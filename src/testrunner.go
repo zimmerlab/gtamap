@@ -1,11 +1,22 @@
 package main
 
-import "github.com/KleinSamuel/gtamap/src/datastructure"
+import (
+	"github.com/KleinSamuel/gtamap/src/datastructure"
+	"github.com/sirupsen/logrus"
+)
 
 func main() {
 
-	sequences := []string{"abcabd", "abd"}
+	logrus.SetFormatter(&logrus.TextFormatter{
+		FullTimestamp: true,
+	})
+	logrus.SetLevel(logrus.InfoLevel)
+
+	sequences := []string{"abacad", "abd"}
 
 	tree := datastructure.BuildSuffixTree(sequences)
-	tree.PrintEdgeList()
+
+	//tree.PrintEdgeList()
+
+	tree.Search("a")
 }

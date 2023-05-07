@@ -4,9 +4,13 @@ import (
 	"fmt"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
 	"github.com/KleinSamuel/gtamap/src/gtf"
+	"github.com/KleinSamuel/gtamap/src/logging"
+	"github.com/sirupsen/logrus"
 )
 
 func main() {
+
+	logging.SetLevel(logrus.DebugLevel)
 
 	pathFastaCcr9Zeroed := "../resources/ENSG00000173585.fasta"
 	pathGtfCcr9Zeroed := "../resources/ENSG00000173585.zeroed.gtf"
