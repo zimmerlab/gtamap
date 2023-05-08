@@ -1,11 +1,35 @@
 package main
 
 import (
+	"fmt"
+	"github.com/KleinSamuel/gtamap/src/core"
+	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
-	"github.com/KleinSamuel/gtamap/src/datastructure"
-	"github.com/KleinSamuel/gtamap/src/gtf"
+	"github.com/KleinSamuel/gtamap/src/dataloader/gtf"
 	"github.com/sirupsen/logrus"
 )
+
+func serializeExample() {
+	sequences := []string{"ABCABCABCD"}
+
+	tree := datastructure.BuildSuffixTree(sequences)
+
+	fmt.Println("serializing tree..")
+
+	datastructure.SerializeSuffixTree(tree, "../resources/tree")
+
+	fmt.Println("done serializing tree")
+
+	fmt.Println("reading tree..")
+
+	var newTree *datastructure.SuffixTree = datastructure.DezerializeSuffixTree("../resources/tree")
+
+	pattern := "ABCD"
+
+	var result *core.PatternSearchResult = newTree.Search(&pattern)
+
+	fmt.Println("result: ", result)
+}
 
 func main() {
 
@@ -23,11 +47,18 @@ func main() {
 
 	// ATGACACCCACAGACTT
 	// ABCXABCY
-	//sequences := []string{"AAAABAAAABAAC"}
+	//sequences := []string{"ABCABCABCD"}
 
 	tree := datastructure.BuildSuffixTree(sequences)
-
 	//tree.PrintEdgeList()
 
-	tree.Search("ATGACACCCACAGACTT")
+	datastructure.SerializeSuffixTree(tree, "../resources/ENSG00000173585.gtai")
+
+	/*
+		pattern := "ABCD"
+
+		var result *core.PatternSearchResult = tree.Search(&pattern)
+
+		fmt.Println("result: ", result)
+	*/
 }

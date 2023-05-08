@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
-	"github.com/KleinSamuel/gtamap/src/gtf"
+	"github.com/KleinSamuel/gtamap/src/dataloader/gtf"
 	"github.com/KleinSamuel/gtamap/src/logging"
 	"github.com/sirupsen/logrus"
 )

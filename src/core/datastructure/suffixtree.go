@@ -1,16 +1,20 @@
 package datastructure
 
 import (
-	"fmt"
+	"github.com/KleinSamuel/gtamap/src/core"
 	"github.com/sirupsen/logrus"
 	"time"
 )
 
 type SuffixTree struct {
-	Root      *Node
-	Nodes     []*Node
-	Edges     []*Edge
+	// the root node of the suffix tree
+	Root *Node
+	// the sequences the suffix tree was built from
 	Sequences []string
+	// (DEBUG) used for printing the edge list
+	//Nodes []*Node
+	// (DEBUG) used for printing the edge list
+	//Edges []*Edge
 }
 
 type Node struct {
@@ -32,72 +36,9 @@ type Edge struct {
 	// end position of the sequence on this edge
 	End *int
 	// the node the edge points to
-	To   *Node
-	From *Node
-}
-
-func (tree *SuffixTree) ToSif() {
-
-	for _, edge := range tree.Edges {
-		fmt.Println(edge.From.Id, tree.getEdgeSequence(edge), edge.To.Id)
-	}
-
-	for _, node := range tree.Nodes {
-		if node.Link != nil {
-			fmt.Println(node.Id, "link", node.Link.Id)
-		}
-	}
-}
-
-// PrintEdgeList prints (STDOUT) the suffix tree as an edge list for visualization
-func (tree *SuffixTree) PrintEdgeList() {
-
-	logrus.Info("Printing edge list")
-
-	fmt.Println("num nodes: ", len(tree.Nodes))
-	fmt.Println("num edges: ", len(tree.Edges))
-
-	for _, edge := range tree.Edges {
-		fmt.Println(edge.From.Id, edge.To.Id, tree.getEdgeSequence(edge))
-	}
-
-	for _, node := range tree.Nodes {
-		if node.Link != nil {
-			fmt.Println(node.Id, node.Link.Id, "link")
-		}
-	}
-
-	/*
-
-		queue := list.New()
-		visited := make(map[*Node]bool)
-
-		queue.PushBack(tree.Root)
-
-		for queue.Len() > 0 {
-
-			item := queue.Front()
-			queue.Remove(item)
-			node := item.Value.(*Node)
-
-			visited[node] = true
-
-			// prints the suffix link of the current node
-			if node.Link != nil {
-				fmt.Println(node.Id, node.Link.Id, "link")
-			}
-
-			for _, edge := range node.Edges {
-				if visited[edge.To] {
-					continue
-				}
-				queue.PushBack(edge.To)
-
-				// prints the edge between the current node and the node the edge points to
-				fmt.Println(node.Id, strconv.Itoa(edge.To.Id), tree.getEdgeSequence(edge))
-			}
-		}
-	*/
+	To *Node
+	// (DEBUG) used for printing the edge list
+	//From *Node
 }
 
 // getEdgeSequence returns the sequence on the given edge
@@ -107,14 +48,6 @@ func (tree *SuffixTree) getEdgeSequence(edge *Edge) string {
 		return "/"
 	}
 	return tree.Sequences[edge.SequenceIndex][edge.Start:*edge.End]
-}
-
-// incrementToLimit helper function that is used to increment the "stop" variable in the
-// function BuildSuffixTree such that it never exceeds the length of the current sequence
-func incrementToLimit(value *int, limit int) {
-	if *value < limit {
-		*value += 1
-	}
 }
 
 // BuildSuffixTree builds a suffix tree from the given sequences using Ukkonen's linear time algorithm
@@ -151,10 +84,10 @@ func BuildSuffixTree(sequences []string) *SuffixTree {
 	tree := &SuffixTree{
 		Root:      rootNode,
 		Sequences: sequences,
-		Nodes:     make([]*Node, 0),
-		Edges:     make([]*Edge, 0),
+		//Nodes:     make([]*Node, 0),
+		//Edges:     make([]*Edge, 0),
 	}
-	tree.Nodes = append(tree.Nodes, rootNode)
+	//tree.Nodes = append(tree.Nodes, rootNode)
 
 	for sequenceId, sequence := range tree.Sequences {
 
@@ -265,7 +198,7 @@ func BuildSuffixTree(sequences []string) *SuffixTree {
 					numNodes += 1
 					newNode.Locations[sequenceId] = []int{locationToAdd}
 
-					tree.Nodes = append(tree.Nodes, newNode)
+					//tree.Nodes = append(tree.Nodes, newNode)
 
 					logrus.WithFields(logrus.Fields{
 						"newNode":   newNode.Id,
@@ -277,11 +210,11 @@ func BuildSuffixTree(sequences []string) *SuffixTree {
 						Start:         stop - 1,
 						End:           &stop,
 						To:            newNode,
-						From:          activeNode,
+						//From:          activeNode,
 					}
 					activeNode.Edges[sequence[newEdge.Start]] = newEdge
 
-					tree.Edges = append(tree.Edges, newEdge)
+					//tree.Edges = append(tree.Edges, newEdge)
 
 					logrus.WithFields(logrus.Fields{
 						"newEdge": tree.getEdgeSequence(newEdge),
@@ -347,7 +280,7 @@ func BuildSuffixTree(sequences []string) *SuffixTree {
 					}
 					numNodes += 1
 
-					tree.Nodes = append(tree.Nodes, newSplitNode)
+					//tree.Nodes = append(tree.Nodes, newSplitNode)
 
 					logrus.WithFields(logrus.Fields{
 						"newSplitNode": newSplitNode.Id,
@@ -359,11 +292,11 @@ func BuildSuffixTree(sequences []string) *SuffixTree {
 						Start:         activeEdge.Start + activeLength,
 						End:           activeEdge.End,
 						To:            activeEdge.To,
-						From:          newSplitNode,
+						//From:          newSplitNode,
 					}
 					newSplitNode.Edges[sequence[newSplitEdge.Start]] = newSplitEdge
 
-					tree.Edges = append(tree.Edges, newSplitEdge)
+					//tree.Edges = append(tree.Edges, newSplitEdge)
 
 					logrus.WithFields(logrus.Fields{
 						"newSplitEdge": tree.getEdgeSequence(newSplitEdge),
@@ -396,7 +329,7 @@ func BuildSuffixTree(sequences []string) *SuffixTree {
 					numNodes += 1
 					newNode.Locations[sequenceId] = []int{locationToAdd}
 
-					tree.Nodes = append(tree.Nodes, newNode)
+					//tree.Nodes = append(tree.Nodes, newNode)
 
 					logrus.WithFields(logrus.Fields{
 						"newNode":   newNode.Id,
@@ -409,11 +342,11 @@ func BuildSuffixTree(sequences []string) *SuffixTree {
 						Start:         stop - 1,
 						End:           &stop,
 						To:            newNode,
-						From:          newSplitNode,
+						//From:          newSplitNode,
 					}
 					newSplitNode.Edges[sequence[newEdge.Start]] = newEdge
 
-					tree.Edges = append(tree.Edges, newEdge)
+					//tree.Edges = append(tree.Edges, newEdge)
 
 					logrus.WithFields(logrus.Fields{
 						"newEdge": tree.getEdgeSequence(newEdge),
@@ -586,6 +519,7 @@ func BuildSuffixTree(sequences []string) *SuffixTree {
 
 		stop -= 1
 
+		// TODO: remove when using multiple sequences
 		break
 	}
 
@@ -631,19 +565,45 @@ func (tree *SuffixTree) FindLeafNodesRecursive(node *Node) []*Node {
 	return leafNodes
 }
 
-func (tree *SuffixTree) Search(pattern string) {
+// Search searches for the given pattern in the suffix tree and reports the positions
+// of occurrences within the sequences of the suffix tree
+// Iterates over each char of the given pattern and traverses the tree until the pattern is found or not
+// Each leaf node of the tree contains the information about the start position of the subsequence
+// (from root to leaf) within the set of sequences as well as the sequence index.
+// The pattern is scanned byte by byte and compared to the edges of the tree, which is traversed until
+// there are no more bytes (chars) within the pattern. If any byte is not found within the tree, the pattern
+// is not contained within the tree. Otherwise, all leaf nodes are returned as occurrences. This is true
+// even when the leaf node is not reached because then the pattern is a prefix of a suffix which is still
+// contained within the sequences of the tree.
+func (tree *SuffixTree) Search(pattern *string) *core.PatternSearchResult {
 
 	logrus.Debug("searching for pattern: ", pattern)
 
+	result := core.PatternSearchResult{
+		Pattern: pattern,
+		Matches: make([]core.PatternMatch, 0),
+	}
+
+	// the last node that was traversed
 	var activeNode *Node = tree.Root
+	// the currently traversed edge
 	var activeEdge *Edge = nil
+	// the current position within the active edge
 	var indexEdge int = 0
 
-	for indexPattern := 0; indexPattern < len(pattern); indexPattern++ {
+	// iterates over the entire pattern byte by byte
+	for indexPattern := 0; indexPattern < len(*pattern); indexPattern++ {
 
-		currentChar := pattern[indexPattern]
+		// the current char of the pattern to be found in the tree
+		currentChar := (*pattern)[indexPattern]
 
-		logrus.Debug("searching next char: ", string(currentChar))
+		logrus.WithFields(logrus.Fields{
+			"indexPattern": indexPattern,
+			"currentChar":  string(currentChar),
+			"activeNode":   activeNode.Id,
+			"activeEdge":   tree.getEdgeSequence(activeEdge),
+			"indexEdge":    indexEdge,
+		}).Debug("compare next char of pattern")
 
 		if activeEdge == nil {
 			// find new active edge
@@ -652,60 +612,125 @@ func (tree *SuffixTree) Search(pattern string) {
 
 			if activeNode.Edges[currentChar] == nil {
 				// pattern not found
-				logrus.Info("no edge with char on current node -> pattern not found")
-				return
+				logrus.Debug("no edge with char on current node -> pattern not found")
+				return nil
 			}
 
 			activeEdge = activeNode.Edges[currentChar]
 			indexEdge = 1
-			logrus.Debug("found new active edge: ", tree.Sequences[activeEdge.SequenceIndex][activeEdge.Start:*activeEdge.End])
+
+			logrus.WithFields(logrus.Fields{
+				"activeEdge": tree.getEdgeSequence(activeEdge),
+				"indexEdge":  indexEdge,
+			}).Debug("update active edge")
 
 		} else {
 
 			// check if char is on active edge
 			nextCharOnEdge := tree.Sequences[activeEdge.SequenceIndex][activeEdge.Start+indexEdge]
 
+			logrus.WithFields(logrus.Fields{
+				"nextCharOnEdge": string(nextCharOnEdge),
+				"currenChar":     string(currentChar),
+			}).Debug("compare next char of pattern to next char on edge")
+
 			if nextCharOnEdge != currentChar {
 				// pattern not found
-				logrus.Info("char not on active edge -> pattern not found")
-				return
+				logrus.Debug("char not on active edge -> pattern not found")
+				return nil
 			}
 
 			indexEdge += 1
 
-			logrus.Debug("char on active edge -> continue search on active edge")
+			logrus.WithFields(logrus.Fields{
+				"indexEdge": indexEdge,
+			}).Debug("char found on active edge")
 		}
 
 		// check if end of active edge reached -> update active node and reset active edge
-		if activeEdge.Start+indexEdge == *activeEdge.End-1 {
+		if activeEdge.Start+indexEdge == *activeEdge.End {
 			logrus.Debug("end of active edge reached -> update active node and reset active edge")
 
 			activeNode = activeEdge.To
 			activeEdge = nil
+			indexEdge = 0
+
+			logrus.WithFields(logrus.Fields{
+				"activeNode": activeNode.Id,
+				"activeEdge": tree.getEdgeSequence(activeEdge),
+			}).Debug("end of active edge reached, update:")
 		}
 	}
 
-	logrus.Debug("pattern found!")
-	logrus.Debug("determining leaf nodes..")
+	logrus.Debug("pattern found")
 
-	// find leaf nodes
+	// determines the node from which to start the leaf search
 	startNode := activeNode
 	if activeEdge != nil {
+		// if the current position is not at the end of an edge, the leaf search must start from the next node
 		startNode = activeEdge.To
 	}
 
-	logrus.Debug("starting from node ", startNode.Id)
+	logrus.WithFields(logrus.Fields{
+		"startNode": startNode.Id,
+	}).Debug("determining leaf nodes to extract positions")
 
 	leafs := tree.FindLeafNodesRecursive(startNode)
 
 	for _, leaf := range leafs {
 		for sequenceId, indices := range leaf.Locations {
 			for _, index := range indices {
+
 				logrus.WithFields(logrus.Fields{
 					"sequenceId": sequenceId,
 					"index":      index,
-				}).Info("found pattern")
+				}).Debug("pattern match")
+
+				result.Matches = append(result.Matches, core.PatternMatch{
+					SequenceIndex: sequenceId,
+					From:          index - 1,
+					To:            index - 1 + len(*pattern),
+				})
 			}
 		}
 	}
+
+	return &result
 }
+
+/*
+// (DEBUG) used for printing the edge list for visualization
+func (tree *SuffixTree) ToSif() {
+
+	for _, edge := range tree.Edges {
+		fmt.Println(edge.From.Id, tree.getEdgeSequence(edge), edge.To.Id)
+	}
+
+	for _, node := range tree.Nodes {
+		if node.Link != nil {
+			fmt.Println(node.Id, "link", node.Link.Id)
+		}
+	}
+}
+*/
+
+/*
+// (DEBUG) prints the suffix tree as an edge list for visualization
+func (tree *SuffixTree) PrintEdgeList() {
+
+	logrus.Info("Printing edge list")
+
+	fmt.Println("num nodes: ", len(tree.Nodes))
+	fmt.Println("num edges: ", len(tree.Edges))
+
+	for _, edge := range tree.Edges {
+		fmt.Println(edge.From.Id, edge.To.Id, tree.getEdgeSequence(edge))
+	}
+
+	for _, node := range tree.Nodes {
+		if node.Link != nil {
+			fmt.Println(node.Id, node.Link.Id, "link")
+		}
+	}
+}
+*/
