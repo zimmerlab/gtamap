@@ -7,27 +7,63 @@ import (
 	"github.com/KleinSamuel/gtamap/src/dataloader"
 	"github.com/KleinSamuel/gtamap/src/dataloader/gtf"
 	"github.com/sirupsen/logrus"
+	"time"
 )
 
-func serializeExample() {
-	sequences := []string{"ABCABCABCD"}
+func inspectAnnotation() {
+	pathGtfZeroed := "../resources/ENSG00000173585.zeroed.gtf"
+	pathFastaZeroed := "../resources/ENSG00000173585.fasta"
+
+	var annotation *gtf.Annotation = dataloader.GenerateInputForIndex(pathGtfZeroed, pathFastaZeroed)
+
+	for _, trans := range annotation.Genes[0].Transcripts {
+		fmt.Println(trans.SequenceDna)
+	}
+}
+
+func buildAndSerializeSuffixTree() {
+	pathGtfZeroed := "../resources/ENSG00000173585.zeroed.gtf"
+	pathFastaZeroed := "../resources/ENSG00000173585.fasta"
+
+	var annotation *gtf.Annotation = dataloader.GenerateInputForIndex(pathGtfZeroed, pathFastaZeroed)
+	sequences := []string{annotation.Genes[0].Transcripts[0].SequenceDna}
 
 	tree := datastructure.BuildSuffixTree(sequences)
 
-	fmt.Println("serializing tree..")
+	datastructure.SerializeSuffixTree(tree, "../resources/ENSG00000173585.gtai")
+}
 
-	datastructure.SerializeSuffixTree(tree, "../resources/tree")
+func deserializeSuffixTree() *datastructure.SuffixTree {
+	return datastructure.DezerializeSuffixTree("../resources/ENSG00000173585.gtai")
+}
 
-	fmt.Println("done serializing tree")
+func buildTestTree() {
+	sequences := []string{"ABCABCD", "CABCDA"}
 
-	fmt.Println("reading tree..")
+	tree := datastructure.BuildSuffixTree(sequences)
 
-	var newTree *datastructure.SuffixTree = datastructure.DezerializeSuffixTree("../resources/tree")
+	//tree.ToEdgeList()
 
-	pattern := "ABCD"
+	timerStart := time.Now()
 
-	var result *core.PatternSearchResult = newTree.Search(&pattern)
+	pattern := "C"
 
+	var result *core.PatternSearchResult = tree.Search(&pattern)
+
+	fmt.Println("duration: ", time.Since(timerStart))
+	fmt.Println("result: ", result)
+}
+
+func search() {
+	tree := deserializeSuffixTree()
+
+	timerStart := time.Now()
+
+	pattern := "ATGA"
+
+	var result *core.PatternSearchResult = tree.Search(&pattern)
+
+	fmt.Println("duration: ", time.Since(timerStart))
 	fmt.Println("result: ", result)
 }
 
@@ -38,27 +74,5 @@ func main() {
 	})
 	logrus.SetLevel(logrus.InfoLevel)
 
-	pathGtfZeroed := "../resources/ENSG00000173585.zeroed.gtf"
-	pathFastaZeroed := "../resources/ENSG00000173585.fasta"
-
-	var annotation *gtf.Annotation = dataloader.GenerateInputForIndex(pathGtfZeroed, pathFastaZeroed)
-
-	sequences := []string{annotation.Genes[0].Transcripts[0].SequenceDna}
-
-	// ATGACACCCACAGACTT
-	// ABCXABCY
-	//sequences := []string{"ABCABCABCD"}
-
-	tree := datastructure.BuildSuffixTree(sequences)
-	//tree.PrintEdgeList()
-
-	datastructure.SerializeSuffixTree(tree, "../resources/ENSG00000173585.gtai")
-
-	/*
-		pattern := "ABCD"
-
-		var result *core.PatternSearchResult = tree.Search(&pattern)
-
-		fmt.Println("result: ", result)
-	*/
+	buildAndSerializeSuffixTree()
 }

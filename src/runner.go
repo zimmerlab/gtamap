@@ -1,22 +1,28 @@
 package main
 
 import (
-	"fmt"
-	"github.com/KleinSamuel/gtamap/src/dataloader"
-	"github.com/KleinSamuel/gtamap/src/dataloader/gtf"
-	"github.com/KleinSamuel/gtamap/src/logging"
 	"github.com/sirupsen/logrus"
 )
 
+func printBanner() {
+	logrus.Info("_____ _____ ___   ___  ___  ___  ______")
+	logrus.Info("|  __ \\_   _/ _ \\  |  \\/  | / _ \\ | ___ \\")
+	logrus.Info("| |  \\/ | |/ /_\\ \\ | .  . |/ /_\\ \\| |_/ /")
+	logrus.Info("| | __  | ||  _  | | |\\/| ||  _  ||  __/")
+	logrus.Info("| |_\\ \\ | || | | | | |  | || | | || |")
+	logrus.Info(" \\____/ \\_/\\_| |_/ \\_|  |_/\\_| |_/\\_|")
+	logrus.Info("Starting GTAMap v0.1.0 (A. Hadziahmetovic, S. Klein, 2023)")
+}
+
 func main() {
 
-	logging.SetLevel(logrus.DebugLevel)
+	logrus.SetFormatter(&logrus.TextFormatter{
+		FullTimestamp: true,
+	})
+	logrus.SetLevel(logrus.DebugLevel)
 
-	pathFastaCcr9Zeroed := "../resources/ENSG00000173585.fasta"
-	pathGtfCcr9Zeroed := "../resources/ENSG00000173585.zeroed.gtf"
+	printBanner()
 
-	var annotation *gtf.Annotation = dataloader.GenerateInputForIndex(pathGtfCcr9Zeroed, pathFastaCcr9Zeroed)
-
-	fmt.Println("annotation: ", annotation)
+	logrus.Info("Runner does nothing for now..")
 
 }

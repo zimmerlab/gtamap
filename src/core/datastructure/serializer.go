@@ -29,6 +29,9 @@ func SerializeSuffixTree(tree *SuffixTree, filePath string) {
 }
 
 func DezerializeSuffixTree(filePath string) *SuffixTree {
+
+	timerStart := time.Now()
+
 	// Open the file for reading
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -42,6 +45,10 @@ func DezerializeSuffixTree(filePath string) *SuffixTree {
 	if err := decoder.Decode(&tree); err != nil {
 		panic(err)
 	}
+
+	logrus.WithFields(logrus.Fields{
+		"duration": time.Since(timerStart),
+	}).Info("deserialized suffix tree")
 
 	return &tree
 }

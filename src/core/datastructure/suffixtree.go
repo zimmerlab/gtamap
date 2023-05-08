@@ -1,10 +1,14 @@
 package datastructure
 
 import (
+	"container/list"
+	"fmt"
 	"github.com/KleinSamuel/gtamap/src/core"
 	"github.com/sirupsen/logrus"
 	"time"
 )
+
+var EndSymbol byte = '$'
 
 type SuffixTree struct {
 	// the root node of the suffix tree
@@ -71,6 +75,10 @@ func BuildSuffixTree(sequences []string) *SuffixTree {
 
 	timerStart := time.Now()
 
+	for i := 0; i < len(sequences); i++ {
+		sequences[i] += string(EndSymbol)
+	}
+
 	// used to assign ids to nodes (not required for production)
 	numNodes := 1
 
@@ -93,7 +101,7 @@ func BuildSuffixTree(sequences []string) *SuffixTree {
 
 		logrus.WithFields(logrus.Fields{
 			"sequenceId": sequenceId,
-			"sequence":   sequence,
+			"length":     len(sequence),
 		}).Debug("adding new sequence to tree")
 
 		var activeNode *Node = tree.Root
@@ -287,14 +295,17 @@ func BuildSuffixTree(sequences []string) *SuffixTree {
 					}).Debug("created new node that splits the active edge")
 
 					// edge between the newly inserted split node and the old end node
+					// contains information from the old edge (careful with sequence index etc.)
 					newSplitEdge := &Edge{
-						SequenceIndex: sequenceId,
+						SequenceIndex: activeEdge.SequenceIndex,
 						Start:         activeEdge.Start + activeLength,
 						End:           activeEdge.End,
 						To:            activeEdge.To,
 						//From:          newSplitNode,
 					}
-					newSplitNode.Edges[sequence[newSplitEdge.Start]] = newSplitEdge
+					// retrieve char from respective sequence of the "old" edge to form new edge
+					var edgeStart byte = sequences[newSplitEdge.SequenceIndex][newSplitEdge.Start]
+					newSplitNode.Edges[edgeStart] = newSplitEdge
 
 					//tree.Edges = append(tree.Edges, newSplitEdge)
 
@@ -344,6 +355,7 @@ func BuildSuffixTree(sequences []string) *SuffixTree {
 						To:            newNode,
 						//From:          newSplitNode,
 					}
+					// current sequence is correct because the edge contains the char of the current sequence
 					newSplitNode.Edges[sequence[newEdge.Start]] = newEdge
 
 					//tree.Edges = append(tree.Edges, newEdge)
@@ -520,7 +532,7 @@ func BuildSuffixTree(sequences []string) *SuffixTree {
 		stop -= 1
 
 		// TODO: remove when using multiple sequences
-		break
+		// break
 	}
 
 	logrus.WithFields(logrus.Fields{
@@ -713,6 +725,30 @@ func (tree *SuffixTree) ToSif() {
 	}
 }
 */
+
+func (tree *SuffixTree) ToEdgeList() {
+
+	queue := list.New()
+	queue.PushBack(tree.Root)
+	visited := make(map[int]bool)
+
+	for queue.Len() > 0 {
+
+		item := queue.Front()
+		queue.Remove(item)
+		node := item.Value.(*Node)
+		visited[node.Id] = true
+
+		for _, edge := range node.Edges {
+
+			fmt.Println(node.Id, edge.To.Id, tree.getEdgeSequence(edge))
+
+			if !visited[edge.To.Id] {
+				queue.PushBack(edge.To)
+			}
+		}
+	}
+}
 
 /*
 // (DEBUG) prints the suffix tree as an edge list for visualization
