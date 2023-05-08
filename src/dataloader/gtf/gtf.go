@@ -37,18 +37,23 @@ type Exon struct {
 
 func ReadGtfFromFile(filePath string) *Annotation {
 
-	annot := Annotation{
-		Genes: make([]*Gene, 0),
-	}
-
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil
 	}
 	defer file.Close()
 
+	return ReadGtf(file)
+}
+
+func ReadGtf(gtfFile *os.File) *Annotation {
+
+	annot := Annotation{
+		Genes: make([]*Gene, 0),
+	}
+
 	// buffered reader
-	scanner := bufio.NewScanner(file)
+	scanner := bufio.NewScanner(gtfFile)
 
 	var currentGene *Gene
 	var currentTranscript *Transcript

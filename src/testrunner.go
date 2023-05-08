@@ -15,8 +15,9 @@ import (
 func inspectAnnotation() {
 	pathGtfZeroed := "../resources/ENSG00000173585.zeroed.gtf"
 	pathFastaZeroed := "../resources/ENSG00000173585.fasta"
+	pathFastaIndex := "../resources/ENSG00000173585.fasta.fai"
 
-	var annotation *gtf.Annotation = dataloader.GenerateInputForIndex(pathGtfZeroed, pathFastaZeroed)
+	var annotation *gtf.Annotation = dataloader.GenerateInputForIndexFromFile(pathGtfZeroed, pathFastaZeroed, pathFastaIndex)
 
 	for _, trans := range annotation.Genes[0].Transcripts {
 		fmt.Println(trans.SequenceDna)
@@ -26,17 +27,19 @@ func inspectAnnotation() {
 func buildAndSerializeSuffixTree() {
 	pathGtfZeroed := "../resources/ENSG00000173585.zeroed.gtf"
 	pathFastaZeroed := "../resources/ENSG00000173585.fasta"
+	pathFastaIndex := "../resources/ENSG00000173585.fasta.fai"
 
-	var annotation *gtf.Annotation = dataloader.GenerateInputForIndex(pathGtfZeroed, pathFastaZeroed)
-	sequences := []string{annotation.Genes[0].Transcripts[0].SequenceDna}
+	var annotation *gtf.Annotation = dataloader.GenerateInputForIndexFromFile(pathGtfZeroed, pathFastaZeroed, pathFastaIndex)
+
+	var sequences []string = []string{annotation.Genes[0].Transcripts[0].SequenceDna}
 
 	tree := datastructure.BuildSuffixTree(sequences)
 
-	datastructure.SerializeSuffixTree(tree, "../resources/ENSG00000173585.gtai")
+	datastructure.SerializeSuffixTreeFromFile(tree, "../resources/ENSG00000173585.gtai")
 }
 
 func deserializeSuffixTree() *datastructure.SuffixTree {
-	return datastructure.DezerializeSuffixTree("../resources/ENSG00000173585.gtai")
+	return datastructure.DezerializeSuffixTreeFromFile("../resources/ENSG00000173585.gtai")
 }
 
 func buildTestTree() {
@@ -70,7 +73,7 @@ func search() {
 }
 
 func testArgparse() {
-	
+
 	parser := argparse.NewParser("gtamap", "Gene-based Trancript-Aware readMAPping")
 
 	var cmdIndex *argparse.Command = parser.NewCommand("index", "Build the GTAMap index (.gtai).")

@@ -3,6 +3,7 @@ package dataloader
 import (
 	"github.com/KleinSamuel/gtamap/src/dataloader/fasta"
 	"github.com/KleinSamuel/gtamap/src/dataloader/gtf"
+	"github.com/sirupsen/logrus"
 	"os"
 	"sort"
 	"strings"
@@ -27,22 +28,42 @@ func panicIfFilesAreMissing(pathGtf string, pathFasta string, pathFastaIndex str
 	}
 }
 
+func ExitIfFastaIndexIsMissing(pathFastaIndex string) {
+	// check if the fasta index file exists
+	_, errIndex := os.Stat(pathFastaIndex)
+	if os.IsNotExist(errIndex) {
+		logrus.Fatal("fasta index file (.fai) does not exist: " + pathFastaIndex)
+	}
+}
+
+func GenerateInputForIndexFromFile(gtfFilePath string, fastaFilePath string, fastaIndexFilePath string) *gtf.Annotation {
+
+	panicIfFilesAreMissing(gtfFilePath, fastaFilePath, fastaIndexFilePath)
+
+	gtfFile, errGtf := os.Open(gtfFilePath)
+	if errGtf != nil {
+		logrus.Fatal("Error reading gtf file", errGtf)
+	}
+
+	fastaFile, errFasta := os.Open(fastaFilePath)
+	if errFasta != nil {
+		logrus.Fatal("Error reading fasta file", errFasta)
+	}
+
+	fastaIndexFile, errIndex := os.Open(fastaIndexFilePath)
+	if errIndex != nil {
+		logrus.Fatal("Error reading fasta index file (.fai)", errIndex)
+	}
+
+	return GenerateInputForIndex(gtfFile, fastaFile, fastaIndexFile)
+}
+
 // GenerateInputForIndex reads in the genome annotation from given gtf file,
 // reads the fasta index (required) and extracts the dna sequence for every transcript
-func GenerateInputForIndex(pathGtf string, pathFasta string) *gtf.Annotation {
+func GenerateInputForIndex(gtfFile *os.File, fastaFile *os.File, fastaIndexFile *os.File) *gtf.Annotation {
 
-	pathFastaIndex := pathFasta + ".fai"
-
-	panicIfFilesAreMissing(pathGtf, pathFasta, pathFastaIndex)
-
-	fastaIndex := fasta.ReadFastaIndex(pathFastaIndex)
-	annotation := gtf.ReadGtfFromFile(pathGtf)
-
-	fastaFile, err := os.Open(pathFasta)
-	if err != nil {
-		panic(err)
-	}
-	defer fastaFile.Close()
+	fastaIndex := fasta.ReadFastaIndex(fastaIndexFile)
+	annotation := gtf.ReadGtf(gtfFile)
 
 	for _, gene := range annotation.Genes {
 

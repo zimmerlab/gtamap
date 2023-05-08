@@ -537,7 +537,7 @@ func BuildSuffixTree(sequences []string) *SuffixTree {
 
 	logrus.WithFields(logrus.Fields{
 		"duration": time.Since(timerStart),
-	}).Info("successfully added all sequences into the suffix tree")
+	}).Info("Added all sequences into the suffix tree")
 
 	return tree
 }

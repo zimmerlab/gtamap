@@ -20,20 +20,14 @@ type IndexEntry struct {
 	Linewidth uint16
 }
 
-func ReadFastaIndex(filePath string) *Index {
+func ReadFastaIndex(fastaIndexFile *os.File) *Index {
 
 	fastaIndex := Index{
 		Entries: make(map[string]*IndexEntry),
 	}
 
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil
-	}
-	defer file.Close()
-
 	// buffered reader
-	scanner := bufio.NewScanner(file)
+	scanner := bufio.NewScanner(fastaIndexFile)
 
 	for scanner.Scan() {
 		line := strings.Split(scanner.Text(), "\t")
