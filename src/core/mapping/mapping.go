@@ -1,6 +1,7 @@
 package mapping
 
 import (
+	"fmt"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/dataloader/fastq"
@@ -102,21 +103,18 @@ func LocateR1PositionOnStrands(gtaIndex *index.GtaIndex, r1Read *fastq.Read) (*m
 func MapReadPair(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) {
 
 	rvReadHeader := ""
-	if readPair.RvRead != nil {
-		rvReadHeader = readPair.RvRead.Header
+	if readPair.ReadR2 != nil {
+		rvReadHeader = readPair.ReadR2.Header
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"fwReadHeader": readPair.FwRead.Header,
+		"fwReadHeader": readPair.ReadR1.Header,
 		"rvReadHeader": rvReadHeader,
 	}).Info("Map new read pair")
 
 	// the kmer matches on the forward strand
-	hitsR1, isForwardStrand := LocateR1PositionOnStrands(gtaIndex, readPair.FwRead)
+	hitsR1, isForwardStrand := LocateR1PositionOnStrands(gtaIndex, readPair.ReadR1)
 
-	logrus.Debug("hitsR1: ", hitsR1)
-	logrus.Debug("isForwardStrand: ", isForwardStrand)
-
-	//fmt.Println(hitsR1)
-	//fmt.Println(isForwardStrand)
+	fmt.Println(hitsR1)
+	fmt.Println(isForwardStrand)
 }

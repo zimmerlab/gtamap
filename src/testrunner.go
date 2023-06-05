@@ -159,8 +159,8 @@ func testFastqReader() {
 
 	read := reader.NextRead()
 
-	fmt.Println(read.FwRead)
-	fmt.Println(read.RvRead)
+	fmt.Println(read.ReadR1)
+	fmt.Println(read.ReadR2)
 }
 
 func testMapping() {
@@ -180,13 +180,6 @@ func testMapping() {
 	reader := fastq.InitFromPaths(pathReadsR1, pathReadsR2)
 
 	for read := reader.NextRead(); read != nil; read = reader.NextRead() {
-
-		timerStart = time.Now()
-
-		read := reader.NextRead()
-
-		//fmt.Println("get first read pair")
-		//fmt.Println("duration: ", time.Since(timerStart))
 
 		timerStart = time.Now()
 
