@@ -81,6 +81,8 @@ func main() {
 		printBanner()
 		logrus.Info("Building index (.gtai)..")
 
+		// TODO: build suffix tree for reverse complement of each transcript
+
 		index.BuildAndSerializeIndex(gtfFile, fastaFile, outputFile)
 
 	} else if cmdMap.Happened() {

@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"github.com/KleinSamuel/gtamap/src/core"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
+	"github.com/KleinSamuel/gtamap/src/core/mapping"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
+	"github.com/KleinSamuel/gtamap/src/dataloader/fastq"
 	"github.com/KleinSamuel/gtamap/src/dataloader/gtf"
 	"github.com/akamensky/argparse"
 	"github.com/sirupsen/logrus"
@@ -145,6 +147,55 @@ func testArgparse() {
 	}
 }
 
+func testFastqReader() {
+
+	pathReadsFw := "../resources/reads_first_1.1.fq"
+	//pathReadsRv := "../resources/reads_first_1.2.fq"
+
+	reader := fastq.InitFromPaths(pathReadsFw, "")
+
+	read := reader.NextRead()
+
+	fmt.Println(read.FwRead)
+	fmt.Println(read.RvRead)
+}
+
+func testMapping() {
+
+	timerStart := time.Now()
+
+	tree := deserializeSuffixTree()
+
+	fmt.Println("read tree")
+	fmt.Println("duration: ", time.Since(timerStart))
+
+	timerStart = time.Now()
+
+	//pathReadsFw := "../resources/reads_first_1.1.fq"
+	pathReadsFw := "../resources/reads_ccr9.2.fq"
+	pathReadsRv := "../resources/reads_ccr9.1.fq"
+
+	reader := fastq.InitFromPaths(pathReadsFw, pathReadsRv)
+
+	fmt.Println("init fastq reader")
+	fmt.Println("duration: ", time.Since(timerStart))
+
+	timerStart = time.Now()
+
+	read := reader.NextRead()
+
+	fmt.Println("get first read pair")
+	fmt.Println("duration: ", time.Since(timerStart))
+
+	timerStart = time.Now()
+
+	mapping.MapReadPair(read, tree)
+
+	fmt.Println("map read pair")
+	fmt.Println("duration: ", time.Since(timerStart))
+
+}
+
 func main() {
 
 	logrus.SetFormatter(&logrus.TextFormatter{
@@ -152,5 +203,5 @@ func main() {
 	})
 	logrus.SetLevel(logrus.InfoLevel)
 
-	testArgparse()
+	testMapping()
 }

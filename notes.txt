@@ -1,0 +1,15 @@
+### mapping
+
+- create n kmers for r1 read and align without mismatches using suffix tree
+- if less than x found for r1:
+- if r2 does not exist -> discard read
+- if r2 exists -> create n kmers for r2 read and align without mismatches using suffix tree
+(x = 1 currently but can be changed)
+for each match, the id of the transcript and the position of the match is returned
+- if less than x found for r2 -> discard read pair
+
+
+### optimization ideas
+
+- discard kmer matches that are too close to the end of the transcript
+(for kmer matching, it is assumed that the kmer is from the R1 read)
