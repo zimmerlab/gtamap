@@ -41,7 +41,7 @@ func main() {
 	var logLevelIndex *string = cmdIndex.Selector("", "loglevel", []string{"ERROR", "INFO", "DEBUG"}, &argparse.Options{
 		Required: false,
 		Help:     "Log output level.",
-		Default:  "ERROR",
+		Default:  "INFO",
 	})
 
 	var cmdMap *argparse.Command = parser.NewCommand("map", "Map reads to the GTAMap index.")
@@ -79,9 +79,7 @@ func main() {
 		logrus.SetLevel(level)
 
 		printBanner()
-		logrus.Info("Building index (.gtai)..")
-
-		// TODO: build suffix tree for reverse complement of each transcript
+		logrus.Info("Building GTAMap index (.gtai) ..")
 
 		index.BuildAndSerializeIndex(gtfFile, fastaFile, outputFile)
 

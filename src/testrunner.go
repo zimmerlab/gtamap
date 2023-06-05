@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/KleinSamuel/gtamap/src/core"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
+	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapping"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
 	"github.com/KleinSamuel/gtamap/src/dataloader/fastq"
@@ -26,7 +27,8 @@ func inspectAnnotation() {
 	}
 }
 
-func buildAndSerializeSuffixTree() {
+/*
+func buildAndSerializeIndex() {
 	pathGtfZeroed := "../resources/ENSG00000173585.zeroed.gtf"
 	pathFastaZeroed := "../resources/ENSG00000173585.fasta"
 	pathFastaIndex := "../resources/ENSG00000173585.fasta.fai"
@@ -39,9 +41,10 @@ func buildAndSerializeSuffixTree() {
 
 	datastructure.SerializeSuffixTreeFromFile(tree, "../resources/ENSG00000173585.gtai")
 }
+*/
 
-func deserializeSuffixTree() *datastructure.SuffixTree {
-	return datastructure.DezerializeSuffixTreeFromFile("../resources/ENSG00000173585.gtai")
+func deserializeIndex() *index.GtaIndex {
+	return index.DezerializeFromPath("../resources/ENSG00000173585.gtai")
 }
 
 func buildTestTree() {
@@ -62,13 +65,13 @@ func buildTestTree() {
 }
 
 func search() {
-	tree := deserializeSuffixTree()
+	gtaIndex := deserializeIndex()
 
 	timerStart := time.Now()
 
 	pattern := "ATGA"
 
-	var result *core.PatternSearchResult = tree.Search(&pattern)
+	var result *core.PatternSearchResult = gtaIndex.SuffixTreeFw.Search(&pattern)
 
 	fmt.Println("duration: ", time.Since(timerStart))
 	fmt.Println("result: ", result)
@@ -164,7 +167,7 @@ func testMapping() {
 
 	timerStart := time.Now()
 
-	tree := deserializeSuffixTree()
+	gtaIndex := deserializeIndex()
 
 	fmt.Println("read tree")
 	fmt.Println("duration: ", time.Since(timerStart))
@@ -172,27 +175,30 @@ func testMapping() {
 	timerStart = time.Now()
 
 	//pathReadsFw := "../resources/reads_first_1.1.fq"
-	pathReadsFw := "../resources/reads_ccr9.2.fq"
-	pathReadsRv := "../resources/reads_ccr9.1.fq"
+	pathReadsFw := "../resources/reads_ccr9.1.fq"
+	pathReadsRv := "../resources/reads_ccr9.2.fq"
 
 	reader := fastq.InitFromPaths(pathReadsFw, pathReadsRv)
 
-	fmt.Println("init fastq reader")
-	fmt.Println("duration: ", time.Since(timerStart))
+	//fmt.Println("init fastq reader")
+	//fmt.Println("duration: ", time.Since(timerStart))
 
-	timerStart = time.Now()
+	for read := reader.NextRead(); read != nil; read = reader.NextRead() {
 
-	read := reader.NextRead()
+		timerStart = time.Now()
 
-	fmt.Println("get first read pair")
-	fmt.Println("duration: ", time.Since(timerStart))
+		read := reader.NextRead()
 
-	timerStart = time.Now()
+		//fmt.Println("get first read pair")
+		//fmt.Println("duration: ", time.Since(timerStart))
 
-	mapping.MapReadPair(read, tree)
+		timerStart = time.Now()
 
-	fmt.Println("map read pair")
-	fmt.Println("duration: ", time.Since(timerStart))
+		mapping.MapReadPair(read, gtaIndex)
+
+		fmt.Println("map read pair duration: ", time.Since(timerStart))
+
+	}
 
 }
 

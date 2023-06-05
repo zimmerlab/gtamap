@@ -1,8 +1,8 @@
 package mapping
 
 import (
-	"fmt"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
+	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/dataloader/fastq"
 	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
@@ -76,11 +76,30 @@ func GetAnchorMatches(read *fastq.Read, tree *datastructure.SuffixTree) *map[Pos
 	return &hits
 }
 
-func LocateReadPositions() {
+func LocateR1PositionOnStrands(gtaIndex *index.GtaIndex, r1Read *fastq.Read) (*map[Position][]int, bool) {
 
+	// matches the kmers to the forward strand
+	var hitsFw *map[Position][]int = GetAnchorMatches(r1Read, gtaIndex.SuffixTreeFw)
+
+	// no kmer matches on the forward strand
+	if len(*hitsFw) == 0 {
+
+		// matches the kmers to the reverse strand
+		var hitsRv *map[Position][]int = GetAnchorMatches(r1Read, gtaIndex.SuffixTreeRv)
+
+		// no kmer matches on the reverse strand
+		if len(*hitsRv) == 0 {
+			// discard read pair
+			return nil, false
+		}
+
+		return hitsRv, false
+	}
+
+	return hitsFw, true
 }
 
-func MapReadPair(readPair *fastq.ReadPair, tree *datastructure.SuffixTree) {
+func MapReadPair(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) {
 
 	rvReadHeader := ""
 	if readPair.RvRead != nil {
@@ -90,30 +109,14 @@ func MapReadPair(readPair *fastq.ReadPair, tree *datastructure.SuffixTree) {
 	logrus.WithFields(logrus.Fields{
 		"fwReadHeader": readPair.FwRead.Header,
 		"rvReadHeader": rvReadHeader,
-	}).Info("Map read pair")
+	}).Info("Map new read pair")
 
-	var hitsR1 *map[Position][]int = GetAnchorMatches(readPair.FwRead, tree)
-	var hitsR2 *map[Position][]int = nil
+	// the kmer matches on the forward strand
+	hitsR1, isForwardStrand := LocateR1PositionOnStrands(gtaIndex, readPair.FwRead)
 
-	if len(*hitsR1) == 0 {
-		fmt.Println("no hits for R1 read")
+	logrus.Debug("hitsR1: ", hitsR1)
+	logrus.Debug("isForwardStrand: ", isForwardStrand)
 
-		if readPair.RvRead == nil {
-			fmt.Println("no R2 read -> discard pair")
-			return
-		}
-
-		fmt.Println("check R2 read")
-
-		hitsR2 = GetAnchorMatches(readPair.RvRead, tree)
-
-		if len(*hitsR2) == 0 {
-			fmt.Println("no hits for R2 read -> discard pair")
-			return
-		}
-	}
-
-	fmt.Println("hits R1: ", *hitsR1)
-	fmt.Println("hits R2: ", *hitsR2)
-
+	//fmt.Println(hitsR1)
+	//fmt.Println(isForwardStrand)
 }

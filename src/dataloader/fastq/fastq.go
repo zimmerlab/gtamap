@@ -66,11 +66,11 @@ func InitFromPaths(pathFwReads string, pathRvReads string) *Reader {
 
 func (r Reader) NextRead() *ReadPair {
 
-	fmt.Println("Next read")
-
 	if !r.scannerFw.Scan() {
 		return nil
 	}
+
+	//fmt.Println("Next read")
 
 	header := r.scannerFw.Text()
 	r.scannerFw.Scan()
