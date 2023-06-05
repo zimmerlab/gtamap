@@ -79,13 +79,13 @@ func GetAnchorMatches(read *fastq.Read, tree *datastructure.SuffixTree) *map[Pos
 func LocateR1PositionOnStrands(gtaIndex *index.GtaIndex, r1Read *fastq.Read) (*map[Position][]int, bool) {
 
 	// matches the kmers to the forward strand
-	var hitsFw *map[Position][]int = GetAnchorMatches(r1Read, gtaIndex.SuffixTreeFw)
+	var hitsFw *map[Position][]int = GetAnchorMatches(r1Read, gtaIndex.SuffixTreeForwardStrandForwardDirection)
 
 	// no kmer matches on the forward strand
 	if len(*hitsFw) == 0 {
 
 		// matches the kmers to the reverse strand
-		var hitsRv *map[Position][]int = GetAnchorMatches(r1Read, gtaIndex.SuffixTreeRv)
+		var hitsRv *map[Position][]int = GetAnchorMatches(r1Read, gtaIndex.SuffixTreeReverseStrandForwardDirection)
 
 		// no kmer matches on the reverse strand
 		if len(*hitsRv) == 0 {

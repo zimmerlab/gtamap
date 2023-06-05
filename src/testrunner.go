@@ -71,7 +71,7 @@ func search() {
 
 	pattern := "ATGA"
 
-	var result *core.PatternSearchResult = gtaIndex.SuffixTreeFw.Search(&pattern)
+	var result *core.PatternSearchResult = gtaIndex.SuffixTreeForwardStrandForwardDirection.Search(&pattern)
 
 	fmt.Println("duration: ", time.Since(timerStart))
 	fmt.Println("result: ", result)
@@ -174,14 +174,10 @@ func testMapping() {
 
 	timerStart = time.Now()
 
-	//pathReadsFw := "../resources/reads_first_1.1.fq"
-	pathReadsFw := "../resources/reads_ccr9.1.fq"
-	pathReadsRv := "../resources/reads_ccr9.2.fq"
+	pathReadsR1 := "../resources/reads_ccr9.1.fq"
+	pathReadsR2 := "../resources/reads_ccr9.2.fq"
 
-	reader := fastq.InitFromPaths(pathReadsFw, pathReadsRv)
-
-	//fmt.Println("init fastq reader")
-	//fmt.Println("duration: ", time.Since(timerStart))
+	reader := fastq.InitFromPaths(pathReadsR1, pathReadsR2)
 
 	for read := reader.NextRead(); read != nil; read = reader.NextRead() {
 
