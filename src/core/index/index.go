@@ -13,10 +13,20 @@ import (
 )
 
 type GtaIndex struct {
+	Transcripts                             []*Transcript
 	SuffixTreeForwardStrandForwardDirection *datastructure.SuffixTree
 	SuffixTreeForwardStrandReverseDirection *datastructure.SuffixTree
 	SuffixTreeReverseStrandForwardDirection *datastructure.SuffixTree
 	SuffixTreeReverseStrandReverseDirection *datastructure.SuffixTree
+}
+
+type Transcript struct {
+	TranscriptIdEnsembl                      string
+	SequenceDnaForwardStrandForwardDirection string
+	SequenceDnaForwardStrandReverseDirection string
+	SequenceDnaReverseStrandForwardDirection string
+	SequenceDnaReverseStrandReverseDirection string
+	SequenceLength                           int
 }
 
 func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os.File) {
@@ -37,11 +47,22 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 	var sequencesRvFw []string = make([]string, len(annotation.Genes[0].Transcripts))
 	var sequencesRvRv []string = make([]string, len(annotation.Genes[0].Transcripts))
 
+	var transcripts []*Transcript = make([]*Transcript, len(annotation.Genes[0].Transcripts))
+
 	for i, transcript := range annotation.Genes[0].Transcripts {
 		sequencesFwFw[i] = transcript.SequenceDna
 		sequencesFwRv[i] = utils.ReverseString(transcript.SequenceDna)
 		sequencesRvFw[i] = utils.ReverseComplementDNA(transcript.SequenceDna)
 		sequencesRvRv[i] = utils.ComplementDNA(transcript.SequenceDna)
+
+		transcripts[i] = &Transcript{
+			TranscriptIdEnsembl:                      transcript.TranscriptIdEnsembl,
+			SequenceLength:                           len(transcript.SequenceDna),
+			SequenceDnaForwardStrandForwardDirection: sequencesFwFw[i],
+			SequenceDnaForwardStrandReverseDirection: sequencesFwRv[i],
+			SequenceDnaReverseStrandForwardDirection: sequencesRvFw[i],
+			SequenceDnaReverseStrandReverseDirection: sequencesRvRv[i],
+		}
 	}
 
 	// builds the suffix tree for the forward strand
@@ -53,6 +74,7 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 	var suffixTreeRvRv *datastructure.SuffixTree = datastructure.BuildSuffixTree(sequencesRvRv)
 
 	var gtaIndex GtaIndex = GtaIndex{
+		Transcripts:                             transcripts,
 		SuffixTreeForwardStrandForwardDirection: suffixTreeFwFw,
 		SuffixTreeForwardStrandReverseDirection: suffixTreeFwRv,
 		SuffixTreeReverseStrandForwardDirection: suffixTreeRvFw,

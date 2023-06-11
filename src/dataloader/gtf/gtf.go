@@ -22,6 +22,7 @@ type Gene struct {
 }
 
 type Transcript struct {
+	TranscriptIdEnsembl string
 	// start position of the transcript relative to the genomic start of its parent gene
 	StartRelative uint32
 	// end position of the transcript relative to the genomic start of its parent gene
@@ -74,22 +75,29 @@ func ReadGtf(gtfFile *os.File) *Annotation {
 
 		switch *feature {
 		case "gene":
+
 			gene := Gene{
-				GeneIdEnsembl:   "",
+				GeneIdEnsembl:   extractAttributeValue(line[8], "gene_id"),
 				Chromosome:      *seqName,
 				IsForwardStrand: isForwardStrand,
 				StartGenomic:    start,
 				EndGenomic:      end,
 				Transcripts:     make([]*Transcript, 0),
 			}
+
 			currentGene = &gene
 			annot.Genes = append(annot.Genes, &gene)
+
 		case "transcript":
+
 			transcript := Transcript{
-				StartRelative: start - currentGene.StartGenomic,
-				EndRelative:   end - currentGene.StartGenomic,
-				SequenceDna:   "",
+				TranscriptIdEnsembl: extractAttributeValue(line[8], "transcript_id"),
+				StartRelative:       start - currentGene.StartGenomic,
+				EndRelative:         end - currentGene.StartGenomic,
+				// the sequence is built later based on the exon structure and the supplied fasta file
+				SequenceDna: "",
 			}
+
 			currentTranscript = &transcript
 			currentGene.Transcripts = append(currentGene.Transcripts, &transcript)
 		case "exon":
@@ -106,4 +114,14 @@ func ReadGtf(gtfFile *os.File) *Annotation {
 	}
 
 	return &annot
+}
+
+func extractAttributeValue(attributeString string, attributeKey string) string {
+	for _, item := range strings.Split(attributeString, ";") {
+		split := strings.Split(strings.TrimSpace(item), " ")
+		if strings.TrimSpace(split[0]) == attributeKey {
+			return strings.Replace(strings.TrimSpace(split[1]), "\"", "", -1)
+		}
+	}
+	return ""
 }
