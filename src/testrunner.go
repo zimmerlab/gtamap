@@ -187,6 +187,7 @@ func testMapping() {
 
 		fmt.Println("map read pair duration: ", time.Since(timerStart))
 
+		break
 	}
 
 }

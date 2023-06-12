@@ -1,5 +1,6 @@
 package core
 
+// TODO: (performance) remove pattern as it is probably already known and does not have to be stored twice
 type PatternSearchResult struct {
 	Pattern *string
 	Matches []PatternMatch
