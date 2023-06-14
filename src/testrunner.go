@@ -15,6 +15,12 @@ import (
 	"time"
 )
 
+var KmerLength int = 8
+
+func GetKmerLength() int {
+	return KmerLength
+}
+
 func inspectAnnotation() {
 	pathGtfZeroed := "../resources/ENSG00000173585.zeroed.gtf"
 	pathFastaZeroed := "../resources/ENSG00000173585.fasta"

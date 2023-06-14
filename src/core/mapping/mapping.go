@@ -2,6 +2,7 @@ package mapping
 
 import (
 	"fmt"
+	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/dataloader/fastq"
@@ -29,22 +30,18 @@ func drawNextKmerIndex(startIndices []int) int {
 // GetAnchorMatches returns a map of positions in the transcriptome where the read could be aligned to.
 // Kmers are generated from the read and searched in the suffix tree.
 // The kmers are taken from evenly spaced starting positions in the read.
-// TODO: not only keep track of the position in the transcript where the kmer was mapped but also the position in the read
 func GetAnchorMatches(read *fastq.Read, tree *datastructure.SuffixTree) *map[int][]Info {
 
-	var kmerSize int = 8
-	var numKmers int = 5
-
 	var lenRead int = len(read.Sequence)
-	startIndices := utils.Arange(0, lenRead-kmerSize, numKmers)
+	startIndices := utils.Arange(0, lenRead-config.GetKmerLength(), config.GetNumKmers())
 
 	hits := make(map[int][]Info)
 
-	for i := 0; i < numKmers; i++ {
+	for i := 0; i < config.GetNumKmers(); i++ {
 
 		nextIndex := startIndices[i]
 
-		kmer := read.Sequence[nextIndex : nextIndex+kmerSize]
+		kmer := read.Sequence[nextIndex : nextIndex+config.GetKmerLength()]
 
 		result := tree.Search(&kmer)
 
@@ -60,6 +57,7 @@ func GetAnchorMatches(read *fastq.Read, tree *datastructure.SuffixTree) *map[int
 			if matchIndex < 0 {
 				continue
 			}
+			// TODO: check if match index is too far right s.t. the fragment would extend beyond the read
 
 			// TODO: (performance) use simple pair (array) instead of struct
 			info := Info{
@@ -98,6 +96,30 @@ func LocateR1PositionOnStrands(gtaIndex *index.GtaIndex, r1Read *fastq.Read) (*m
 	return hitsFw, true
 }
 
+func AlignRead(read *fastq.Read, transcriptSequence *string, tree *datastructure.SuffixTree, kmerHitList []Info) {
+
+	fmt.Println(read.Sequence)
+	fmt.Println(*transcriptSequence)
+
+	for i, hit := range kmerHitList {
+
+		// the first kmer does not start at the beginning of the read
+		if i == 0 && hit.IndexRead != 0 {
+			fmt.Println("first kmer does not start at the beginning of the read")
+
+			// the region before the first kmer
+			start := 0
+			end := hit.IndexRead
+
+			fmt.Println(start, end)
+
+			continue
+		}
+
+		fmt.Println(hit)
+	}
+}
+
 func MapReadPair(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) {
 
 	rvReadHeader := ""
@@ -122,17 +144,14 @@ func MapReadPair(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) {
 		return
 	}
 
-	fmt.Println(hitsR1)
-	fmt.Println(isForwardStrand)
-
 	// TODO: implement check for single end reads
 
 	var hitsR2 *map[int][]Info
 
 	if isForwardStrand {
-		hitsR2 = GetAnchorMatches(readPair.ReadR2, gtaIndex.SuffixTreeForwardStrandReverseDirection)
+		hitsR2 = GetAnchorMatches(readPair.ReadR2, gtaIndex.SuffixTreeReverseStrandForwardDirection)
 	} else {
-		hitsR2 = GetAnchorMatches(readPair.ReadR2, gtaIndex.SuffixTreeReverseStrandReverseDirection)
+		hitsR2 = GetAnchorMatches(readPair.ReadR2, gtaIndex.SuffixTreeForwardStrandForwardDirection)
 	}
 
 	if hitsR2 == nil {
@@ -140,14 +159,35 @@ func MapReadPair(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) {
 		return
 	}
 
-	fmt.Println(hitsR2)
+	// determine most likely transcript by using the count of kmer hits
+
+	maxHits := 0
+	idTranscript := -1
 
 	for index1, _ := range *hitsR1 {
 		for index2, _ := range *hitsR2 {
 			if index1 == index2 {
-				fmt.Println(gtaIndex.Transcripts[index1].TranscriptIdEnsembl)
-				fmt.Println(index1)
+
+				// TODO: filter unique hits per transcript
+
+				// TODO: find a better way to determine the most likely transcript (maybe use fragment length)
+
+				if len((*hitsR1)[index1])+len((*hitsR2)[index2]) > maxHits {
+					maxHits = len((*hitsR1)[index1]) + len((*hitsR2)[index2])
+					idTranscript = index1
+				}
 			}
 		}
+	}
+
+	fmt.Println("idTranscript", idTranscript)
+	fmt.Println("maxHits", maxHits)
+
+	if isForwardStrand {
+		AlignRead(readPair.ReadR1, &gtaIndex.Transcripts[idTranscript].SequenceDnaForwardStrandForwardDirection,
+			gtaIndex.SuffixTreeForwardStrandForwardDirection, (*hitsR1)[idTranscript])
+	} else {
+		AlignRead(readPair.ReadR1, &gtaIndex.Transcripts[idTranscript].SequenceDnaReverseStrandForwardDirection,
+			gtaIndex.SuffixTreeReverseStrandForwardDirection, (*hitsR1)[idTranscript])
 	}
 }
