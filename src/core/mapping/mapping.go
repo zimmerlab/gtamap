@@ -6,7 +6,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/core/algorithms"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/index"
-	"github.com/KleinSamuel/gtamap/src/dataloader/fastq"
+	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
 	"math/rand"
@@ -104,6 +104,28 @@ func addKmerMatchToCigar(cigarList *[]rune) *[]rune {
 	return cigarList
 }
 
+func finalizeCigar(cigarList *[]rune) string {
+	cigarString := ""
+
+	lastRune := (*cigarList)[0]
+	occurence := 1
+
+	for i := 1; i < len(*cigarList); i++ {
+
+		currentRune := (*cigarList)[i]
+		if currentRune == lastRune {
+			occurence++
+		} else {
+			cigarString += fmt.Sprintf("%d%c", occurence, lastRune)
+			occurence = 1
+			lastRune = currentRune
+		}
+	}
+	cigarString += fmt.Sprintf("%d%c", occurence, lastRune)
+
+	return cigarString
+}
+
 func AlignRead(read *fastq.Read, transcriptSequence *string, tree *datastructure.SuffixTree, kmerHitList []Info) {
 
 	leftmostMappingPosition := -1
@@ -121,10 +143,22 @@ func AlignRead(read *fastq.Read, transcriptSequence *string, tree *datastructure
 				fmt.Println("first kmer does not start at the beginning of the read")
 
 				// the region before the first kmer
-				start := 0
-				end := hit.IndexRead
+				startPrefixGapRead := 0
+				endPrefixGapRead := hit.IndexRead
+				lenPrefixGapRead := endPrefixGapRead - startPrefixGapRead
 
-				fmt.Println(start, end)
+				startPrefixGapRef := hit.IndexReference - lenPrefixGapRead
+				endPrefixGapRef := hit.IndexReference
+
+				score, cigarPart, seq1, seq2 := algorithms.NeedlemanWunsch((*transcriptSequence)[startPrefixGapRef:endPrefixGapRef], read.Sequence[startPrefixGapRead:endPrefixGapRead])
+
+				fmt.Println(score)
+				fmt.Println(cigarPart)
+				fmt.Println(seq1)
+				fmt.Println(seq2)
+
+				// add the alignment of the region before the first kmer to the cigar
+				cigarList = append(cigarList, cigarPart...)
 
 				// TODO: determine leftmost mapping position
 			}
@@ -134,6 +168,7 @@ func AlignRead(read *fastq.Read, transcriptSequence *string, tree *datastructure
 				leftmostMappingPosition = hit.IndexReference
 			}
 
+			// add the kmer match to the cigar
 			addKmerMatchToCigar(&cigarList)
 
 			continue
@@ -152,13 +187,15 @@ func AlignRead(read *fastq.Read, transcriptSequence *string, tree *datastructure
 			// TODO: (performance) check if there is any smarter way of comparing strings of same length
 		}
 
-		score, seq1, seq2 := algorithms.NeedlemanWunsch((*transcriptSequence)[startGapRef:endGapRef], read.Sequence[startGapRead:endGapRead])
+		score, cigarPart, seq1, seq2 := algorithms.NeedlemanWunsch((*transcriptSequence)[startGapRef:endGapRef], read.Sequence[startGapRead:endGapRead])
 
 		fmt.Println(score)
+		fmt.Println(cigarPart)
 		fmt.Println(seq1)
 		fmt.Println(seq2)
 
-		// TODO: add alignment to cigar string
+		// add the alignment to the cigar string
+		cigarList = append(cigarList, cigarPart...)
 
 		// add the kmer match to the cigar string
 		addKmerMatchToCigar(&cigarList)
@@ -168,17 +205,30 @@ func AlignRead(read *fastq.Read, transcriptSequence *string, tree *datastructure
 
 			fmt.Println("last kmer does not end at the end of the read")
 
-			start := hit.IndexRead + config.GetKmerLength()
-			end := len(read.Sequence)
+			startSuffixGapRead := hit.IndexRead + config.GetKmerLength()
+			endSuffixGapRead := len(read.Sequence)
+			lenSuffixGapRead := endSuffixGapRead - startSuffixGapRead
 
-			fmt.Println(start, end)
+			startSuffixGapRef := hit.IndexReference + config.GetKmerLength()
+			endSuffixGapRef := startSuffixGapRef + lenSuffixGapRead
 
-			// TODO: add match to cigar
+			score, cigarPart, seq1, seq2 := algorithms.NeedlemanWunsch((*transcriptSequence)[startSuffixGapRef:endSuffixGapRef], read.Sequence[startSuffixGapRead:endSuffixGapRead])
+
+			fmt.Println(score)
+			fmt.Println(cigarPart)
+			fmt.Println(seq1)
+			fmt.Println(seq2)
+
+			// add the alignment of the suffix to the cigar string
+			cigarList = append(cigarList, cigarPart...)
 		}
 	}
 
 	fmt.Println("leftmostMappingPosition", leftmostMappingPosition)
 	fmt.Println("cigarString", cigarList)
+	fmt.Println(len(cigarList))
+
+	fmt.Println(finalizeCigar(&cigarList))
 }
 
 func MapReadPair(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) {

@@ -115,6 +115,7 @@ func Main() {
 	score, cigarList, align1, align2 := NeedlemanWunsch(seq1, seq2)
 
 	fmt.Println("Alignment score:", score)
+	fmt.Println("CIGAR:", string(cigarList))
 	fmt.Println("Aligned sequence 1:", align1)
 	fmt.Println("Aligned sequence 2:", align2)
 }

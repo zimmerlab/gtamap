@@ -1,8 +1,8 @@
 package dataloader
 
 import (
-	"github.com/KleinSamuel/gtamap/src/dataloader/fasta"
-	"github.com/KleinSamuel/gtamap/src/dataloader/gtf"
+	"github.com/KleinSamuel/gtamap/src/formats/fasta"
+	"github.com/KleinSamuel/gtamap/src/formats/gtf"
 	"github.com/sirupsen/logrus"
 	"os"
 	"sort"
