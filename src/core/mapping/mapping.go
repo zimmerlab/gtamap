@@ -3,6 +3,7 @@ package mapping
 import (
 	"fmt"
 	"github.com/KleinSamuel/gtamap/src/config"
+	"github.com/KleinSamuel/gtamap/src/core/algorithms"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/dataloader/fastq"
@@ -96,28 +97,88 @@ func LocateR1PositionOnStrands(gtaIndex *index.GtaIndex, r1Read *fastq.Read) (*m
 	return hitsFw, true
 }
 
+func addKmerMatchToCigar(cigarList *[]rune) *[]rune {
+	for i := 0; i < config.GetKmerLength(); i++ {
+		*cigarList = append(*cigarList, 'M')
+	}
+	return cigarList
+}
+
 func AlignRead(read *fastq.Read, transcriptSequence *string, tree *datastructure.SuffixTree, kmerHitList []Info) {
 
-	fmt.Println(read.Sequence)
-	fmt.Println(*transcriptSequence)
+	leftmostMappingPosition := -1
+	cigarList := make([]rune, 0)
 
-	for i, hit := range kmerHitList {
+	for i := 0; i < len(kmerHitList); i++ {
 
-		// the first kmer does not start at the beginning of the read
-		if i == 0 && hit.IndexRead != 0 {
-			fmt.Println("first kmer does not start at the beginning of the read")
+		hit := kmerHitList[i]
 
-			// the region before the first kmer
-			start := 0
-			end := hit.IndexRead
+		fmt.Println(i, hit)
 
-			fmt.Println(start, end)
+		if i == 0 {
+			// the first kmer does not start at the beginning of the read
+			if hit.IndexRead != 0 {
+				fmt.Println("first kmer does not start at the beginning of the read")
+
+				// the region before the first kmer
+				start := 0
+				end := hit.IndexRead
+
+				fmt.Println(start, end)
+
+				// TODO: determine leftmost mapping position
+			}
+
+			// sets the leftmost mapping position if not already set by gap before first kmer
+			if leftmostMappingPosition == -1 {
+				leftmostMappingPosition = hit.IndexReference
+			}
+
+			addKmerMatchToCigar(&cigarList)
 
 			continue
 		}
 
-		fmt.Println(hit)
+		// check gap between current and previous kmer in read
+		startGapRead := kmerHitList[i-1].IndexRead + config.GetKmerLength()
+		endGapRead := hit.IndexRead
+		lenGapRead := endGapRead - startGapRead
+		// check gap between current and previous kmer in reference
+		startGapRef := kmerHitList[i-1].IndexReference + config.GetKmerLength()
+		endGapRef := hit.IndexReference
+		lenGapRef := endGapRef - startGapRef
+
+		if lenGapRead == lenGapRef {
+			// TODO: (performance) check if there is any smarter way of comparing strings of same length
+		}
+
+		score, seq1, seq2 := algorithms.NeedlemanWunsch((*transcriptSequence)[startGapRef:endGapRef], read.Sequence[startGapRead:endGapRead])
+
+		fmt.Println(score)
+		fmt.Println(seq1)
+		fmt.Println(seq2)
+
+		// TODO: add alignment to cigar string
+
+		// add the kmer match to the cigar string
+		addKmerMatchToCigar(&cigarList)
+
+		// the last kmer does not end at the end of the read
+		if i == len(kmerHitList)-1 && hit.IndexRead < len(read.Sequence)-config.GetKmerLength() {
+
+			fmt.Println("last kmer does not end at the end of the read")
+
+			start := hit.IndexRead + config.GetKmerLength()
+			end := len(read.Sequence)
+
+			fmt.Println(start, end)
+
+			// TODO: add match to cigar
+		}
 	}
+
+	fmt.Println("leftmostMappingPosition", leftmostMappingPosition)
+	fmt.Println("cigarString", cigarList)
 }
 
 func MapReadPair(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) {
