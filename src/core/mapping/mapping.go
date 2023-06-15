@@ -231,7 +231,7 @@ func AlignRead(read *fastq.Read, transcriptSequence *string, tree *datastructure
 	fmt.Println(finalizeCigar(&cigarList))
 }
 
-func MapReadPair(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) {
+func MapReadPair(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) string {
 
 	rvReadHeader := ""
 	if readPair.ReadR2 != nil {
@@ -252,7 +252,7 @@ func MapReadPair(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) {
 
 	if hitsR1 == nil {
 		logrus.Info("Discard read pair because R1 does not match")
-		return
+		return ""
 	}
 
 	// TODO: implement check for single end reads
@@ -267,7 +267,7 @@ func MapReadPair(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) {
 
 	if hitsR2 == nil {
 		logrus.Info("Discard read pair because R2 does not match")
-		return
+		return ""
 	}
 
 	// determine most likely transcript by using the count of kmer hits
@@ -295,10 +295,14 @@ func MapReadPair(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) {
 	fmt.Println("maxHits", maxHits)
 
 	if isForwardStrand {
+
 		AlignRead(readPair.ReadR1, &gtaIndex.Transcripts[idTranscript].SequenceDnaForwardStrandForwardDirection,
 			gtaIndex.SuffixTreeForwardStrandForwardDirection, (*hitsR1)[idTranscript])
+
 	} else {
 		AlignRead(readPair.ReadR1, &gtaIndex.Transcripts[idTranscript].SequenceDnaReverseStrandForwardDirection,
 			gtaIndex.SuffixTreeReverseStrandForwardDirection, (*hitsR1)[idTranscript])
 	}
+
+	return "mapping result dummy"
 }
