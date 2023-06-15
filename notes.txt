@@ -8,10 +8,16 @@
 for each match, the id of the transcript and the position of the match is returned
 - if less than x found for r2 -> discard read pair
 
+## after kmer mapping
+- kmers are already exact matches and are kept
+- regions between kmer matches are aligned using needleman wunsch
+- regions before and after the first and last kmer match need special care
+? how far to look in the reference ?
+
 
 ### optimization ideas
 
 - discard kmer matches that are too close to the end of the transcript
 (for kmer matching, it is assumed that the kmer is from the R1 read)
-
-# test
+- use different alignment strategies for gaps of the same length
+- use banded alignment for the regions between kmer matches

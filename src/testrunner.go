@@ -7,11 +7,12 @@ import (
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapping"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
-	"github.com/KleinSamuel/gtamap/src/dataloader/fastq"
-	"github.com/KleinSamuel/gtamap/src/dataloader/gtf"
+	"github.com/KleinSamuel/gtamap/src/formats/fastq"
+	"github.com/KleinSamuel/gtamap/src/formats/gtf"
 	"github.com/akamensky/argparse"
 	"github.com/sirupsen/logrus"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -185,17 +186,61 @@ func testMapping() {
 
 	reader := fastq.InitFromPaths(pathReadsR1, pathReadsR2)
 
-	for read := reader.NextRead(); read != nil; read = reader.NextRead() {
+	numWorkers := 3
 
-		timerStart = time.Now()
+	taskQueue := make(chan Task)
 
-		mapping.MapReadPair(read, gtaIndex)
+	var wg sync.WaitGroup
 
-		fmt.Println("map read pair duration: ", time.Since(timerStart))
-
-		break
+	// Start the worker goroutines
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		//go worker(i, taskQueue, &wg)
+		go mapReadPairWorker(i, taskQueue, &wg, gtaIndex)
 	}
 
+	taskCounter := 0
+
+	for readPair := reader.NextRead(); readPair != nil; readPair = reader.NextRead() {
+
+		task := Task{
+			ID:       taskCounter,
+			ReadPair: readPair,
+		}
+		taskQueue <- task
+
+		taskCounter++
+
+		/*
+			timerStart = time.Now()
+			mapping.MapReadPair(read, gtaIndex)
+			fmt.Println("map read pair duration: ", time.Since(timerStart))
+		*/
+	}
+
+	close(taskQueue)
+
+	wg.Wait()
+
+	fmt.Println("mapping finished")
+}
+
+func mapReadPairWorker(workerId int, taskQueue <-chan Task, wg *sync.WaitGroup, gtaIndex *index.GtaIndex) {
+
+	fmt.Println("worker", workerId, "started")
+
+	// Process tasks from the task queue
+	for task := range taskQueue {
+		// Simulate work
+		fmt.Println("Processing task (worker", workerId, ")", task.ID, task.ReadPair)
+
+		mapping.MapReadPair(task.ReadPair, gtaIndex)
+	}
+
+	// Signal that the worker has finished
+	wg.Done()
+
+	fmt.Println("worker", workerId, "finished")
 }
 
 func main() {
@@ -206,4 +251,59 @@ func main() {
 	logrus.SetLevel(logrus.InfoLevel)
 
 	testMapping()
+
+	/*
+		numWorkers := 3
+
+		taskQueue := make(chan Task)
+
+		var wg sync.WaitGroup
+
+		// Start the worker goroutines
+		for i := 0; i < numWorkers; i++ {
+			wg.Add(1)
+			go worker(i, taskQueue, &wg)
+		}
+
+		// Enqueue tasks to the task queue
+		for i := 0; i < 20; i++ {
+			task := Task{
+				ID:       i,
+				ReadPair: nil,
+				//Data: fmt.Sprintf("Task %d", i),
+			}
+			taskQueue <- task
+		}
+
+		// Close the task queue to signal that no more tasks will be added
+		close(taskQueue)
+
+		// Wait for all worker goroutines to finish
+		wg.Wait()
+	*/
+}
+
+func worker(workerId int, tasks <-chan Task, wg *sync.WaitGroup) {
+
+	fmt.Println("worker", workerId, "started")
+	fmt.Println("tasks")
+	fmt.Println(tasks)
+
+	// Process tasks from the task queue
+	for task := range tasks {
+		// Simulate work
+		fmt.Println("Processing task (worker", workerId, ")", task.ID, task.ReadPair)
+
+		// Perform actual work...
+	}
+
+	fmt.Println("worker", workerId, "finished")
+
+	// Signal that the worker has finished
+	wg.Done()
+}
+
+type Task struct {
+	ID       int
+	ReadPair *fastq.ReadPair
 }
