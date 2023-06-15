@@ -21,3 +21,9 @@ for each match, the id of the transcript and the position of the match is return
 (for kmer matching, it is assumed that the kmer is from the R1 read)
 - use different alignment strategies for gaps of the same length
 - use banded alignment for the regions between kmer matches
+
+
+### cleanup
+
+- remove sequences and suffix trees for reverse directions
+- remove return values for sequence of NW algorithm

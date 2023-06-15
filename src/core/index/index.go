@@ -13,6 +13,7 @@ import (
 )
 
 type GtaIndex struct {
+	Gene                                    *Gene
 	Transcripts                             []*Transcript
 	SuffixTreeForwardStrandForwardDirection *datastructure.SuffixTree
 	SuffixTreeForwardStrandReverseDirection *datastructure.SuffixTree
@@ -20,13 +21,27 @@ type GtaIndex struct {
 	SuffixTreeReverseStrandReverseDirection *datastructure.SuffixTree
 }
 
+type Gene struct {
+	GeneIdEnsembl  string // e.g. "ENSG00000173585"
+	Chromosome     string // e.g. "1", "2", "X", "Y", "MT"
+	IsFowardStrand bool   // true if on forward strand
+	StartGenomic   uint32 // 0-based genomic start location
+	EndGenomic     uint32 // exclusive genomic end location
+}
+
 type Transcript struct {
-	TranscriptIdEnsembl                      string
+	TranscriptIdEnsembl                      string // e.g. "ENST00000342992"
 	SequenceDnaForwardStrandForwardDirection string
 	SequenceDnaForwardStrandReverseDirection string
 	SequenceDnaReverseStrandForwardDirection string
 	SequenceDnaReverseStrandReverseDirection string
 	SequenceLength                           int
+	Exons                                    []*Exon
+}
+
+type Exon struct {
+	StartRelative uint32 // 0-based start location relative to genomic location of parent gene
+	EndRelative   uint32 // exclusive end location relative to genomic location of parent gene
 }
 
 func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os.File) {
@@ -41,6 +56,12 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 	}
 
 	var annotation *gtf.Annotation = dataloader.GenerateInputForIndex(gtfFile, fastaFile, fastaIndexFile)
+
+	var gene *Gene = &Gene{
+		GeneIdEnsembl:  annotation.Genes[0].GeneIdEnsembl,
+		Chromosome:     annotation.Genes[0].Chromosome,
+		IsFowardStrand: annotation.Genes[0].IsForwardStrand,
+	}
 
 	var sequencesFwFw []string = make([]string, len(annotation.Genes[0].Transcripts))
 	var sequencesFwRv []string = make([]string, len(annotation.Genes[0].Transcripts))
@@ -63,6 +84,15 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 			SequenceDnaReverseStrandForwardDirection: sequencesRvFw[i],
 			SequenceDnaReverseStrandReverseDirection: sequencesRvRv[i],
 		}
+
+		transcripts[i].Exons = make([]*Exon, len(transcript.Exons))
+
+		for j, exon := range transcript.Exons {
+			transcripts[i].Exons[j] = &Exon{
+				StartRelative: exon.StartRelative,
+				EndRelative:   exon.EndRelative,
+			}
+		}
 	}
 
 	// builds the suffix tree for the forward strand
@@ -74,6 +104,7 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 	var suffixTreeRvRv *datastructure.SuffixTree = datastructure.BuildSuffixTree(sequencesRvRv)
 
 	var gtaIndex GtaIndex = GtaIndex{
+		Gene:                                    gene,
 		Transcripts:                             transcripts,
 		SuffixTreeForwardStrandForwardDirection: suffixTreeFwFw,
 		SuffixTreeForwardStrandReverseDirection: suffixTreeFwRv,

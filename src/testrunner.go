@@ -77,7 +77,7 @@ func search() {
 
 	timerStart := time.Now()
 
-	pattern := "ATGA"
+	pattern := "AGCCCTATT"
 
 	var result *core.PatternSearchResult = gtaIndex.SuffixTreeForwardStrandForwardDirection.Search(&pattern)
 
@@ -173,6 +173,8 @@ func testFastqReader() {
 
 func testMapping() {
 
+	timerStartTotal := time.Now()
+
 	timerStart := time.Now()
 
 	gtaIndex := deserializeIndex()
@@ -221,6 +223,9 @@ func testMapping() {
 		taskQueueMapping <- mappingTask
 
 		taskCounter++
+
+		// TODO: remove after testing
+		break
 	}
 
 	close(taskQueueMapping)
@@ -236,6 +241,12 @@ func testMapping() {
 	writer.Close()
 
 	fmt.Println("writer finished")
+
+	totalDuration := time.Since(timerStartTotal)
+
+	logrus.WithFields(logrus.Fields{
+		"duration": totalDuration,
+	}).Info("Finished mapping")
 }
 
 type ReadPairMappingTask struct {
@@ -294,4 +305,5 @@ func main() {
 
 	testMapping()
 
+	//search()
 }

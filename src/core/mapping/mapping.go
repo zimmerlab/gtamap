@@ -7,9 +7,11 @@ import (
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
+	"github.com/KleinSamuel/gtamap/src/formats/sam"
 	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
 	"math/rand"
+	"strings"
 )
 
 // Info the mapping information about a kmer
@@ -82,8 +84,12 @@ func LocateR1PositionOnStrands(gtaIndex *index.GtaIndex, r1Read *fastq.Read) (*m
 	// TODO: create a function to check if there are not sufficiently enough hits on this strand
 	if len(*hitsFw) == 0 {
 
+		r1Read.Sequence = utils.ReverseComplementDNA(r1Read.Sequence)
+
 		// matches the kmers to the reverse strand
-		var hitsRv *map[int][]Info = GetAnchorMatches(r1Read, gtaIndex.SuffixTreeReverseStrandForwardDirection)
+		//var hitsRv *map[int][]Info = GetAnchorMatches(r1Read, gtaIndex.SuffixTreeReverseStrandForwardDirection)
+
+		var hitsRv *map[int][]Info = GetAnchorMatches(r1Read, gtaIndex.SuffixTreeForwardStrandForwardDirection)
 
 		// no kmer matches on the reverse strand
 		if len(*hitsRv) == 0 {
@@ -104,31 +110,100 @@ func addKmerMatchToCigar(cigarList *[]rune) *[]rune {
 	return cigarList
 }
 
-func finalizeCigar(cigarList *[]rune) string {
-	cigarString := ""
+func finalizeCigar(cigarList *[]rune, startPositionInTranscript uint32, transcript *index.Transcript) (int, string) {
 
-	lastRune := (*cigarList)[0]
-	occurence := 1
+	// the final cigar string which is built in this function
+	cigarString := ""
+	// the start position of the match relative to the parent gene
+	startRelative := 0
+
+	// the current position within the reference (relative to the parent gene)
+	var posInRef uint32 = 0
+
+	lastCigarElement := (*cigarList)[0]
+	occurencesCigarElements := 1
+
+	// the index of the current exon
+	currentExonId := 0
+
+	// find the exon where the read starts
+	for i := 0; i < len(transcript.Exons); i++ {
+
+		// the length of the current exon
+		lenExon := transcript.Exons[i].EndRelative - transcript.Exons[i].StartRelative
+
+		if startPositionInTranscript >= lenExon {
+			startPositionInTranscript -= lenExon
+			continue
+		}
+
+		currentExonId = i
+
+		posInRef = transcript.Exons[i].StartRelative + startPositionInTranscript
+
+		break
+	}
+
+	startRelative = int(posInRef)
+
+	fmt.Println("currentExonId", currentExonId)
+	fmt.Println("posInRef", posInRef)
 
 	for i := 1; i < len(*cigarList); i++ {
 
-		currentRune := (*cigarList)[i]
-		if currentRune == lastRune {
-			occurence++
+		posInRef += 1
+
+		// read match exceeds current exon
+		if posInRef > transcript.Exons[currentExonId].EndRelative {
+
+			cigarString += fmt.Sprintf("%d%c", occurencesCigarElements, lastCigarElement)
+
+			lenIntron := transcript.Exons[currentExonId+1].StartRelative - transcript.Exons[currentExonId].EndRelative - 1
+
+			// add intron to cigar
+			cigarString += fmt.Sprintf("%dN", lenIntron)
+			// reset current cigar element counter
+			lastCigarElement = 'N'
+			occurencesCigarElements = 0
+
+			// set the position in the reference to the start of the next exon
+			posInRef += lenIntron
+
+			// set the current exon to the next exon
+			currentExonId += 1
+		}
+
+		currentCigarElement := (*cigarList)[i]
+
+		if currentCigarElement == lastCigarElement {
+
+			occurencesCigarElements++
+
 		} else {
-			cigarString += fmt.Sprintf("%d%c", occurence, lastRune)
-			occurence = 1
-			lastRune = currentRune
+
+			if lastCigarElement != 'N' {
+				cigarString += fmt.Sprintf("%d%c", occurencesCigarElements, lastCigarElement)
+			}
+			occurencesCigarElements = 1
+			lastCigarElement = currentCigarElement
+
 		}
 	}
-	cigarString += fmt.Sprintf("%d%c", occurence, lastRune)
+	if lastCigarElement != 'N' {
+		cigarString += fmt.Sprintf("%d%c", occurencesCigarElements, lastCigarElement)
+	}
 
-	return cigarString
+	return startRelative, cigarString
 }
 
-func AlignRead(read *fastq.Read, transcriptSequence *string, tree *datastructure.SuffixTree, kmerHitList []Info) {
+func AlignRead(read *fastq.Read, transcriptId int, kmerHitList []Info, gtaIndex *index.GtaIndex) *sam.Entry {
+
+	fmt.Println(read.Sequence)
+	fmt.Println("transcript", gtaIndex.Transcripts[transcriptId].TranscriptIdEnsembl)
+	fmt.Println(kmerHitList)
 
 	leftmostMappingPosition := -1
+
 	cigarList := make([]rune, 0)
 
 	for i := 0; i < len(kmerHitList); i++ {
@@ -150,10 +225,11 @@ func AlignRead(read *fastq.Read, transcriptSequence *string, tree *datastructure
 				startPrefixGapRef := hit.IndexReference - lenPrefixGapRead
 				endPrefixGapRef := hit.IndexReference
 
-				score, cigarPart, seq1, seq2 := algorithms.NeedlemanWunsch((*transcriptSequence)[startPrefixGapRef:endPrefixGapRef], read.Sequence[startPrefixGapRead:endPrefixGapRead])
+				score, cigarPart, seq1, seq2 := algorithms.NeedlemanWunsch(
+					gtaIndex.Transcripts[transcriptId].SequenceDnaForwardStrandForwardDirection[startPrefixGapRef:endPrefixGapRef],
+					read.Sequence[startPrefixGapRead:endPrefixGapRead])
 
 				fmt.Println(score)
-				fmt.Println(cigarPart)
 				fmt.Println(seq1)
 				fmt.Println(seq2)
 
@@ -187,10 +263,11 @@ func AlignRead(read *fastq.Read, transcriptSequence *string, tree *datastructure
 			// TODO: (performance) check if there is any smarter way of comparing strings of same length
 		}
 
-		score, cigarPart, seq1, seq2 := algorithms.NeedlemanWunsch((*transcriptSequence)[startGapRef:endGapRef], read.Sequence[startGapRead:endGapRead])
+		score, cigarPart, seq1, seq2 := algorithms.NeedlemanWunsch(
+			gtaIndex.Transcripts[transcriptId].SequenceDnaForwardStrandForwardDirection[startGapRef:endGapRef],
+			read.Sequence[startGapRead:endGapRead])
 
 		fmt.Println(score)
-		fmt.Println(cigarPart)
 		fmt.Println(seq1)
 		fmt.Println(seq2)
 
@@ -212,10 +289,11 @@ func AlignRead(read *fastq.Read, transcriptSequence *string, tree *datastructure
 			startSuffixGapRef := hit.IndexReference + config.GetKmerLength()
 			endSuffixGapRef := startSuffixGapRef + lenSuffixGapRead
 
-			score, cigarPart, seq1, seq2 := algorithms.NeedlemanWunsch((*transcriptSequence)[startSuffixGapRef:endSuffixGapRef], read.Sequence[startSuffixGapRead:endSuffixGapRead])
+			score, cigarPart, seq1, seq2 = algorithms.NeedlemanWunsch(
+				gtaIndex.Transcripts[transcriptId].SequenceDnaForwardStrandForwardDirection[startSuffixGapRef:endSuffixGapRef],
+				read.Sequence[startSuffixGapRead:endSuffixGapRead])
 
 			fmt.Println(score)
-			fmt.Println(cigarPart)
 			fmt.Println(seq1)
 			fmt.Println(seq2)
 
@@ -225,10 +303,14 @@ func AlignRead(read *fastq.Read, transcriptSequence *string, tree *datastructure
 	}
 
 	fmt.Println("leftmostMappingPosition", leftmostMappingPosition)
-	fmt.Println("cigarString", cigarList)
-	fmt.Println(len(cigarList))
 
-	fmt.Println(finalizeCigar(&cigarList))
+	startPos, cigarString := finalizeCigar(&cigarList, uint32(leftmostMappingPosition), gtaIndex.Transcripts[transcriptId])
+
+	return &sam.Entry{
+		Qname: strings.Split(read.Header[1:], " ")[0],
+		Cigar: cigarString,
+		Pos:   startPos,
+	}
 }
 
 func MapReadPair(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) string {
@@ -250,6 +332,7 @@ func MapReadPair(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) string {
 
 	hitsR1, isForwardStrand := LocateR1PositionOnStrands(gtaIndex, readPair.ReadR1)
 
+	// TODO: check if discard read pair or report as mate unmapped
 	if hitsR1 == nil {
 		logrus.Info("Discard read pair because R1 does not match")
 		return ""
@@ -260,7 +343,11 @@ func MapReadPair(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) string {
 	var hitsR2 *map[int][]Info
 
 	if isForwardStrand {
-		hitsR2 = GetAnchorMatches(readPair.ReadR2, gtaIndex.SuffixTreeReverseStrandForwardDirection)
+
+		readPair.ReadR2.Sequence = utils.ReverseComplementDNA(readPair.ReadR2.Sequence)
+
+		hitsR2 = GetAnchorMatches(readPair.ReadR2, gtaIndex.SuffixTreeForwardStrandForwardDirection)
+
 	} else {
 		hitsR2 = GetAnchorMatches(readPair.ReadR2, gtaIndex.SuffixTreeForwardStrandForwardDirection)
 	}
@@ -296,13 +383,30 @@ func MapReadPair(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) string {
 
 	if isForwardStrand {
 
-		AlignRead(readPair.ReadR1, &gtaIndex.Transcripts[idTranscript].SequenceDnaForwardStrandForwardDirection,
-			gtaIndex.SuffixTreeForwardStrandForwardDirection, (*hitsR1)[idTranscript])
+		samEntryR1 := AlignRead(readPair.ReadR1, idTranscript, (*hitsR1)[idTranscript], gtaIndex)
+		samEntryR2 := AlignRead(readPair.ReadR2, idTranscript, (*hitsR2)[idTranscript], gtaIndex)
+
+		samEntryR1.Rname = gtaIndex.Gene.Chromosome
+		samEntryR1.Seq = readPair.ReadR1.Sequence
+		samEntryR1.Pnext = samEntryR2.Pos
+		samEntryR1.Rnext = "="
+
+		samEntryR2.Rname = gtaIndex.Gene.Chromosome
+		samEntryR2.Seq = readPair.ReadR2.Sequence
+		samEntryR2.Pnext = samEntryR1.Pos
+		samEntryR2.Rnext = "="
+
+		return samEntryR1.String() + "\n" + samEntryR2.String() + "\n"
 
 	} else {
-		AlignRead(readPair.ReadR1, &gtaIndex.Transcripts[idTranscript].SequenceDnaReverseStrandForwardDirection,
-			gtaIndex.SuffixTreeReverseStrandForwardDirection, (*hitsR1)[idTranscript])
+
+		fmt.Println("not implemented yet")
+
+		/*
+			AlignRead(readPair.ReadR1, &gtaIndex.Transcripts[idTranscript].SequenceDnaReverseStrandForwardDirection,
+				gtaIndex.SuffixTreeReverseStrandForwardDirection, (*hitsR1)[idTranscript])
+		*/
 	}
 
-	return "mapping result dummy"
+	return "mapping result dummy\n"
 }

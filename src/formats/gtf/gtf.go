@@ -69,7 +69,8 @@ func ReadGtf(gtfFile *os.File) *Annotation {
 		if errStart != nil && errEnd != nil {
 			fmt.Println("Could not parse start or end position: ", line[3], line[4])
 		}
-		start := uint32(start64)
+		// the gtf file is 1-based, but the annotation is 0-based
+		start := uint32(start64) - 1
 		end := uint32(end64)
 		isForwardStrand := line[6] == "+"
 
@@ -100,7 +101,7 @@ func ReadGtf(gtfFile *os.File) *Annotation {
 
 			currentTranscript = &transcript
 			currentGene.Transcripts = append(currentGene.Transcripts, &transcript)
-		case "exon":
+		case "cds":
 			exon := Exon{
 				StartRelative: start - currentGene.StartGenomic,
 				EndRelative:   end - currentGene.StartGenomic,

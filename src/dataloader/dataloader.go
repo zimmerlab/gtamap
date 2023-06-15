@@ -82,7 +82,7 @@ func GenerateInputForIndex(gtfFile *os.File, fastaFile *os.File, fastaIndexFile 
 			for _, exon := range trans.Exons {
 
 				// the start position of the transcript relative to its chromosome
-				startRelativeChromosome := gene.StartGenomic - 1 + exon.StartRelative
+				startRelativeChromosome := gene.StartGenomic + exon.StartRelative
 				// the number of newlines contained between the start of the chromosome and the start of the transcript
 				offsetNewlines := int64(startRelativeChromosome) / int64(index.Linebases)
 				// the offset to the start of the transcript
@@ -94,7 +94,7 @@ func GenerateInputForIndex(gtfFile *os.File, fastaFile *os.File, fastaIndexFile 
 				}
 
 				// the length of the exon sequence in nucleotides
-				lengthBases := exon.EndRelative - exon.StartRelative + 1
+				lengthBases := exon.EndRelative - exon.StartRelative
 				// the number of newlines contained between the start and end of the exon sequence
 				lengthNewlines := int64(lengthBases) / int64(index.Linebases)
 				// the number of characters in the current line until the next newline
