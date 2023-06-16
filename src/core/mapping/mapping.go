@@ -310,9 +310,11 @@ func AlignRead(read *fastq.Read, transcriptId int, kmerHitList []Info, gtaIndex 
 	startPos, cigarString := finalizeCigar(&cigarList, uint32(leftmostMappingPosition), gtaIndex.Transcripts[transcriptId])
 
 	return &sam.Entry{
-		Qname: strings.Split(read.Header[1:], " ")[0],
-		Cigar: cigarString,
-		Pos:   startPos + 1, // start position is 1-based in SAM file
+		Qname:        strings.Split(read.Header[1:], " ")[0],
+		Cigar:        cigarString,
+		Pos:          startPos + 1, // start position is 1-based in SAM file
+		TranscriptId: transcriptId,
+		Qual:         read.Quality,
 	}
 }
 

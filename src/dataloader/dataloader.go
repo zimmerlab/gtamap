@@ -62,14 +62,28 @@ func GenerateInputForIndexFromFile(gtfFilePath string, fastaFilePath string, fas
 // reads the fasta index (required) and extracts the dna sequence for every transcript
 func GenerateInputForIndex(gtfFile *os.File, fastaFile *os.File, fastaIndexFile *os.File) *gtf.Annotation {
 
+	logrus.WithFields(logrus.Fields{
+		"gtfFile":        gtfFile.Name(),
+		"fastaFile":      fastaFile.Name(),
+		"fastaIndexFile": fastaIndexFile.Name(),
+	}).Info("Generate input for index")
+
 	fastaIndex := fasta.ReadFastaIndex(fastaIndexFile)
 	annotation := gtf.ReadGtf(gtfFile)
 
 	for _, gene := range annotation.Genes {
 
+		logrus.WithFields(logrus.Fields{
+			"geneIdEnsembl": gene.GeneIdEnsembl,
+		}).Info("Process gene")
+
 		index := fastaIndex.Entries[gene.Chromosome]
 
 		for _, trans := range gene.Transcripts {
+
+			logrus.WithFields(logrus.Fields{
+				"transcriptIdEnsembl": trans.TranscriptIdEnsembl,
+			}).Info("Process transcript")
 
 			// sort exons by start position such that transcript sequence is in order
 			sort.Slice(trans.Exons, func(i, j int) bool {
@@ -81,32 +95,43 @@ func GenerateInputForIndex(gtfFile *os.File, fastaFile *os.File, fastaIndexFile 
 			// build transcript sequence by seeking and concatenating the exon sequences
 			for _, exon := range trans.Exons {
 
+				logrus.WithFields(logrus.Fields{
+					"startRelative": exon.StartRelative,
+					"endRelative":   exon.EndRelative,
+				}).Info("Extract CDS sequence")
+
 				// the start position of the transcript relative to its chromosome
 				startRelativeChromosome := gene.StartGenomic + exon.StartRelative
 				// the number of newlines contained between the start of the chromosome and the start of the transcript
-				offsetNewlines := int64(startRelativeChromosome) / int64(index.Linebases)
-				// the offset to the start of the transcript
-				offset := index.Offset + int64(startRelativeChromosome) + offsetNewlines
+				lineNumber := int64(startRelativeChromosome) / int64(index.Linebases)
+				// the number of bases contained in the last line that the exon is on
+				offsetWithinLine := int64(startRelativeChromosome) % int64(index.Linebases)
 
-				_, errSeek := fastaFile.Seek(offset, 0)
+				// the offset to the start of the transcript
+				filePosition := index.Offset + lineNumber*int64(index.Linewidth) + offsetWithinLine
+
+				_, errSeek := fastaFile.Seek(filePosition, 0)
 				if errSeek != nil {
 					panic(errSeek)
 				}
 
 				// the length of the exon sequence in nucleotides
-				lengthBases := exon.EndRelative - exon.StartRelative
-				// the number of newlines contained between the start and end of the exon sequence
-				lengthNewlines := int64(lengthBases) / int64(index.Linebases)
+				lengthBases := int64(exon.EndRelative - exon.StartRelative)
 				// the number of characters in the current line until the next newline
-				numCharsInLine := int64(index.Linebases) - (int64(startRelativeChromosome) % int64(index.Linebases))
+				numCharsInLineLeft := int64(index.Linebases) - offsetWithinLine
+				// the number of newlines contained between the start and end of the exon sequence
+				numNewlines := int64(0)
 				// adds a newline if the exon sequence spans across the current line
-				if int64(lengthBases) > numCharsInLine {
-					lengthNewlines++
+				if numCharsInLineLeft < lengthBases {
+					numNewlines += 1
 				}
-				// the total length of the exon sequence in bytes (including newlines)
-				length := int64(lengthBases) + lengthNewlines
+				// adds the number of lines that the exon sequence spans across as newlines
+				numNewlines += (lengthBases - numCharsInLineLeft) / int64(index.Linebases)
 
-				buffer := make([]byte, length)
+				// the total length of the exon sequence in bytes (including newlines)
+				lengthBuffer := lengthBases + numNewlines
+
+				buffer := make([]byte, lengthBuffer)
 
 				_, errRead := fastaFile.Read(buffer)
 				if errRead != nil {
@@ -118,6 +143,9 @@ func GenerateInputForIndex(gtfFile *os.File, fastaFile *os.File, fastaIndexFile 
 
 			trans.SequenceDna = strings.ReplaceAll(string(transcriptSequence), "\n", "")
 		}
+
+		// TODO: currently only supporting the first gene within the gtf file
+		break
 	}
 
 	return annotation

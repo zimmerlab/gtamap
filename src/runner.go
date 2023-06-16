@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/akamensky/argparse"
 	"github.com/sirupsen/logrus"
@@ -15,7 +16,7 @@ func printBanner() {
 	logrus.Info("| | __  | ||  _  | | |\\/| ||  _  ||  __/")
 	logrus.Info("| |_\\ \\ | || | | | | |  | || | | || |")
 	logrus.Info(" \\____/ \\_/\\_| |_/ \\_|  |_/\\_| |_/\\_|")
-	logrus.Info("GTAMap v0.1.0 (A. Hadziahmetovic, S. Klein, 2023)")
+	logrus.Info("GTAMap v" + config.ToolVersion() + " (A. Hadziahmetovic, S. Klein, 2023)")
 	logrus.Info("Fast (and memory efficient) RNA-seq read mapping to transcripts of a single gene.")
 	logrus.Info("")
 }
