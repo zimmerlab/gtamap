@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/index"
@@ -10,9 +11,11 @@ import (
 	"github.com/KleinSamuel/gtamap/src/datawriter"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/KleinSamuel/gtamap/src/formats/gtf"
+	"github.com/KleinSamuel/gtamap/src/formats/sam"
 	"github.com/akamensky/argparse"
 	"github.com/sirupsen/logrus"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -182,6 +185,24 @@ func testMapping() {
 	fmt.Println("read tree")
 	fmt.Println("duration: ", time.Since(timerStart))
 
+	samHeader := sam.Header{
+		Version:                 sam.Version,
+		ReferenceSequenceName:   gtaIndex.Gene.Chromosome,
+		ReferenceSequenceLength: int(gtaIndex.Gene.EndGenomic - gtaIndex.Gene.StartGenomic + 1),
+		GenomeAnnotationVersion: "",
+		GenomeAssemblyVersion:   "",
+		OrganismTaxId:           "",
+		ToolVersion:             config.ToolVersion(),
+		Transcripts:             make([]*sam.TranscriptInfo, len(gtaIndex.Transcripts)),
+	}
+	for i, transcript := range gtaIndex.Transcripts {
+		samHeader.Transcripts[i] = &sam.TranscriptInfo{
+			Id:                  "T" + strconv.Itoa(i),
+			TranscriptEnsemblId: transcript.TranscriptIdEnsembl,
+			TranscriptLength:    transcript.SequenceLength,
+		}
+	}
+
 	timerStart = time.Now()
 
 	pathReadsR1 := "../resources/reads_ccr9.1.fq"
@@ -190,6 +211,7 @@ func testMapping() {
 	reader := fastq.InitFromPaths(pathReadsR1, pathReadsR2)
 
 	writer := datawriter.InitFromPath("../resources/reads_ccr9.sam")
+	writer.Write(samHeader.String())
 
 	numWorkers := 3
 

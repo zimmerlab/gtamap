@@ -36,15 +36,15 @@ func drawNextKmerIndex(startIndices []int) int {
 func GetAnchorMatches(read *fastq.Read, tree *datastructure.SuffixTree) *map[int][]Info {
 
 	var lenRead int = len(read.Sequence)
-	startIndices := utils.Arange(0, lenRead-config.GetKmerLength(), config.GetNumKmers())
+	startIndices := utils.Arange(0, lenRead-config.KmerLength(), config.NumKmers())
 
 	hits := make(map[int][]Info)
 
-	for i := 0; i < config.GetNumKmers(); i++ {
+	for i := 0; i < config.NumKmers(); i++ {
 
 		nextIndex := startIndices[i]
 
-		kmer := read.Sequence[nextIndex : nextIndex+config.GetKmerLength()]
+		kmer := read.Sequence[nextIndex : nextIndex+config.KmerLength()]
 
 		result := tree.Search(&kmer)
 
@@ -104,13 +104,16 @@ func LocateR1PositionOnStrands(gtaIndex *index.GtaIndex, r1Read *fastq.Read) (*m
 }
 
 func addKmerMatchToCigar(cigarList *[]rune) *[]rune {
-	for i := 0; i < config.GetKmerLength(); i++ {
+	for i := 0; i < config.KmerLength(); i++ {
 		*cigarList = append(*cigarList, 'M')
 	}
 	return cigarList
 }
 
 func finalizeCigar(cigarList *[]rune, startPositionInTranscript uint32, transcript *index.Transcript) (int, string) {
+
+	fmt.Println("finalizing cigar")
+	fmt.Println("startPositionInTranscript", startPositionInTranscript)
 
 	// the final cigar string which is built in this function
 	cigarString := ""
@@ -251,11 +254,11 @@ func AlignRead(read *fastq.Read, transcriptId int, kmerHitList []Info, gtaIndex 
 		}
 
 		// check gap between current and previous kmer in read
-		startGapRead := kmerHitList[i-1].IndexRead + config.GetKmerLength()
+		startGapRead := kmerHitList[i-1].IndexRead + config.KmerLength()
 		endGapRead := hit.IndexRead
 		lenGapRead := endGapRead - startGapRead
 		// check gap between current and previous kmer in reference
-		startGapRef := kmerHitList[i-1].IndexReference + config.GetKmerLength()
+		startGapRef := kmerHitList[i-1].IndexReference + config.KmerLength()
 		endGapRef := hit.IndexReference
 		lenGapRef := endGapRef - startGapRef
 
@@ -278,15 +281,15 @@ func AlignRead(read *fastq.Read, transcriptId int, kmerHitList []Info, gtaIndex 
 		addKmerMatchToCigar(&cigarList)
 
 		// the last kmer does not end at the end of the read
-		if i == len(kmerHitList)-1 && hit.IndexRead < len(read.Sequence)-config.GetKmerLength() {
+		if i == len(kmerHitList)-1 && hit.IndexRead < len(read.Sequence)-config.KmerLength() {
 
 			fmt.Println("last kmer does not end at the end of the read")
 
-			startSuffixGapRead := hit.IndexRead + config.GetKmerLength()
+			startSuffixGapRead := hit.IndexRead + config.KmerLength()
 			endSuffixGapRead := len(read.Sequence)
 			lenSuffixGapRead := endSuffixGapRead - startSuffixGapRead
 
-			startSuffixGapRef := hit.IndexReference + config.GetKmerLength()
+			startSuffixGapRef := hit.IndexReference + config.KmerLength()
 			endSuffixGapRef := startSuffixGapRef + lenSuffixGapRead
 
 			score, cigarPart, seq1, seq2 = algorithms.NeedlemanWunsch(
@@ -309,7 +312,7 @@ func AlignRead(read *fastq.Read, transcriptId int, kmerHitList []Info, gtaIndex 
 	return &sam.Entry{
 		Qname: strings.Split(read.Header[1:], " ")[0],
 		Cigar: cigarString,
-		Pos:   startPos,
+		Pos:   startPos + 1, // start position is 1-based in SAM file
 	}
 }
 

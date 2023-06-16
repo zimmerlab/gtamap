@@ -1,12 +1,18 @@
 package config
 
+const toolVersion string = "0.1"
+
 var kmerLength int = 8
 var numKmers int = 8
 
-func GetKmerLength() int {
+func ToolVersion() string {
+	return toolVersion
+}
+
+func KmerLength() int {
 	return kmerLength
 }
 
-func GetNumKmers() int {
+func NumKmers() int {
 	return numKmers
 }
