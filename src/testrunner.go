@@ -12,7 +12,6 @@ import (
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/KleinSamuel/gtamap/src/formats/gtf"
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
-	"github.com/akamensky/argparse"
 	"github.com/sirupsen/logrus"
 	"os"
 	"strconv"
@@ -38,24 +37,31 @@ func inspectAnnotation() {
 	}
 }
 
-/*
 func buildAndSerializeIndex() {
 	pathGtfZeroed := "../resources/ENSG00000173585.zeroed.gtf"
-	pathFastaZeroed := "../resources/ENSG00000173585.fasta"
-	pathFastaIndex := "../resources/ENSG00000173585.fasta.fai"
+	pathFastaZeroed := "../resources/ENSG00000173585.zeroed.fasta"
+	pathOutput := "../resources/ENSG00000173585.dev.gtai"
 
-	var annotation *gtf.Annotation = dataloader.GenerateInputForIndexFromFile(pathGtfZeroed, pathFastaZeroed, pathFastaIndex)
+	gtfFile, errGtf := os.Open(pathGtfZeroed)
+	if errGtf != nil {
+		logrus.Fatal("Error reading gtf file", errGtf)
+	}
 
-	var sequences []string = []string{annotation.Genes[0].Transcripts[0].SequenceDna}
+	fastaFile, errFasta := os.Open(pathFastaZeroed)
+	if errFasta != nil {
+		logrus.Fatal("Error reading fasta file", errFasta)
+	}
 
-	tree := datastructure.BuildSuffixTree(sequences)
+	outputFile, errIndex := os.Create(pathOutput)
+	if errIndex != nil {
+		logrus.Fatal("Error reading output file (.fai)", errIndex)
+	}
 
-	datastructure.SerializeSuffixTreeFromFile(tree, "../resources/ENSG00000173585.gtai")
+	index.BuildAndSerializeIndex(gtfFile, fastaFile, outputFile)
 }
-*/
 
 func deserializeIndex() *index.GtaIndex {
-	return index.DezerializeFromPath("../resources/ENSG00000173585.gtai")
+	return index.DezerializeFromPath("../resources/ENSG00000173585.dev.gtai")
 }
 
 func buildTestTree() {
@@ -69,97 +75,97 @@ func buildTestTree() {
 
 	pattern := "C"
 
-	var result *core.PatternSearchResult = tree.Search(&pattern)
+	var result *core.ExactMatchResult = tree.Search(&pattern)
 
 	fmt.Println("duration: ", time.Since(timerStart))
 	fmt.Println("result: ", result)
 }
 
-func search() {
-	gtaIndex := deserializeIndex()
+//func search() {
+//	gtaIndex := deserializeIndex()
+//
+//	timerStart := time.Now()
+//
+//	pattern := "AGCCCTATT"
+//
+//	var result *core.PatternSearchResult = gtaIndex.SuffixTreeForwardStrandForwardDirection.Search(&pattern)
+//
+//	fmt.Println("duration: ", time.Since(timerStart))
+//	fmt.Println("result: ", result)
+//}
 
-	timerStart := time.Now()
-
-	pattern := "AGCCCTATT"
-
-	var result *core.PatternSearchResult = gtaIndex.SuffixTreeForwardStrandForwardDirection.Search(&pattern)
-
-	fmt.Println("duration: ", time.Since(timerStart))
-	fmt.Println("result: ", result)
-}
-
-func testArgparse() {
-
-	parser := argparse.NewParser("gtamap", "Gene-based Trancript-Aware readMAPping")
-
-	var cmdIndex *argparse.Command = parser.NewCommand("index", "Build the GTAMap index (.gtai).")
-
-	var gtfFile *os.File = cmdIndex.File("", "gtf", os.O_RDONLY, 0600, &argparse.Options{
-		Required: true,
-		Help:     "Gene transfer format (GTF) file.",
-	})
-	var fastaFile *os.File = cmdIndex.File("", "fasta", os.O_RDONLY, 0600, &argparse.Options{
-		Required: true,
-		Help:     "Nucleotide sequences (FASTA) file. The corresponding index (.fai) file must be present.",
-	})
-	var outputFile *os.File = cmdIndex.File("o", "output", os.O_WRONLY|os.O_CREATE, 0600, &argparse.Options{
-		Required: true,
-		Help:     "Output file (.gtai).",
-	})
-	var logLevelIndex *string = cmdIndex.Selector("", "loglevel", []string{"ERROR", "INFO", "DEBUG"}, &argparse.Options{
-		Required: false,
-		Help:     "Log output level.",
-		Default:  "ERROR",
-	})
-
-	var cmdMap *argparse.Command = parser.NewCommand("map", "Map reads to the GTAMap index.")
-	var indexFile *os.File = cmdMap.File("", "index", os.O_RDONLY, 0600, &argparse.Options{
-		Required: true,
-		Help:     "GTAMap index (.gtai) file",
-	})
-	var fastqFwFile *os.File = cmdMap.File("", "r1", os.O_RDONLY, 0600, &argparse.Options{
-		Required: true,
-		Help:     "FASTQ file containing the forward reads.",
-	})
-	var fastqRwFile *os.File = cmdMap.File("", "r2", os.O_RDONLY, 0600, &argparse.Options{
-		Required: false,
-		Help:     "FASTQ file containing the reverse reads.",
-	})
-	var logLevelMap *string = cmdMap.Selector("", "loglevel", []string{"ERROR", "INFO", "DEBUG"}, &argparse.Options{
-		Required: false,
-		Help:     "log output level",
-		Default:  "ERROR",
-	})
-
-	err := parser.Parse(os.Args)
-	if err != nil {
-		fmt.Print(parser.Usage(err))
-		return
-	}
-
-	if cmdIndex.Happened() {
-
-		fmt.Println("Indexing..")
-
-		fmt.Println("GTF file: ", *gtfFile)
-		fmt.Println("FASTA file: ", *fastaFile)
-		fmt.Println("Output file: ", *outputFile)
-		fmt.Println("loglevel: ", *logLevelIndex)
-
-	} else if cmdMap.Happened() {
-
-		fmt.Println("Mapping..")
-
-		fmt.Println("loglevel: ", *logLevelMap)
-		fmt.Println("index: ", *indexFile)
-		fmt.Println("fastq fw: ", *fastqFwFile)
-		fmt.Println("fastq rw: ", *fastqRwFile)
-
-	} else {
-		fmt.Println(parser.Usage("no valid command supplied"))
-		return
-	}
-}
+//func testArgparse() {
+//
+//	parser := argparse.NewParser("gtamap", "Gene-based Trancript-Aware readMAPping")
+//
+//	var cmdIndex *argparse.Command = parser.NewCommand("index", "Build the GTAMap index (.gtai).")
+//
+//	var gtfFile *os.File = cmdIndex.File("", "gtf", os.O_RDONLY, 0600, &argparse.Options{
+//		Required: true,
+//		Help:     "Gene transfer format (GTF) file.",
+//	})
+//	var fastaFile *os.File = cmdIndex.File("", "fasta", os.O_RDONLY, 0600, &argparse.Options{
+//		Required: true,
+//		Help:     "Nucleotide sequences (FASTA) file. The corresponding index (.fai) file must be present.",
+//	})
+//	var outputFile *os.File = cmdIndex.File("o", "output", os.O_WRONLY|os.O_CREATE, 0600, &argparse.Options{
+//		Required: true,
+//		Help:     "Output file (.gtai).",
+//	})
+//	var logLevelIndex *string = cmdIndex.Selector("", "loglevel", []string{"ERROR", "INFO", "DEBUG"}, &argparse.Options{
+//		Required: false,
+//		Help:     "Log output level.",
+//		Default:  "ERROR",
+//	})
+//
+//	var cmdMap *argparse.Command = parser.NewCommand("map", "Map reads to the GTAMap index.")
+//	var indexFile *os.File = cmdMap.File("", "index", os.O_RDONLY, 0600, &argparse.Options{
+//		Required: true,
+//		Help:     "GTAMap index (.gtai) file",
+//	})
+//	var fastqFwFile *os.File = cmdMap.File("", "r1", os.O_RDONLY, 0600, &argparse.Options{
+//		Required: true,
+//		Help:     "FASTQ file containing the forward reads.",
+//	})
+//	var fastqRwFile *os.File = cmdMap.File("", "r2", os.O_RDONLY, 0600, &argparse.Options{
+//		Required: false,
+//		Help:     "FASTQ file containing the reverse reads.",
+//	})
+//	var logLevelMap *string = cmdMap.Selector("", "loglevel", []string{"ERROR", "INFO", "DEBUG"}, &argparse.Options{
+//		Required: false,
+//		Help:     "log output level",
+//		Default:  "ERROR",
+//	})
+//
+//	err := parser.Parse(os.Args)
+//	if err != nil {
+//		fmt.Print(parser.Usage(err))
+//		return
+//	}
+//
+//	if cmdIndex.Happened() {
+//
+//		fmt.Println("Indexing..")
+//
+//		fmt.Println("GTF file: ", *gtfFile)
+//		fmt.Println("FASTA file: ", *fastaFile)
+//		fmt.Println("Output file: ", *outputFile)
+//		fmt.Println("loglevel: ", *logLevelIndex)
+//
+//	} else if cmdMap.Happened() {
+//
+//		fmt.Println("Mapping..")
+//
+//		fmt.Println("loglevel: ", *logLevelMap)
+//		fmt.Println("index: ", *indexFile)
+//		fmt.Println("fastq fw: ", *fastqFwFile)
+//		fmt.Println("fastq rw: ", *fastqRwFile)
+//
+//	} else {
+//		fmt.Println(parser.Usage("no valid command supplied"))
+//		return
+//	}
+//}
 
 func testFastqReader() {
 
@@ -205,15 +211,15 @@ func testMapping() {
 
 	timerStart = time.Now()
 
-	pathReadsR1 := "../resources/reads_ccr9.1.fq"
-	pathReadsR2 := "../resources/reads_ccr9.2.fq"
+	pathReadsR1 := "../resources/reads/manual/reads_ccr9.1.fq"
+	pathReadsR2 := "../resources/reads/manual/reads_ccr9.2.fq"
 
 	reader := fastq.InitFromPaths(pathReadsR1, pathReadsR2)
 
-	writer := datawriter.InitFromPath("../resources/reads_ccr9.sam")
+	writer := datawriter.InitFromPath("../out/reads_ccr9.sam")
 	writer.Write(samHeader.String())
 
-	numWorkers := 3
+	numWorkers := 1
 
 	taskQueueMapping := make(chan ReadPairMappingTask)
 	taskQueueWriter := make(chan string)
@@ -236,7 +242,12 @@ func testMapping() {
 	// the number of read pairs that have been processed
 	taskCounter := 0
 
-	for readPair := reader.NextRead(); readPair != nil; readPair = reader.NextRead() {
+	reader.NextRead()
+
+	for readPair := reader.NextRead(); readPair != nil; {
+
+		fmt.Println("new read pair")
+		fmt.Println("read pair: ", readPair)
 
 		mappingTask := ReadPairMappingTask{
 			ID:       taskCounter,
@@ -289,7 +300,11 @@ func writeOutputWorker(taskQueue <-chan string, wg *sync.WaitGroup, writer *data
 	logrus.Info("Finished writeOutputWorker")
 }
 
-func mapReadPairWorker(workerId int, taskQueue <-chan ReadPairMappingTask, taskQueueWriter chan<- string, wg *sync.WaitGroup, gtaIndex *index.GtaIndex) {
+func mapReadPairWorker(workerId int,
+	taskQueue <-chan ReadPairMappingTask,
+	taskQueueWriter chan<- string,
+	wg *sync.WaitGroup,
+	gtaIndex *index.GtaIndex) {
 
 	logrus.WithFields(logrus.Fields{
 		"workerId": workerId,
@@ -303,7 +318,7 @@ func mapReadPairWorker(workerId int, taskQueue <-chan ReadPairMappingTask, taskQ
 		}).Info("Processing task")
 
 		// TODO: result is currently only dummy
-		result := mapping.MapReadPair(task.ReadPair, gtaIndex)
+		result := mapping.MapReadPairDev(task.ReadPair, gtaIndex)
 
 		fmt.Println("result: ", result)
 
@@ -325,7 +340,7 @@ func main() {
 	})
 	logrus.SetLevel(logrus.InfoLevel)
 
+	//buildAndSerializeIndex()
 	testMapping()
 
-	//search()
 }

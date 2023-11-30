@@ -14,3 +14,25 @@ type PatternMatch struct {
 	// the end-exclusive position of the pattern within that sequence
 	To int
 }
+
+type ExactMatchResult struct {
+	Matches []ExactMatch
+}
+
+type ExactMatch struct {
+	// the index of the sequence within the trees sequences
+	SequenceIndex int
+	// the 0-based start position of the match within the source sequence
+	FromSource int
+	// the end-exclusive position of the match within the source sequence
+	ToSource int
+	// the 0-based start position of the match within the target sequence
+	FromTarget int
+	// the end-exclusive position of the match within the target sequence
+	ToTarget int
+}
+
+type DiscardStepMatchInformation struct {
+	NumMismatches int
+	Matches       []ExactMatch
+}

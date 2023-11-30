@@ -17,13 +17,13 @@ func printBanner() {
 	logrus.Info("| |_\\ \\ | || | | | | |  | || | | || |")
 	logrus.Info(" \\____/ \\_/\\_| |_/ \\_|  |_/\\_| |_/\\_|")
 	logrus.Info("GTAMap v" + config.ToolVersion() + " (A. Hadziahmetovic, S. Klein, 2023)")
-	logrus.Info("Fast (and memory efficient) RNA-seq read mapping to transcripts of a single gene.")
+	logrus.Info("Fast and memory efficient RNA-seq read mapping to transcripts of a single gene.")
 	logrus.Info("")
 }
 
 func main() {
 
-	parser := argparse.NewParser("gtamap", "Gene-based Trancript-Aware readMAPping")
+	parser := argparse.NewParser("gtamap", "Gene-centric, Trancript-Aware readMAPping")
 
 	var cmdIndex *argparse.Command = parser.NewCommand("index", "Build the GTAMap index (.gtai).")
 

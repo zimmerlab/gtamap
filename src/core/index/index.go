@@ -13,12 +13,10 @@ import (
 )
 
 type GtaIndex struct {
-	Gene                                    *Gene
-	Transcripts                             []*Transcript
-	SuffixTreeForwardStrandForwardDirection *datastructure.SuffixTree
-	SuffixTreeForwardStrandReverseDirection *datastructure.SuffixTree
-	SuffixTreeReverseStrandForwardDirection *datastructure.SuffixTree
-	SuffixTreeReverseStrandReverseDirection *datastructure.SuffixTree
+	Gene         *Gene                     // information about the gene
+	Transcripts  []*Transcript             // all transcripts of the gene
+	SuffixTree   *datastructure.SuffixTree // a single suffix tree containing all transcripts
+	NumSequences int
 }
 
 type Gene struct {
@@ -30,13 +28,13 @@ type Gene struct {
 }
 
 type Transcript struct {
-	TranscriptIdEnsembl                      string // e.g. "ENST00000342992"
-	SequenceDnaForwardStrandForwardDirection string
-	SequenceDnaForwardStrandReverseDirection string
-	SequenceDnaReverseStrandForwardDirection string
-	SequenceDnaReverseStrandReverseDirection string
-	SequenceLength                           int
-	Exons                                    []*Exon
+	TranscriptIdEnsembl  string // e.g. "ENST00000342992"
+	SequenceDnaForward53 string // the DNA sequence on the forward strand in 5'-3' direction
+	SequenceDnaForward35 string // the DNA sequence on the forward strand in 3'-5' direction
+	SequenceDnaReverse53 string // the DNA sequence on the reverse strand in 5'-3' direction (rev-comp of forward)
+	SequenceDnaReverse35 string // the DNA sequence on the reverse strand in 3'-5' direction (rev-comp of forward)
+	SequenceLength       int
+	Exons                []*Exon
 }
 
 type Exon struct {
@@ -63,26 +61,27 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 		IsFowardStrand: annotation.Genes[0].IsForwardStrand,
 	}
 
-	var sequencesFwFw []string = make([]string, len(annotation.Genes[0].Transcripts))
-	var sequencesFwRv []string = make([]string, len(annotation.Genes[0].Transcripts))
-	var sequencesRvFw []string = make([]string, len(annotation.Genes[0].Transcripts))
-	var sequencesRvRv []string = make([]string, len(annotation.Genes[0].Transcripts))
+	var sequencesForward53 []string = make([]string, len(annotation.Genes[0].Transcripts))
+	var sequencesForward35 []string = make([]string, len(annotation.Genes[0].Transcripts))
+	var sequencesReverse53 []string = make([]string, len(annotation.Genes[0].Transcripts))
+	var sequencesReverse35 []string = make([]string, len(annotation.Genes[0].Transcripts))
 
 	var transcripts []*Transcript = make([]*Transcript, len(annotation.Genes[0].Transcripts))
 
 	for i, transcript := range annotation.Genes[0].Transcripts {
-		sequencesFwFw[i] = transcript.SequenceDna
-		sequencesFwRv[i] = utils.ReverseString(transcript.SequenceDna)
-		sequencesRvFw[i] = utils.ReverseComplementDNA(transcript.SequenceDna)
-		sequencesRvRv[i] = utils.ComplementDNA(transcript.SequenceDna)
+
+		sequencesForward53[i] = transcript.SequenceDna
+		sequencesForward35[i] = utils.ReverseString(transcript.SequenceDna)
+		sequencesReverse53[i] = utils.ReverseComplementDNA(transcript.SequenceDna)
+		sequencesReverse35[i] = utils.ComplementDNA(transcript.SequenceDna)
 
 		transcripts[i] = &Transcript{
-			TranscriptIdEnsembl:                      transcript.TranscriptIdEnsembl,
-			SequenceLength:                           len(transcript.SequenceDna),
-			SequenceDnaForwardStrandForwardDirection: sequencesFwFw[i],
-			SequenceDnaForwardStrandReverseDirection: sequencesFwRv[i],
-			SequenceDnaReverseStrandForwardDirection: sequencesRvFw[i],
-			SequenceDnaReverseStrandReverseDirection: sequencesRvRv[i],
+			TranscriptIdEnsembl:  transcript.TranscriptIdEnsembl,
+			SequenceLength:       len(transcript.SequenceDna),
+			SequenceDnaForward53: sequencesForward53[i],
+			SequenceDnaForward35: sequencesForward35[i],
+			SequenceDnaReverse53: sequencesReverse53[i],
+			SequenceDnaReverse35: sequencesReverse35[i],
 		}
 
 		transcripts[i].Exons = make([]*Exon, len(transcript.Exons))
@@ -95,21 +94,21 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 		}
 	}
 
-	// builds the suffix tree for the forward strand
-	var suffixTreeFwFw *datastructure.SuffixTree = datastructure.BuildSuffixTree(sequencesFwFw)
-	var suffixTreeFwRv *datastructure.SuffixTree = datastructure.BuildSuffixTree(sequencesFwRv)
+	// contains all forward sequences of the transcripts and then all rev-comp sequences
+	var allSequences []string = make([]string, 0)
+	allSequences = append(allSequences, sequencesForward53...)
+	allSequences = append(allSequences, sequencesForward35...)
+	allSequences = append(allSequences, sequencesReverse53...)
+	allSequences = append(allSequences, sequencesReverse35...)
 
-	// builds the suffix tree for the reverse strand
-	var suffixTreeRvFw *datastructure.SuffixTree = datastructure.BuildSuffixTree(sequencesRvFw)
-	var suffixTreeRvRv *datastructure.SuffixTree = datastructure.BuildSuffixTree(sequencesRvRv)
+	// build the suffix tree containing all sequences
+	var suffixTree *datastructure.SuffixTree = datastructure.BuildSuffixTree(allSequences)
 
 	var gtaIndex GtaIndex = GtaIndex{
-		Gene:                                    gene,
-		Transcripts:                             transcripts,
-		SuffixTreeForwardStrandForwardDirection: suffixTreeFwFw,
-		SuffixTreeForwardStrandReverseDirection: suffixTreeFwRv,
-		SuffixTreeReverseStrandForwardDirection: suffixTreeRvFw,
-		SuffixTreeReverseStrandReverseDirection: suffixTreeRvRv,
+		Gene:         gene,
+		Transcripts:  transcripts,
+		SuffixTree:   suffixTree,
+		NumSequences: len(allSequences),
 	}
 
 	SerializeFromFile(&gtaIndex, outputFile)

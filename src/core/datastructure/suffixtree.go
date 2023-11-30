@@ -587,13 +587,17 @@ func (tree *SuffixTree) FindLeafNodesRecursive(node *Node) []*Node {
 // is not contained within the tree. Otherwise, all leaf nodes are returned as occurrences. This is true
 // even when the leaf node is not reached because then the pattern is a prefix of a suffix which is still
 // contained within the sequences of the tree.
-func (tree *SuffixTree) Search(pattern *string) *core.PatternSearchResult {
+func (tree *SuffixTree) Search(pattern *string) *core.ExactMatchResult {
 
 	logrus.Debug("searching for pattern: ", pattern)
 
-	result := core.PatternSearchResult{
-		Pattern: pattern,
-		Matches: make([]core.PatternMatch, 0),
+	//result := core.PatternSearchResult{
+	//	Pattern: pattern,
+	//	Matches: make([]core.PatternMatch, 0),
+	//}
+
+	result := core.ExactMatchResult{
+		Matches: make([]core.ExactMatch, 0),
 	}
 
 	// the last node that was traversed
@@ -698,10 +702,10 @@ func (tree *SuffixTree) Search(pattern *string) *core.PatternSearchResult {
 					"index":      index,
 				}).Debug("pattern match")
 
-				result.Matches = append(result.Matches, core.PatternMatch{
+				result.Matches = append(result.Matches, core.ExactMatch{
 					SequenceIndex: sequenceId,
-					From:          index - 1,
-					To:            index - 1 + len(*pattern),
+					FromTarget:    index - 1,
+					ToTarget:      index - 1 + len(*pattern),
 				})
 			}
 		}

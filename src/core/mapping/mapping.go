@@ -3,6 +3,7 @@ package mapping
 import (
 	"fmt"
 	"github.com/KleinSamuel/gtamap/src/config"
+	"github.com/KleinSamuel/gtamap/src/core"
 	"github.com/KleinSamuel/gtamap/src/core/algorithms"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/index"
@@ -54,7 +55,7 @@ func GetAnchorMatches(read *fastq.Read, tree *datastructure.SuffixTree) *map[int
 
 		for _, match := range result.Matches {
 
-			matchIndex := match.From - nextIndex
+			matchIndex := match.FromTarget - nextIndex
 
 			// read and transcript sequence can not be aligned
 			if matchIndex < 0 {
@@ -64,7 +65,7 @@ func GetAnchorMatches(read *fastq.Read, tree *datastructure.SuffixTree) *map[int
 
 			// TODO: (performance) use simple pair (array) instead of struct
 			info := Info{
-				IndexReference: match.From,
+				IndexReference: match.FromTarget,
 				IndexRead:      nextIndex,
 			}
 
@@ -78,7 +79,7 @@ func GetAnchorMatches(read *fastq.Read, tree *datastructure.SuffixTree) *map[int
 func LocateR1PositionOnStrands(gtaIndex *index.GtaIndex, r1Read *fastq.Read) (*map[int][]Info, bool) {
 
 	// matches the kmers to the forward strand
-	var hitsFw *map[int][]Info = GetAnchorMatches(r1Read, gtaIndex.SuffixTreeForwardStrandForwardDirection)
+	var hitsFw *map[int][]Info = GetAnchorMatches(r1Read, gtaIndex.SuffixTree)
 
 	// no kmer matches on the forward strand
 	// TODO: create a function to check if there are not sufficiently enough hits on this strand
@@ -89,7 +90,7 @@ func LocateR1PositionOnStrands(gtaIndex *index.GtaIndex, r1Read *fastq.Read) (*m
 		// matches the kmers to the reverse strand
 		//var hitsRv *map[int][]Info = GetAnchorMatches(r1Read, gtaIndex.SuffixTreeReverseStrandForwardDirection)
 
-		var hitsRv *map[int][]Info = GetAnchorMatches(r1Read, gtaIndex.SuffixTreeForwardStrandForwardDirection)
+		var hitsRv *map[int][]Info = GetAnchorMatches(r1Read, gtaIndex.SuffixTree)
 
 		// no kmer matches on the reverse strand
 		if len(*hitsRv) == 0 {
@@ -229,7 +230,8 @@ func AlignRead(read *fastq.Read, transcriptId int, kmerHitList []Info, gtaIndex 
 				endPrefixGapRef := hit.IndexReference
 
 				score, cigarPart, seq1, seq2 := algorithms.NeedlemanWunsch(
-					gtaIndex.Transcripts[transcriptId].SequenceDnaForwardStrandForwardDirection[startPrefixGapRef:endPrefixGapRef],
+					//gtaIndex.Transcripts[transcriptId].SequenceDnaForwardStrandForwardDirection[startPrefixGapRef:endPrefixGapRef],
+					gtaIndex.Transcripts[transcriptId].SequenceDnaForward53[startPrefixGapRef:endPrefixGapRef],
 					read.Sequence[startPrefixGapRead:endPrefixGapRead])
 
 				fmt.Println(score)
@@ -267,7 +269,8 @@ func AlignRead(read *fastq.Read, transcriptId int, kmerHitList []Info, gtaIndex 
 		}
 
 		score, cigarPart, seq1, seq2 := algorithms.NeedlemanWunsch(
-			gtaIndex.Transcripts[transcriptId].SequenceDnaForwardStrandForwardDirection[startGapRef:endGapRef],
+			//gtaIndex.Transcripts[transcriptId].SequenceDnaForwardStrandForwardDirection[startGapRef:endGapRef],
+			gtaIndex.Transcripts[transcriptId].SequenceDnaForward53[startGapRef:endGapRef],
 			read.Sequence[startGapRead:endGapRead])
 
 		fmt.Println(score)
@@ -293,7 +296,8 @@ func AlignRead(read *fastq.Read, transcriptId int, kmerHitList []Info, gtaIndex 
 			endSuffixGapRef := startSuffixGapRef + lenSuffixGapRead
 
 			score, cigarPart, seq1, seq2 = algorithms.NeedlemanWunsch(
-				gtaIndex.Transcripts[transcriptId].SequenceDnaForwardStrandForwardDirection[startSuffixGapRef:endSuffixGapRef],
+				//gtaIndex.Transcripts[transcriptId].SequenceDnaForwardStrandForwardDirection[startSuffixGapRef:endSuffixGapRef],
+				gtaIndex.Transcripts[transcriptId].SequenceDnaForward53[startSuffixGapRef:endSuffixGapRef],
 				read.Sequence[startSuffixGapRead:endSuffixGapRead])
 
 			fmt.Println(score)
@@ -318,6 +322,8 @@ func AlignRead(read *fastq.Read, transcriptId int, kmerHitList []Info, gtaIndex 
 	}
 }
 
+// MapReadPair map a read pair to the reference
+// the main mapping function to be called from outside
 func MapReadPair(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) string {
 
 	rvReadHeader := ""
@@ -351,10 +357,10 @@ func MapReadPair(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) string {
 
 		readPair.ReadR2.Sequence = utils.ReverseComplementDNA(readPair.ReadR2.Sequence)
 
-		hitsR2 = GetAnchorMatches(readPair.ReadR2, gtaIndex.SuffixTreeForwardStrandForwardDirection)
+		hitsR2 = GetAnchorMatches(readPair.ReadR2, gtaIndex.SuffixTree)
 
 	} else {
-		hitsR2 = GetAnchorMatches(readPair.ReadR2, gtaIndex.SuffixTreeForwardStrandForwardDirection)
+		hitsR2 = GetAnchorMatches(readPair.ReadR2, gtaIndex.SuffixTree)
 	}
 
 	if hitsR2 == nil {
@@ -414,4 +420,145 @@ func MapReadPair(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) string {
 	}
 
 	return "mapping result dummy\n"
+}
+
+func MapReadPairDev(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) string {
+
+	fmt.Println("index num sequences", gtaIndex.NumSequences)
+
+	rvReadHeader := ""
+	if readPair.ReadR2 != nil {
+		rvReadHeader = readPair.ReadR2.Header
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"fwReadHeader": readPair.ReadR1.Header,
+		"rvReadHeader": rvReadHeader,
+	}).Info("Map new read pair")
+
+	fmt.Println("R1")
+	fmt.Println(readPair.ReadR1.Sequence)
+	fmt.Println("R2")
+	fmt.Println(readPair.ReadR2.Sequence)
+
+	errorRate := 0.05
+
+	// map R1
+
+	// the maximum number of mismatches allowed
+	maxMismatches := int(float64(len(readPair.ReadR1.Sequence)) * errorRate)
+	// the min length of each kmer
+	lenKmer := 8
+	// the number of kmers created from the read
+	numKmer := len(readPair.ReadR1.Sequence) / lenKmer
+	// the number of bases left over after creating the kmers with equal length
+	rest := len(readPair.ReadR1.Sequence) % numKmer
+
+	// the current position within the read
+	position := 0
+	// the state of the discard step
+	failed := false
+	// the number of mismatches per sequence
+	mismatches := make(map[int]core.DiscardStepMatchInformation, gtaIndex.NumSequences)
+	for i := 0; i < gtaIndex.NumSequences; i++ {
+		mismatches[i] = core.DiscardStepMatchInformation{
+			NumMismatches: 0,
+			Matches:       make([]core.ExactMatch, 0),
+		}
+	}
+
+	// TODO: idea: randomize the kmer that is used for filtering
+
+	for position < len(readPair.ReadR1.Sequence) {
+
+		currentLenKmer := lenKmer
+		if rest > 0 {
+			currentLenKmer++
+			rest--
+		}
+
+		// the actual kmer
+		kmer := readPair.ReadR1.Sequence[position : position+currentLenKmer]
+
+		logrus.WithFields(logrus.Fields{
+			"position": position,
+			"length":   currentLenKmer,
+			"kmer":     kmer,
+		}).Debug("create new kmer")
+
+		// the result of the exact matching against the suffix tree
+		result := gtaIndex.SuffixTree.Search(&kmer)
+
+		// contains true for each sequence index that has a match
+		matches := make([]bool, gtaIndex.NumSequences)
+
+		// there was at least one exact match in any sequence
+		if result != nil {
+
+			for _, match := range result.Matches {
+
+				logrus.WithFields(logrus.Fields{
+					"sequenceIndex": match.SequenceIndex,
+					"fromTarget":    match.FromTarget,
+					"toTarget":      match.ToTarget,
+				}).Debug("match")
+
+				matches[match.SequenceIndex] = true
+			}
+		}
+
+		for i := 0; i < len(matches); i++ {
+
+			if matches[i] {
+				continue
+			}
+
+			logrus.WithFields(logrus.Fields{
+				"sequenceIndex": i,
+			}).Debug("add mismatch")
+
+			if val, ok := mismatches[i]; ok {
+
+				logrus.WithFields(logrus.Fields{
+					"sequenceIndex": i,
+					"numMismatches": val.NumMismatches,
+					"numMatches":    len(val.Matches),
+				}).Debug("add mismatch to sequence index")
+
+				val.NumMismatches += 1
+				mismatches[i] = val
+
+				if val.NumMismatches > maxMismatches {
+					delete(mismatches, i)
+
+					logrus.Debug("discard sequence index because too many mismatches")
+				}
+
+			} else {
+				logrus.Debug("sequence index already discarded")
+			}
+		}
+
+		if len(mismatches) == 0 {
+			logrus.Debug("no more sequences left")
+
+			failed = true
+			break
+		}
+
+		position += currentLenKmer
+	}
+
+	if failed {
+		logrus.Info("discard this read!")
+		return "discard"
+	}
+
+	logrus.Info("keep this read!")
+
+	for val := range mismatches {
+		logrus.Info(val)
+	}
+
+	return "end"
 }
