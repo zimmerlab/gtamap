@@ -5,11 +5,9 @@ import (
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core"
 	"github.com/KleinSamuel/gtamap/src/core/algorithms"
-	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
-	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
 	"math/rand"
 	"strings"
@@ -29,79 +27,6 @@ func drawNextKmerIndex(startIndices []int) int {
 	startIndices = startIndices[:len(startIndices)-1]
 
 	return nextIndex
-}
-
-// GetAnchorMatches returns a map of positions in the transcriptome where the read could be aligned to.
-// Kmers are generated from the read and searched in the suffix tree.
-// The kmers are taken from evenly spaced starting positions in the read.
-func GetAnchorMatches(read *fastq.Read, tree *datastructure.SuffixTree) *map[int][]Info {
-
-	var lenRead int = len(read.Sequence)
-	startIndices := utils.Arange(0, lenRead-config.KmerLength(), config.NumKmers())
-
-	hits := make(map[int][]Info)
-
-	for i := 0; i < config.NumKmers(); i++ {
-
-		nextIndex := startIndices[i]
-
-		kmer := read.Sequence[nextIndex : nextIndex+config.KmerLength()]
-
-		result := tree.Search(&kmer)
-
-		if result == nil {
-			continue
-		}
-
-		for _, match := range result.Matches {
-
-			matchIndex := match.FromTarget - nextIndex
-
-			// read and transcript sequence can not be aligned
-			if matchIndex < 0 {
-				continue
-			}
-			// TODO: check if match index is too far right s.t. the fragment would extend beyond the read
-
-			// TODO: (performance) use simple pair (array) instead of struct
-			info := Info{
-				IndexReference: match.FromTarget,
-				IndexRead:      nextIndex,
-			}
-
-			hits[match.SequenceIndex] = append(hits[match.SequenceIndex], info)
-		}
-	}
-
-	return &hits
-}
-
-func LocateR1PositionOnStrands(gtaIndex *index.GtaIndex, r1Read *fastq.Read) (*map[int][]Info, bool) {
-
-	// matches the kmers to the forward strand
-	var hitsFw *map[int][]Info = GetAnchorMatches(r1Read, gtaIndex.SuffixTree)
-
-	// no kmer matches on the forward strand
-	// TODO: create a function to check if there are not sufficiently enough hits on this strand
-	if len(*hitsFw) == 0 {
-
-		r1Read.Sequence = utils.ReverseComplementDNA(r1Read.Sequence)
-
-		// matches the kmers to the reverse strand
-		//var hitsRv *map[int][]Info = GetAnchorMatches(r1Read, gtaIndex.SuffixTreeReverseStrandForwardDirection)
-
-		var hitsRv *map[int][]Info = GetAnchorMatches(r1Read, gtaIndex.SuffixTree)
-
-		// no kmer matches on the reverse strand
-		if len(*hitsRv) == 0 {
-			// discard read pair
-			return nil, false
-		}
-
-		return hitsRv, false
-	}
-
-	return hitsFw, true
 }
 
 func addKmerMatchToCigar(cigarList *[]rune) *[]rune {
@@ -324,103 +249,103 @@ func AlignRead(read *fastq.Read, transcriptId int, kmerHitList []Info, gtaIndex 
 
 // MapReadPair map a read pair to the reference
 // the main mapping function to be called from outside
-func MapReadPair(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) string {
-
-	rvReadHeader := ""
-	if readPair.ReadR2 != nil {
-		rvReadHeader = readPair.ReadR2.Header
-	}
-
-	logrus.WithFields(logrus.Fields{
-		"fwReadHeader": readPair.ReadR1.Header,
-		"rvReadHeader": rvReadHeader,
-	}).Info("Map new read pair")
-
-	fmt.Println("R1")
-	fmt.Println(readPair.ReadR1.Sequence)
-	fmt.Println("R2")
-	fmt.Println(readPair.ReadR2.Sequence)
-
-	hitsR1, isForwardStrand := LocateR1PositionOnStrands(gtaIndex, readPair.ReadR1)
-
-	// TODO: check if discard read pair or report as mate unmapped
-	if hitsR1 == nil {
-		logrus.Info("Discard read pair because R1 does not match")
-		return ""
-	}
-
-	// TODO: implement check for single end reads
-
-	var hitsR2 *map[int][]Info
-
-	if isForwardStrand {
-
-		readPair.ReadR2.Sequence = utils.ReverseComplementDNA(readPair.ReadR2.Sequence)
-
-		hitsR2 = GetAnchorMatches(readPair.ReadR2, gtaIndex.SuffixTree)
-
-	} else {
-		hitsR2 = GetAnchorMatches(readPair.ReadR2, gtaIndex.SuffixTree)
-	}
-
-	if hitsR2 == nil {
-		logrus.Info("Discard read pair because R2 does not match")
-		return ""
-	}
-
-	// determine most likely transcript by using the count of kmer hits
-
-	maxHits := 0
-	idTranscript := -1
-
-	for index1, _ := range *hitsR1 {
-		for index2, _ := range *hitsR2 {
-			if index1 == index2 {
-
-				// TODO: filter unique hits per transcript
-
-				// TODO: find a better way to determine the most likely transcript (maybe use fragment length)
-
-				if len((*hitsR1)[index1])+len((*hitsR2)[index2]) > maxHits {
-					maxHits = len((*hitsR1)[index1]) + len((*hitsR2)[index2])
-					idTranscript = index1
-				}
-			}
-		}
-	}
-
-	fmt.Println("idTranscript", idTranscript)
-	fmt.Println("maxHits", maxHits)
-
-	if isForwardStrand {
-
-		samEntryR1 := AlignRead(readPair.ReadR1, idTranscript, (*hitsR1)[idTranscript], gtaIndex)
-		samEntryR2 := AlignRead(readPair.ReadR2, idTranscript, (*hitsR2)[idTranscript], gtaIndex)
-
-		samEntryR1.Rname = gtaIndex.Gene.Chromosome
-		samEntryR1.Seq = readPair.ReadR1.Sequence
-		samEntryR1.Pnext = samEntryR2.Pos
-		samEntryR1.Rnext = "="
-
-		samEntryR2.Rname = gtaIndex.Gene.Chromosome
-		samEntryR2.Seq = readPair.ReadR2.Sequence
-		samEntryR2.Pnext = samEntryR1.Pos
-		samEntryR2.Rnext = "="
-
-		return samEntryR1.String() + "\n" + samEntryR2.String() + "\n"
-
-	} else {
-
-		fmt.Println("not implemented yet")
-
-		/*
-			AlignRead(readPair.ReadR1, &gtaIndex.Transcripts[idTranscript].SequenceDnaReverseStrandForwardDirection,
-				gtaIndex.SuffixTreeReverseStrandForwardDirection, (*hitsR1)[idTranscript])
-		*/
-	}
-
-	return "mapping result dummy\n"
-}
+//func MapReadPair(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) string {
+//
+//	rvReadHeader := ""
+//	if readPair.ReadR2 != nil {
+//		rvReadHeader = readPair.ReadR2.Header
+//	}
+//
+//	logrus.WithFields(logrus.Fields{
+//		"fwReadHeader": readPair.ReadR1.Header,
+//		"rvReadHeader": rvReadHeader,
+//	}).Info("Map new read pair")
+//
+//	fmt.Println("R1")
+//	fmt.Println(readPair.ReadR1.Sequence)
+//	fmt.Println("R2")
+//	fmt.Println(readPair.ReadR2.Sequence)
+//
+//	hitsR1, isForwardStrand := LocateR1PositionOnStrands(gtaIndex, readPair.ReadR1)
+//
+//	// TODO: check if discard read pair or report as mate unmapped
+//	if hitsR1 == nil {
+//		logrus.Info("Discard read pair because R1 does not match")
+//		return ""
+//	}
+//
+//	// TODO: implement check for single end reads
+//
+//	var hitsR2 *map[int][]Info
+//
+//	if isForwardStrand {
+//
+//		readPair.ReadR2.Sequence = utils.ReverseComplementDNA(readPair.ReadR2.Sequence)
+//
+//		hitsR2 = GetAnchorMatches(readPair.ReadR2, gtaIndex.SuffixTree)
+//
+//	} else {
+//		hitsR2 = GetAnchorMatches(readPair.ReadR2, gtaIndex.SuffixTree)
+//	}
+//
+//	if hitsR2 == nil {
+//		logrus.Info("Discard read pair because R2 does not match")
+//		return ""
+//	}
+//
+//	// determine most likely transcript by using the count of kmer hits
+//
+//	maxHits := 0
+//	idTranscript := -1
+//
+//	for index1, _ := range *hitsR1 {
+//		for index2, _ := range *hitsR2 {
+//			if index1 == index2 {
+//
+//				// TODO: filter unique hits per transcript
+//
+//				// TODO: find a better way to determine the most likely transcript (maybe use fragment length)
+//
+//				if len((*hitsR1)[index1])+len((*hitsR2)[index2]) > maxHits {
+//					maxHits = len((*hitsR1)[index1]) + len((*hitsR2)[index2])
+//					idTranscript = index1
+//				}
+//			}
+//		}
+//	}
+//
+//	fmt.Println("idTranscript", idTranscript)
+//	fmt.Println("maxHits", maxHits)
+//
+//	if isForwardStrand {
+//
+//		samEntryR1 := AlignRead(readPair.ReadR1, idTranscript, (*hitsR1)[idTranscript], gtaIndex)
+//		samEntryR2 := AlignRead(readPair.ReadR2, idTranscript, (*hitsR2)[idTranscript], gtaIndex)
+//
+//		samEntryR1.Rname = gtaIndex.Gene.Chromosome
+//		samEntryR1.Seq = readPair.ReadR1.Sequence
+//		samEntryR1.Pnext = samEntryR2.Pos
+//		samEntryR1.Rnext = "="
+//
+//		samEntryR2.Rname = gtaIndex.Gene.Chromosome
+//		samEntryR2.Seq = readPair.ReadR2.Sequence
+//		samEntryR2.Pnext = samEntryR1.Pos
+//		samEntryR2.Rnext = "="
+//
+//		return samEntryR1.String() + "\n" + samEntryR2.String() + "\n"
+//
+//	} else {
+//
+//		fmt.Println("not implemented yet")
+//
+//		/*
+//			AlignRead(readPair.ReadR1, &gtaIndex.Transcripts[idTranscript].SequenceDnaReverseStrandForwardDirection,
+//				gtaIndex.SuffixTreeReverseStrandForwardDirection, (*hitsR1)[idTranscript])
+//		*/
+//	}
+//
+//	return "mapping result dummy\n"
+//}
 
 func MapReadPairDev(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) string {
 
@@ -507,29 +432,33 @@ func MapReadPairDev(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) string {
 			}
 		}
 
-		for i := 0; i < len(matches); i++ {
+		// iterate every sequence index to add to their mismatch count
+		for sequenceIndex := 0; sequenceIndex < len(matches); sequenceIndex++ {
 
-			if matches[i] {
+			// skip if there was a match in this sequence
+			if matches[sequenceIndex] {
 				continue
 			}
 
 			logrus.WithFields(logrus.Fields{
-				"sequenceIndex": i,
+				"sequenceIndex": sequenceIndex,
 			}).Debug("add mismatch")
 
-			if val, ok := mismatches[i]; ok {
+			// sequence index was not already discarded
+			if val, ok := mismatches[sequenceIndex]; ok {
 
 				logrus.WithFields(logrus.Fields{
-					"sequenceIndex": i,
+					"sequenceIndex": sequenceIndex,
 					"numMismatches": val.NumMismatches,
 					"numMatches":    len(val.Matches),
 				}).Debug("add mismatch to sequence index")
 
 				val.NumMismatches += 1
-				mismatches[i] = val
+				mismatches[sequenceIndex] = val
 
+				// remove the sequence index if it has too many mismatches
 				if val.NumMismatches > maxMismatches {
-					delete(mismatches, i)
+					delete(mismatches, sequenceIndex)
 
 					logrus.Debug("discard sequence index because too many mismatches")
 				}
@@ -539,6 +468,7 @@ func MapReadPairDev(readPair *fastq.ReadPair, gtaIndex *index.GtaIndex) string {
 			}
 		}
 
+		// stop if there are no more sequences left and the read can be discarded
 		if len(mismatches) == 0 {
 			logrus.Debug("no more sequences left")
 

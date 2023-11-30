@@ -15,6 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -242,12 +243,16 @@ func testMapping() {
 	// the number of read pairs that have been processed
 	taskCounter := 0
 
+	// TODO: remove after testing
 	reader.NextRead()
 
-	for readPair := reader.NextRead(); readPair != nil; {
+	for readPair := reader.NextRead(); readPair != nil; readPair = reader.NextRead() {
 
-		fmt.Println("new read pair")
-		fmt.Println("read pair: ", readPair)
+		// TODO: remove after testing (only process specific read pair)
+		name := strings.Split(readPair.ReadR1.Header, " ")[0]
+		if name != "@3-0002/1" {
+			continue
+		}
 
 		mappingTask := ReadPairMappingTask{
 			ID:       taskCounter,
@@ -256,9 +261,6 @@ func testMapping() {
 		taskQueueMapping <- mappingTask
 
 		taskCounter++
-
-		// TODO: remove after testing
-		break
 	}
 
 	close(taskQueueMapping)
