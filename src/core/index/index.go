@@ -37,6 +37,20 @@ type Transcript struct {
 	Exons                []*Exon
 }
 
+func (t Transcript) GetSequenceDna(index int) string {
+	switch index {
+	case 0:
+		return t.SequenceDnaForward53
+	case 1:
+		return t.SequenceDnaForward35
+	case 2:
+		return t.SequenceDnaReverse53
+	case 3:
+		return t.SequenceDnaReverse35
+	}
+	return ""
+}
+
 type Exon struct {
 	StartRelative uint32 // 0-based start location relative to genomic location of parent gene
 	EndRelative   uint32 // exclusive end location relative to genomic location of parent gene

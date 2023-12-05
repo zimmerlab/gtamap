@@ -1,5 +1,9 @@
 package core
 
+import (
+	"sort"
+)
+
 // TODO: (performance) remove pattern as it is probably already known and does not have to be stored twice
 type PatternSearchResult struct {
 	Pattern *string
@@ -15,11 +19,7 @@ type PatternMatch struct {
 	To int
 }
 
-type ExactMatchResult struct {
-	Matches []ExactMatch
-}
-
-type ExactMatch struct {
+type SequenceMatch struct {
 	// the index of the sequence within the trees sequences
 	SequenceIndex int
 	// the 0-based start position of the match within the source sequence
@@ -30,9 +30,94 @@ type ExactMatch struct {
 	FromTarget int
 	// the end-exclusive position of the match within the target sequence
 	ToTarget int
+	// the locations of the mismatches in the source sequence
+	Mismatches []int
+}
+
+type MatchesSortableByFromSource []SequenceMatch
+
+func (m MatchesSortableByFromSource) Len() int {
+	return len(m)
+}
+func (m MatchesSortableByFromSource) Less(i, j int) bool {
+	return m[i].FromSource < m[j].FromSource
+}
+func (m MatchesSortableByFromSource) Swap(i, j int) {
+	m[i], m[j] = m[j], m[i]
+}
+func (m MatchesSortableByFromSource) Sort() {
+	sort.Sort(m)
+}
+func (m MatchesSortableByFromSource) Last() (SequenceMatch, bool) {
+	if len(m) == 0 {
+		return SequenceMatch{}, false
+	}
+	return m[len(m)-1], true
+}
+func (m MatchesSortableByFromSource) Add(match SequenceMatch) MatchesSortableByFromSource {
+	return append(m, match)
+}
+
+type ExactMatchResult struct {
+	Matches []SequenceMatch
 }
 
 type DiscardStepMatchInformation struct {
 	NumMismatches int
-	Matches       []ExactMatch
+	Matches       MatchesSortableByFromSource
+}
+
+type SequenceContextMatch struct {
+	// the index of the sequence within the trees sequences
+	SequenceIndex int
+	// the 0-based start position of the match within the target sequence
+	TargetIndex int
+	Matches     MatchesSortableByFromSource
+}
+
+func (c SequenceContextMatch) GetUnmatchedRegions(readLength int) []SequenceMatch {
+
+	unmatchedRegions := make([]SequenceMatch, 0)
+
+	for i, match := range c.Matches {
+
+		if i == 0 {
+			if match.FromSource > 0 {
+				unmatchedRegions = append(unmatchedRegions, SequenceMatch{
+					SequenceIndex: c.SequenceIndex,
+					FromSource:    0,
+					ToSource:      match.FromSource,
+					FromTarget:    c.TargetIndex,
+					ToTarget:      c.TargetIndex + match.FromSource,
+				})
+			}
+
+		} else {
+
+			prevMatch := c.Matches[i-1]
+			unmatchedRegions = append(unmatchedRegions, SequenceMatch{
+				SequenceIndex: c.SequenceIndex,
+				FromSource:    prevMatch.ToSource,
+				ToSource:      match.FromSource,
+				FromTarget:    c.TargetIndex + prevMatch.ToSource,
+				ToTarget:      c.TargetIndex + match.FromSource,
+			})
+		}
+
+		// the last match
+		if i == len(c.Matches)-1 {
+			// the end of the read is not matched yet
+			if match.ToSource < readLength {
+				unmatchedRegions = append(unmatchedRegions, SequenceMatch{
+					SequenceIndex: c.SequenceIndex,
+					FromSource:    match.ToSource,
+					ToSource:      readLength,
+					FromTarget:    c.TargetIndex + match.ToSource,
+					ToTarget:      c.TargetIndex + readLength,
+				})
+			}
+		}
+	}
+
+	return unmatchedRegions
 }

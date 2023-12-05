@@ -597,7 +597,7 @@ func (tree *SuffixTree) Search(pattern *string) *core.ExactMatchResult {
 	//}
 
 	result := core.ExactMatchResult{
-		Matches: make([]core.ExactMatch, 0),
+		Matches: make([]core.SequenceMatch, 0),
 	}
 
 	// the last node that was traversed
@@ -702,7 +702,7 @@ func (tree *SuffixTree) Search(pattern *string) *core.ExactMatchResult {
 					"index":      index,
 				}).Debug("pattern match")
 
-				result.Matches = append(result.Matches, core.ExactMatch{
+				result.Matches = append(result.Matches, core.SequenceMatch{
 					SequenceIndex: sequenceId,
 					FromTarget:    index - 1,
 					ToTarget:      index - 1 + len(*pattern),
