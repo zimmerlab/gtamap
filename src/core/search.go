@@ -75,6 +75,14 @@ type SequenceContextMatch struct {
 	Matches     MatchesSortableByFromSource
 }
 
+type ReadMapResult struct {
+	SequenceMatches map[int]SequenceMapResult // key = sequence index in suffix tree
+}
+
+type SequenceMapResult struct {
+	SequenceContextMatches map[int]SequenceContextMatch // key = start index of read mapping on target sequence
+}
+
 func (c SequenceContextMatch) GetUnmatchedRegions(readLength int) []SequenceMatch {
 
 	unmatchedRegions := make([]SequenceMatch, 0)
