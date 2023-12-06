@@ -19,6 +19,13 @@ type GtaIndex struct {
 	NumSequences int
 }
 
+func (i GtaIndex) GetTranscriptSequenceDna(sequenceIndex int) string {
+	transcriptIndex := sequenceIndex / 4
+	sequenceIndexInTranscript := sequenceIndex % 4
+
+	return i.Transcripts[transcriptIndex].GetSequenceDna(sequenceIndexInTranscript)
+}
+
 type Gene struct {
 	GeneIdEnsembl  string // e.g. "ENSG00000173585"
 	Chromosome     string // e.g. "1", "2", "X", "Y", "MT"
@@ -111,9 +118,9 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 	// contains all forward sequences of the transcripts and then all rev-comp sequences
 	var allSequences []string = make([]string, 0)
 	allSequences = append(allSequences, sequencesForward53...)
-	allSequences = append(allSequences, sequencesForward35...)
-	allSequences = append(allSequences, sequencesReverse53...)
-	allSequences = append(allSequences, sequencesReverse35...)
+	//allSequences = append(allSequences, sequencesForward35...)
+	//allSequences = append(allSequences, sequencesReverse53...)
+	//allSequences = append(allSequences, sequencesReverse35...)
 
 	// build the suffix tree containing all sequences
 	var suffixTree *datastructure.SuffixTree = datastructure.BuildSuffixTree(allSequences)

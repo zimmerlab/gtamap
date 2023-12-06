@@ -76,7 +76,7 @@ func BuildSuffixTree(sequences []string) *SuffixTree {
 	timerStart := time.Now()
 
 	for i := 0; i < len(sequences); i++ {
-		sequences[i] += string(EndSymbol)
+		sequences[i] += string(rune(i))
 	}
 
 	// used to assign ids to nodes (not required for production)
@@ -205,6 +205,11 @@ func BuildSuffixTree(sequences []string) *SuffixTree {
 					}
 					numNodes += 1
 					newNode.Locations[sequenceId] = []int{locationToAdd}
+
+					// TODO: remove
+					if locationToAdd > len(sequence) {
+						panic("locationToAdd > len(sequence)")
+					}
 
 					//tree.Nodes = append(tree.Nodes, newNode)
 
@@ -339,6 +344,11 @@ func BuildSuffixTree(sequences []string) *SuffixTree {
 					}
 					numNodes += 1
 					newNode.Locations[sequenceId] = []int{locationToAdd}
+
+					// TODO: remove
+					if locationToAdd > len(sequence) {
+						panic("locationToAdd > len(sequence)")
+					}
 
 					//tree.Nodes = append(tree.Nodes, newNode)
 
@@ -526,13 +536,9 @@ func BuildSuffixTree(sequences []string) *SuffixTree {
 					"activeEdge":   tree.getEdgeSequence(activeEdge),
 				}).Debug("traversed tree to find new active node, active edge and active length")
 			}
-
 		}
 
 		stop -= 1
-
-		// TODO: remove when using multiple sequences
-		// break
 	}
 
 	logrus.WithFields(logrus.Fields{

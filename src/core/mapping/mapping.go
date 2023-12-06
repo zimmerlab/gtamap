@@ -350,32 +350,40 @@ func AlignRead(read *fastq.Read, transcriptId int, kmerHitList []Info, gtaIndex 
 
 func MapReadPairDev(readPair *fastq.ReadPair, index *index.GtaIndex) string {
 
-	fmt.Println("index num sequences", index.NumSequences)
-
-	rvReadHeader := ""
-	if readPair.ReadR2 != nil {
-		rvReadHeader = readPair.ReadR2.Header
-	}
+	logrus.Info("map new read pair")
 
 	logrus.WithFields(logrus.Fields{
-		"fwReadHeader": readPair.ReadR1.Header,
-		"rvReadHeader": rvReadHeader,
-	}).Info("Map new read pair")
+		"header": readPair.ReadR1.Header,
+	}).Info("got read R1")
+	logrus.Info(readPair.ReadR1.Sequence)
 
-	fmt.Println("R1")
-	fmt.Println(readPair.ReadR1.Sequence)
-	fmt.Println("R2")
-	fmt.Println(readPair.ReadR2.Sequence)
+	if readPair.ReadR2 != nil {
+		logrus.WithFields(logrus.Fields{
+			"header": readPair.ReadR2.Header,
+		}).Info("got read R2")
+		logrus.Info(readPair.ReadR2.Sequence)
+	} else {
+		logrus.Info("no read R2")
+	}
 
 	logrus.WithFields(logrus.Fields{
 		"header": readPair.ReadR1.Header,
 	}).Info("map R1 read to reference")
+
+	resultString := ""
 
 	resultR1, valid1 := MapRead(readPair.ReadR1, index)
 
 	fmt.Println("result R1")
 	fmt.Println(valid1)
 	fmt.Println(resultR1)
+
+	if valid1 {
+		resultString += readPair.ReadR1.Header + "\tkeep"
+	} else {
+		resultString += readPair.ReadR1.Header + "\tdiscard"
+	}
+	resultString += "\n"
 
 	logrus.WithFields(logrus.Fields{
 		"header": readPair.ReadR2.Header,
@@ -387,7 +395,14 @@ func MapReadPairDev(readPair *fastq.ReadPair, index *index.GtaIndex) string {
 	fmt.Println(valid2)
 	fmt.Println(resultR2)
 
-	return "end"
+	if valid2 {
+		resultString += readPair.ReadR2.Header + "\tkeep"
+	} else {
+		resultString += readPair.ReadR2.Header + "\tdiscard"
+	}
+	resultString += "\n"
+
+	return resultString
 }
 
 func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool) {
@@ -444,6 +459,13 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 
 		// the result of the exact matching of this kmer against the suffix tree
 		mappingResult := index.SuffixTree.Search(&kmer)
+
+		if mappingResult != nil {
+			for _, match := range mappingResult.Matches {
+				fmt.Println(match)
+				fmt.Println(len(index.GetTranscriptSequenceDna(match.SequenceIndex)))
+			}
+		}
 
 		// contains true for each sequence index that has a match
 		matches := make([]bool, index.NumSequences)
@@ -574,6 +596,19 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 				"fromTarget":    match.FromTarget,
 				"toTarget":      match.ToTarget,
 			}).Debug("process match")
+
+			lengthTranscript := len(index.GetTranscriptSequenceDna(sequenceIndex))
+			lengthRead := len(read.Sequence)
+
+			// discard this match because the read is too long for the transcript for this target index
+			if targetIndex > lengthTranscript-lengthRead {
+				logrus.WithFields(logrus.Fields{
+					"lengthTranscript": lengthTranscript,
+					"lengthRead":       lengthRead,
+					"targetIndex":      targetIndex,
+				}).Info("discard match because target index is out of bounds")
+				continue
+			}
 
 			context := core.SequenceContextMatch{
 				SequenceIndex: sequenceIndex,

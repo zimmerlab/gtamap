@@ -15,7 +15,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"os"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -212,8 +211,11 @@ func testMapping() {
 
 	timerStart = time.Now()
 
-	pathReadsR1 := "../resources/reads/manual/reads_ccr9.1.fq"
-	pathReadsR2 := "../resources/reads/manual/reads_ccr9.2.fq"
+	//pathReadsR1 := "../resources/reads/manual/reads_ccr9.1.fq"
+	//pathReadsR2 := "../resources/reads/manual/reads_ccr9.2.fq"
+
+	pathReadsR1 := "/usr/local/storage2/sam_fasta_test/fw.fastq"
+	pathReadsR2 := "/usr/local/storage2/sam_fasta_test/rw.fastq"
 
 	reader := fastq.InitFromPaths(pathReadsR1, pathReadsR2)
 
@@ -243,16 +245,13 @@ func testMapping() {
 	// the number of read pairs that have been processed
 	taskCounter := 0
 
-	// TODO: remove after testing
-	reader.NextRead()
-
 	for readPair := reader.NextRead(); readPair != nil; readPair = reader.NextRead() {
 
 		// TODO: remove after testing (only process specific read pair)
-		name := strings.Split(readPair.ReadR1.Header, " ")[0]
-		if name != "@3-0003/1" {
-			continue
-		}
+		//name := strings.Split(readPair.ReadR1.Header, " ")[0]
+		//if name != "@3-0003/1" {
+		//	continue
+		//}
 
 		mappingTask := ReadPairMappingTask{
 			ID:       taskCounter,
@@ -342,7 +341,59 @@ func main() {
 	})
 	logrus.SetLevel(logrus.InfoLevel)
 
-	//buildAndSerializeIndex()
-	testMapping()
+	buildAndSerializeIndex()
+	//testMapping()
 
+	gtaIndex := deserializeIndex()
+
+	leafs := gtaIndex.SuffixTree.FindLeafNodesRecursive(gtaIndex.SuffixTree.Root)
+
+	for _, leaf := range leafs {
+
+		fmt.Println("leaf: ", leaf)
+
+		for sequenceIndex, locations := range leaf.Locations {
+			lenTranscript := len(gtaIndex.GetTranscriptSequenceDna(sequenceIndex))
+
+			for _, location := range locations {
+				if location > lenTranscript {
+					fmt.Println("location: ", location)
+					fmt.Println("lenTranscript: ", lenTranscript)
+					panic("location > lenTranscript")
+				}
+			}
+		}
+	}
+
+	//allSequences := make([]string, 2)
+	//
+	//allSequences[0] = "ACAB1"
+	//allSequences[1] = "CAB2"
+	//
+	//var suffixTree *datastructure.SuffixTree = datastructure.BuildSuffixTree(allSequences)
+	//
+	//leafs := suffixTree.FindLeafNodesRecursive(suffixTree.Root)
+	//
+	//for _, leaf := range leafs {
+	//
+	//	fmt.Println("leaf: ", leaf)
+	//
+	//	for sequenceIndex, locations := range leaf.Locations {
+	//		lenTranscript := len(allSequences[sequenceIndex])
+	//
+	//		for _, location := range locations {
+	//			if location > lenTranscript {
+	//				fmt.Println("location: ", location)
+	//				fmt.Println("lenTranscript: ", lenTranscript)
+	//				panic("location > lenTranscript")
+	//			}
+	//		}
+	//	}
+	//}
+	//
+	//pattern := "CA"
+	//
+	//result := suffixTree.Search(&pattern)
+	//
+	//fmt.Println(result)
 }
