@@ -14,6 +14,8 @@ type SuffixTree struct {
 	Root *Node
 	// the sequences the suffix tree was built from
 	Sequences []string
+	// used to keep track of the node ids
+	NumNodes int
 	// (DEBUG) used for printing the edge list
 	//Nodes []*Node
 	// (DEBUG) used for printing the edge list
@@ -60,6 +62,7 @@ func CreateNewTree() *SuffixTree {
 	return &SuffixTree{
 		Root:      &Node{Id: 0, Edges: make(map[byte]*Edge), Link: nil, Locations: nil},
 		Sequences: make([]string, 0),
+		NumNodes:  1,
 	}
 }
 
@@ -74,9 +77,6 @@ func (tree *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 	endSymbols := strconv.Itoa(len(tree.Sequences))
 
 	logrus.Debug("end symbol: ", endSymbols)
-
-	// used for naming the nodes
-	nodeCounter := 1
 
 	var globalEnd int = 0
 	// active point information
@@ -93,7 +93,7 @@ func (tree *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 		logrus.Debug("new main loop iteration")
 
 		if inExtendStep {
-			index -= 1
+			//index -= 1
 
 			logrus.Debug("in extend step -> keep index the same")
 		} else {
@@ -134,14 +134,14 @@ func (tree *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 
 				// a leaf node by design which will never have any outgoing edges
 				newNode := &Node{
-					Id:            nodeCounter,
+					Id:            tree.NumNodes,
 					Edges:         nil,
 					Link:          nil,
 					Locations:     nil,
 					SequenceIndex: sequenceIndex,
 					SequenceStart: index,
 				}
-				nodeCounter++
+				tree.NumNodes++
 
 				logrus.Debug("created new leaf node: ", newNode.Id)
 
@@ -195,6 +195,7 @@ func (tree *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 
 		// check if current char is on active edge
 		if sequence[index] == tree.Sequences[activeEdge.SequenceIndex][activeEdge.Start+activeLength] {
+
 			logrus.Debug("current char (", string(sequence[index]), ") is on active edge: ",
 				string(tree.Sequences[activeEdge.SequenceIndex][activeEdge.Start:activeEdge.Start+activeLength]), ">",
 				string(tree.Sequences[activeEdge.SequenceIndex][activeEdge.Start+activeLength]), "<",
@@ -226,6 +227,7 @@ func (tree *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 			}).Debug("updated active point")
 
 		} else {
+			// current char is not on active edge
 			logrus.Debug("current char (", string(sequence[index]), ") is not on active edge: ",
 				string(tree.Sequences[activeEdge.SequenceIndex][activeEdge.Start:activeEdge.Start+activeLength]), ">",
 				string(tree.Sequences[activeEdge.SequenceIndex][activeEdge.Start+activeLength]), "<",
@@ -235,14 +237,14 @@ func (tree *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 
 			// split edge
 			newInternalNode := &Node{
-				Id:            nodeCounter,
+				Id:            tree.NumNodes,
 				Edges:         make(map[byte]*Edge),
 				Link:          nil,
 				Locations:     nil,
 				SequenceIndex: 0,
 				SequenceStart: 0,
 			}
-			nodeCounter++
+			tree.NumNodes++
 
 			logrus.Debug("created new internal node: ", newInternalNode.Id)
 
@@ -255,14 +257,14 @@ func (tree *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 
 			// a leaf node by design which will never have any outgoing edges
 			newLeafNode := &Node{
-				Id:            nodeCounter,
+				Id:            tree.NumNodes,
 				Edges:         nil,
 				Link:          nil,
 				Locations:     nil,
 				SequenceIndex: sequenceIndex,
 				SequenceStart: index - remainder,
 			}
-			nodeCounter++
+			tree.NumNodes++
 
 			logrus.Debug("created new leaf node: ", newLeafNode.Id)
 
@@ -289,7 +291,9 @@ func (tree *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 			logrus.Debug("created new edge between the new internal node and the new leaf node: ", newInternalNode.Id, "->", newLeafNode.Id, " (", tree.getEdgeSequence(newLeafEdge), ")")
 
 			// add the new edges to the new internal node
-			newInternalNode.Edges[sequence[newInternalEdge.Start]] = newInternalEdge
+			// the new internal edge coordinates are referencing the sequence at its index
+			newInternalNode.Edges[tree.Sequences[newInternalEdge.SequenceIndex][newInternalEdge.Start]] = newInternalEdge
+			// the new leaf edge coordinates are referencing the current sequence
 			newInternalNode.Edges[sequence[newLeafEdge.Start]] = newLeafEdge
 
 			remainder -= 1
@@ -325,19 +329,28 @@ func (tree *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 					logrus.Debug("active node is now: ", activeNode.Id)
 				}
 				// update the active edge as the active node was changed
-				activeEdge = activeNode.Edges[sequence[activeEdge.Start]]
+				activeEdge = activeNode.Edges[tree.Sequences[activeEdge.SequenceIndex][activeEdge.Start]]
 				logrus.Debug("active edge is now: ", tree.getEdgeSequence(activeEdge))
+			}
 
+			logrus.WithFields(logrus.Fields{
+				"activeNode":   activeNode.Id,
+				"activeEdge":   tree.getEdgeSequence(activeEdge),
+				"activeLength": activeLength,
+				"remainder":    remainder,
+			}).Debug("updated active point")
+
+			// canonize active point (edge is shorted than active length)
+			if activeLength > 0 {
 				edgeLength := *activeEdge.End - activeEdge.Start
 
-				// canonize active point (edge is shorted than active length)
-				if activeLength > 0 && edgeLength < activeLength {
+				if edgeLength < activeLength {
 					logrus.WithFields(logrus.Fields{
 						"edgeLength":   edgeLength,
 						"activeLength": activeLength,
 					}).Debug("active edge is shorter than active length -> canonize active point")
 
-					for edgeLength < activeLength+1 {
+					for edgeLength < activeLength {
 
 						logrus.Debug("current active edge: ", activeNode.Id, "->", activeEdge.To.Id, " (", tree.getEdgeSequence(activeEdge), ")")
 						logrus.Debug("active length: ", activeLength)
@@ -358,6 +371,7 @@ func (tree *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 			}).Debug("updated active point")
 
 			inExtendStep = true
+			index -= 1
 		}
 	}
 }

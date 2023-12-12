@@ -375,12 +375,14 @@ func main() {
 
 	allSequences := make([]string, 2)
 
-	allSequences[0] = "abcdefabxybcdmnabcdex1"
+	allSequences[0] = "ACAB1"
 	allSequences[1] = "CAB2"
 
 	tree := datastructure.CreateNewTree()
 
-	tree.AddSequence(allSequences[0], 0)
+	for i, sequence := range allSequences {
+		tree.AddSequence(sequence, i)
+	}
 
 	logrus.Debug()
 	logrus.Debug("final tree:")
