@@ -375,7 +375,7 @@ func main() {
 
 	allSequences := make([]string, 2)
 
-	allSequences[0] = "ABCABXABCD$"
+	allSequences[0] = "abcdefabxybcdmnabcdex1"
 	allSequences[1] = "CAB2"
 
 	tree := datastructure.CreateNewTree()

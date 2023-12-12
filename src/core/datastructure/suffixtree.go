@@ -166,7 +166,15 @@ func (tree *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 
 				// update active point information
 				activeEdge = activeNode.Edges[sequence[index]]
-				activeLength = 1
+
+				edgeLength := *activeEdge.End - activeEdge.Start
+				if edgeLength == 1 {
+					activeNode = activeEdge.To
+					activeEdge = nil
+					activeLength = 0
+				} else {
+					activeLength += 1
+				}
 				remainder++
 
 				logrus.WithFields(logrus.Fields{
@@ -194,6 +202,7 @@ func (tree *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 
 			// update active point information
 			edgeLength := *activeEdge.End - activeEdge.Start
+
 			if edgeLength == activeLength+1 {
 				logrus.Debug("active edge ends on node")
 				// end of active edge reached -> update active node and reset active edge
@@ -318,6 +327,27 @@ func (tree *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 				// update the active edge as the active node was changed
 				activeEdge = activeNode.Edges[sequence[activeEdge.Start]]
 				logrus.Debug("active edge is now: ", tree.getEdgeSequence(activeEdge))
+
+				edgeLength := *activeEdge.End - activeEdge.Start
+
+				// canonize active point (edge is shorted than active length)
+				if activeLength > 0 && edgeLength < activeLength {
+					logrus.WithFields(logrus.Fields{
+						"edgeLength":   edgeLength,
+						"activeLength": activeLength,
+					}).Debug("active edge is shorter than active length -> canonize active point")
+
+					for edgeLength < activeLength+1 {
+
+						logrus.Debug("current active edge: ", activeNode.Id, "->", activeEdge.To.Id, " (", tree.getEdgeSequence(activeEdge), ")")
+						logrus.Debug("active length: ", activeLength)
+						logrus.Debug("-> canonize active point")
+
+						activeLength -= edgeLength
+						activeNode = activeEdge.To
+						activeEdge = activeNode.Edges[sequence[index-activeLength]]
+					}
+				}
 			}
 
 			logrus.WithFields(logrus.Fields{
