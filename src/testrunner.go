@@ -339,41 +339,59 @@ func main() {
 	logrus.SetFormatter(&logrus.TextFormatter{
 		FullTimestamp: true,
 	})
-	logrus.SetLevel(logrus.InfoLevel)
+	logrus.SetLevel(logrus.DebugLevel)
 
-	buildAndSerializeIndex()
-	//testMapping()
-
-	gtaIndex := deserializeIndex()
-
-	leafs := gtaIndex.SuffixTree.FindLeafNodesRecursive(gtaIndex.SuffixTree.Root)
-
-	for _, leaf := range leafs {
-
-		fmt.Println("leaf: ", leaf)
-
-		for sequenceIndex, locations := range leaf.Locations {
-			lenTranscript := len(gtaIndex.GetTranscriptSequenceDna(sequenceIndex))
-
-			for _, location := range locations {
-				if location > lenTranscript {
-					fmt.Println("location: ", location)
-					fmt.Println("lenTranscript: ", lenTranscript)
-					panic("location > lenTranscript")
-				}
-			}
-		}
-	}
-
-	//allSequences := make([]string, 2)
+	//buildAndSerializeIndex()
+	////testMapping()
 	//
-	//allSequences[0] = "ACAB1"
-	//allSequences[1] = "CAB2"
+	//gtaIndex := deserializeIndex()
 	//
+	//leafs := gtaIndex.SuffixTree.FindLeafNodesRecursive(gtaIndex.SuffixTree.Root)
+	//
+	//numErrors := 0
+	//
+	//for _, leaf := range leafs {
+	//
+	//	//fmt.Println("leaf: ", leaf)
+	//
+	//	for sequenceIndex, locations := range leaf.Locations {
+	//		lenTranscript := len(gtaIndex.GetTranscriptSequenceDna(sequenceIndex))
+	//
+	//		for _, location := range locations {
+	//			if location > lenTranscript {
+	//				fmt.Println("location: ", location)
+	//				fmt.Println("lenTranscript: ", lenTranscript)
+	//				numErrors++
+	//				//panic("location > lenTranscript")
+	//				fmt.Println(leaf)
+	//			}
+	//		}
+	//	}
+	//}
+	//
+	//gtaIndex.SuffixTree.ToEdgeList()
+	//
+	//fmt.Println("numErrors: ", numErrors)
+
+	allSequences := make([]string, 2)
+
+	allSequences[0] = "ABCABXABCD$"
+	allSequences[1] = "CAB2"
+
+	tree := datastructure.CreateNewTree()
+
+	tree.AddSequence(allSequences[0], 0)
+
+	logrus.Debug()
+	logrus.Debug("final tree:")
+	tree.ToEdgeList()
+
+	//datastructure.BuildSuffixTree(allSequences)
+
 	//var suffixTree *datastructure.SuffixTree = datastructure.BuildSuffixTree(allSequences)
-	//
+
 	//leafs := suffixTree.FindLeafNodesRecursive(suffixTree.Root)
-	//
+
 	//for _, leaf := range leafs {
 	//
 	//	fmt.Println("leaf: ", leaf)
@@ -390,10 +408,12 @@ func main() {
 	//		}
 	//	}
 	//}
-	//
+
 	//pattern := "CA"
 	//
 	//result := suffixTree.Search(&pattern)
+	//
+	//suffixTree.ToEdgeList()
 	//
 	//fmt.Println(result)
 }
