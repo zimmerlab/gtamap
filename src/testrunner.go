@@ -75,7 +75,7 @@ func buildTestTree() {
 
 	pattern := "C"
 
-	var result *core.ExactMatchResult = tree.Search(&pattern)
+	var result *core.ExactMatchResult = tree.FindPatternExact(&pattern)
 
 	fmt.Println("duration: ", time.Since(timerStart))
 	fmt.Println("result: ", result)
@@ -88,7 +88,7 @@ func buildTestTree() {
 //
 //	pattern := "AGCCCTATT"
 //
-//	var result *core.PatternSearchResult = gtaIndex.SuffixTreeForwardStrandForwardDirection.Search(&pattern)
+//	var result *core.PatternSearchResult = gtaIndex.SuffixTreeForwardStrandForwardDirection.FindPatternExact(&pattern)
 //
 //	fmt.Println("duration: ", time.Since(timerStart))
 //	fmt.Println("result: ", result)
@@ -375,8 +375,8 @@ func main() {
 
 	allSequences := make([]string, 2)
 
-	allSequences[0] = "ACAB1"
-	allSequences[1] = "CAB2"
+	allSequences[0] = "abcdefabxybcdmnabcdex1"
+	allSequences[1] = "abcdefgh2"
 
 	tree := datastructure.CreateNewTree()
 
@@ -384,9 +384,13 @@ func main() {
 		tree.AddSequence(sequence, i)
 	}
 
-	logrus.Debug()
-	logrus.Debug("final tree:")
-	tree.ToEdgeList()
+	//logrus.Debug()
+	//logrus.Debug("final tree:")
+	//tree.ToEdgeList()
+
+	pattern := "e"
+	result := tree.FindPatternExact(&pattern)
+	fmt.Println(result)
 
 	//datastructure.BuildSuffixTree(allSequences)
 
@@ -413,7 +417,7 @@ func main() {
 
 	//pattern := "CA"
 	//
-	//result := suffixTree.Search(&pattern)
+	//result := suffixTree.FindPatternExact(&pattern)
 	//
 	//suffixTree.ToEdgeList()
 	//
