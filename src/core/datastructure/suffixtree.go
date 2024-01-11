@@ -5,1104 +5,728 @@ import (
 	"fmt"
 	"github.com/KleinSamuel/gtamap/src/core"
 	"github.com/sirupsen/logrus"
-	"strconv"
-	"time"
+	"strings"
 )
 
-type SuffixTree struct {
-	// the root node of the suffix tree
-	Root *Node
-	// the sequences the suffix tree was built from
-	Sequences []string
-	// used to keep track of the node ids
-	NumNodes int
-	// (DEBUG) used for printing the edge list
-	//Nodes []*Node
-	// (DEBUG) used for printing the edge list
-	//Edges []*Edge
+type SuffixPosition struct {
+	Index int
+	Start int
 }
 
 type Node struct {
-	// the id of the node
-	Id int
-	// maps start char of the edge to the edge
-	Edges map[byte]*Edge
-	// suffix link to other node, nil if no link present
-	Link *Node
-	// sequence index -> start positions of the substring in the sequence
-	// TODO: is this even required? only leaf nodes are used for position lookup and those contain only one position by design
-	Locations map[int][]int
-	// only present for leaf nodes (each leaf node has exactly one position because of the unique suffix rule)
-	SequenceIndex int // the index of the sequence in the suffix tree sequence array
-	SequenceStart int // start position of the sequence ending on this leaf nodenode
+	Id            int
+	Edges         map[byte]int
+	Link          int
+	SequenceIndex int
+	SequenceStart int
 }
 
 type Edge struct {
-	// the index of the sequence in the suffix tree sequence array
+	Label *SubString
+	To    int
+}
+
+type SubString struct {
 	SequenceIndex int
-	// start position of the sequence on this edge
-	Start int
-	// end position of the sequence on this edge
-	End *int
-	// the node the edge points to
-	To *Node
-	// (DEBUG) used for printing the edge list
-	//From *Node
+	Start         int
+	End           int
 }
 
-// GetEdgeSequence returns the sequence on the given edge
-// if the edge is nil, "/" is returned
-func (tree *SuffixTree) GetEdgeSequence(edge *Edge) string {
-	if edge == nil {
-		return "/"
-	}
-	return tree.Sequences[edge.SequenceIndex][edge.Start:*edge.End]
-}
-
-func CreateNewTree() *SuffixTree {
-	return &SuffixTree{
-		Root:      &Node{Id: 0, Edges: make(map[byte]*Edge), Link: nil, Locations: nil},
-		Sequences: make([]string, 0),
-		NumNodes:  1,
+func (s *SubString) copy() *SubString {
+	return &SubString{
+		SequenceIndex: s.SequenceIndex,
+		Start:         s.Start,
+		End:           s.End,
 	}
 }
 
-// AddSequence adds a new sequence to the suffix tree
-func (tree *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
-
-	logrus.Debug("adding new sequence to tree: ", sequence)
-
-	tree.Sequences = append(tree.Sequences, sequence)
-
-	// the number of sequences in the tree serves as the terminating symbol which is different for each sequence
-	endSymbols := strconv.Itoa(len(tree.Sequences))
-
-	logrus.Debug("end symbol: ", endSymbols)
-
-	var globalEnd int = 0
-	// active point information
-	var activeNode *Node = tree.Root
-	var activeEdge *Edge = nil
-	var activeLength int = 0
-	var remainder int = 0
-
-	var inExtendStep bool = false
-	var previouslyInsertedInternalNode *Node = nil
-
-	for index := 0; index < len(sequence); index++ {
-
-		logrus.Debug("new main loop iteration")
-
-		if inExtendStep {
-			//index -= 1
-
-			logrus.Debug("in extend step -> keep index the same")
-		} else {
-
-			logrus.Debug()
-			logrus.Debug("------ new main step ------")
-			logrus.Debug("existing tree:")
-			tree.ToEdgeList()
-
-			previouslyInsertedInternalNode = nil
-
-			globalEnd += 1
-			logrus.WithFields(logrus.Fields{
-				"index":        index,
-				"activeNode":   activeNode.Id,
-				"activeEdge":   tree.GetEdgeSequence(activeEdge),
-				"activeLength": activeLength,
-				"remainder":    remainder,
-				"globalEnd":    globalEnd,
-				"prefix":       sequence[0:globalEnd],
-				"prevInserted": previouslyInsertedInternalNode,
-			}).Debug("add new prefix")
-		}
-
-		// TODO: remove after testing
-		//if index == 11 {
-		//	break
-		//}
-
-		// active length == 0 -> either add a new edge and node or update active point if edge with current char exists
-		// the remainder must always be 0 in this case
-		if activeLength == 0 {
-
-			logrus.Debug("active length == 0 -> no active edge -> check if path exists")
-
-			if activeNode.Edges[sequence[index]] == nil {
-				logrus.Debug("path does not exist -> add new node and edge")
-
-				// a leaf node by design which will never have any outgoing edges
-				newNode := &Node{
-					Id:            tree.NumNodes,
-					Edges:         nil,
-					Link:          nil,
-					Locations:     nil,
-					SequenceIndex: sequenceIndex,
-					SequenceStart: index,
-				}
-				tree.NumNodes++
-
-				logrus.Debug("created new leaf node: ", newNode.Id)
-
-				newEdge := &Edge{
-					SequenceIndex: sequenceIndex,
-					Start:         index,
-					End:           &globalEnd,
-					To:            newNode,
-				}
-
-				activeNode.Edges[sequence[index]] = newEdge
-
-				logrus.Debug("created new edge: ", activeNode.Id, "->", newNode.Id, " (", tree.GetEdgeSequence(newEdge), ")")
-
-				if activeNode == tree.Root {
-					inExtendStep = false
-					previouslyInsertedInternalNode = nil
-				}
-
-			} else {
-				logrus.Debug("path exists -> update active point")
-
-				// update active point information
-				activeEdge = activeNode.Edges[sequence[index]]
-
-				edgeLength := *activeEdge.End - activeEdge.Start
-				if edgeLength == 1 {
-					activeNode = activeEdge.To
-					activeEdge = nil
-					activeLength = 0
-				} else {
-					activeLength += 1
-				}
-				remainder++
-
-				logrus.WithFields(logrus.Fields{
-					"activeNode":   activeNode.Id,
-					"activeEdge":   tree.GetEdgeSequence(activeEdge),
-					"activeLength": activeLength,
-					"remainder":    remainder,
-				}).Debug("updated active point")
-
-				inExtendStep = false
-				previouslyInsertedInternalNode = nil
-			}
-
-			continue
-		}
-
-		logrus.Debug("active length > 0 -> active edge exists")
-
-		// check if current char is on active edge
-		if sequence[index] == tree.Sequences[activeEdge.SequenceIndex][activeEdge.Start+activeLength] {
-
-			logrus.Debug("current char (", string(sequence[index]), ") is on active edge: ",
-				string(tree.Sequences[activeEdge.SequenceIndex][activeEdge.Start:activeEdge.Start+activeLength]), ">",
-				string(tree.Sequences[activeEdge.SequenceIndex][activeEdge.Start+activeLength]), "<",
-				string(tree.Sequences[activeEdge.SequenceIndex][activeEdge.Start+activeLength+1:*activeEdge.End]))
-
-			// update active point information
-			edgeLength := *activeEdge.End - activeEdge.Start
-
-			if edgeLength == activeLength+1 {
-				logrus.Debug("active edge ends on node")
-				// end of active edge reached -> update active node and reset active edge
-				activeNode = activeEdge.To
-				activeEdge = nil
-				activeLength = 0
-			} else {
-				// active edge not yet reached -> update active length and remainder
-				activeLength += 1
-			}
-			remainder += 1
-
-			inExtendStep = false
-			previouslyInsertedInternalNode = nil
-
-			logrus.WithFields(logrus.Fields{
-				"activeNode":   activeNode.Id,
-				"activeEdge":   tree.GetEdgeSequence(activeEdge),
-				"activeLength": activeLength,
-				"remainder":    remainder,
-			}).Debug("updated active point")
-
-		} else {
-			// current char is not on active edge
-			logrus.Debug("current char (", string(sequence[index]), ") is not on active edge: ",
-				string(tree.Sequences[activeEdge.SequenceIndex][activeEdge.Start:activeEdge.Start+activeLength]), ">",
-				string(tree.Sequences[activeEdge.SequenceIndex][activeEdge.Start+activeLength]), "<",
-				string(tree.Sequences[activeEdge.SequenceIndex][activeEdge.Start+activeLength+1:*activeEdge.End]))
-
-			logrus.Debug("-> split edge")
-
-			// split edge
-			newInternalNode := &Node{
-				Id:            tree.NumNodes,
-				Edges:         make(map[byte]*Edge),
-				Link:          nil,
-				Locations:     nil,
-				SequenceIndex: 0,
-				SequenceStart: 0,
-			}
-			tree.NumNodes++
-
-			logrus.Debug("created new internal node: ", newInternalNode.Id)
-
-			if previouslyInsertedInternalNode != nil {
-				logrus.Debug("rule 2 applies -> add suffix link from previously inserted internal node to new internal node")
-
-				previouslyInsertedInternalNode.Link = newInternalNode
-			}
-			previouslyInsertedInternalNode = newInternalNode
-
-			// a leaf node by design which will never have any outgoing edges
-			newLeafNode := &Node{
-				Id:            tree.NumNodes,
-				Edges:         nil,
-				Link:          nil,
-				Locations:     nil,
-				SequenceIndex: sequenceIndex,
-				SequenceStart: index - remainder,
-			}
-			tree.NumNodes++
-
-			logrus.Debug("created new leaf node: ", newLeafNode.Id)
-
-			// create new edge between the new internal node and the old end node
-			newInternalEdge := &Edge{
-				SequenceIndex: activeEdge.SequenceIndex,
-				Start:         activeEdge.Start + activeLength,
-				End:           activeEdge.End,
-				To:            activeEdge.To,
-			}
-			logrus.Debug("created new edge between the new internal node and the old end node: ", newInternalNode.Id, "->", newInternalEdge.To.Id, " (", tree.GetEdgeSequence(newInternalEdge), ")")
-
-			// the existing edge (which is split) is updated to point to the new internal node
-			activeEdge.End = &newInternalEdge.Start
-			activeEdge.To = newInternalNode
-			logrus.Debug("updated the old edge to end at the new internal node: ", activeNode.Id, "->", activeEdge.To.Id, " (", tree.GetEdgeSequence(activeEdge), ")")
-
-			newLeafEdge := &Edge{
-				SequenceIndex: sequenceIndex,
-				Start:         index,
-				End:           &globalEnd,
-				To:            newLeafNode,
-			}
-			logrus.Debug("created new edge between the new internal node and the new leaf node: ", newInternalNode.Id, "->", newLeafNode.Id, " (", tree.GetEdgeSequence(newLeafEdge), ")")
-
-			// add the new edges to the new internal node
-			// the new internal edge coordinates are referencing the sequence at its index
-			newInternalNode.Edges[tree.Sequences[newInternalEdge.SequenceIndex][newInternalEdge.Start]] = newInternalEdge
-			// the new leaf edge coordinates are referencing the current sequence
-			newInternalNode.Edges[sequence[newLeafEdge.Start]] = newLeafEdge
-
-			remainder -= 1
-
-			// update active point information
-			// RULE 1: after splitting an edge while the active node is root
-			if activeNode == tree.Root {
-				logrus.Debug("rule 1 applies")
-
-				// active node remains root
-				// active edge is set to the first character of the new suffix
-				activeEdge = activeNode.Edges[sequence[index-remainder]]
-				// active length is reduced by 1
-				activeLength -= 1
-
-			} else {
-				// RULE 3: after splitting an edge while the active node is not root
-				// active length and active edge remain unchanged
-				// if it has a suffix link:
-				// follow the suffix link going out from that internal node, set the active node to the node it points to
-				// if it does not have a suffix link:
-				// set the active node to the root
-
-				logrus.Debug("rule 3 applies")
-
-				if activeNode.Link != nil {
-					logrus.Debug("active node has suffix link -> follow suffix link")
-					activeNode = activeNode.Link
-					logrus.Debug("active node is now: ", activeNode.Id)
-				} else {
-					logrus.Debug("active node has no suffix link -> set active node to root")
-					activeNode = tree.Root
-					logrus.Debug("active node is now: ", activeNode.Id)
-				}
-				// update the active edge as the active node was changed
-				activeEdge = activeNode.Edges[tree.Sequences[activeEdge.SequenceIndex][activeEdge.Start]]
-				logrus.Debug("active edge is now: ", tree.GetEdgeSequence(activeEdge))
-			}
-
-			logrus.WithFields(logrus.Fields{
-				"activeNode":   activeNode.Id,
-				"activeEdge":   tree.GetEdgeSequence(activeEdge),
-				"activeLength": activeLength,
-				"remainder":    remainder,
-			}).Debug("updated active point")
-
-			// canonize active point (edge is shorted than active length)
-			if activeLength > 0 {
-				edgeLength := *activeEdge.End - activeEdge.Start
-
-				if edgeLength < activeLength {
-					logrus.WithFields(logrus.Fields{
-						"edgeLength":   edgeLength,
-						"activeLength": activeLength,
-					}).Debug("active edge is shorter than active length -> canonize active point")
-
-					for edgeLength < activeLength {
-
-						logrus.Debug("current active edge: ", activeNode.Id, "->", activeEdge.To.Id, " (", tree.GetEdgeSequence(activeEdge), ")")
-						logrus.Debug("active length: ", activeLength)
-						logrus.Debug("-> canonize active point")
-
-						activeLength -= edgeLength
-						activeNode = activeEdge.To
-						activeEdge = activeNode.Edges[sequence[index-activeLength]]
-					}
-				}
-			}
-
-			logrus.WithFields(logrus.Fields{
-				"activeNode":   activeNode.Id,
-				"activeEdge":   tree.GetEdgeSequence(activeEdge),
-				"activeLength": activeLength,
-				"remainder":    remainder,
-			}).Debug("updated active point")
-
-			inExtendStep = true
-			index -= 1
+func (s *SubString) shortenStart() *SubString {
+	if s.length() == 0 {
+		return &SubString{
+			SequenceIndex: s.SequenceIndex,
+			Start:         s.Start,
+			End:           s.End,
 		}
 	}
+	return &SubString{
+		SequenceIndex: s.SequenceIndex,
+		Start:         s.Start + 1,
+		End:           s.End,
+	}
 }
 
-// BuildSuffixTree builds a suffix tree from the given sequences using Ukkonen's linear time algorithm
-// There are two different cases when adding a new node:
-// 1. The new node can be added directly to the active node through an edge carrying only the current char
-// -> happens when activeLength == 0 and char is not on any existing edge
-// 2. The new node cannot be added directly to the active node, so an edge split is required
-// -> happens when activeLength > 0 and char is not on any existing edge
-// The 3 addition rules only apply when a new node was inserted using case 2 (edge split):
-// Rule 1: If a new node was inserted using case 2 and the active node is not the root node
-// -> activeNode stays root, activeLength -= 1, activeEdge = char at (stop - remainder + 1) (next char of current suffix)
-// Rule 2: If a new node was inserted using case 2 and it is not the first node inserted during this substep:
-// -> connect previously inserted node to the new node using a suffix link
-// Rule 3: If a new node was inserted using case 2 and the active node is not the root node:
-// -> set activeNode to target of suffix link of activeNode, to root if no suffix link is present
-func BuildSuffixTree(sequences []string) *SuffixTree {
-
-	logrus.WithFields(logrus.Fields{
-		"sequences": sequences,
-	}).Debug("Building suffix tree...")
-
-	timerStart := time.Now()
-
-	for i := 0; i < len(sequences); i++ {
-		sequences[i] += string(rune(i))
+func (s *SubString) shortenEnd() *SubString {
+	if s.length() == 0 {
+		return &SubString{
+			SequenceIndex: s.SequenceIndex,
+			Start:         s.Start,
+			End:           s.End,
+		}
 	}
-
-	// used to assign ids to nodes (not required for production)
-	numNodes := 1
-
-	rootNode := &Node{
-		Id:        0,
-		Edges:     make(map[byte]*Edge),
-		Link:      nil,
-		Locations: nil,
+	return &SubString{
+		SequenceIndex: s.SequenceIndex,
+		Start:         s.Start,
+		End:           s.End - 1,
 	}
+}
+
+func (s *SubString) extendEnd() *SubString {
+	return &SubString{
+		SequenceIndex: s.SequenceIndex,
+		Start:         s.Start,
+		End:           s.End + 1,
+	}
+}
+
+func (s *SubString) length() int {
+	return s.End - s.Start
+}
+func (s *SubString) isEmpty() bool {
+	return s.length() <= 0
+}
+
+type SuffixTree struct {
+	NumNodes             int
+	NumEdges             int
+	Sequences            []string
+	RootId               int
+	ActiveLeafId         int
+	currentSequenceIndex int
+	currentSequenceStart int
+	Nodes                map[int]*Node
+	Edges                map[int]*Edge
+	PositionQueue        []SuffixPosition
+}
+
+func CreateTree() *SuffixTree {
 
 	tree := &SuffixTree{
-		Root:      rootNode,
-		Sequences: sequences,
-		//Nodes:     make([]*Node, 0),
-		//Edges:     make([]*Edge, 0),
-	}
-	//tree.Nodes = append(tree.Nodes, rootNode)
-
-	for sequenceId, sequence := range tree.Sequences {
-
-		logrus.WithFields(logrus.Fields{
-			"sequenceId": sequenceId,
-			"length":     len(sequence),
-		}).Debug("adding new sequence to tree")
-
-		var activeNode *Node = tree.Root
-		var activeEdge *Edge = nil
-		var activeLength int = 0
-		var remainder int = 0
-		var stop int = 0
-
-		// the main iteration over the sequence to build all suffixes
-		for stop = 1; stop <= len(sequence); stop++ {
-
-			remainder += 1
-
-			logrus.WithFields(logrus.Fields{
-				"step":         stop,
-				"prefix":       sequence[0:stop],
-				"activeNode":   activeNode.Id,
-				"activeEdge":   tree.GetEdgeSequence(activeEdge),
-				"activeLength": activeLength,
-				"remainder":    remainder,
-			}).Debug("new step")
-
-			// stores the last node which splits and edge that was added in this step
-			var lastSplitNode *Node = nil
-
-			// determines and adds actual suffixes to add which are not added implicitly
-		addremainder:
-			for remainder > 0 {
-
-				// the current suffix to add
-				suffix := sequence[stop-remainder : stop]
-				// the new character (last char of current suffix's prefix) to be added in this step
-				charToAdd := suffix[len(suffix)-1]
-
-				// the location of the current suffix within the sequence
-				locationToAdd := stop
-				if remainder > 1 {
-					locationToAdd = stop - remainder + 1
-				}
-
-				logrus.WithFields(logrus.Fields{
-					"remainder":    remainder,
-					"subsequence":  suffix,
-					"charToAdd":    string(charToAdd),
-					"location":     locationToAdd,
-					"step":         stop,
-					"activeNode":   activeNode.Id,
-					"activeEdge":   tree.GetEdgeSequence(activeEdge),
-					"activeLength": activeLength,
-				}).Debug("in substep")
-
-				if activeLength == 0 {
-					// no edge must be split
-					// it must be checked if a new node+edge must be inserted or if edge with suffix exists
-
-					logrus.Debug("check current node for path")
-
-					// check if path with char exists
-					// -> if yes, set active edge and active length
-					if activeNode.Edges[charToAdd] != nil {
-
-						logrus.Debug("path exists")
-
-						activeEdge = activeNode.Edges[charToAdd]
-
-						// check if path ends after this char -> update active node, reset active edge
-						if *activeEdge.End-activeEdge.Start == 1 {
-
-							activeNode = activeEdge.To
-							activeEdge = nil
-							activeLength = 0
-
-							logrus.WithFields(logrus.Fields{
-								"activeNode":   activeNode.Id,
-								"activeEdge":   tree.GetEdgeSequence(activeEdge),
-								"activeLength": activeLength,
-							}).Debug("path ends on node, update:")
-
-							break addremainder
-						}
-
-						activeLength = 1
-
-						logrus.WithFields(logrus.Fields{
-							"activeNode":   activeNode.Id,
-							"activeEdge":   tree.GetEdgeSequence(activeEdge),
-							"activeLength": activeLength,
-						}).Debug("path does not end on node, update:")
-
-						break addremainder
-					}
-
-					logrus.Debug("path does not exist -> add new node and edge")
-
-					// edge with suffix does not exist -> add new node and edge
-					newNode := &Node{
-						Id:        numNodes,
-						Edges:     make(map[byte]*Edge),
-						Link:      nil,
-						Locations: make(map[int][]int),
-					}
-					numNodes += 1
-					newNode.Locations[sequenceId] = []int{locationToAdd}
-
-					// TODO: remove
-					if locationToAdd > len(sequence) {
-						panic("locationToAdd > len(sequence)")
-					}
-
-					//tree.Nodes = append(tree.Nodes, newNode)
-
-					logrus.WithFields(logrus.Fields{
-						"newNode":   newNode.Id,
-						"locations": newNode.Locations,
-					}).Debug("created new leaf node")
-
-					newEdge := &Edge{
-						SequenceIndex: sequenceId,
-						Start:         stop - 1,
-						End:           &stop,
-						To:            newNode,
-						//From:          activeNode,
-					}
-					activeNode.Edges[sequence[newEdge.Start]] = newEdge
-
-					//tree.Edges = append(tree.Edges, newEdge)
-
-					logrus.WithFields(logrus.Fields{
-						"newEdge": tree.GetEdgeSequence(newEdge),
-						"from":    activeNode.Id,
-						"to":      newNode.Id,
-						"start":   newEdge.Start,
-						"end":     *newEdge.End,
-					}).Debug("created new edge leading to new leaf node")
-
-				} else {
-					// current position is on edge
-					// check if edge must be split or if suffix is already on edge
-
-					nextCharOnEdge := tree.Sequences[activeEdge.SequenceIndex][activeEdge.Start+activeLength]
-
-					logrus.WithFields(logrus.Fields{
-						"activeEdge":     tree.GetEdgeSequence(activeEdge),
-						"activeLength":   activeLength,
-						"charToAdd":      string(charToAdd),
-						"nextCharOnEdge": string(nextCharOnEdge),
-					}).Debug("check if edge must be split or if char is already on edge")
-
-					if nextCharOnEdge == charToAdd {
-
-						logrus.Debug("next char is on edge")
-
-						// check if path ends after this char -> update active node, reset active edge
-						if *activeEdge.End-activeEdge.Start == activeLength+1 {
-
-							activeNode = activeEdge.To
-							activeEdge = nil
-							activeLength = 0
-
-							logrus.WithFields(logrus.Fields{
-								"activeNode":   activeNode.Id,
-								"activeEdge":   tree.GetEdgeSequence(activeEdge),
-								"activeLength": activeLength,
-							}).Debug("path ends on node, update:")
-
-							break addremainder
-						}
-
-						// suffix is already on edge -> update active length and remainder
-						activeLength += 1
-
-						logrus.WithFields(logrus.Fields{
-							"activeNode":   activeNode.Id,
-							"activeEdge":   tree.GetEdgeSequence(activeEdge),
-							"activeLength": activeLength,
-						}).Debug("path does not end on node, update:")
-
-						break addremainder
-					}
-
-					logrus.Debug("next char is not on edge -> split edge")
-
-					// create new node that splits the activeEdge
-					newSplitNode := &Node{
-						Id:        numNodes,
-						Edges:     make(map[byte]*Edge),
-						Link:      nil,
-						Locations: nil,
-					}
-					numNodes += 1
-
-					//tree.Nodes = append(tree.Nodes, newSplitNode)
-
-					logrus.WithFields(logrus.Fields{
-						"newSplitNode": newSplitNode.Id,
-					}).Debug("created new node that splits the active edge")
-
-					// edge between the newly inserted split node and the old end node
-					// contains information from the old edge (careful with sequence index etc.)
-					newSplitEdge := &Edge{
-						SequenceIndex: activeEdge.SequenceIndex,
-						Start:         activeEdge.Start + activeLength,
-						End:           activeEdge.End,
-						To:            activeEdge.To,
-						//From:          newSplitNode,
-					}
-					// retrieve char from respective sequence of the "old" edge to form new edge
-					var edgeStart byte = sequences[newSplitEdge.SequenceIndex][newSplitEdge.Start]
-					newSplitNode.Edges[edgeStart] = newSplitEdge
-
-					//tree.Edges = append(tree.Edges, newSplitEdge)
-
-					logrus.WithFields(logrus.Fields{
-						"newSplitEdge": tree.GetEdgeSequence(newSplitEdge),
-						"from":         newSplitNode.Id,
-						"to":           newSplitEdge.To.Id,
-						"start":        newSplitEdge.Start,
-						"end":          *newSplitEdge.End,
-					}).Debug("created new edge that connects the split node to the old end node")
-
-					// updates the active edge to point to the new split node
-					newEnd := activeEdge.Start + activeLength
-					activeEdge.End = &newEnd
-					activeEdge.To = newSplitNode
-
-					logrus.WithFields(logrus.Fields{
-						"oldEdge": tree.GetEdgeSequence(activeEdge),
-						"from":    activeNode.Id,
-						"to":      activeEdge.To.Id,
-						"start":   activeEdge.Start,
-						"end":     *activeEdge.End,
-					}).Debug("updated the old edge to end at the new split node")
-
-					// create new node and edge for the new suffix
-					newNode := &Node{
-						Id:        numNodes,
-						Edges:     make(map[byte]*Edge),
-						Link:      nil,
-						Locations: make(map[int][]int),
-					}
-					numNodes += 1
-					newNode.Locations[sequenceId] = []int{locationToAdd}
-
-					// TODO: remove
-					if locationToAdd > len(sequence) {
-						panic("locationToAdd > len(sequence)")
-					}
-
-					//tree.Nodes = append(tree.Nodes, newNode)
-
-					logrus.WithFields(logrus.Fields{
-						"newNode":   newNode.Id,
-						"locations": newNode.Locations,
-					}).Debug("created new leaf node")
-
-					// new edge between the new split node and the new node
-					newEdge := &Edge{
-						SequenceIndex: sequenceId,
-						Start:         stop - 1,
-						End:           &stop,
-						To:            newNode,
-						//From:          newSplitNode,
-					}
-					// current sequence is correct because the edge contains the char of the current sequence
-					newSplitNode.Edges[sequence[newEdge.Start]] = newEdge
-
-					//tree.Edges = append(tree.Edges, newEdge)
-
-					logrus.WithFields(logrus.Fields{
-						"newEdge": tree.GetEdgeSequence(newEdge),
-						"from":    newSplitNode.Id,
-						"to":      newNode.Id,
-						"start":   newEdge.Start,
-						"end":     *newEdge.End,
-					}).Debug("created new edge between the new split node and the new node")
-
-					// check if rule 2 applies:
-					// inserted split node is not the first node added in this step, links previous node to it
-					if lastSplitNode != nil {
-
-						logrus.Debug("rule 2 applies, but suffix links are ignored for now")
-
-						/*
-							lastSplitNode.Link = newSplitNode
-
-							logrus.WithFields(logrus.Fields{
-								"from": lastSplitNode.Id,
-								"to":   newSplitNode.Id,
-							}).Debug("rule 2 applies, create suffix link:")
-						*/
-					}
-
-					// keeps track of the currently added split node
-					lastSplitNode = newSplitNode
-				}
-
-				// check if rule 1 applies:
-				// active node is root: active node = root, active edge = first char of new suffix, active length -= 1
-				if activeNode == tree.Root && activeLength > 0 {
-
-					logrus.Debug("rule 1 applies, computing new activeNode, activeEdge, activeLength")
-
-					activeLength -= 1
-
-					if activeLength == 0 {
-						activeEdge = nil
-					} else {
-						// the active edge is the first char of the new suffix
-						// this edge must exist because the activeLength was > 1
-						activeEdge = activeNode.Edges[sequence[(stop-remainder)+1]]
-					}
-
-					logrus.WithFields(logrus.Fields{
-						"activeNode":   activeNode.Id,
-						"activeEdge":   tree.GetEdgeSequence(activeEdge),
-						"activeLength": activeLength,
-					}).Debug("rule 1 applied, update:")
-				}
-
-				followedSuffixLink := false
-
-				// check if rule 3 applies:
-				// a new node was inserted and active node is not root:
-				// if active node has no suffix link -> active node = root
-				// if active node has suffix link -> set active node to suffix link node
-				// set activeEdge to edge starting with same character as current active edge
-				// (such an edge must exist because active node was an inner node)
-				if activeNode != tree.Root {
-					logrus.Debug("rule 3 applies, computing new activeNode, activeEdge, activeLength")
-
-					if activeNode.Link == nil {
-						activeNode = tree.Root
-
-						logrus.WithFields(logrus.Fields{
-							"activeNode": activeNode.Id,
-						}).Debug("active node has no suffix link, update activeNode:")
-					} else {
-						activeNode = activeNode.Link
-						followedSuffixLink = true
-
-						logrus.WithFields(logrus.Fields{
-							"activeNode": activeNode.Id,
-						}).Debug("active node has suffix link, update activeNode:")
-					}
-				}
-
-				remainder -= 1
-
-				logrus.WithFields(logrus.Fields{
-					"remainder": remainder,
-				}).Debug("decrementing remainder")
-
-				rescanCounter := remainder
-				if followedSuffixLink {
-					rescanCounter = activeLength
-
-					logrus.Debug("setting rescanCounter to activeLength because followed a suffix link")
-				}
-
-				if rescanCounter <= 1 {
-
-					//logrus.Debug("setting activeEdge to nil because activeLength == 0")
-					logrus.Debug("setting activeEdge to nil because rescanCounter <= 1")
-
-					activeEdge = nil
-
-				} else {
-
-					// the active edge must be updated
-					activeEdge = activeNode.Edges[sequence[stop-remainder]]
-
-					// number of chars left to scan
-					tmpRemainder := remainder - 1
-
-					logrus.WithFields(logrus.Fields{
-						"activeNode":   activeNode.Id,
-						"activeEdge":   tree.GetEdgeSequence(activeEdge),
-						"tmpRemainder": tmpRemainder,
-					}).Debug("sub-rescanning tree to find new activePoint")
-
-					for tmpRemainder > 0 && *activeEdge.End-activeEdge.Start <= tmpRemainder {
-
-						logrus.WithFields(logrus.Fields{
-							"tmpRemainder": tmpRemainder,
-							"edge length":  *activeEdge.End - activeEdge.Start,
-							"suffix":       sequence[stop-tmpRemainder-1 : stop],
-						}).Debug("in sub-rescan loop, because edge length <= remainder")
-
-						tmpRemainder -= *activeEdge.End - activeEdge.Start
-						activeNode = activeEdge.To
-
-						if tmpRemainder == 0 {
-							// path ends on a node -> activeEdge = nil
-							activeEdge = nil
-						} else {
-							// path ends on an edge -> activeEdge = edge
-							activeEdge = activeNode.Edges[sequence[stop-tmpRemainder-1]]
-						}
-					}
-
-					activeLength = tmpRemainder
-
-					/* used when suffix links are implemented
-
-					// traverse edge -> activeLength -= edge length
-					// update activeNode
-					// choose new edge from activeNode that starts with char at this pos in suffix
-					// repeat until activeLength < edge length
-					for activeLength > 0 && *activeEdge.End-activeEdge.Start <= activeLength {
-
-						activeLength -= *activeEdge.End - activeEdge.Start
-						activeNode = activeEdge.To
-
-						newChar := sequence[stop-activeLength-1]
-
-						activeEdge = activeNode.Edges[newChar]
-
-						fmt.Println("new activeLength", activeLength)
-						fmt.Println("new activeNode", activeNode.Id)
-						fmt.Println("index: ", stop-activeLength-1)
-						fmt.Println("suffix: ", sequence[stop-activeLength-1:stop])
-						fmt.Println("new char", string(newChar))
-						fmt.Println("new activeEdge", tree.GetEdgeSequence(activeEdge))
-
-					}
-					*/
-				}
-
-				logrus.WithFields(logrus.Fields{
-					"activeNode":   activeNode.Id,
-					"activeLength": activeLength,
-					"activeEdge":   tree.GetEdgeSequence(activeEdge),
-				}).Debug("traversed tree to find new active node, active edge and active length")
-			}
-		}
-
-		stop -= 1
+		NumNodes:      1, // 1 is root, 0 is nil
+		NumEdges:      1, // 1 is root, 0 is nil
+		Nodes:         make(map[int]*Node),
+		Edges:         make(map[int]*Edge),
+		Sequences:     make([]string, 0),
+		PositionQueue: make([]SuffixPosition, 0),
 	}
 
-	logrus.WithFields(logrus.Fields{
-		"duration": time.Since(timerStart),
-	}).Info("Added all sequences into the suffix tree")
+	rootNodeId := tree.AddNode(false)
+	tree.RootId = rootNodeId
+	tree.ActiveLeafId = tree.RootId
 
 	return tree
 }
 
-// FindLeafNodesRecursive searches for all leaf nodes in the tree recursively, starting from the given node
-func (tree *SuffixTree) FindLeafNodesRecursive(node *Node) []*Node {
+func (t *SuffixTree) AddNode(isLeaf bool) int {
+	nodeId := t.NumNodes
+	t.Nodes[nodeId] = &Node{
+		Id:            nodeId,
+		Edges:         make(map[byte]int),
+		Link:          0,
+		SequenceIndex: -1,
+		SequenceStart: -1,
+	}
 
 	logrus.WithFields(logrus.Fields{
-		"node": node.Id,
-	}).Debug("search leaf nodes recursively from given node")
+		"node":   nodeId,
+		"isLeaf": isLeaf,
+	}).Debug("add new node")
 
-	if len(node.Edges) == 0 {
-		// given node is already a leaf node
-
-		logrus.WithFields(logrus.Fields{
-			"leaf": node.Id,
-		}).Debug("given node is leaf node")
-
-		return []*Node{node}
-	}
-
-	logrus.Debug("is inner node, continue recursively for all edges")
-
-	var leafNodes []*Node
-
-	for _, edge := range node.Edges {
-
-		logrus.WithFields(logrus.Fields{
-			"edgeSequence": tree.GetEdgeSequence(edge),
-			"from":         node.Id,
-			"to":           edge.To.Id,
-		}).Debug("traversing edge")
-
-		leafNodes = append(leafNodes, tree.FindLeafNodesRecursive(edge.To)...)
-	}
-
-	return leafNodes
+	t.NumNodes++
+	return nodeId
 }
 
-// FindPatternExact search for the given pattern in the suffix tree and report the positions
-// of exact matches within all sequences of the suffix tree.
-// Iterate over each char of the given pattern and traverse the tree until the pattern is found or discarded.
-// Each leaf node of the tree contains the information about the start position of the subsequence
-// (from root to leaf) within the set of sequences as well as the sequence index.
-// The pattern is scanned byte by byte and compared to the edges of the tree, which is traversed until
-// there are no more bytes (chars) within the pattern. If any byte is not found within the tree, the pattern
-// is not contained within the tree. Otherwise, all leaf nodes are returned as occurrences. This is true
-// even when the leaf node is not reached because then the pattern is a prefix of a suffix which is still
-// contained within the sequences of the tree.
-func (tree *SuffixTree) FindPatternExact(pattern *string) *core.ExactMatchResult {
+func (t *SuffixTree) AddEdge(label *SubString, fromId int, toId int) int {
+
+	key := t.GetFirstCharOfSubstring(label)
 
 	logrus.WithFields(logrus.Fields{
-		"pattern": *pattern,
-	}).Debug("search pattern in tree")
+		"label": t.GetSubstring(label),
+		"from":  fromId,
+		"to":    toId,
+		"key":   string(key),
+	}).Debug("add new edge")
 
-	//result := core.PatternSearchResult{
-	//	Pattern: pattern,
-	//	Matches: make([]core.PatternMatch, 0),
-	//}
+	if t.GetFirstCharOfSubstring(label) != key {
+		panic("first char of label does not match key when adding edge")
+	}
 
-	result := core.ExactMatchResult{
+	edgeId := t.NumEdges
+	t.Edges[edgeId] = &Edge{
+		Label: label,
+		To:    toId,
+	}
+	t.NumEdges++
+
+	t.GetNode(fromId).Edges[key] = edgeId
+
+	return edgeId
+}
+
+func (t *SuffixTree) OverwriteEdge(edgeId int, label *SubString, fromId int, toId int) {
+
+	key := t.GetFirstCharOfSubstring(label)
+
+	logrus.WithFields(logrus.Fields{
+		"edgeId": edgeId,
+		"label":  t.GetSubstring(label),
+		"from":   fromId,
+		"to":     toId,
+		"key":    string(key),
+	}).Debug("overwrite edge")
+
+	if t.GetFirstCharOfSubstring(label) != key {
+		panic("first char of label does not match key when adding edge")
+	}
+
+	t.Edges[edgeId] = &Edge{
+		Label: label,
+		To:    toId,
+	}
+
+	t.GetNode(fromId).Edges[key] = edgeId
+}
+
+func (t *SuffixTree) GetRoot() *Node {
+	return t.Nodes[1]
+}
+
+func (t *SuffixTree) GetNode(id int) *Node {
+	return t.Nodes[id]
+}
+
+func (t *SuffixTree) GetEdge(id int) *Edge {
+	return t.Edges[id]
+}
+
+func (t *SuffixTree) GetEdgeLabelCopyByEdgeId(edgeId int) *SubString {
+	return t.Edges[edgeId].Label.copy()
+}
+
+func (t *SuffixTree) GetEdgeLabelStringByEdgeId(edgeId int) string {
+	return t.Sequences[t.Edges[edgeId].Label.SequenceIndex][t.Edges[edgeId].Label.Start:t.Edges[edgeId].Label.End]
+}
+
+func (t *SuffixTree) GetSubstring(substring *SubString) string {
+	return t.Sequences[substring.SequenceIndex][substring.Start:substring.End]
+}
+
+func (t *SuffixTree) GetFirstCharOfSubstring(substring *SubString) byte {
+	return t.Sequences[substring.SequenceIndex][substring.Start]
+}
+
+func (t *SuffixTree) GetCharAt(sequenceIndex int, position int) byte {
+	return t.Sequences[sequenceIndex][position]
+}
+
+func (t *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
+
+	logrus.Debug()
+	logrus.Debug("--------------------")
+	logrus.WithFields(logrus.Fields{
+		"sequenceIndex": sequenceIndex,
+		"sequence":      sequence,
+	}).Debug("adding sequence to suffix tree")
+	logrus.Debug("--------------------")
+
+	// add the new sequence to the list of sequences in the tree for character lookup
+	// as each edge contains only an interval to represent the edge label
+	t.Sequences = append(t.Sequences, sequence)
+
+	t.ActiveLeafId = t.RootId
+
+	sId := t.RootId
+
+	var text *SubString = &SubString{
+		SequenceIndex: sequenceIndex,
+		Start:         0,
+		End:           0,
+	}
+	var rest *SubString
+
+	for i := 0; i < len(sequence); i++ {
+
+		rest = &SubString{
+			SequenceIndex: sequenceIndex,
+			Start:         i,
+			End:           len(sequence),
+		}
+
+		//logrus.Debug()
+		//t.ToEdgeList(false)
+		logrus.WithFields(logrus.Fields{
+			"i":    i,
+			"text": t.GetSubstring(text),
+			"char": string(sequence[i]),
+			"rest": t.GetSubstring(rest),
+		}).Debug("adding char to suffix tree")
+
+		t.PositionQueue = append(t.PositionQueue, SuffixPosition{
+			Index: sequenceIndex,
+			Start: i,
+		})
+
+		sId, text = t.update(sId, text, sequence[i], rest)
+	}
+
+	if t.ActiveLeafId != 0 && t.ActiveLeafId != t.RootId && t.ActiveLeafId != sId {
+		t.GetNode(t.ActiveLeafId).Link = sId
+	}
+}
+
+func (t *SuffixTree) update(sId int, stringPart *SubString, nextChar byte, rest *SubString) (int, *SubString) {
+
+	logrus.WithFields(logrus.Fields{
+		"s":          sId,
+		"stringPart": t.GetSubstring(stringPart),
+		"nextChar":   string(nextChar),
+		"rest":       t.GetSubstring(rest),
+	}).Debug("update")
+
+	k := stringPart.extendEnd()
+
+	oldRootId := t.RootId
+
+	endpoint, rId := t.testAndSplit(sId, stringPart, nextChar, rest)
+
+	logrus.WithFields(logrus.Fields{
+		"endpoint": endpoint,
+		"r":        rId,
+		"k":        t.GetSubstring(k),
+		"s":        sId,
+	}).Debug("in update start after testAndSplit")
+
+	var leafId int
+
+	for !endpoint {
+
+		logrus.Debug("in update !endpoint loop")
+
+		edgeId := t.GetNode(rId).Edges[nextChar]
+		//tempEdge := r.Edges[nextChar]
+
+		if edgeId != 0 {
+
+			leafId = t.GetEdge(edgeId).To
+
+			logrus.WithFields(logrus.Fields{
+				"leaf": leafId,
+			}).Debug("r has edge starting with nextChar -> updating leaf")
+
+		} else {
+
+			leafId = t.AddNode(true)
+
+			position := t.PositionQueue[0]
+			t.PositionQueue = t.PositionQueue[1:]
+
+			t.GetNode(leafId).SequenceIndex = position.Index
+			t.GetNode(leafId).SequenceStart = position.Start
+
+			t.AddEdge(rest, rId, leafId)
+
+			logrus.WithFields(logrus.Fields{
+				"leaf": leafId,
+			}).Debug("r has no edge starting with nextChar -> creating new leaf")
+		}
+
+		if t.ActiveLeafId != t.RootId {
+			// update suffix link for new leaf
+			t.GetNode(t.ActiveLeafId).Link = leafId
+
+			logrus.WithFields(logrus.Fields{
+				"oldActiveLeaf": t.ActiveLeafId,
+				"link":          leafId,
+			}).Debug("active leaf != root -> updating suffix link for new leaf")
+		}
+
+		t.ActiveLeafId = leafId
+
+		logrus.WithFields(logrus.Fields{
+			"activeLeaf": t.ActiveLeafId,
+		}).Debug("updating active leaf")
+
+		if oldRootId != t.RootId {
+			t.GetNode(oldRootId).Link = rId
+
+			logrus.WithFields(logrus.Fields{
+				"oldRoot": oldRootId,
+				"link":    rId,
+			}).Debug("old root != root -> updating suffix link for old root")
+		}
+		oldRootId = rId
+		logrus.WithFields(logrus.Fields{
+			"oldRoot": oldRootId,
+		}).Debug("updating old root")
+
+		if t.GetNode(sId).Link == 0 {
+			// special case
+			k = k.shortenStart()
+
+			logrus.WithFields(logrus.Fields{
+				"k":         k,
+				"kSequence": t.GetSubstring(k),
+			}).Debug("s.Link == nil -> special case")
+
+		} else {
+
+			logrus.Debug("s.Link != nil")
+
+			if t.GetNode(sId).Link == 4 {
+				fmt.Println("s.Link.Id == 4")
+				for i, _ := range t.GetNode(t.GetNode(sId).Link).Edges {
+					fmt.Println(string(i))
+				}
+			}
+
+			sId, k = t.canonize(t.GetNode(sId).Link, k.shortenEnd())
+			k = k.extendEnd()
+
+			logrus.WithFields(logrus.Fields{
+				"s": sId,
+				"k": t.GetSubstring(k),
+			}).Debug("updating s and k after canonize")
+		}
+
+		endpoint, rId = t.testAndSplit(sId, k.shortenEnd(), nextChar, rest)
+	}
+
+	logrus.Debug("in update !endpoint loop finished")
+
+	if oldRootId != t.RootId {
+		t.GetNode(oldRootId).Link = rId
+
+		logrus.WithFields(logrus.Fields{
+			"oldRoot": oldRootId,
+			"link":    rId,
+		}).Debug("old root != root -> updating suffix link for old root")
+	}
+
+	return t.canonize(sId, k)
+}
+
+func (t *SuffixTree) testAndSplit(startNodeId int, searchString *SubString, nextChar byte, remainder *SubString) (bool, int) {
+
+	logrus.WithFields(logrus.Fields{
+		"startNode":            startNodeId,
+		"searchString":         searchString,
+		"searchStringSequence": t.GetSubstring(searchString),
+		"nextChar":             string(nextChar),
+		"remainder":            t.GetSubstring(remainder),
+	}).Debug("testAndSplit")
+
+	// TODO: maybe assert remainder not empty and remainder char at 0 == nextChar
+
+	startNodeId, searchString = t.canonize(startNodeId, searchString)
+
+	logrus.WithFields(logrus.Fields{
+		"startNode":    startNodeId,
+		"searchString": t.GetSubstring(searchString),
+	}).Debug("in testAndSplit start after canonize")
+
+	if !searchString.isEmpty() {
+
+		logrus.Debug("in testAndSplit !searchString.isEmpty")
+		logrus.Debug("searchString: ", t.GetSubstring(searchString))
+		logrus.Debug(string(t.GetFirstCharOfSubstring(searchString)))
+
+		edgeId := t.GetNode(startNodeId).Edges[t.GetFirstCharOfSubstring(searchString)]
+		edgeSequence := t.GetEdgeLabelStringByEdgeId(edgeId)
+		searchSequence := t.GetSubstring(searchString)
+
+		logrus.WithFields(logrus.Fields{
+			"edgeSequence":   edgeSequence,
+			"searchSequence": searchSequence,
+		}).Debug("in testAndSplit !searchString.isEmpty loop")
+
+		// TODO: maybe assert g != null
+
+		// searchString is a substring of the edge label
+		if len(edgeSequence) > len(searchSequence) && edgeSequence[len(searchSequence)] == nextChar {
+
+			logrus.Debug("in testAndSplit !searchString.isEmpty loop -> searchString is a substring of the edge label")
+
+			return true, startNodeId
+		}
+
+		newNodeId := t.splitNode(startNodeId, edgeId, searchString)
+
+		return false, newNodeId
+	}
+
+	remainderSequence := t.GetSubstring(remainder)
+
+	edgeId := t.GetNode(startNodeId).Edges[remainderSequence[0]]
+
+	if edgeId == 0 {
+
+		logrus.Debug("edgeId == 0")
+
+		// there is no t-transition from s
+		return false, startNodeId
+	}
+
+	edgeSequence := t.GetEdgeLabelStringByEdgeId(edgeId)
+
+	if strings.Index(edgeSequence, remainderSequence) == 0 {
+
+		logrus.Debug("edgeSequence starts with remainderSequence")
+
+		if len(remainderSequence) == len(edgeSequence) {
+			logrus.Debug("remainderSequence == edgeSequence")
+
+			return true, startNodeId
+
+		} else {
+			logrus.Debug("remainderSequence != edgeSequence")
+
+			t.splitNode(startNodeId, edgeId, remainder)
+
+			return false, startNodeId
+		}
+	}
+
+	logrus.Debug("edgeSequence does not start with remainderSequence")
+
+	return true, startNodeId
+}
+
+func (t *SuffixTree) splitNode(nodeId int, edgeId int, splitFirstPart *SubString) int {
+
+	logrus.WithFields(logrus.Fields{
+		"node":           nodeId,
+		"splitFirstPart": t.GetSubstring(splitFirstPart),
+		"edgeSequence":   t.GetEdgeLabelStringByEdgeId(edgeId),
+	}).Debug("splitNode")
+
+	newNodeId := t.AddNode(false)
+
+	// new edge that connects the given source node with the new inner node
+	//newEdgeId := t.AddEdge(splitFirstPart, newNodeId)
+	//t.GetNode(nodeId).Edges[t.GetFirstCharOfSubstring(splitFirstPart)] = newEdgeId
+	newEdgeId := t.AddEdge(splitFirstPart, nodeId, newNodeId)
+
+	// update the given edge such that it connects the new inner node with the destination node of the given edge
+	//t.GetEdge(edgeId).Label.Start += splitFirstPart.length()
+	//t.GetNode(newNodeId).Edges[t.GetFirstCharOfSubstring(t.GetEdge(edgeId).Label)] = edgeId
+	newLabel := t.GetEdgeLabelCopyByEdgeId(edgeId)
+	newLabel.Start += splitFirstPart.length()
+
+	t.OverwriteEdge(edgeId, newLabel, newNodeId, t.GetEdge(edgeId).To)
+
+	logrus.WithFields(logrus.Fields{
+		"sourceNode":          nodeId,
+		"innerNode":           newNodeId,
+		"destNode":            t.GetEdge(edgeId).To,
+		"newEdgeSequence":     t.GetEdgeLabelStringByEdgeId(newEdgeId),
+		"updatedEdgeSequence": t.GetEdgeLabelStringByEdgeId(edgeId),
+	}).Debug("splitNode finished")
+
+	return newNodeId
+}
+
+func (t *SuffixTree) canonize(startNodeId int, input *SubString) (int, *SubString) {
+
+	logrus.WithFields(logrus.Fields{
+		"startNode": startNodeId,
+		"input":     t.GetSubstring(input),
+	}).Debug("canonize")
+
+	nodeId := startNodeId
+
+	var remainder *SubString = input.copy()
+
+	for !remainder.isEmpty() {
+
+		remainderSequence := t.GetSubstring(remainder)
+
+		logrus.WithFields(logrus.Fields{
+			"node":               nodeId,
+			"remainder":          remainder,
+			"remainderSequence":  remainderSequence,
+			"firstCharRemainder": string(remainderSequence[0]),
+		}).Debug("remainder not empty")
+
+		tmpNode := t.GetNode(nodeId)
+		for id, edge := range tmpNode.Edges {
+			logrus.WithFields(logrus.Fields{
+				"key":      string(id),
+				"id":       edge,
+				"sequence": t.GetEdgeLabelStringByEdgeId(edge),
+			}).Debug("edge")
+		}
+
+		edgeId := t.GetNode(nodeId).Edges[remainderSequence[0]]
+
+		if edgeId == 0 {
+			logrus.Debug("no edge from current node with first char of remainder")
+			break
+		}
+
+		edgeSequence := t.GetEdgeLabelStringByEdgeId(edgeId)
+
+		logrus.WithFields(logrus.Fields{
+			"edgeSequence": edgeSequence,
+		}).Debug("edge from current node starting with first char of remainder")
+
+		if strings.Index(remainderSequence, edgeSequence) != 0 {
+			logrus.Debug("remainder sequence does not start with edge sequence")
+			break
+		}
+
+		nodeId = t.GetEdge(edgeId).To
+		remainder.Start += t.GetEdgeLabelCopyByEdgeId(edgeId).length()
+
+		logrus.WithFields(logrus.Fields{
+			"node":      nodeId,
+			"remainder": t.GetSubstring(remainder),
+		}).Debug("updated node and remainder")
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"node":      nodeId,
+		"remainder": t.GetSubstring(remainder),
+	}).Debug("canonize finished")
+
+	return nodeId, remainder
+}
+
+func (t *SuffixTree) FindPatternExact(pattern string) *core.ExactMatchResult {
+
+	logrus.WithFields(logrus.Fields{
+		"pattern": pattern,
+	}).Debug("find pattern exact")
+
+	result := &core.ExactMatchResult{
 		Matches: make([]core.SequenceMatch, 0),
 	}
 
-	// the last node that was traversed
-	var activeNode *Node = tree.Root
-	// the currently traversed edge
-	var activeEdge *Edge = nil
-	// the current position within the active edge
-	var activeLength int = 0
+	activeNodeId := t.GetRoot().Id
+	activeEdgeId := 0
+	activeLength := 0
 
-	// iterate over the entire pattern byte by byte
-	for indexPattern := 0; indexPattern < len(*pattern); indexPattern++ {
-
-		// the current char of the pattern to be found in the tree
-		currentChar := (*pattern)[indexPattern]
+	for indexPattern := 0; indexPattern < len(pattern); indexPattern++ {
 
 		logrus.WithFields(logrus.Fields{
 			"indexPattern": indexPattern,
-			"currentChar":  string(currentChar),
-			"activeNode":   activeNode.Id,
-			"activeEdge":   tree.GetEdgeSequence(activeEdge),
+			"activeNode":   activeNodeId,
+			"activeEdge":   activeEdgeId,
 			"activeLength": activeLength,
-		}).Debug("compare next char of pattern")
+			"char":         string(pattern[indexPattern]),
+		}).Debug("find pattern exact loop")
 
-		if activeEdge == nil {
-			// there is no active edge currently, find edge of the current node that starts with the current char
-			// if no such edge exists, the pattern is not contained within the tree
-			// if such an edge exists, set it as the active edge and set the active length to 1
-			// if the edge ends on a node, set the active node to the node and reset the active edge
+		if activeEdgeId == 0 {
 
-			logrus.Debug("currently no active edge, find new active edge")
+			logrus.Debug("no active edge")
 
-			if activeNode.Edges[currentChar] == nil {
-				// pattern not found
-				logrus.Debug("no edge with char on current node, pattern not found")
-				return nil
+			activeEdgeId = t.GetNode(activeNodeId).Edges[pattern[indexPattern]]
+
+			if activeEdgeId == 0 {
+				fmt.Println("pattern not found")
+				return result
 			}
 
-			activeEdge = activeNode.Edges[currentChar]
-			activeLength = 1
-
 			logrus.WithFields(logrus.Fields{
-				"activeEdge":   tree.GetEdgeSequence(activeEdge),
-				"activeLength": activeLength,
-			}).Debug("update active edge")
-
-		} else {
-			// there is an active edge currently, check if the current char is on the active edge
-			// if yes, increment the active length and check if the active edge ends on a node
-			// if it ends on a node, set the active node to the node and reset the active edge
-			// if the current char is not on the active edge, the pattern is not contained within the tree
-
-			// check if char is on active edge
-			nextCharOnEdge := tree.Sequences[activeEdge.SequenceIndex][activeEdge.Start+activeLength]
-
-			logrus.WithFields(logrus.Fields{
-				"nextCharOnEdge": string(nextCharOnEdge),
-				"currenChar":     string(currentChar),
-			}).Debug("compare next char of pattern to next char on edge")
-
-			if nextCharOnEdge != currentChar {
-				// pattern not found
-				logrus.Debug("char not on active edge -> pattern not found")
-				return nil
-			}
-
-			activeLength += 1
-
-			logrus.WithFields(logrus.Fields{
-				"activeLength": activeLength,
-			}).Debug("char found on active edge")
+				"activeEdge": activeEdgeId,
+				"edgeLabel":  t.GetEdgeLabelStringByEdgeId(activeEdgeId),
+				"char":       string(pattern[indexPattern]),
+			}).Debug("found edge with first char of pattern")
 		}
 
-		if activeEdge.Start+activeLength == *activeEdge.End {
-			// active edge ends on node, update active node and reset active edge
+		logrus.WithFields(logrus.Fields{
+			"activeEdge": activeEdgeId,
+			"edgeLabel":  t.GetEdgeLabelStringByEdgeId(activeEdgeId),
+		}).Debug("active edge")
 
-			activeNode = activeEdge.To
-			activeEdge = nil
+		if t.GetEdgeLabelStringByEdgeId(activeEdgeId)[activeLength] != pattern[indexPattern] {
+			fmt.Println("pattern not found")
+			return result
+		}
+
+		activeLength++
+
+		if t.GetEdge(activeEdgeId).Label.length() == activeLength {
+			activeNodeId = t.GetEdge(activeEdgeId).To
 			activeLength = 0
+			activeEdgeId = 0
 
 			logrus.WithFields(logrus.Fields{
-				"activeNode": activeNode.Id,
-				"activeEdge": tree.GetEdgeSequence(activeEdge),
-			}).Debug("end of active edge reached, update active node and reset active edge")
+				"activeNode":   activeNodeId,
+				"activeEdge":   activeEdgeId,
+				"activeLength": activeLength,
+			}).Debug("end of active edge reached")
+
+			continue
 		}
 	}
 
-	logrus.Debug("pattern found")
-
-	// determine the node from which to start the leaf search
-	startNode := activeNode
-	if activeEdge != nil {
-		// if the current position is not at the end of an edge, the leaf search must start from the next node
-		startNode = activeEdge.To
+	// determine the node from which to start the search for leaf nodes
+	startNodeId := activeNodeId
+	if activeEdgeId != 0 {
+		// the active edge is not fully traversed, the leaf search must start from its target node
+		startNodeId = t.GetEdge(activeEdgeId).To
 	}
 
-	logrus.WithFields(logrus.Fields{
-		"startNode": startNode.Id,
-	}).Debug("determining leaf nodes to extract positions")
+	leafNodeIds := t.findLeafNodesRecursive(startNodeId)
 
-	// all leaf nodes of the start node are occurrences of the pattern
-	leafs := tree.FindLeafNodesRecursive(startNode)
+	for _, leafNodeId := range leafNodeIds {
 
-	for _, leaf := range leafs {
+		leafNode := t.GetNode(leafNodeId)
+
 		result.Matches = append(result.Matches, core.SequenceMatch{
-			SequenceIndex: leaf.SequenceIndex,
-			FromTarget:    leaf.SequenceStart,                 // the start position of the match in the target sequence
-			ToTarget:      leaf.SequenceStart + len(*pattern), // the end position of the match in the target sequence
+			SequenceIndex: leafNode.SequenceIndex,
+			FromTarget:    leafNode.SequenceStart,
+			ToTarget:      leafNode.SequenceStart + len(pattern),
 		})
 	}
 
-	return &result
+	return result
 }
 
-/*
-// (DEBUG) used for printing the edge list for visualization
-func (tree *SuffixTree) ToSif() {
+func (t *SuffixTree) findLeafNodesRecursive(nodeId int) []int {
 
-	for _, edge := range tree.Edges {
-		fmt.Println(edge.From.Id, tree.GetEdgeSequence(edge), edge.To.Id)
+	if len(t.GetNode(nodeId).Edges) == 0 {
+		return []int{nodeId}
 	}
 
-	for _, node := range tree.Nodes {
-		if node.Link != nil {
-			fmt.Println(node.Id, "link", node.Link.Id)
-		}
+	var leafNodeIds []int
+
+	for _, edgeId := range t.GetNode(nodeId).Edges {
+		leafNodeIds = append(leafNodeIds, t.findLeafNodesRecursive(t.GetEdge(edgeId).To)...)
+	}
+
+	return leafNodeIds
+}
+
+func (t *SuffixTree) PrintNodes() {
+	for _, node := range t.Nodes {
+		fmt.Println(node.Id, node.SequenceIndex, node.SequenceStart, node.Link)
 	}
 }
-*/
 
-func (tree *SuffixTree) ToEdgeList() {
+func (t *SuffixTree) ToEdgeList(printLinks bool) {
 
 	queue := list.New()
-	queue.PushBack(tree.Root)
+	queue.PushBack(t.RootId)
 	visited := make(map[int]bool)
 
 	for queue.Len() > 0 {
 
 		item := queue.Front()
 		queue.Remove(item)
-		node := item.Value.(*Node)
-		visited[node.Id] = true
+		nodeId := item.Value.(int)
+		visited[nodeId] = true
 
-		for _, edge := range node.Edges {
+		for _, edgeId := range t.GetNode(nodeId).Edges {
 
-			fmt.Println(node.Id, edge.To.Id, tree.GetEdgeSequence(edge))
+			fmt.Println(nodeId, t.GetEdge(edgeId).To, t.GetEdgeLabelStringByEdgeId(edgeId))
 
-			if !visited[edge.To.Id] {
-				queue.PushBack(edge.To)
+			if !visited[t.GetEdge(edgeId).To] {
+				queue.PushBack(t.GetEdge(edgeId).To)
 			}
 		}
 
-		if node.Link != nil {
-			fmt.Println(node.Id, node.Link.Id, "link")
+		if printLinks && t.GetNode(nodeId).Link > 0 {
+			fmt.Println(nodeId, t.GetNode(nodeId).Link, "link")
 		}
 	}
 }
-
-/*
-// (DEBUG) prints the suffix tree as an edge list for visualization
-func (tree *SuffixTree) PrintEdgeList() {
-
-	logrus.Info("Printing edge list")
-
-	fmt.Println("num nodes: ", len(tree.Nodes))
-	fmt.Println("num edges: ", len(tree.Edges))
-
-	for _, edge := range tree.Edges {
-		fmt.Println(edge.From.Id, edge.To.Id, tree.GetEdgeSequence(edge))
-	}
-
-	for _, node := range tree.Nodes {
-		if node.Link != nil {
-			fmt.Println(node.Id, node.Link.Id, "link")
-		}
-	}
-}
-*/

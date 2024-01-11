@@ -38,9 +38,13 @@ func inspectAnnotation() {
 }
 
 func buildAndSerializeIndex() {
-	pathGtfZeroed := "../resources/ENSG00000173585.zeroed.gtf"
-	pathFastaZeroed := "../resources/ENSG00000173585.zeroed.fasta"
-	pathOutput := "../resources/ENSG00000173585.dev.gtai"
+	//pathGtfZeroed := "../resources/ENSG00000173585.zeroed.gtf"
+	//pathFastaZeroed := "../resources/ENSG00000173585.zeroed.fasta"
+	//pathOutput := "../resources/ENSG00000173585.dev.gtai"
+
+	pathGtfZeroed := "/home/users/klein/Projects/GTA_Map/resources/ENSG00000173585.zeroed.gtf"
+	pathFastaZeroed := "/home/users/klein/Projects/GTA_Map/resources/ENSG00000173585.zeroed.fasta"
+	pathOutput := "/home/users/klein/Projects/GTA_Map/resources/ENSG00000173585.dev.gtai"
 
 	gtfFile, errGtf := os.Open(pathGtfZeroed)
 	if errGtf != nil {
@@ -211,11 +215,11 @@ func testMapping() {
 
 	timerStart = time.Now()
 
-	//pathReadsR1 := "../resources/reads/manual/reads_ccr9.1.fq"
-	//pathReadsR2 := "../resources/reads/manual/reads_ccr9.2.fq"
+	pathReadsR1 := "../resources/reads/manual/reads_ccr9.1.fq"
+	pathReadsR2 := "../resources/reads/manual/reads_ccr9.2.fq"
 
-	pathReadsR1 := "/usr/local/storage2/sam_fasta_test/fw.fastq"
-	pathReadsR2 := "/usr/local/storage2/sam_fasta_test/rw.fastq"
+	//pathReadsR1 := "/usr/local/storage2/sam_fasta_test/fw.fastq"
+	//pathReadsR2 := "/usr/local/storage2/sam_fasta_test/rw.fastq"
 
 	reader := fastq.InitFromPaths(pathReadsR1, pathReadsR2)
 
@@ -339,7 +343,10 @@ func main() {
 	logrus.SetFormatter(&logrus.TextFormatter{
 		FullTimestamp: true,
 	})
-	logrus.SetLevel(logrus.DebugLevel)
+	logrus.SetLevel(logrus.InfoLevel)
+
+	//buildAndSerializeIndex()
+	//testMapping()
 
 	//buildAndSerializeIndex()
 	////testMapping()
@@ -373,24 +380,24 @@ func main() {
 	//
 	//fmt.Println("numErrors: ", numErrors)
 
-	allSequences := make([]string, 2)
-
-	allSequences[0] = "abcdefabxybcdmnabcdex1"
-	allSequences[1] = "abcdefgh2"
-
-	tree := datastructure.CreateNewTree()
-
-	for i, sequence := range allSequences {
-		tree.AddSequence(sequence, i)
-	}
+	//allSequences := make([]string, 2)
+	//
+	//allSequences[0] = "abcdefabxybcdmnabcdex1"
+	//allSequences[1] = "abcdefgh2"
+	//
+	//tree := datastructure.CreateNewTree()
+	//
+	//for i, sequence := range allSequences {
+	//	tree.AddSequence(sequence, i)
+	//}
 
 	//logrus.Debug()
 	//logrus.Debug("final tree:")
 	//tree.ToEdgeList()
 
-	pattern := "e"
-	result := tree.FindPatternExact(&pattern)
-	fmt.Println(result)
+	//pattern := "e"
+	//result := tree.FindPatternExact(&pattern)
+	//fmt.Println(result)
 
 	//datastructure.BuildSuffixTree(allSequences)
 

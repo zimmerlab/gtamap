@@ -2,6 +2,7 @@ package index
 
 import (
 	"encoding/gob"
+	"fmt"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
 	"github.com/KleinSamuel/gtamap/src/formats/gtf"
@@ -122,8 +123,22 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 	//allSequences = append(allSequences, sequencesReverse53...)
 	//allSequences = append(allSequences, sequencesReverse35...)
 
-	// build the suffix tree containing all sequences
-	var suffixTree *datastructure.SuffixTree = datastructure.BuildSuffixTree(allSequences)
+	var suffixTree *datastructure.SuffixTree = datastructure.CreateNewTree()
+
+	fmt.Println(allSequences)
+
+	// add each sequence to the suffix tree
+	for sequenceIndex, sequence := range allSequences {
+
+		suffixTree.AddSequence(sequence, sequenceIndex)
+
+		suffixTree.Stats()
+
+		logrus.Info("Processed sequence ", sequenceIndex+1, " of ", len(allSequences))
+
+		// TODO: remove after debugging
+		//break
+	}
 
 	var gtaIndex GtaIndex = GtaIndex{
 		Gene:         gene,

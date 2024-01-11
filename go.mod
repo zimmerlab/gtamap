@@ -4,6 +4,7 @@ go 1.20
 
 require (
 	github.com/akamensky/argparse v1.4.0
+	github.com/ljfuyuan/suffixtree v0.0.0-20210126021338-399a0a102130
 	github.com/sirupsen/logrus v1.9.0
 )
 
