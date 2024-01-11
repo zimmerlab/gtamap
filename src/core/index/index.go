@@ -2,7 +2,6 @@ package index
 
 import (
 	"encoding/gob"
-	"fmt"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
 	"github.com/KleinSamuel/gtamap/src/formats/gtf"
@@ -123,22 +122,16 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 	//allSequences = append(allSequences, sequencesReverse53...)
 	//allSequences = append(allSequences, sequencesReverse35...)
 
-	var suffixTree *datastructure.SuffixTree = datastructure.CreateNewTree()
+	timerBuildTree := time.Now()
 
-	fmt.Println(allSequences)
+	var suffixTree = datastructure.CreateTree()
 
 	// add each sequence to the suffix tree
 	for sequenceIndex, sequence := range allSequences {
-
 		suffixTree.AddSequence(sequence, sequenceIndex)
-
-		suffixTree.Stats()
-
-		logrus.Info("Processed sequence ", sequenceIndex+1, " of ", len(allSequences))
-
-		// TODO: remove after debugging
-		//break
 	}
+
+	totalBuildTree := time.Since(timerBuildTree)
 
 	var gtaIndex GtaIndex = GtaIndex{
 		Gene:         gene,
@@ -150,7 +143,8 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 	SerializeFromFile(&gtaIndex, outputFile)
 
 	logrus.WithFields(logrus.Fields{
-		"total": time.Since(timerStart).String(),
+		"buildTree": totalBuildTree.String(),
+		"total":     time.Since(timerStart).String(),
 	}).Info("Successfully built and serialized GTAMap index")
 }
 

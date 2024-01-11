@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/KleinSamuel/gtamap/src/core"
 	"github.com/sirupsen/logrus"
+	"strconv"
 	"strings"
 )
 
@@ -219,6 +220,8 @@ func (t *SuffixTree) GetCharAt(sequenceIndex int, position int) byte {
 }
 
 func (t *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
+
+	sequence = sequence + strconv.Itoa(sequenceIndex)
 
 	logrus.Debug()
 	logrus.Debug("--------------------")
@@ -590,7 +593,7 @@ func (t *SuffixTree) canonize(startNodeId int, input *SubString) (int, *SubStrin
 	return nodeId, remainder
 }
 
-func (t *SuffixTree) FindPatternExact(pattern string) *core.ExactMatchResult {
+func (t *SuffixTree) FindPatternExact(pattern *string) *core.ExactMatchResult {
 
 	logrus.WithFields(logrus.Fields{
 		"pattern": pattern,
@@ -604,31 +607,30 @@ func (t *SuffixTree) FindPatternExact(pattern string) *core.ExactMatchResult {
 	activeEdgeId := 0
 	activeLength := 0
 
-	for indexPattern := 0; indexPattern < len(pattern); indexPattern++ {
+	for indexPattern := 0; indexPattern < len(*pattern); indexPattern++ {
 
 		logrus.WithFields(logrus.Fields{
 			"indexPattern": indexPattern,
 			"activeNode":   activeNodeId,
 			"activeEdge":   activeEdgeId,
 			"activeLength": activeLength,
-			"char":         string(pattern[indexPattern]),
+			"char":         string((*pattern)[indexPattern]),
 		}).Debug("find pattern exact loop")
 
 		if activeEdgeId == 0 {
 
 			logrus.Debug("no active edge")
 
-			activeEdgeId = t.GetNode(activeNodeId).Edges[pattern[indexPattern]]
+			activeEdgeId = t.GetNode(activeNodeId).Edges[(*pattern)[indexPattern]]
 
 			if activeEdgeId == 0 {
-				fmt.Println("pattern not found")
 				return result
 			}
 
 			logrus.WithFields(logrus.Fields{
 				"activeEdge": activeEdgeId,
 				"edgeLabel":  t.GetEdgeLabelStringByEdgeId(activeEdgeId),
-				"char":       string(pattern[indexPattern]),
+				"char":       string((*pattern)[indexPattern]),
 			}).Debug("found edge with first char of pattern")
 		}
 
@@ -637,8 +639,7 @@ func (t *SuffixTree) FindPatternExact(pattern string) *core.ExactMatchResult {
 			"edgeLabel":  t.GetEdgeLabelStringByEdgeId(activeEdgeId),
 		}).Debug("active edge")
 
-		if t.GetEdgeLabelStringByEdgeId(activeEdgeId)[activeLength] != pattern[indexPattern] {
-			fmt.Println("pattern not found")
+		if t.GetEdgeLabelStringByEdgeId(activeEdgeId)[activeLength] != (*pattern)[indexPattern] {
 			return result
 		}
 
@@ -675,7 +676,7 @@ func (t *SuffixTree) FindPatternExact(pattern string) *core.ExactMatchResult {
 		result.Matches = append(result.Matches, core.SequenceMatch{
 			SequenceIndex: leafNode.SequenceIndex,
 			FromTarget:    leafNode.SequenceStart,
-			ToTarget:      leafNode.SequenceStart + len(pattern),
+			ToTarget:      leafNode.SequenceStart + len(*pattern),
 		})
 	}
 

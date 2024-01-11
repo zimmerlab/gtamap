@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"github.com/KleinSamuel/gtamap/src/config"
-	"github.com/KleinSamuel/gtamap/src/core"
-	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapping"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
@@ -67,36 +65,6 @@ func buildAndSerializeIndex() {
 func deserializeIndex() *index.GtaIndex {
 	return index.DezerializeFromPath("../resources/ENSG00000173585.dev.gtai")
 }
-
-func buildTestTree() {
-	sequences := []string{"ABCABCD", "CABCDA"}
-
-	tree := datastructure.BuildSuffixTree(sequences)
-
-	//tree.ToEdgeList()
-
-	timerStart := time.Now()
-
-	pattern := "C"
-
-	var result *core.ExactMatchResult = tree.FindPatternExact(&pattern)
-
-	fmt.Println("duration: ", time.Since(timerStart))
-	fmt.Println("result: ", result)
-}
-
-//func search() {
-//	gtaIndex := deserializeIndex()
-//
-//	timerStart := time.Now()
-//
-//	pattern := "AGCCCTATT"
-//
-//	var result *core.PatternSearchResult = gtaIndex.SuffixTreeForwardStrandForwardDirection.FindPatternExact(&pattern)
-//
-//	fmt.Println("duration: ", time.Since(timerStart))
-//	fmt.Println("result: ", result)
-//}
 
 //func testArgparse() {
 //
@@ -346,7 +314,7 @@ func main() {
 	logrus.SetLevel(logrus.InfoLevel)
 
 	//buildAndSerializeIndex()
-	//testMapping()
+	testMapping()
 
 	//buildAndSerializeIndex()
 	////testMapping()
