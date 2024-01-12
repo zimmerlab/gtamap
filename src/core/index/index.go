@@ -82,27 +82,21 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 		IsFowardStrand: annotation.Genes[0].IsForwardStrand,
 	}
 
-	var sequencesForward53 []string = make([]string, len(annotation.Genes[0].Transcripts))
-	var sequencesForward35 []string = make([]string, len(annotation.Genes[0].Transcripts))
-	var sequencesReverse53 []string = make([]string, len(annotation.Genes[0].Transcripts))
-	var sequencesReverse35 []string = make([]string, len(annotation.Genes[0].Transcripts))
+	var sequencesForward []string = make([]string, len(annotation.Genes[0].Transcripts))
+	var sequencesReverseComplement []string = make([]string, len(annotation.Genes[0].Transcripts))
 
 	var transcripts []*Transcript = make([]*Transcript, len(annotation.Genes[0].Transcripts))
 
 	for i, transcript := range annotation.Genes[0].Transcripts {
 
-		sequencesForward53[i] = transcript.SequenceDna
-		sequencesForward35[i] = utils.ReverseString(transcript.SequenceDna)
-		sequencesReverse53[i] = utils.ReverseComplementDNA(transcript.SequenceDna)
-		sequencesReverse35[i] = utils.ComplementDNA(transcript.SequenceDna)
+		sequencesForward[i] = transcript.SequenceDna
+		sequencesReverseComplement[i] = utils.ReverseComplementDNA(transcript.SequenceDna)
 
 		transcripts[i] = &Transcript{
 			TranscriptIdEnsembl:  transcript.TranscriptIdEnsembl,
 			SequenceLength:       len(transcript.SequenceDna),
-			SequenceDnaForward53: sequencesForward53[i],
-			SequenceDnaForward35: sequencesForward35[i],
-			SequenceDnaReverse53: sequencesReverse53[i],
-			SequenceDnaReverse35: sequencesReverse35[i],
+			SequenceDnaForward53: sequencesForward[i],
+			SequenceDnaReverse53: sequencesReverseComplement[i],
 		}
 
 		transcripts[i].Exons = make([]*Exon, len(transcript.Exons))
@@ -117,10 +111,8 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 
 	// contains all forward sequences of the transcripts and then all rev-comp sequences
 	var allSequences []string = make([]string, 0)
-	allSequences = append(allSequences, sequencesForward53...)
-	//allSequences = append(allSequences, sequencesForward35...)
-	//allSequences = append(allSequences, sequencesReverse53...)
-	//allSequences = append(allSequences, sequencesReverse35...)
+	allSequences = append(allSequences, sequencesForward...)
+	allSequences = append(allSequences, sequencesReverseComplement...)
 
 	timerBuildTree := time.Now()
 
@@ -130,6 +122,8 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 	for sequenceIndex, sequence := range allSequences {
 		suffixTree.AddSequence(sequence, sequenceIndex)
 	}
+	// suffix links are only required for tree construction but not for the search
+	suffixTree.RemoveAllSuffixLinks()
 
 	totalBuildTree := time.Since(timerBuildTree)
 

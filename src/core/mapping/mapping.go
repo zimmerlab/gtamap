@@ -455,11 +455,12 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 			"position": position,
 			"length":   currentLenKmer,
 			"kmer":     kmer,
-		}).Debug("create new kmer")
+		}).Info("create new kmer")
 
 		// the result of the exact matching of this kmer against the suffix tree
 		mappingResult := index.SuffixTree.FindPatternExact(&kmer)
 
+		// TODO: only for debugging
 		if mappingResult != nil {
 			for _, match := range mappingResult.Matches {
 				fmt.Println(match)
@@ -484,7 +485,7 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 					"sequenceIndex": match.SequenceIndex,
 					"fromTarget":    match.FromTarget,
 					"toTarget":      match.ToTarget,
-				}).Debug("match")
+				}).Info("match")
 
 				matches[match.SequenceIndex] = true
 

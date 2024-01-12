@@ -68,7 +68,7 @@ type DiscardStepMatchInformation struct {
 }
 
 type SequenceContextMatch struct {
-	// the index of the sequence within the trees sequences
+	// the index of the sequence within the target sequences (contained in the index tree)
 	SequenceIndex int
 	// the 0-based start position of the match within the target sequence
 	TargetIndex int

@@ -13,6 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -36,13 +37,13 @@ func inspectAnnotation() {
 }
 
 func buildAndSerializeIndex() {
-	//pathGtfZeroed := "../resources/ENSG00000173585.zeroed.gtf"
-	//pathFastaZeroed := "../resources/ENSG00000173585.zeroed.fasta"
-	//pathOutput := "../resources/ENSG00000173585.dev.gtai"
+	pathGtfZeroed := "../resources/ENSG00000173585.zeroed.gtf"
+	pathFastaZeroed := "../resources/ENSG00000173585.zeroed.fasta"
+	pathOutput := "../resources/ENSG00000173585.dev.gtai"
 
-	pathGtfZeroed := "/home/users/klein/Projects/GTA_Map/resources/ENSG00000173585.zeroed.gtf"
-	pathFastaZeroed := "/home/users/klein/Projects/GTA_Map/resources/ENSG00000173585.zeroed.fasta"
-	pathOutput := "/home/users/klein/Projects/GTA_Map/resources/ENSG00000173585.dev.gtai"
+	//pathGtfZeroed := "/home/users/klein/Projects/GTA_Map/resources/ENSG00000173585.zeroed.gtf"
+	//pathFastaZeroed := "/home/users/klein/Projects/GTA_Map/resources/ENSG00000173585.zeroed.fasta"
+	//pathOutput := "/home/users/klein/Projects/GTA_Map/resources/ENSG00000173585.dev.gtai"
 
 	gtfFile, errGtf := os.Open(pathGtfZeroed)
 	if errGtf != nil {
@@ -220,10 +221,10 @@ func testMapping() {
 	for readPair := reader.NextRead(); readPair != nil; readPair = reader.NextRead() {
 
 		// TODO: remove after testing (only process specific read pair)
-		//name := strings.Split(readPair.ReadR1.Header, " ")[0]
-		//if name != "@3-0003/1" {
-		//	continue
-		//}
+		name := strings.Split(readPair.ReadR1.Header, " ")[0]
+		if name != "@3-0002/1" {
+			continue
+		}
 
 		mappingTask := ReadPairMappingTask{
 			ID:       taskCounter,

@@ -117,6 +117,12 @@ func CreateTree() *SuffixTree {
 	return tree
 }
 
+func (t *SuffixTree) RemoveAllSuffixLinks() {
+	for _, node := range t.Nodes {
+		node.Link = 0
+	}
+}
+
 func (t *SuffixTree) AddNode(isLeaf bool) int {
 	nodeId := t.NumNodes
 	t.Nodes[nodeId] = &Node{
@@ -596,7 +602,7 @@ func (t *SuffixTree) canonize(startNodeId int, input *SubString) (int, *SubStrin
 func (t *SuffixTree) FindPatternExact(pattern *string) *core.ExactMatchResult {
 
 	logrus.WithFields(logrus.Fields{
-		"pattern": pattern,
+		"pattern": *pattern,
 	}).Debug("find pattern exact")
 
 	result := &core.ExactMatchResult{
