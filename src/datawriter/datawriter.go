@@ -24,8 +24,8 @@ func InitFromPath(outputFilePath string) *Writer {
 }
 
 func (writer Writer) Write(s string) {
-	fmt.Println("write to file")
-	fmt.Println(s)
+	//fmt.Println("write to file")
+	//fmt.Println(s)
 
 	_, err := writer.file.WriteString(s)
 	if err != nil {

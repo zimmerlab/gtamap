@@ -80,7 +80,7 @@ type ReadMapResult struct {
 }
 
 type SequenceMapResult struct {
-	SequenceContextMatches map[int]SequenceContextMatch // key = start index of read mapping on target sequence
+	SequenceContextMatches map[int]SequenceContextMatch // key = start index of read match on target sequence
 }
 
 func (c SequenceContextMatch) GetUnmatchedRegions(readLength int) []SequenceMatch {

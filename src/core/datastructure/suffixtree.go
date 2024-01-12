@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/KleinSamuel/gtamap/src/core"
 	"github.com/sirupsen/logrus"
-	"strconv"
 	"strings"
 )
 
@@ -20,11 +19,13 @@ type Node struct {
 	Link          int
 	SequenceIndex int
 	SequenceStart int
+	Positions     []SuffixPosition
 }
 
 type Edge struct {
-	Label *SubString
-	To    int
+	Label  *SubString
+	To     int
+	isLast bool // edge connects the node with a leaf node and does not have a label
 }
 
 type SubString struct {
@@ -131,6 +132,7 @@ func (t *SuffixTree) AddNode(isLeaf bool) int {
 		Link:          0,
 		SequenceIndex: -1,
 		SequenceStart: -1,
+		Positions:     make([]SuffixPosition, 0),
 	}
 
 	logrus.WithFields(logrus.Fields{
@@ -227,7 +229,7 @@ func (t *SuffixTree) GetCharAt(sequenceIndex int, position int) byte {
 
 func (t *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 
-	sequence = sequence + strconv.Itoa(sequenceIndex)
+	//sequence = sequence + strconv.Itoa(sequenceIndex)
 
 	logrus.Debug()
 	logrus.Debug("--------------------")
@@ -260,8 +262,8 @@ func (t *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 			End:           len(sequence),
 		}
 
-		//logrus.Debug()
-		//t.ToEdgeList(false)
+		logrus.Debug()
+		t.ToEdgeList(false)
 		logrus.WithFields(logrus.Fields{
 			"i":    i,
 			"text": t.GetSubstring(text),
@@ -331,11 +333,17 @@ func (t *SuffixTree) update(sId int, stringPart *SubString, nextChar byte, rest 
 			t.GetNode(leafId).SequenceIndex = position.Index
 			t.GetNode(leafId).SequenceStart = position.Start
 
+			t.GetNode(leafId).Positions = append(t.GetNode(leafId).Positions, position)
+
 			t.AddEdge(rest, rId, leafId)
 
+			logrus.Debug("r has no edge starting with nextChar")
+
 			logrus.WithFields(logrus.Fields{
-				"leaf": leafId,
-			}).Debug("r has no edge starting with nextChar -> creating new leaf")
+				"leaf":          leafId,
+				"sequenceIndex": t.GetNode(leafId).SequenceIndex,
+				"sequenceStart": t.GetNode(leafId).SequenceStart,
+			}).Debug("creating new leaf")
 		}
 
 		if t.ActiveLeafId != t.RootId {
@@ -705,8 +713,12 @@ func (t *SuffixTree) findLeafNodesRecursive(nodeId int) []int {
 }
 
 func (t *SuffixTree) PrintNodes() {
+	
 	for _, node := range t.Nodes {
-		fmt.Println(node.Id, node.SequenceIndex, node.SequenceStart, node.Link)
+		fmt.Println(node.Id)
+		for _, p := range node.Positions {
+			fmt.Println(p.Index, p.Start)
+		}
 	}
 }
 

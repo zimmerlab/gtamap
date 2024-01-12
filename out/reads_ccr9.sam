@@ -5,5 +5,3 @@
 @SQ	SN:T2	LN:321	DS:ENST00000422395
 @SQ	SN:T3	LN:1071	DS:ENST00000395963
 @PG	ID:GTAMap	PN:GTAMap	VN:0.1
-@3-0002/1 CCR9-201 ENST00000357632 frag_gene[] read-pos_gene[] frag_trans[25:225] read-pos_trans[25-175] forward no-error	keep
-@3-0002/1 CCR9-201 ENST00000357632 frag_gene[] read-pos_gene[] frag_trans[25:225] read-pos_trans[75-225] rev-comp no-error	keep

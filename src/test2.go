@@ -42,9 +42,22 @@ func main() {
 	logrus.SetFormatter(&logrus.TextFormatter{
 		FullTimestamp: true,
 	})
-	logrus.SetLevel(logrus.InfoLevel)
+	logrus.SetLevel(logrus.DebugLevel)
 
 	//alphabet := []rune{'A', 'T', 'G', 'C'}
+	//
+	//for _, char := range alphabet {
+	//	fmt.Println(char)
+	//}
+	//
+	//var b byte = 255
+	//var r rune = 2562222
+	//
+	//fmt.Println(b)
+	//fmt.Println(r)
+	//
+	//os.Exit(1)
+
 	//for i := 1; i <= 10; i++ {
 	//	words := make([]string, 0)
 	//	generateCombinations(alphabet, "", i, &words)
@@ -59,7 +72,11 @@ func main() {
 	//}
 	//fmt.Println("OK")
 
-	words := []string{"ATGC1", "ATGG2", "ATTTTG13"}
+	//words := []string{"ABC", "DEF", "GHI", "JKL", "MNO", "PQR", "ABC"}
+	//words := []string{"ABC1", "DEF2", "GHI3", "JKL4", "MNO5", "PQR6", "ABC7"}
+	words := []string{"ABC", "DEF", "ABC"}
+	//words := []string{"ABC1", "DEF2", "ABC3"}
+	//words := []string{"ATGC1", "ATGG2", "ATTTTG13"}
 	//words := []string{"AATAT1"}
 	//words := []string{"AATATAT1"}
 	//words := []string{"ATGCGC1"}
@@ -71,16 +88,24 @@ func main() {
 	tree := datastructure.CreateTree()
 
 	for k, word := range words {
+		fmt.Println(k, word)
+
+		//for i := 0; i < len(word); i++ {
+		//	fmt.Println(word[i])
+		//}
+
 		tree.AddSequence(word, k)
 	}
 
-	//tree.ToEdgeList(false)
-	//tree.PrintNodes()
+	tree.ToEdgeList(false)
+	tree.PrintNodes()
 
-	result := tree.FindPatternExact("G")
-
-	for _, match := range result.Matches {
-		fmt.Println(match)
-	}
+	//pattern := "BC"
+	//fmt.Println("searching for pattern", pattern)
+	//result := tree.FindPatternExact(&pattern)
+	//
+	//for _, match := range result.Matches {
+	//	fmt.Println(match)
+	//}
 
 }

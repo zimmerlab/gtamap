@@ -461,10 +461,13 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 		mappingResult := index.SuffixTree.FindPatternExact(&kmer)
 
 		// TODO: only for debugging
+		fmt.Println("mapping result:")
 		if mappingResult != nil {
 			for _, match := range mappingResult.Matches {
 				fmt.Println(match)
 				fmt.Println(len(index.GetTranscriptSequenceDna(match.SequenceIndex)))
+				fmt.Println(index.GetTranscriptSequenceDna(match.SequenceIndex))
+				fmt.Println(index.GetTranscriptSequenceDna(match.SequenceIndex)[match.FromTarget : match.FromTarget+currentLenKmer])
 			}
 		}
 
@@ -512,20 +515,20 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 			// sequence index was not already discarded
 			if val, ok := matchMismatchCounts[sequenceIndex]; ok {
 
+				val.NumMismatches += 1
+				matchMismatchCounts[sequenceIndex] = val
+
 				logrus.WithFields(logrus.Fields{
 					"sequenceIndex": sequenceIndex,
 					"numMismatches": val.NumMismatches,
 					"numMatches":    len(val.Matches),
-				}).Debug("add mismatch to sequence index")
-
-				val.NumMismatches += 1
-				matchMismatchCounts[sequenceIndex] = val
+				}).Info("add mismatch to sequence index")
 
 				// remove the sequence index if it has too many mismatches
 				if val.NumMismatches > maxMismatches {
 					delete(matchMismatchCounts, sequenceIndex)
 
-					logrus.Debug("discard sequence index because too many mismatches")
+					logrus.Info("discard sequence index because too many mismatches")
 				}
 
 			} else {
@@ -557,6 +560,7 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 		logrus.WithFields(logrus.Fields{
 			"sequenceIndex": sequenceIndex,
 			"numMatches":    len(val.Matches),
+			"numMismatch":   val.NumMismatches,
 		}).Info("process non-discarded sequence index")
 
 		// the final result for this sequence index
@@ -602,12 +606,12 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 			lengthRead := len(read.Sequence)
 
 			// discard this match because the read is too long for the transcript for this target index
-			if targetIndex > lengthTranscript-lengthRead {
+			if targetIndex < 0 || targetIndex > lengthTranscript-lengthRead {
 				logrus.WithFields(logrus.Fields{
 					"lengthTranscript": lengthTranscript,
 					"lengthRead":       lengthRead,
 					"targetIndex":      targetIndex,
-				}).Info("discard match because target index is out of bounds")
+				}).Debug("discard match because target index is out of bounds")
 				continue
 			}
 
@@ -685,11 +689,11 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 			// the sequence of the read
 			sourceSequence := read.Sequence
 			// the starting position of the match in the target sequence (transcript)
-			transcriptIndex := context.SequenceIndex / 4
-			// the index of the direction of the target sequence (FF, FR, RF, RR)
-			directionIndex := context.SequenceIndex % 4
+			transcriptIndex := context.SequenceIndex / 2
+			// the direction of the target sequence, always 5' -> 3' on either forward or reverse strand
+			isForward := context.SequenceIndex%2 == 0
 			// the target sequence (transcript)
-			targetSequence := index.Transcripts[transcriptIndex].GetSequenceDna(directionIndex)
+			targetSequence := index.Transcripts[transcriptIndex].GetSequenceDna(isForward)
 
 			// map the unmapped regions and combine with exact match regions
 

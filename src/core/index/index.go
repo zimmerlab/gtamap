@@ -2,6 +2,7 @@ package index
 
 import (
 	"encoding/gob"
+	"fmt"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
 	"github.com/KleinSamuel/gtamap/src/formats/gtf"
@@ -19,11 +20,17 @@ type GtaIndex struct {
 	NumSequences int
 }
 
+// GetTranscriptSequenceDna returns the DNA sequence of the transcript for the given sequence index
+// sequenceIndex is the index of the sequence in the suffix tree
+// the index of the transcript is sequenceIndex / 2
+// if sequenceIndex is even, the sequence is on the forward strand, otherwise on the reverse strand
 func (i GtaIndex) GetTranscriptSequenceDna(sequenceIndex int) string {
-	transcriptIndex := sequenceIndex / 4
-	sequenceIndexInTranscript := sequenceIndex % 4
-
-	return i.Transcripts[transcriptIndex].GetSequenceDna(sequenceIndexInTranscript)
+	// the index of the transcript
+	var transcriptIndex uint8 = uint8(sequenceIndex / 2)
+	// true if forward strand, false if reverse strand
+	var isForward bool = sequenceIndex%2 == 0
+	// return the sequence of the transcript
+	return i.Transcripts[transcriptIndex].GetSequenceDna(isForward)
 }
 
 type Gene struct {
@@ -37,25 +44,18 @@ type Gene struct {
 type Transcript struct {
 	TranscriptIdEnsembl  string // e.g. "ENST00000342992"
 	SequenceDnaForward53 string // the DNA sequence on the forward strand in 5'-3' direction
-	SequenceDnaForward35 string // the DNA sequence on the forward strand in 3'-5' direction
 	SequenceDnaReverse53 string // the DNA sequence on the reverse strand in 5'-3' direction (rev-comp of forward)
-	SequenceDnaReverse35 string // the DNA sequence on the reverse strand in 3'-5' direction (rev-comp of forward)
 	SequenceLength       int
 	Exons                []*Exon
 }
 
-func (t Transcript) GetSequenceDna(index int) string {
-	switch index {
-	case 0:
+// GetSequenceDna returns the DNA sequence of the transcript for the given strand in 5'-3' direction
+func (t Transcript) GetSequenceDna(isForward bool) string {
+	if isForward {
 		return t.SequenceDnaForward53
-	case 1:
-		return t.SequenceDnaForward35
-	case 2:
+	} else {
 		return t.SequenceDnaReverse53
-	case 3:
-		return t.SequenceDnaReverse35
 	}
-	return ""
 }
 
 type Exon struct {
@@ -87,10 +87,18 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 
 	var transcripts []*Transcript = make([]*Transcript, len(annotation.Genes[0].Transcripts))
 
+	counter := 0
+
 	for i, transcript := range annotation.Genes[0].Transcripts {
 
 		sequencesForward[i] = transcript.SequenceDna
 		sequencesReverseComplement[i] = utils.ReverseComplementDNA(transcript.SequenceDna)
+
+		// TODO: remove after debugging
+		fmt.Println(counter, sequencesForward[i])
+		counter++
+		fmt.Println(counter, sequencesReverseComplement[i])
+		counter++
 
 		transcripts[i] = &Transcript{
 			TranscriptIdEnsembl:  transcript.TranscriptIdEnsembl,
@@ -137,8 +145,8 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 	SerializeFromFile(&gtaIndex, outputFile)
 
 	logrus.WithFields(logrus.Fields{
-		"buildTree": totalBuildTree.String(),
-		"total":     time.Since(timerStart).String(),
+		"build": totalBuildTree.String(),
+		"total": time.Since(timerStart).String(),
 	}).Info("Successfully built and serialized GTAMap index")
 }
 
@@ -183,7 +191,7 @@ func DezerializeFromFile(indexFile *os.File) *GtaIndex {
 
 	timerStart := time.Now()
 
-	// Create a decoder and deserialize the person struct from the file
+	// create a decoder and deserialize the person struct from the file
 	decoder := gob.NewDecoder(indexFile)
 
 	var gtaIndex GtaIndex
@@ -195,6 +203,20 @@ func DezerializeFromFile(indexFile *os.File) *GtaIndex {
 	logrus.WithFields(logrus.Fields{
 		"duration": time.Since(timerStart),
 	}).Info("Deserialized index")
+
+	logrus.WithFields(logrus.Fields{
+		"geneId":         gtaIndex.Gene.GeneIdEnsembl,
+		"numTranscripts": len(gtaIndex.Transcripts),
+	}).Info("Index info")
+
+	// information about the transcripts contained in the index
+	for i, transcript := range gtaIndex.Transcripts {
+		logrus.WithFields(logrus.Fields{
+			"sequenceIndex":  i,
+			"transcriptId":   transcript.TranscriptIdEnsembl,
+			"sequenceLength": transcript.SequenceLength,
+		}).Info("Contained transcript")
+	}
 
 	return &gtaIndex
 }
