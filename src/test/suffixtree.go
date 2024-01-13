@@ -2,100 +2,81 @@ package test
 
 import (
 	"bufio"
-	"container/list"
 	"fmt"
-	"github.com/KleinSamuel/gtamap/src/core/datastructure"
-	"log"
+	"github.com/sirupsen/logrus"
 	"os"
-	"slices"
-	"strconv"
 	"strings"
 )
 
-type EdgeListItem struct {
+type Edge struct {
+	Id    int
 	From  int
 	To    int
 	Label string
 }
 
-func ReadEdgeList(path string) (string, []EdgeListItem) {
-	items := make([]EdgeListItem, 0)
+type Position struct {
+	Index int
+	Start int
+}
 
-	file, err := os.Open(path)
-	if err != nil {
-		log.Fatal(err)
+type Testcase struct {
+	Sequences []string
+	Nodes     []int
+	Edges     map[int]Edge
+	Positions map[int]Position
+}
+
+func ReadTestcase(path string) *Testcase {
+
+	file, errFile := os.Open(path)
+	if errFile != nil {
+		logrus.Fatal("Error reading testcase file", errFile)
+		return nil
 	}
-	defer file.Close()
+
+	testCase := &Testcase{
+		Sequences: make([]string, 0),
+		Nodes:     make([]int, 0),
+		Edges:     make(map[int]Edge),
+		Positions: make(map[int]Position),
+	}
 
 	scanner := bufio.NewScanner(file)
 
-	pattern := ""
+	annotationType := 0
 
 	for scanner.Scan() {
-		lineArray := strings.Fields(scanner.Text())
+		line := strings.TrimSpace(scanner.Text())
 
-		if lineArray[0] == "#" {
-			pattern = lineArray[1]
-			continue
+		fmt.Print(line)
+
+		if strings.Index(line, "sequences:") == 0 {
+			fmt.Println("got sequences line")
+			annotationType = 1
+		}
+		if strings.Index(line, "edge list:") == 0 {
+			fmt.Println("got edge list line")
+			annotationType = 2
+		}
+		if strings.Index(line, "positions:") == 0 {
+			fmt.Println("got positions line")
+			annotationType = 3
 		}
 
-		from, errFrom := strconv.Atoi(lineArray[0])
-		to, errTo := strconv.Atoi(lineArray[1])
-		label := lineArray[2]
+		if annotationType == 1 {
+			lineArray := strings.Split(line, " ")
+			//sequenceIndex := strconv.Atoi(lineArray[0])
+			sequence := lineArray[1]
 
-		if errFrom != nil || errTo != nil {
-			log.Fatal(err)
+			testCase.Sequences = append(testCase.Sequences, sequence)
 		}
-		items = append(items, EdgeListItem{from, to, label})
+
 	}
 
-	return pattern, items
-}
-
-func TestTree(edgelistFile string) bool {
-
-	pattern, _ := ReadEdgeList(edgelistFile)
-
-	tree := datastructure.CreateNewTree()
-	tree.AddSequence(pattern, 0)
-
-	treeEdgeList := make([]EdgeListItem, 0)
-
-	queue := list.New()
-	queue.PushBack(tree.Root)
-	visited := make(map[int]bool)
-
-	for queue.Len() > 0 {
-
-		item := queue.Front()
-		queue.Remove(item)
-		node := item.Value.(*datastructure.Node)
-		visited[node.Id] = true
-
-		for _, edge := range node.Edges {
-
-			treeEdgeList = append(treeEdgeList, EdgeListItem{node.Id, edge.To.Id, tree.GetEdgeSequence(edge)})
-
-			if !visited[edge.To.Id] {
-				queue.PushBack(edge.To)
-			}
-		}
-
-		if node.Link != nil {
-			treeEdgeList = append(treeEdgeList, EdgeListItem{node.Id, node.Link.Id, "link"})
-		}
+	if err := scanner.Err(); err != nil {
+		return nil
 	}
 
-	passed := true
-
-	fmt.Println("Tree edges:")
-	for _, edge := range treeEdgeList {
-		fmt.Println(edge)
-
-		if slices.Contains() {
-			
-		}
-	}
-
-	return passed
+	return testCase
 }
