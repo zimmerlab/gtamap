@@ -44,42 +44,17 @@ func main() {
 	})
 	logrus.SetLevel(logrus.DebugLevel)
 
-	//alphabet := []rune{'A', 'T', 'G', 'C'}
-	//
-	//for _, char := range alphabet {
-	//	fmt.Println(char)
-	//}
-	//
-	//var b byte = 255
-	//var r rune = 2562222
-	//
-	//fmt.Println(b)
-	//fmt.Println(r)
-	//
-	//os.Exit(1)
+	// testcases that were once passed
+	//words := []string{"ABC", "DEF", "ABC"}
+	words := []string{"ATCATCATC", "ATATATATAT"}
 
-	//for i := 1; i <= 10; i++ {
-	//	words := make([]string, 0)
-	//	generateCombinations(alphabet, "", i, &words)
-	//
-	//	for _, word := range words {
-	//
-	//		fmt.Println("checking word", word)
-	//
-	//		tree := datastructure.CreateTree()
-	//		tree.AddSequence(word, 0)
-	//	}
-	//}
-	//fmt.Println("OK")
-
-	words := []string{"ABC", "DEF", "ABC"}
 	//words := []string{"ABC1", "DEF2", "GHI3", "JKL4", "MNO5", "PQR6", "ABC7"}
 	//words := []string{"ABC", "CEF", "CEG", "CEH"}
 	//words := []string{"ABCD", "ADEF", "ABCF", "ABKU"}
 	//words := []string{"ABC1", "DEF2", "ABC3"}
 	//words := []string{"ATGC1", "ATGG2", "ATTTTG13"}
+
 	//words := []string{"AATAT1"}
-	//words := []string{"AATATAT1"}
 	//words := []string{"ATGCGC1"}
 	//words := []string{"ATGACACCCACAGACTTCACAAG1"}
 	//words := []string{"ATGACACCCACAGACTTCACAAGCCCTATTCCTAACATGGCTGATGAC1"}
@@ -99,7 +74,7 @@ func main() {
 	}
 
 	fmt.Println("edge list:")
-	tree.PrintEdgeList(true)
+	tree.PrintEdgeList(false)
 
 	//tree.PropagatePositionsToInnerNodes(tree.RootId)
 

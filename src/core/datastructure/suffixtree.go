@@ -276,7 +276,6 @@ func (t *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 		"sequenceIndex": sequenceIndex,
 		"sequence":      sequence,
 	}).Debug("adding sequence to suffix tree")
-	logrus.Debug("--------------------")
 
 	// add the new sequence to the list of sequences in the tree for character lookup
 	// as each edge contains only an interval to represent the edge label
@@ -296,14 +295,16 @@ func (t *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 
 	for i := 0; i < len(sequence); i++ {
 
+		logrus.Debug("--------------------")
+
 		rest = &SubString{
 			SequenceIndex: sequenceIndex,
 			Start:         i,
 			End:           len(sequence),
 		}
 
-		//logrus.Debug()
-		//t.PrintEdgeList(false)
+		logrus.Debug()
+		t.PrintEdgeList(false)
 		logrus.WithFields(logrus.Fields{
 			"i":     i,
 			"text":  t.GetSubstring(text),
@@ -316,6 +317,10 @@ func (t *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 			Index: sequenceIndex,
 			Start: i,
 		})
+		logrus.WithFields(logrus.Fields{
+			"new":   t.PositionQueue[len(t.PositionQueue)-1],
+			"queue": t.PositionQueue,
+		}).Debug("added new position to queue")
 
 		t.insertedNode = false
 
@@ -328,7 +333,7 @@ func (t *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 			logrus.WithFields(logrus.Fields{
 				"nodeId":   sId,
 				"position": position,
-			}).Debug("adding position to inner node")
+			}).Debug("added position to inner node")
 		}
 
 		// keep track of the length of the suffix which is already contained in the tree
@@ -354,21 +359,25 @@ func (t *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 		logrus.Debug("last suffix is already contained in the tree")
 		logrus.Debug("adding positions to all of its links")
 
+		// set the active node to the suffix link of the previous node
+		// the previous node has its position set within the main loop
 		activeNodeId := t.GetNode(sId).Link
-		t.remainder--
+		// remove the position of the previous node from the queue
+		t.PositionQueue = t.PositionQueue[1:]
 
+		// add the position to all of its links except the root node
 		for activeNodeId != t.RootId {
-			logrus.WithFields(logrus.Fields{
-				"nodeId":        activeNodeId,
-				"sequenceIndex": sequenceIndex,
-				"sequenceStart": len(sequence) - t.remainder,
-			}).Debug("adding position to node")
 
-			t.GetNode(activeNodeId).Positions = append(t.GetNode(activeNodeId).Positions, SuffixPosition{
-				Index: sequenceIndex,
-				Start: len(sequence) - t.remainder,
-			})
-			t.remainder--
+			position := t.PositionQueue[0].copy()
+			// remove the position from the queue
+			t.PositionQueue = t.PositionQueue[1:]
+
+			t.GetNode(activeNodeId).Positions = append(t.GetNode(activeNodeId).Positions, position)
+
+			logrus.WithFields(logrus.Fields{
+				"nodeId":   activeNodeId,
+				"position": position,
+			}).Debug("added position to node")
 
 			activeNodeId = t.GetNode(activeNodeId).Link
 		}
@@ -422,14 +431,6 @@ func (t *SuffixTree) update(sId int, stringPart *SubString, nextChar byte, rest 
 			t.insertedNode = true
 
 			position := t.PositionQueue[0].copy()
-			// remove the position from the queue
-			t.PositionQueue = t.PositionQueue[1:]
-
-			logrus.WithFields(logrus.Fields{
-				"removed": position,
-				"queue":   t.PositionQueue,
-			}).Debug("removing first item from position queue")
-
 			// add the position to the new leaf node
 			t.GetNode(leafId).Positions = append(t.GetNode(leafId).Positions, position)
 
@@ -450,14 +451,13 @@ func (t *SuffixTree) update(sId int, stringPart *SubString, nextChar byte, rest 
 			logrus.WithFields(logrus.Fields{
 				"oldActiveLeaf": t.ActiveLeafId,
 				"link":          leafId,
-			}).Debug("active leaf != root -> updating suffix link for new leaf")
+			}).Debug("updated suffix link for new leaf")
 		}
-
-		t.ActiveLeafId = leafId
-
 		logrus.WithFields(logrus.Fields{
-			"activeLeaf": t.ActiveLeafId,
-		}).Debug("updating active leaf")
+			"old": t.ActiveLeafId,
+			"new": leafId,
+		}).Debug("updated active leaf")
+		t.ActiveLeafId = leafId
 
 		if oldRootId != t.RootId {
 			t.GetNode(oldRootId).Link = rId
@@ -465,12 +465,28 @@ func (t *SuffixTree) update(sId int, stringPart *SubString, nextChar byte, rest 
 			logrus.WithFields(logrus.Fields{
 				"oldRoot": oldRootId,
 				"link":    rId,
-			}).Debug("old root != root -> updating suffix link for old root")
+			}).Debug("updated suffix link for old root")
 		}
-		oldRootId = rId
 		logrus.WithFields(logrus.Fields{
-			"oldRoot": oldRootId,
-		}).Debug("updating old root")
+			"old": oldRootId,
+			"new": rId,
+		}).Debug("updated old root")
+		oldRootId = rId
+
+		if t.insertedNode {
+			// a node was inserted in this step (split edge and maybe a new leaf)
+			// either way this indicates that the current suffix is contained within the tree
+			// so the current sequence position can be removed from the queue
+
+			position := t.PositionQueue[0].copy()
+			// remove the position from the queue
+			t.PositionQueue = t.PositionQueue[1:]
+
+			logrus.WithFields(logrus.Fields{
+				"removed": position,
+				"queue":   t.PositionQueue,
+			}).Debug("removed first item from position queue")
+		}
 
 		if t.GetNode(sId).Link == 0 {
 			// special case
@@ -484,6 +500,22 @@ func (t *SuffixTree) update(sId int, stringPart *SubString, nextChar byte, rest 
 		} else {
 
 			logrus.Debug("s.Link != nil")
+			logrus.WithFields(logrus.Fields{
+				"suffixLink": t.GetNode(sId).Link,
+			}).Debug("canonize from suffix link")
+
+			//if t.GetNode(sId).Link == 1 {
+			//	logrus.Debug("followed suffix link is root")
+			//	logrus.Debug("current suffix completely contained")
+			//
+			//	position := t.PositionQueue[0].copy()
+			//	t.PositionQueue = t.PositionQueue[1:]
+			//
+			//	logrus.WithFields(logrus.Fields{
+			//		"queue":   t.PositionQueue,
+			//		"removed": position,
+			//	}).Debug("remove first position from queue")
+			//}
 
 			sId, k = t.canonize(t.GetNode(sId).Link, k.shortenEnd())
 
@@ -545,8 +577,6 @@ func (t *SuffixTree) testAndSplit(startNodeId int, searchString *SubString, next
 	if !searchString.isEmpty() {
 
 		logrus.Debug("in testAndSplit !searchString.isEmpty")
-		logrus.Debug("searchString: ", t.GetSubstring(searchString))
-		logrus.Debug(string(t.GetFirstCharOfSubstring(searchString)))
 
 		edgeId := t.GetNode(startNodeId).Edges[t.GetFirstCharOfSubstring(searchString)]
 		edgeSequence := t.GetEdgeLabelStringByEdgeId(edgeId)
@@ -556,8 +586,6 @@ func (t *SuffixTree) testAndSplit(startNodeId int, searchString *SubString, next
 			"edgeSequence":   edgeSequence,
 			"searchSequence": searchSequence,
 		}).Debug("in testAndSplit !searchString.isEmpty loop")
-
-		// TODO: maybe assert g != null
 
 		// searchString is a substring of the edge label
 		if len(edgeSequence) > len(searchSequence) && edgeSequence[len(searchSequence)] == nextChar {
