@@ -42,7 +42,7 @@ func main() {
 	logrus.SetFormatter(&logrus.TextFormatter{
 		FullTimestamp: true,
 	})
-	logrus.SetLevel(logrus.DebugLevel)
+	logrus.SetLevel(logrus.InfoLevel)
 
 	// testcases that were once passed
 	//words := []string{"ABC", "DEF", "ABC"}
@@ -64,19 +64,13 @@ func main() {
 	tree := datastructure.CreateTree()
 
 	for k, word := range words {
-		fmt.Println(k, word)
-
-		//for i := 0; i < len(word); i++ {
-		//	fmt.Println(word[i])
-		//}
-
 		tree.AddSequence(word, k)
 	}
 
 	fmt.Println("edge list:")
 	tree.PrintEdgeList(false)
 
-	//tree.PropagatePositionsToInnerNodes(tree.RootId)
+	tree.PropagatePositionsToInnerNodes(tree.RootId)
 
 	fmt.Println("positions:")
 	tree.PrintNodes()

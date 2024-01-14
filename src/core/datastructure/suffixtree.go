@@ -129,25 +129,6 @@ func CreateTree() *SuffixTree {
 	return tree
 }
 
-func (t *SuffixTree) PropagatePositionsToInnerNodes(nodeId int) []SuffixPosition {
-
-	if len(t.GetNode(nodeId).Edges) == 0 {
-		return t.GetNode(nodeId).Positions
-	}
-
-	var positions []SuffixPosition
-
-	for _, edgeId := range t.GetNode(nodeId).Edges {
-		positions = append(positions, t.PropagatePositionsToInnerNodes(t.GetEdge(edgeId).To)...)
-	}
-
-	if nodeId != t.RootId {
-		t.GetNode(nodeId).Positions = positions
-	}
-
-	return positions
-}
-
 func (t *SuffixTree) GetPositionsCopyOfNode(nodeId int) []SuffixPosition {
 	node := t.GetNode(nodeId)
 	positionCopies := make([]SuffixPosition, len(node.Positions))
@@ -303,8 +284,8 @@ func (t *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 			End:           len(sequence),
 		}
 
-		logrus.Debug()
-		t.PrintEdgeList(false)
+		//logrus.Debug()
+		//t.PrintEdgeList(false)
 		logrus.WithFields(logrus.Fields{
 			"i":     i,
 			"text":  t.GetSubstring(text),
