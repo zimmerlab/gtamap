@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"fmt"
 	"github.com/KleinSamuel/gtamap/src/core"
+	"github.com/KleinSamuel/gtamap/src/test"
 	"github.com/sirupsen/logrus"
 	"strconv"
 	"strings"
@@ -301,8 +302,8 @@ func (t *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 			End:           len(sequence),
 		}
 
-		logrus.Debug()
-		t.ToEdgeList(false)
+		//logrus.Debug()
+		//t.PrintEdgeList(false)
 		logrus.WithFields(logrus.Fields{
 			"i":     i,
 			"text":  t.GetSubstring(text),
@@ -321,11 +322,13 @@ func (t *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 		sId, text = t.update(sId, text, sequence[i], rest)
 
 		if sId != 1 && text.length() == 0 {
-			fmt.Println("ended on node: ", sId)
-			fmt.Println("add position: ", t.PositionQueue[0])
-
 			position := t.PositionQueue[0].copy()
 			t.GetNode(sId).Positions = append(t.GetNode(sId).Positions, position)
+
+			logrus.WithFields(logrus.Fields{
+				"nodeId":   sId,
+				"position": position,
+			}).Debug("adding position to inner node")
 		}
 
 		// keep track of the length of the suffix which is already contained in the tree
@@ -347,14 +350,12 @@ func (t *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 
 	logrus.Debug("done adding sequence to suffix tree")
 
-	fmt.Println("position queue")
-	fmt.Println(t.PositionQueue)
-
 	if !t.insertedNode {
 		logrus.Debug("last suffix is already contained in the tree")
-		logrus.Debug("adding positions to node and all of its links")
+		logrus.Debug("adding positions to all of its links")
 
-		activeNodeId := sId
+		activeNodeId := t.GetNode(sId).Link
+		t.remainder--
 
 		for activeNodeId != t.RootId {
 			logrus.WithFields(logrus.Fields{
@@ -815,18 +816,31 @@ func (t *SuffixTree) findLeafNodesRecursive(nodeId int) []int {
 	return leafNodeIds
 }
 
-func (t *SuffixTree) PrintNodes() {
-	for _, node := range t.Nodes {
-		fmt.Print(node.Id, ": ")
-		posStrings := make([]string, len(node.Positions))
-		for i, p := range node.Positions {
-			posStrings[i] = strconv.Itoa(p.Index) + "-" + strconv.Itoa(p.Start)
-		}
-		fmt.Println(strings.Join(posStrings, ","))
+func (t *SuffixTree) ToTestCase() *test.Testcase {
+
+	testCase := &test.Testcase{
+		Sequences: make([]string, 0),
+		Edges:     make([]test.Edge, 0),
+		Positions: make(map[int][]test.Position),
 	}
+
+	// add all sequences to the test case
+	for _, sequence := range t.Sequences {
+		testCase.Sequences = append(testCase.Sequences, sequence)
+	}
+
+	// compute and add the edge list to the test case
+	testCase.Edges = t.toTestEdgeList(true)
+
+	// compute and add the position list to the test case
+	testCase.Positions = t.toTestPositionList()
+
+	return testCase
 }
 
-func (t *SuffixTree) ToEdgeList(printLinks bool) {
+func (t *SuffixTree) toTestEdgeList(includeSuffixLinks bool) []test.Edge {
+
+	edgeList := make([]test.Edge, 0)
 
 	queue := list.New()
 	queue.PushBack(t.RootId)
@@ -841,15 +855,69 @@ func (t *SuffixTree) ToEdgeList(printLinks bool) {
 
 		for _, edgeId := range t.GetNode(nodeId).Edges {
 
-			fmt.Println(nodeId, t.GetEdge(edgeId).To, t.GetEdgeLabelStringByEdgeId(edgeId))
+			edgeList = append(edgeList, test.Edge{
+				From:  nodeId,
+				To:    t.GetEdge(edgeId).To,
+				Label: t.GetEdgeLabelStringByEdgeId(edgeId),
+			})
 
 			if !visited[t.GetEdge(edgeId).To] {
 				queue.PushBack(t.GetEdge(edgeId).To)
 			}
 		}
 
-		if printLinks && t.GetNode(nodeId).Link > 0 {
-			fmt.Println(nodeId, t.GetNode(nodeId).Link, "link")
+		if includeSuffixLinks && t.GetNode(nodeId).Link > 0 {
+			edgeList = append(edgeList, test.Edge{
+				From:  nodeId,
+				To:    t.GetNode(nodeId).Link,
+				Label: "link",
+			})
 		}
+	}
+
+	return edgeList
+}
+
+func (t *SuffixTree) PrintEdgeList(includeSuffixLinks bool) {
+
+	edgeList := t.toTestEdgeList(includeSuffixLinks)
+
+	for _, edge := range edgeList {
+		fmt.Println(edge.From, edge.To, edge.Label)
+	}
+}
+
+func (t *SuffixTree) toTestPositionList() map[int][]test.Position {
+
+	positionList := make(map[int][]test.Position)
+
+	for _, node := range t.Nodes {
+
+		if len(node.Positions) > 0 {
+			positionList[node.Id] = make([]test.Position, 0)
+			for _, position := range node.Positions {
+				positionList[node.Id] = append(positionList[node.Id], test.Position{
+					Index: position.Index,
+					Start: position.Start,
+				})
+			}
+		}
+	}
+
+	return positionList
+}
+
+func (t *SuffixTree) PrintNodes() {
+
+	positionMap := t.toTestPositionList()
+
+	for i, positions := range positionMap {
+
+		fmt.Print(i, ": ")
+		posStrings := make([]string, len(positions))
+		for i, p := range positions {
+			posStrings[i] = strconv.Itoa(p.Index) + "-" + strconv.Itoa(p.Start)
+		}
+		fmt.Println(strings.Join(posStrings, ","))
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -90,7 +91,7 @@ func (t *Testcase) Print() {
 
 func (t *Testcase) IsEqual(o *Testcase) bool {
 
-	logrus.Info("Compare testcases")
+	logrus.Debug("Compare testcases")
 
 	// compare sequences
 	if !compareSequences(t.Sequences, o.Sequences) {
@@ -107,26 +108,29 @@ func (t *Testcase) IsEqual(o *Testcase) bool {
 		return false
 	}
 
-	logrus.Info("Testcases are equal")
+	logrus.Debug("Testcases are equal")
 
 	return true
 }
 
-func compareSequences(s1 []string, s2 []string) bool {
-	if len(s1) != len(s2) {
+func compareSequences(truth []string, computed []string) bool {
+
+	if len(truth) != len(computed) {
 		logrus.WithFields(logrus.Fields{
-			"len(s1)": len(s1),
-			"len(s2)": len(s2),
+			"truth":    len(truth),
+			"computed": len(computed),
 		}).Warn("different number of sequences!")
 		return false
 	}
-	sort.Strings(s1)
-	sort.Strings(s2)
-	for i, sequence := range s1 {
-		if sequence != s2[i] {
+
+	sort.Strings(truth)
+	sort.Strings(computed)
+
+	for i, sequence := range truth {
+		if sequence != truth[i] {
 			logrus.WithFields(logrus.Fields{
-				"sequence1": sequence,
-				"sequence2": s2[i],
+				"truth":    sequence,
+				"computed": computed[i],
 			}).Warn("sequences are not equal!")
 			return false
 		}
@@ -134,23 +138,24 @@ func compareSequences(s1 []string, s2 []string) bool {
 	return true
 }
 
-func compareEdges(e1 []Edge, e2 []Edge) bool {
-	if len(e1) != len(e2) {
+func compareEdges(truth []Edge, computed []Edge) bool {
+
+	if len(truth) != len(computed) {
 		logrus.WithFields(logrus.Fields{
-			"len(e1)": len(e1),
-			"len(e2)": len(e2),
+			"truth":    len(truth),
+			"computed": len(computed),
 		}).Warn("different number of edges!")
 		return false
 	}
 
-	sort.Sort(SortableEdges(e1))
-	sort.Sort(SortableEdges(e2))
+	sort.Sort(SortableEdges(truth))
+	sort.Sort(SortableEdges(computed))
 
-	for i, edge := range e1 {
-		if edge != e2[i] {
+	for i, edge := range truth {
+		if edge != computed[i] {
 			logrus.WithFields(logrus.Fields{
-				"edge1": edge,
-				"edge2": e2[i],
+				"edge truth":    edge,
+				"edge computed": computed[i],
 			}).Warn("edges are not equal!")
 			return false
 		}
@@ -158,32 +163,34 @@ func compareEdges(e1 []Edge, e2 []Edge) bool {
 	return true
 }
 
-func comparePositions(p1 map[int][]Position, p2 map[int][]Position) bool {
-	if len(p1) != len(p2) {
+func comparePositions(truth map[int][]Position, computed map[int][]Position) bool {
+
+	if len(truth) != len(computed) {
 		logrus.WithFields(logrus.Fields{
-			"len(p1)": len(p1),
-			"len(p2)": len(p2),
+			"len(truth)":    len(truth),
+			"len(computed)": len(computed),
 		}).Warn("different number of positions!")
 		return false
 	}
 
-	for key, positions := range p1 {
-		if len(positions) != len(p2[key]) {
+	for key, positions := range truth {
+		if len(positions) != len(computed[key]) {
 			logrus.WithFields(logrus.Fields{
-				"len(p1[key])": len(positions),
-				"len(p2[key])": len(p2[key]),
+				"nodeId":             key,
+				"len(truth[key])":    len(positions),
+				"len(computed[key])": len(computed[key]),
 			}).Warn("different number of positions!")
 			return false
 		}
 
 		sort.Sort(SortablePositions(positions))
-		sort.Sort(SortablePositions(p2[key]))
+		sort.Sort(SortablePositions(computed[key]))
 
 		for i, position := range positions {
-			if position != p2[key][i] {
+			if position != computed[key][i] {
 				logrus.WithFields(logrus.Fields{
-					"position1": position,
-					"position2": p2[key][i],
+					"position truth":    position,
+					"position computed": computed[key][i],
 				}).Warn("positions are not equal!")
 				return false
 			}
@@ -255,15 +262,15 @@ func ReadTestcase(path string) *Testcase {
 
 				testCase.Positions[nodeId] = make([]Position, len(positionsArray))
 
-				for _, position := range positionsArray {
+				for i, position := range positionsArray {
 					positionArray := strings.Split(position, "-")
 					index, _ := strconv.Atoi(positionArray[0])
 					start, _ := strconv.Atoi(positionArray[1])
 
-					testCase.Positions[nodeId] = append(testCase.Positions[nodeId], Position{
+					testCase.Positions[nodeId][i] = Position{
 						Index: index,
 						Start: start,
-					})
+					}
 				}
 			} else {
 				testCase.Positions[nodeId] = make([]Position, 0)
@@ -276,4 +283,32 @@ func ReadTestcase(path string) *Testcase {
 	}
 
 	return testCase
+}
+
+func collectFilePaths(folderPath string) ([]string, error) {
+	var filePaths []string
+
+	err := filepath.WalkDir(folderPath, func(fp string, fi os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !fi.IsDir() {
+			filePaths = append(filePaths, fp)
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return filePaths, nil
+}
+
+func GetTestcaseFiles() []string {
+	folderPath := "../resources/test/"
+
+	files, _ := collectFilePaths(folderPath)
+
+	return files
 }

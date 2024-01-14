@@ -72,9 +72,9 @@ func main() {
 	//}
 	//fmt.Println("OK")
 
-	//words := []string{"ABC", "DEF", "GHI", "JKL", "MNO", "PQR", "ABC"}
+	words := []string{"ABC", "DEF", "ABC"}
 	//words := []string{"ABC1", "DEF2", "GHI3", "JKL4", "MNO5", "PQR6", "ABC7"}
-	words := []string{"ABC", "CEF", "CEG", "CEH"}
+	//words := []string{"ABC", "CEF", "CEG", "CEH"}
 	//words := []string{"ABCD", "ADEF", "ABCF", "ABKU"}
 	//words := []string{"ABC1", "DEF2", "ABC3"}
 	//words := []string{"ATGC1", "ATGG2", "ATTTTG13"}
@@ -99,7 +99,7 @@ func main() {
 	}
 
 	fmt.Println("edge list:")
-	tree.ToEdgeList(false)
+	tree.PrintEdgeList(true)
 
 	//tree.PropagatePositionsToInnerNodes(tree.RootId)
 
