@@ -315,7 +315,7 @@ func main() {
 	logrus.SetLevel(logrus.InfoLevel)
 
 	buildAndSerializeIndex()
-	deserializeIndex()
+	//deserializeIndex()
 
 	//testMapping()
 

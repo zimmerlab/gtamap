@@ -126,6 +126,7 @@ func finalizeCigar(cigarList *[]rune, startPositionInTranscript uint32, transcri
 	return startRelative, cigarString
 }
 
+// AlignRead TODO: implement and comment
 func AlignRead(read *fastq.Read, transcriptId int, kmerHitList []Info, gtaIndex *index.GtaIndex) *sam.Entry {
 
 	fmt.Println(read.Sequence)
@@ -150,14 +151,14 @@ func AlignRead(read *fastq.Read, transcriptId int, kmerHitList []Info, gtaIndex 
 				// the region before the first kmer
 				startPrefixGapRead := 0
 				endPrefixGapRead := hit.IndexRead
-				lenPrefixGapRead := endPrefixGapRead - startPrefixGapRead
-
-				startPrefixGapRef := hit.IndexReference - lenPrefixGapRead
-				endPrefixGapRef := hit.IndexReference
+				//lenPrefixGapRead := endPrefixGapRead - startPrefixGapRead
+				//startPrefixGapRef := hit.IndexReference - lenPrefixGapRead
+				//endPrefixGapRef := hit.IndexReference
+				//sequence := gtaIndex.Transcripts[transcriptId].SequenceDnaForward53[startPrefixGapRef:endPrefixGapRef]
+				sequence := ""
 
 				score, cigarPart, seq1, seq2 := algorithms.NeedlemanWunsch(
-					//gtaIndex.Transcripts[transcriptId].SequenceDnaForwardStrandForwardDirection[startPrefixGapRef:endPrefixGapRef],
-					gtaIndex.Transcripts[transcriptId].SequenceDnaForward53[startPrefixGapRef:endPrefixGapRef],
+					sequence,
 					read.Sequence[startPrefixGapRead:endPrefixGapRead])
 
 				fmt.Println(score)
@@ -190,13 +191,15 @@ func AlignRead(read *fastq.Read, transcriptId int, kmerHitList []Info, gtaIndex 
 		endGapRef := hit.IndexReference
 		lenGapRef := endGapRef - startGapRef
 
+		//gtaIndex.Transcripts[transcriptId].SequenceDnaForward53[startGapRef:endGapRef]
+		sequence := ""
+
 		if lenGapRead == lenGapRef {
 			// TODO: (performance) check if there is any smarter way of comparing strings of same length
 		}
 
 		score, cigarPart, seq1, seq2 := algorithms.NeedlemanWunsch(
-			//gtaIndex.Transcripts[transcriptId].SequenceDnaForwardStrandForwardDirection[startGapRef:endGapRef],
-			gtaIndex.Transcripts[transcriptId].SequenceDnaForward53[startGapRef:endGapRef],
+			sequence,
 			read.Sequence[startGapRead:endGapRead])
 
 		fmt.Println(score)
@@ -216,14 +219,15 @@ func AlignRead(read *fastq.Read, transcriptId int, kmerHitList []Info, gtaIndex 
 
 			startSuffixGapRead := hit.IndexRead + config.KmerLength()
 			endSuffixGapRead := len(read.Sequence)
-			lenSuffixGapRead := endSuffixGapRead - startSuffixGapRead
+			//lenSuffixGapRead := endSuffixGapRead - startSuffixGapRead
+			//startSuffixGapRef := hit.IndexReference + config.KmerLength()
+			//endSuffixGapRef := startSuffixGapRef + lenSuffixGapRead
 
-			startSuffixGapRef := hit.IndexReference + config.KmerLength()
-			endSuffixGapRef := startSuffixGapRef + lenSuffixGapRead
+			//sequence := gtaIndex.Transcripts[transcriptId].SequenceDnaForward53[startSuffixGapRef:endSuffixGapRef]
+			sequence := ""
 
 			score, cigarPart, seq1, seq2 = algorithms.NeedlemanWunsch(
-				//gtaIndex.Transcripts[transcriptId].SequenceDnaForwardStrandForwardDirection[startSuffixGapRef:endSuffixGapRef],
-				gtaIndex.Transcripts[transcriptId].SequenceDnaForward53[startSuffixGapRef:endSuffixGapRef],
+				sequence,
 				read.Sequence[startSuffixGapRead:endSuffixGapRead])
 
 			fmt.Println(score)
@@ -688,12 +692,13 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 
 			// the sequence of the read
 			sourceSequence := read.Sequence
-			// the starting position of the match in the target sequence (transcript)
-			transcriptIndex := context.SequenceIndex / 2
-			// the direction of the target sequence, always 5' -> 3' on either forward or reverse strand
-			isForward := context.SequenceIndex%2 == 0
-			// the target sequence (transcript)
-			targetSequence := index.Transcripts[transcriptIndex].GetSequenceDna(isForward)
+			targetSequence := index.GetTranscriptSequenceDna(context.SequenceIndex)
+			//// the starting position of the match in the target sequence (transcript)
+			//transcriptIndex := context.SequenceIndex / 2
+			//// the direction of the target sequence, always 5' -> 3' on either forward or reverse strand
+			//isForward := context.SequenceIndex%2 == 0
+			//// the target sequence (transcript)
+			//targetSequence := index.Transcripts[transcriptIndex].GetSequenceDna(isForward)
 
 			// map the unmapped regions and combine with exact match regions
 
