@@ -37,13 +37,10 @@ func inspectAnnotation() {
 }
 
 func buildAndSerializeIndex() {
-	pathGtfZeroed := "../resources/ENSG00000173585.zeroed.gtf"
-	pathFastaZeroed := "../resources/ENSG00000173585.zeroed.fasta"
-	pathOutput := "../resources/ENSG00000173585.dev.gtai"
 
-	//pathGtfZeroed := "/home/users/klein/Projects/GTA_Map/resources/ENSG00000173585.zeroed.gtf"
-	//pathFastaZeroed := "/home/users/klein/Projects/GTA_Map/resources/ENSG00000173585.zeroed.fasta"
-	//pathOutput := "/home/users/klein/Projects/GTA_Map/resources/ENSG00000173585.dev.gtai"
+	pathGtfZeroed := "./resources/ENSG00000173585.zeroed.gtf"
+	pathFastaZeroed := "./resources/ENSG00000173585.zeroed.fasta"
+	pathOutput := "./resources/ENSG00000173585.dev.gtai"
 
 	gtfFile, errGtf := os.Open(pathGtfZeroed)
 	if errGtf != nil {
@@ -64,7 +61,7 @@ func buildAndSerializeIndex() {
 }
 
 func deserializeIndex() *index.GtaIndex {
-	return index.DezerializeFromPath("../resources/ENSG00000173585.dev.gtai")
+	return index.DezerializeFromPath("./resources/ENSG00000173585.dev.gtai")
 }
 
 //func testArgparse() {
@@ -184,15 +181,15 @@ func testMapping() {
 
 	timerStart = time.Now()
 
-	pathReadsR1 := "../resources/reads/manual/reads_ccr9.1.fq"
-	pathReadsR2 := "../resources/reads/manual/reads_ccr9.2.fq"
+	pathReadsR1 := "./resources/reads/manual/reads_ccr9.1.fq"
+	pathReadsR2 := "./resources/reads/manual/reads_ccr9.2.fq"
 
 	//pathReadsR1 := "/usr/local/storage2/sam_fasta_test/fw.fastq"
 	//pathReadsR2 := "/usr/local/storage2/sam_fasta_test/rw.fastq"
 
 	reader := fastq.InitFromPaths(pathReadsR1, pathReadsR2)
 
-	writer := datawriter.InitFromPath("../out/reads_ccr9.sam")
+	writer := datawriter.InitFromPath("./out/reads_ccr9.sam")
 	writer.Write(samHeader.String())
 
 	numWorkers := 1

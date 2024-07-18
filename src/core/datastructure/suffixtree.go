@@ -10,6 +10,17 @@ import (
 	"strings"
 )
 
+// This generalized suffix tree is built using linear time Ukkonens Algorithm.
+// Original Paper by Ukkonen: http://www.cs.helsinki.fi/u/ukkonen/SuffixT1withFigs.pdf
+// Inspired in some ways by: https://github.com/abahgat/suffixtree
+// There is no terminal symbol added to the strings.
+// Each sequence is referenced by its index in the list of sequences.
+// Edges contain only the interval of the string represented by the edge label.
+// Such an interval refers to the sequence index and the start and end position of the substring in the sequence.
+// Each node contains a list of suffix positions which are the positions of the sequence that end at this node.
+// Each node contains the list of suffix positions of all its descendants.
+// This way, the position of a certain string can be determined without traversing all the way down to the leaf nodes.
+
 type SuffixPosition struct {
 	Index int
 	Start int
@@ -22,25 +33,27 @@ func (s SuffixPosition) copy() SuffixPosition {
 	}
 }
 
+// Node represents a node in the suffix tree
 type Node struct {
-	Id            int
-	Edges         map[byte]int
-	Link          int
-	SequenceIndex int
-	SequenceStart int
-	Positions     []SuffixPosition
+	Id        int              // unique identifier of the node
+	Edges     map[byte]int     // edges of the node, key is the first character of the edge label
+	Link      int              // suffix link pointing to the id of the linked node
+	Positions []SuffixPosition // the list of sequence positions that end at this node (include all descendants)
 }
 
+// Edge represents an edge in the suffix tree
 type Edge struct {
-	Label  *SubString
-	To     int
-	isLast bool // edge connects the node with a leaf node and does not have a label
+	Label  *SubString // the label/string on this edge represented by the SubString object
+	To     int        // the id of the target node of the edge
+	isLast bool       // edge connects the node with a leaf node and does not have a label TODO: check if this can be inferred by To == -1 or 0
 }
 
+// SubString represents the substring of a sequence identified by the sequence index and the start and end position
+// used to efficiently store strings on the edges of the suffix tree
 type SubString struct {
-	SequenceIndex int
-	Start         int
-	End           int
+	SequenceIndex int // the index of the sequence in the list of sequences
+	Start         int // the start position of the substring in the sequence at the specific sequence index
+	End           int // the end position of the substring in the sequence at the specific sequence index
 }
 
 func (s *SubString) copy() *SubString {
@@ -51,6 +64,7 @@ func (s *SubString) copy() *SubString {
 	}
 }
 
+// shortenStart returns a new substring with the start position shortened by one (e.g. +1)
 func (s *SubString) shortenStart() *SubString {
 	if s.length() == 0 {
 		return &SubString{
@@ -66,6 +80,7 @@ func (s *SubString) shortenStart() *SubString {
 	}
 }
 
+// shortenEnd returns a new substring with the end position shortened by one (e.g. -1)
 func (s *SubString) shortenEnd() *SubString {
 	if s.length() == 0 {
 		return &SubString{
@@ -81,6 +96,7 @@ func (s *SubString) shortenEnd() *SubString {
 	}
 }
 
+// extendEnd returns a new substring with the end position extended by one (e.g. +1)
 func (s *SubString) extendEnd() *SubString {
 	return &SubString{
 		SequenceIndex: s.SequenceIndex,
@@ -147,12 +163,10 @@ func (t *SuffixTree) RemoveAllSuffixLinks() {
 func (t *SuffixTree) AddNode(isLeaf bool) int {
 	nodeId := t.NumNodes
 	t.Nodes[nodeId] = &Node{
-		Id:            nodeId,
-		Edges:         make(map[byte]int),
-		Link:          0,
-		SequenceIndex: -1,
-		SequenceStart: -1,
-		Positions:     make([]SuffixPosition, 0),
+		Id:        nodeId,
+		Edges:     make(map[byte]int),
+		Link:      0,
+		Positions: make([]SuffixPosition, 0),
 	}
 
 	logrus.WithFields(logrus.Fields{
@@ -231,6 +245,7 @@ func (t *SuffixTree) GetEdgeLabelCopyByEdgeId(edgeId int) *SubString {
 	return t.Edges[edgeId].Label.copy()
 }
 
+// GetEdgeLabelStringByEdgeId returns the label string of the edge with the given id
 func (t *SuffixTree) GetEdgeLabelStringByEdgeId(edgeId int) string {
 	return t.Sequences[t.Edges[edgeId].Label.SequenceIndex][t.Edges[edgeId].Label.Start:t.Edges[edgeId].Label.End]
 }
@@ -283,9 +298,9 @@ func (t *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 			Start:         i,
 			End:           len(sequence),
 		}
+		
+		//t.PrintEdgeList(true)
 
-		//logrus.Debug()
-		//t.PrintEdgeList(false)
 		logrus.WithFields(logrus.Fields{
 			"i":     i,
 			"text":  t.GetSubstring(text),
@@ -294,10 +309,12 @@ func (t *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 			"queue": t.PositionQueue,
 		}).Debug("adding char to suffix tree")
 
+		// add the current position to the queue of positions that will be added to the leaf nodes
 		t.PositionQueue = append(t.PositionQueue, SuffixPosition{
-			Index: sequenceIndex,
-			Start: i,
+			Index: sequenceIndex, // the index of the sequence in the list of sequences
+			Start: i,             // the start position of the suffix in the sequence
 		})
+
 		logrus.WithFields(logrus.Fields{
 			"new":   t.PositionQueue[len(t.PositionQueue)-1],
 			"queue": t.PositionQueue,
@@ -308,7 +325,10 @@ func (t *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 		sId, text = t.update(sId, text, sequence[i], rest)
 
 		if sId != 1 && text.length() == 0 {
+
 			position := t.PositionQueue[0].copy()
+
+			// add the current suffix start position to the inner node
 			t.GetNode(sId).Positions = append(t.GetNode(sId).Positions, position)
 
 			logrus.WithFields(logrus.Fields{
@@ -418,10 +438,8 @@ func (t *SuffixTree) update(sId int, stringPart *SubString, nextChar byte, rest 
 			t.AddEdge(rest, rId, leafId)
 
 			logrus.WithFields(logrus.Fields{
-				"leaf":          leafId,
-				"sequenceIndex": t.GetNode(leafId).SequenceIndex,
-				"sequenceStart": t.GetNode(leafId).SequenceStart,
-				"position":      position,
+				"leaf":     leafId,
+				"position": position,
 			}).Debug("created new leaf")
 		}
 
@@ -730,8 +748,12 @@ func (t *SuffixTree) FindPatternExact(pattern *string) *core.ExactMatchResult {
 		Matches: make([]core.SequenceMatch, 0),
 	}
 
+	// the active point is used to point to a specific position in the tree
+	// the current node is the last node that was visited
 	activeNodeId := t.GetRoot().Id
+	// the active edge is the current edge that is being traversed
 	activeEdgeId := 0
+	// the active length is the number of characters that have been traversed on the active edge (offset)
 	activeLength := 0
 
 	for indexPattern := 0; indexPattern < len(*pattern); indexPattern++ {
@@ -746,8 +768,9 @@ func (t *SuffixTree) FindPatternExact(pattern *string) *core.ExactMatchResult {
 
 		if activeEdgeId == 0 {
 
-			logrus.Debug("no active edge")
+			logrus.Debug("currently there is no active edge")
 
+			// find the edge that starts with the character of the pattern at position indexPattern
 			activeEdgeId = t.GetNode(activeNodeId).Edges[(*pattern)[indexPattern]]
 
 			if activeEdgeId == 0 {
@@ -758,21 +781,30 @@ func (t *SuffixTree) FindPatternExact(pattern *string) *core.ExactMatchResult {
 				"activeEdge": activeEdgeId,
 				"edgeLabel":  t.GetEdgeLabelStringByEdgeId(activeEdgeId),
 				"char":       string((*pattern)[indexPattern]),
-			}).Debug("found edge with first char of pattern")
+			}).Debug("found new active edge")
 		}
 
 		logrus.WithFields(logrus.Fields{
 			"activeEdge": activeEdgeId,
 			"edgeLabel":  t.GetEdgeLabelStringByEdgeId(activeEdgeId),
-		}).Debug("active edge")
+		}).Debug("active edge information")
 
+		// the next character on the current edge does not match the current character in the pattern
 		if t.GetEdgeLabelStringByEdgeId(activeEdgeId)[activeLength] != (*pattern)[indexPattern] {
+
+			logrus.Debug("next character on active edge does not match current character in pattern")
+
 			return result
 		}
 
+		logrus.Debug("char on active edge matches char in pattern")
+
+		// there are additional characters on the string of the current edge
 		activeLength++
 
+		// the end of the current edge is reached
 		if t.GetEdge(activeEdgeId).Label.length() == activeLength {
+			// update the active point information
 			activeNodeId = t.GetEdge(activeEdgeId).To
 			activeLength = 0
 			activeEdgeId = 0
@@ -785,27 +817,53 @@ func (t *SuffixTree) FindPatternExact(pattern *string) *core.ExactMatchResult {
 
 			continue
 		}
+
+		logrus.WithFields(logrus.Fields{
+			"activeEdge":   activeEdgeId,
+			"activeLength": activeLength,
+		}).Debug("walking on edge")
 	}
 
-	// determine the node from which to start the search for leaf nodes
-	startNodeId := activeNodeId
-	if activeEdgeId != 0 {
-		// the active edge is not fully traversed, the leaf search must start from its target node
-		startNodeId = t.GetEdge(activeEdgeId).To
-	}
+	logrus.Debug("pattern found")
 
-	leafNodeIds := t.findLeafNodesRecursive(startNodeId)
-
-	for _, leafNodeId := range leafNodeIds {
-
-		leafNode := t.GetNode(leafNodeId)
-
-		result.Matches = append(result.Matches, core.SequenceMatch{
-			SequenceIndex: leafNode.SequenceIndex,
-			FromTarget:    leafNode.SequenceStart,
-			ToTarget:      leafNode.SequenceStart + len(*pattern),
-		})
-	}
+	//// TODO: leaf nodes are not required anymore to find all positions of the pattern!
+	//
+	//// determine the node from which to start the search for leaf nodes
+	//startNodeId := activeNodeId
+	//if activeEdgeId != 0 {
+	//	// the active edge is not fully traversed, the leaf search must start from its target node
+	//	startNodeId = t.GetEdge(activeEdgeId).To
+	//}
+	//
+	//// list of node ids of all leaf nodes that are descendants of the start node
+	//leafNodeIds := t.findLeafNodesRecursive(startNodeId)
+	//
+	//logrus.WithFields(logrus.Fields{
+	//	"nodeIds":  leafNodeIds,
+	//	"numLeafs": len(leafNodeIds),
+	//}).Debug("found leaf nodes")
+	//
+	//// determine the actual sequence position of the pattern matches using the leaf nodes
+	//for _, leafNodeId := range leafNodeIds {
+	//
+	//	leafNode := t.GetNode(leafNodeId)
+	//
+	//	fmt.Println(leafNode)
+	//
+	//	// TODO: SequenceIndex and SequenceStart are not needed anymore
+	//
+	//	result.Matches = append(result.Matches, core.SequenceMatch{
+	//		SequenceIndex: leafNode.SequenceIndex,
+	//		FromTarget:    leafNode.SequenceStart,
+	//		ToTarget:      leafNode.SequenceStart + len(*pattern),
+	//	})
+	//
+	//	logrus.WithFields(logrus.Fields{
+	//		"sequenceIndex": leafNode.SequenceIndex,
+	//		"from":          leafNode.SequenceStart,
+	//		"to":            leafNode.SequenceStart + len(*pattern),
+	//	}).Debug("determined pattern match")
+	//}
 
 	return result
 }
@@ -845,6 +903,34 @@ func (t *SuffixTree) ToTestCase() *test.Testcase {
 	testCase.Positions = t.toTestPositionList()
 
 	return testCase
+}
+
+func (t *SuffixTree) ListAllNodes() {
+
+	queue := list.New()
+	queue.PushBack(t.RootId)
+	visited := make(map[int]bool)
+
+	for queue.Len() > 0 {
+
+		item := queue.Front()
+		queue.Remove(item)
+		nodeId := item.Value.(int)
+		visited[nodeId] = true
+
+		node := t.GetNode(nodeId)
+
+		fmt.Println(nodeId, node)
+
+		for _, edgeId := range node.Edges {
+
+			edge := t.GetEdge(edgeId)
+
+			if !visited[edge.To] {
+				queue.PushBack(edge.To)
+			}
+		}
+	}
 }
 
 func (t *SuffixTree) toTestEdgeList(includeSuffixLinks bool) []test.Edge {
