@@ -5,3 +5,10 @@
 @SQ	SN:T2	LN:321	DS:ENST00000422395
 @SQ	SN:T3	LN:1071	DS:ENST00000395963
 @PG	ID:GTAMap	PN:GTAMap	VN:0.1
+@3-0001/1 CCR9-201 NONE frag_gene[] read-pos_gene[] frag_trans[] read-pos_trans[] many-errors-test	discard
+@3-0002/1 CCR9-201 ENST00000357632 frag_gene[] read-pos_gene[] frag_trans[25:225] read-pos_trans[25-175] forward no-error	keep
+@3-0003/1 CCR9-201 ENST00000357632 frag_gene[] read-pos_gene[] frag_trans[25:225] read-pos_trans[25-175] forward 1-errors 5:C>T	keep
+@3-0004/1 CCR9-201 ENST00000357632 frag_gene[] read-pos_gene[] frag_trans[25:225] read-pos_trans[25-175] forward 1-errors 63:A>T	keep
+@3-0005/1 CCR9-201 ENST00000357632 frag_gene[] read-pos_gene[] frag_trans[25:225] read-pos_trans[25-175] forward 1-errors 143:C>T	keep
+@3-0006/1 CCR9-201 ENST00000357632 frag_gene[] read-pos_gene[] frag_trans[25:225] read-pos_trans[25-175] forward 8-errors far away 24:A>T,38:A>T,50:G>A,63:A>C,85:C>G,116:A>C,132:C>A,144:T>A	keep
+@3-0007/1 CCR9-201 ENST00000357632 frag_gene[] read-pos_gene[] frag_trans[25:225] read-pos_trans[25-175] forward 8-errors close together 30:C>T,31:T>A,32:G>A,33:A>C,34:A>T,35:T>C,36:C>A,37:C>T	keep

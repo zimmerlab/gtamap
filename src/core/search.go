@@ -153,8 +153,9 @@ func (intervals Intervals) Swap(i, j int) {
 	intervals[i], intervals[j] = intervals[j], intervals[i]
 }
 
-type SequenceCandidateMatches struct {
-	SequenceIndex     int        // the id of the sequence within the suffix tree (transcript)
-	CandidatePosition int        // the 0-based start position of the candidate match within the target sequence (transcript)
-	MatchedIntervals  []Interval // sorted list of non-overlapping intervals of regions that are matched exactly
+type InexactMatchResult struct {
+	SequenceIndex int   // the id of the sequence within the suffix tree (transcript)
+	FromTarget    int   // the 0-based start position of the match within the target sequence
+	ToTarget      int   // the end-exclusive position of the match within the target sequence
+	Mismatches    []int // the locations of the mismatches in the source sequence (read)
 }

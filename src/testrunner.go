@@ -221,7 +221,7 @@ func testMapping() {
 		// TODO: remove after testing (only process specific read pair)
 		name := strings.Split(readPair.ReadR1.Header, " ")[0]
 		if name != "@3-0004/1" {
-			continue
+			//continue
 		}
 
 		mappingTask := ReadPairMappingTask{

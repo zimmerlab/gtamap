@@ -10,7 +10,6 @@ import (
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
 	"github.com/sirupsen/logrus"
 	"math/rand"
-	"os"
 	"sort"
 	"strings"
 )
@@ -437,7 +436,7 @@ func MapReadPairDev(readPair *fastq.ReadPair, index *index.GtaIndex) string {
 // When matching the 15. k-mer, there must be at least max(0, 15 - 5) = 10 exact matches in any of the sequences.
 // A k-mer can be matched to multiple sequences, for each of which the number of matches is increased but one k-mer
 // can never be counted twice for the same sequence even when there are multiple matches.
-func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool) {
+func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int]*core.InexactMatchResult, bool) {
 
 	// TODO: move this to config
 	// the exact length of each k-mer
@@ -446,10 +445,10 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 	// the maximum error rate allowed per read
 	errorRate := 0.05
 
-	// the final result of this function containing the mapping information of each context for each sequence
-	result := core.ReadMapResult{
-		SequenceMatches: make(map[int]core.SequenceMapResult),
-	}
+	// The final result of this method. Contains positions of the read on the reference sequence within the
+	// allowed range of mismatches.
+	// The key is the sequence index (transcript) and the value is the result of the inexact matching.
+	inexactMatchResults := make(map[int]*core.InexactMatchResult)
 
 	// the maximum number of mismatches allowed given the length of the sequence and the error rate
 	maxMismatches := int(float64(len(read.Sequence)) * errorRate)
@@ -588,7 +587,7 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 	// discard the read because each sequence exceeded the allowed number of mismatches
 	if failed {
 		logrus.Info("discard this read!")
-		return result, false
+		return inexactMatchResults, false
 	} else {
 		logrus.Info("keep this read!")
 	}
@@ -682,8 +681,8 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 			// is counted. If the number of mismatches exceeds the allowed number of mismatches, the candidate position
 			// is discarded.
 
-			// the number of mismatches for this candidate position
-			numMismatches := 0
+			// the mismatched source positions (read) for this candidate position
+			mismatches := make([]int, 0)
 			// true if the maximum number of mismatches is exceeded
 			failed := false
 
@@ -711,10 +710,10 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 							"refBase":        string(index.GetTranscriptSequenceDna(sequenceIndex)[targetPosition]),
 						}).Info("mismatch")
 
-						numMismatches += 1
+						mismatches = append(mismatches, readOffset)
 					}
 
-					if numMismatches > maxMismatches {
+					if len(mismatches) > maxMismatches {
 						failed = true
 						break
 					}
@@ -725,7 +724,8 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 				logrus.WithFields(logrus.Fields{
 					"sequenceIndex":     sequenceIndex,
 					"candidatePosition": candidatePosition,
-					"numMismatches":     numMismatches,
+					"numMismatches":     len(mismatches),
+					"mismatches":        mismatches,
 				}).Info("discard this candidate position")
 				continue
 			}
@@ -757,10 +757,10 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 							"refBase":        string(index.GetTranscriptSequenceDna(sequenceIndex)[targetPosition]),
 						}).Info("mismatch")
 
-						numMismatches += 1
+						mismatches = append(mismatches, readOffset)
 					}
 
-					if numMismatches > maxMismatches {
+					if len(mismatches) > maxMismatches {
 						failed = true
 						break
 					}
@@ -775,7 +775,8 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 				logrus.WithFields(logrus.Fields{
 					"sequenceIndex":     sequenceIndex,
 					"candidatePosition": candidatePosition,
-					"numMismatches":     numMismatches,
+					"numMismatches":     len(mismatches),
+					"mismatches":        mismatches,
 				}).Info("discard this candidate position")
 				continue
 			}
@@ -797,10 +798,10 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 							"refBase":        string(index.GetTranscriptSequenceDna(sequenceIndex)[targetPosition]),
 						}).Info("mismatch")
 
-						numMismatches += 1
+						mismatches = append(mismatches, readOffset)
 					}
 
-					if numMismatches > maxMismatches {
+					if len(mismatches) > maxMismatches {
 						failed = true
 						break
 					}
@@ -811,7 +812,8 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 				logrus.WithFields(logrus.Fields{
 					"sequenceIndex":     sequenceIndex,
 					"candidatePosition": candidatePosition,
-					"numMismatches":     numMismatches,
+					"numMismatches":     len(mismatches),
+					"mismatches":        mismatches,
 				}).Info("discard this candidate position")
 				continue
 			}
@@ -819,267 +821,23 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 			logrus.WithFields(logrus.Fields{
 				"sequenceIndex":     sequenceIndex,
 				"candidatePosition": candidatePosition,
-				"numMismatches":     numMismatches,
+				"numMismatches":     len(mismatches),
+				"mismatches":        mismatches,
 			}).Info("candidate position passed all tests")
-		}
 
+			// the candidate position passed all tests and is added to the final result
+			if _, ok := inexactMatchResults[sequenceIndex]; !ok {
+				inexactMatchResults[sequenceIndex] = &core.InexactMatchResult{
+					SequenceIndex: sequenceIndex,
+					FromTarget:    candidatePosition,
+					ToTarget:      candidatePosition + len(read.Sequence),
+					Mismatches:    mismatches,
+				}
+			}
+		}
 	}
 
-	os.Exit(1)
-
-	// iterate the mappings (different contexts) on each sequence (identified by sequence index)
-	//for sequenceIndex, val := range matchMismatchCounts {
-	//
-	//	logrus.WithFields(logrus.Fields{
-	//		"sequenceIndex": sequenceIndex,
-	//		"numMatches":    len(val.Matches),
-	//		"numMismatch":   val.NumMismatches,
-	//	}).Info("process non-discarded sequence index")
-	//
-	//	// the final result for this sequence index
-	//	sequenceMapResult := core.SequenceMapResult{
-	//		SequenceContextMatches: make(map[int]core.SequenceContextMatch),
-	//	}
-	//
-	//	matches := val.Matches
-	//	sort.Sort(matches)
-	//
-	//	// assert that the matches list is sorted
-	//	if config.Env() == "development" {
-	//		logrus.Debug("assert that the matches list is sorted")
-	//		currentIndex := 0
-	//		for i := 0; i < len(matches); i++ {
-	//			if matches[i].FromSource < currentIndex {
-	//				panic("matches are not sorted")
-	//			}
-	//			currentIndex = matches[i].FromSource
-	//		}
-	//		logrus.Debug("assertion passed")
-	//	}
-	//
-	//	contexts := make(map[int]core.SequenceContextMatch)
-	//
-	//	// sort the matches to the contexts on each sequence index and combine consecutive matches
-	//	for i, match := range matches {
-	//
-	//		// the start position of the entire read within the reference sequence
-	//		targetIndex := match.FromTarget - match.FromSource
-	//
-	//		logrus.WithFields(logrus.Fields{
-	//			"matchIndex":    i,
-	//			"sequenceIndex": sequenceIndex,
-	//			"targetIndex":   targetIndex,
-	//			"fromSource":    match.FromSource,
-	//			"toSource":      match.ToSource,
-	//			"fromTarget":    match.FromTarget,
-	//			"toTarget":      match.ToTarget,
-	//		}).Debug("process match")
-	//
-	//		lengthTranscript := len(index.GetTranscriptSequenceDna(sequenceIndex))
-	//		lengthRead := len(read.Sequence)
-	//
-	//		// discard this match because the read is too long for the transcript for this target index
-	//		if targetIndex < 0 || targetIndex > lengthTranscript-lengthRead {
-	//			logrus.WithFields(logrus.Fields{
-	//				"lengthTranscript": lengthTranscript,
-	//				"lengthRead":       lengthRead,
-	//				"targetIndex":      targetIndex,
-	//			}).Debug("discard match because target index is out of bounds")
-	//			continue
-	//		}
-	//
-	//		context := core.SequenceContextMatch{
-	//			SequenceIndex: sequenceIndex,
-	//			TargetIndex:   -1,
-	//			Matches:       make([]core.SequenceMatch, 0),
-	//		}
-	//
-	//		if val, ok := contexts[targetIndex]; ok {
-	//			context = val
-	//		}
-	//
-	//		// no match yet in this context -> add the current match
-	//		if context.Matches.Len() == 0 {
-	//			context.TargetIndex = targetIndex
-	//			context.Matches = append(context.Matches, match)
-	//			contexts[targetIndex] = context
-	//
-	//			logrus.Debug("no match yet in this context -> add the current match")
-	//			continue
-	//		}
-	//
-	//		// the last match to be checked for extension
-	//		lastMatch := context.Matches[len(context.Matches)-1]
-	//
-	//		// check if the current match extends the last match in this context and combine them
-	//		if match.FromSource == lastMatch.ToSource {
-	//			logrus.Debug("match extends last match")
-	//
-	//			lastMatch.ToSource = match.ToSource
-	//			lastMatch.ToTarget = match.ToTarget
-	//			lastMatch.Mismatches = append(lastMatch.Mismatches, match.Mismatches...)
-	//
-	//			context.Matches[len(context.Matches)-1] = lastMatch
-	//		} else {
-	//			// the current match does not extend the last match
-	//			logrus.Debug("match does not extend last match")
-	//
-	//			// add the current match if not overlapping
-	//			context.Matches = append(context.Matches, match)
-	//		}
-	//	}
-	//
-	//	logrus.WithFields(logrus.Fields{
-	//		"sequenceIndex": sequenceIndex,
-	//		"numContexts":   len(contexts),
-	//	}).Info("contexts of sequence index determined")
-	//
-	//	for _, context := range contexts {
-	//		logrus.Info(context)
-	//	}
-	//
-	//	// extend the matches in the context
-	//	//contextloop:
-	//	for _, context := range contexts {
-	//
-	//		logrus.WithFields(logrus.Fields{
-	//			"sequenceIndex": context.SequenceIndex,
-	//			"targetIndex":   context.TargetIndex,
-	//		}).Info("map the unmapped regions of this context")
-	//
-	//		logrus.Info("matches of this context:")
-	//		for _, match := range context.Matches {
-	//			logrus.Info(match)
-	//		}
-	//
-	//		// containing the whole context with exact matches and mapped unmapped regions
-	//		wholeContext := core.SequenceContextMatch{
-	//			SequenceIndex: context.SequenceIndex,
-	//			TargetIndex:   context.TargetIndex,
-	//			Matches:       make([]core.SequenceMatch, 0),
-	//		}
-	//
-	//		// the sequence of the read
-	//		sourceSequence := read.Sequence
-	//		targetSequence := index.GetTranscriptSequenceDna(context.SequenceIndex)
-	//		//// the starting position of the match in the target sequence (transcript)
-	//		//transcriptIndex := context.SequenceIndex / 2
-	//		//// the direction of the target sequence, always 5' -> 3' on either forward or reverse strand
-	//		//isForward := context.SequenceIndex%2 == 0
-	//		//// the target sequence (transcript)
-	//		//targetSequence := index.Transcripts[transcriptIndex].GetSequenceDna(isForward)
-	//
-	//		// map the unmapped regions and combine with exact match regions
-	//
-	//		// the number of mismatches in this context
-	//		numMismatches := 0
-	//
-	//		// determine the unmapped regions between the matches and map them
-	//		for i, match := range context.Matches {
-	//
-	//			if i == 0 {
-	//				// there is an unmapped region before the first exact match
-	//				if match.FromSource > 0 {
-	//
-	//					currentMatch, valid := MapBaseByBase(
-	//						0,
-	//						match.FromSource,
-	//						context.TargetIndex,
-	//						context.TargetIndex+match.FromSource,
-	//						sourceSequence,
-	//						targetSequence,
-	//						&numMismatches,
-	//						maxMismatches)
-	//
-	//					if !valid {
-	//						logrus.Debug("too many mismatches!")
-	//						break
-	//					}
-	//
-	//					currentMatch.SequenceIndex = match.SequenceIndex
-	//
-	//					wholeContext.Matches = append(wholeContext.Matches, currentMatch)
-	//
-	//				}
-	//
-	//			} else {
-	//
-	//				prevMatch := context.Matches[i-1]
-	//
-	//				// map the unmapped region between the matches
-	//				currentMatch, valid := MapBaseByBase(
-	//					prevMatch.ToSource,
-	//					match.FromSource,
-	//					prevMatch.ToTarget,
-	//					match.FromTarget,
-	//					sourceSequence,
-	//					targetSequence,
-	//					&numMismatches,
-	//					maxMismatches)
-	//
-	//				if !valid {
-	//					logrus.Debug("too many mismatches!")
-	//					break
-	//				}
-	//
-	//				currentMatch.SequenceIndex = match.SequenceIndex
-	//
-	//				wholeContext.Matches = append(wholeContext.Matches, currentMatch)
-	//			}
-	//
-	//			// add the exact sequence match
-	//			wholeContext.Matches = append(wholeContext.Matches, match)
-	//
-	//			// the last match in this read
-	//			if i == len(context.Matches)-1 {
-	//
-	//				// there is an unmapped region at the end of the read
-	//				if match.ToSource < len(read.Sequence) {
-	//
-	//					// map the unmapped region between the last
-	//					currentMatch, valid := MapBaseByBase(
-	//						match.ToSource,
-	//						len(read.Sequence),
-	//						match.ToTarget,
-	//						match.ToTarget+len(read.Sequence),
-	//						sourceSequence,
-	//						targetSequence,
-	//						&numMismatches,
-	//						maxMismatches)
-	//
-	//					if !valid {
-	//						logrus.Debug("too many mismatches!")
-	//						break
-	//					}
-	//
-	//					currentMatch.SequenceIndex = match.SequenceIndex
-	//
-	//					wholeContext.Matches = append(wholeContext.Matches, currentMatch)
-	//				}
-	//			}
-	//		}
-	//
-	//		// discard this context if there are more mismatches than allowed
-	//		if numMismatches > maxMismatches {
-	//			logrus.WithFields(logrus.Fields{
-	//				"sequenceIndex": context.SequenceIndex,
-	//				"targetIndex":   context.TargetIndex,
-	//				"numMismatches": int(numMismatches),
-	//				"maxMismatches": maxMismatches,
-	//			}).Info("discard this context because of too many mismatches")
-	//			continue
-	//		}
-	//
-	//		logrus.WithFields(logrus.Fields{}).Info("add the whole context to the result")
-	//		logrus.Info(wholeContext)
-	//
-	//		sequenceMapResult.SequenceContextMatches[wholeContext.TargetIndex] = wholeContext
-	//	}
-	//
-	//	result.SequenceMatches[sequenceIndex] = sequenceMapResult
-	//}
-
-	return result, true
+	return inexactMatchResults, true
 }
 
 func MapBaseByBase(fromSource int, toSource int, fromTarget int, toTarget int,
