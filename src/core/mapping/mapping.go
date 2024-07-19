@@ -10,6 +10,8 @@ import (
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
 	"github.com/sirupsen/logrus"
 	"math/rand"
+	"os"
+	"sort"
 	"strings"
 )
 
@@ -354,35 +356,36 @@ func AlignRead(read *fastq.Read, transcriptId int, kmerHitList []Info, gtaIndex 
 // MapReadPairDev is the core method that maps a read pair to the reference using the index
 func MapReadPairDev(readPair *fastq.ReadPair, index *index.GtaIndex) string {
 
-	logrus.Info("map new read pair")
+	//logrus.Info("map new read pair")
 
 	logrus.WithFields(logrus.Fields{
 		"header": readPair.ReadR1.Header,
-	}).Info("got read R1")
+	}).Debug("got read R1")
 	// TODO: remove after debugging
-	logrus.Info(readPair.ReadR1.Sequence)
+	//logrus.Info(readPair.ReadR1.Sequence)
 
 	if readPair.ReadR2 != nil {
 		logrus.WithFields(logrus.Fields{
 			"header": readPair.ReadR2.Header,
-		}).Info("got read R2")
+		}).Debug("got read R2")
 		// TODO: remove after debugging
-		logrus.Info(readPair.ReadR2.Sequence)
+		//logrus.Info(readPair.ReadR2.Sequence)
 	} else {
-		logrus.Info("no read R2")
+		//logrus.Info("no read R2")
 	}
 
 	logrus.WithFields(logrus.Fields{
 		"header": readPair.ReadR1.Header,
-	}).Info("map R1 read to reference")
+	}).Debug("map R1 read to reference")
 
 	resultString := ""
 
-	resultR1, valid1 := MapRead(readPair.ReadR1, index)
+	_, valid1 := MapRead(readPair.ReadR1, index)
+	//resultR1, valid1 := MapRead(readPair.ReadR1, index)
 
-	fmt.Println("result R1")
-	fmt.Println(valid1)
-	fmt.Println(resultR1)
+	//fmt.Println("result R1")
+	//fmt.Println(valid1)
+	//fmt.Println(resultR1)
 
 	if valid1 {
 		resultString += readPair.ReadR1.Header + "\tkeep"
@@ -391,24 +394,26 @@ func MapReadPairDev(readPair *fastq.ReadPair, index *index.GtaIndex) string {
 	}
 	resultString += "\n"
 
-	if readPair.ReadR2 == nil {
-		logrus.WithFields(logrus.Fields{
-			"header": readPair.ReadR2.Header,
-		}).Info("map R2 read to reference")
-
-		resultR2, valid2 := MapRead(readPair.ReadR2, index)
-
-		fmt.Println("result R2")
-		fmt.Println(valid2)
-		fmt.Println(resultR2)
-
-		if valid2 {
-			resultString += readPair.ReadR2.Header + "\tkeep"
-		} else {
-			resultString += readPair.ReadR2.Header + "\tdiscard"
-		}
-		resultString += "\n"
-	}
+	// TODO: implement R2 mapping
+	//if readPair.ReadR2 != nil {
+	//	logrus.WithFields(logrus.Fields{
+	//		"header": readPair.ReadR2.Header,
+	//	}).Info("map R2 read to reference")
+	//
+	//	_, valid2 := MapRead(readPair.ReadR2, index)
+	//	//resultR2, valid2 := MapRead(readPair.ReadR2, index)
+	//
+	//	//fmt.Println("result R2")
+	//	//fmt.Println(valid2)
+	//	//fmt.Println(resultR2)
+	//
+	//	if valid2 {
+	//		resultString += readPair.ReadR2.Header + "\tkeep"
+	//	} else {
+	//		resultString += readPair.ReadR2.Header + "\tdiscard"
+	//	}
+	//	resultString += "\n"
+	//}
 
 	return resultString
 }
@@ -437,7 +442,7 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 	// TODO: move this to config
 	// the exact length of each k-mer
 	lenKmer := 8
-	// TODO: move this to
+	// TODO: move this to config
 	// the maximum error rate allowed per read
 	errorRate := 0.05
 
@@ -446,12 +451,8 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 		SequenceMatches: make(map[int]core.SequenceMapResult),
 	}
 
-	// the maximum number of mismatches allowed
+	// the maximum number of mismatches allowed given the length of the sequence and the error rate
 	maxMismatches := int(float64(len(read.Sequence)) * errorRate)
-	// the number of kmers created from the read
-	//numKmer := len(read.Sequence) / lenKmer
-	// the number of bases left over after creating the kmers with equal length
-	//rest := len(read.Sequence) % numKmer
 
 	logrus.WithFields(logrus.Fields{
 		"maxMismatches": maxMismatches,
@@ -460,17 +461,8 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 
 	// the current position within the read
 	position := 0
-	// the state of the discard step
+	// the state of the discard step, true if read is to be discarded
 	failed := false
-	// the number of mismatches per sequence (sequenceIndex = sequence index)
-	//matchMismatchCounts := make(map[int]core.DiscardStepMatchInformation, index.NumSequences)
-	//
-	//for i := 0; i < index.NumSequences; i++ {
-	//	matchMismatchCounts[i] = core.DiscardStepMatchInformation{
-	//		NumMismatches: 0,
-	//		Matches:       make([]core.SequenceMatch, 0),
-	//	}
-	//}
 
 	// the matches per sequence index, sequence index is the key, the value is a list of matches for this sequence
 	matchesPerSequenceMap := make(map[int]*core.SequenceMatches, index.NumSequences)
@@ -479,11 +471,11 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 		matchesPerSequenceMap[i] = &core.SequenceMatches{
 			SequenceIndex: i,
 			NumMatches:    0,
-			Matches:       make(core.MatchesSortableByFromSource, 0),
+			Matches:       make([]*core.SequenceMatch, 0),
 		}
 	}
 
-	// the current k-mer count
+	// the number of processed k-mers, used to determine the minimum number of matches a sequence must have
 	countKmer := 0
 
 	// generates every k-mer from the read and exact matches it to the reference
@@ -493,10 +485,8 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 
 		countKmer += 1
 
-		currentLenKmer := lenKmer
-
 		// the actual kmer sequence
-		kmer := read.Sequence[position : position+currentLenKmer]
+		kmer := read.Sequence[position : position+lenKmer]
 
 		//logrus.WithFields(logrus.Fields{
 		//	"position": position,
@@ -521,8 +511,21 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 					continue
 				}
 
+				// set the source positions for the match
+				match.FromSource = position
+				match.ToSource = position + lenKmer
+
+				// the candidate position of this read based on the matched position on the reference (FromTarget)
+				// and the offset within the read (FromSource)
+				candidatePosition := match.FromTarget - match.FromSource
+
+				// if the candidate position is negative or exceeds the length of the transcript, discard the match
+				if candidatePosition < 0 || candidatePosition > len(index.GetTranscriptSequenceDna(match.SequenceIndex)) {
+					continue
+				}
+
 				// add the match to the sequence
-				matchesPerSequenceMap[match.SequenceIndex].Matches.Add(match)
+				matchesPerSequenceMap[match.SequenceIndex].Matches = append(matchesPerSequenceMap[match.SequenceIndex].Matches, match)
 				// mark the sequence as matched
 				sequencesMatched[match.SequenceIndex] = true
 			}
@@ -541,11 +544,11 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 			// check each sequence if it must be discarded if it has not gathered a match in this round
 			for sequenceIndex := 0; sequenceIndex < index.NumSequences; sequenceIndex++ {
 				// sequence was already discarded
-				if _, ok := matchesPerSequenceMap[sequenceIndex]; !ok {
+				if _, sequenceIsInMap := matchesPerSequenceMap[sequenceIndex]; !sequenceIsInMap {
 					continue
 				}
 				// the sequence has a match with the current k-mer and survives another round
-				if _, ok := sequencesMatched[sequenceIndex]; ok {
+				if _, sequenceHasMatch := sequencesMatched[sequenceIndex]; sequenceHasMatch {
 					continue
 				}
 				// the sequence has not gained a match with the current k-mer and is therefore a potential discard candidate
@@ -568,7 +571,7 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 		//	logrus.WithFields(logrus.Fields{
 		//		"sequenceIndex": sequenceIndex,
 		//		"numMatches":    val.NumMatches,
-		//	}).Info("sequence info after k-mer matching")
+		//	}).Debug("sequence info after k-mer matching")
 		//}
 
 		// stop if there are no more sequences left and the read can be discarded
@@ -579,16 +582,250 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (core.ReadMapResult, bool)
 			break
 		}
 
-		position += currentLenKmer
+		position += lenKmer
 	}
 
 	// discard the read because each sequence exceeded the allowed number of mismatches
 	if failed {
 		logrus.Info("discard this read!")
 		return result, false
+	} else {
+		logrus.Info("keep this read!")
 	}
 
-	logrus.Info("keep this read!")
+	// Idea:
+	// Each exact k-mer hit provides a candidate position for the read on the reference sequence.
+	// When the k-mer starts at position 0 in the read (FromSource), the candidate position of the read on
+	// the reference sequence is the position of the exact match in the reference sequence (FromTarget).
+	// When the k-mer does not start at position 0 in the read, the candidate position of the read on the reference
+	// sequence is the position of the exact match in the reference sequence minus the position of the k-mer in the read.
+	// Example: The k-mer starts at position 25 in the read and the exact match is at position 100 in the reference
+	// sequence. The candidate position of the read on the reference sequence is 100 - 25 = 75.
+	// Compute all unmatched positions for each candidate position and sequence index.
+	// Combine consecutive matches to contexts on each sequence index.
+	// Extend the matches to the left and right to find the best inexact-match.
+
+	for sequenceIndex, matches := range matchesPerSequenceMap {
+
+		fmt.Println("sequenceIndex", sequenceIndex)
+		fmt.Println("numMatches", matches.NumMatches)
+
+		candidatePositions := make(map[int]core.Intervals)
+
+		// collect the exact matched intervals per candidate position
+		for _, match := range matches.Matches {
+
+			// the candidate position of the read on the reference sequence (transcript)
+			candidatePosition := match.FromTarget - match.FromSource
+
+			// create the candidate position if it does not exist yet
+			if _, ok := candidatePositions[candidatePosition]; !ok {
+				candidatePositions[candidatePosition] = make([]core.Interval, 0)
+			}
+			// add the interval for the current candidate position
+			candidatePositions[candidatePosition] = append(candidatePositions[candidatePosition], core.Interval{
+				Start: match.FromTarget,
+				End:   match.ToTarget,
+			})
+		}
+
+		// sort and merge all overlapping intervals for each candidate position
+		for candidatePosition, intervals := range candidatePositions {
+			// sort the intervals by start position
+			sort.Sort(intervals)
+
+			fmt.Println("candidate position", candidatePosition)
+			fmt.Println(intervals)
+
+			matchedRegions := make([]core.Interval, 0)
+
+			// Idea:
+			// Combine consecutive or overlapping intervals by iterating the sorted list of intervals and
+			// extending the current interval if overlapping or consecutive. If not consecutive or overlapping,
+			// then the current interval is added to the final list of intervals.
+			// Finally, the current interval is added to the final list of intervals if it was not added yet.
+			currentInterval := intervals[0]
+			// true when the last interval was added to the matched intervals, false otherwise
+			addedLast := false
+
+			for _, interval := range intervals[1:] {
+				// the current interval overlaps or is consecutive with the next interval
+				if currentInterval.End >= interval.Start {
+					// extend the current interval
+					currentInterval.End = interval.End
+					addedLast = false
+				} else {
+					// add the current interval to the final list of intervals
+					matchedRegions = append(matchedRegions, currentInterval)
+					currentInterval = interval
+					addedLast = true
+				}
+			}
+			// add the last interval which was not added yet
+			if !addedLast {
+				matchedRegions = append(matchedRegions, currentInterval)
+			}
+
+			fmt.Println(matchedRegions)
+
+			logrus.Info("starting inexact matching in unmatched regions")
+
+			// Idea:
+			// Determine all unmatched positions for each candidate position by iterating the sorted list of intervals
+			// and match them to the reference sequence.
+			// There are three possible locations for unmatched regions as there must always be at least one exact matched
+			// interval for each candidate position:
+			// 1. Between the candidate position and the start of the first exact matched interval
+			// 2. Between two exact matched intervals
+			// 3. Between the end of the last exact matched interval and the position (candidate position + read length)
+			// Each position in an unmatched region is compared to the reference sequence and the number of mismatches
+			// is counted. If the number of mismatches exceeds the allowed number of mismatches, the candidate position
+			// is discarded.
+
+			// the number of mismatches for this candidate position
+			numMismatches := 0
+			// true if the maximum number of mismatches is exceeded
+			failed := false
+
+			// location 1: between the candidate position and the start of the first exact matched interval
+			if matchedRegions[0].Start > candidatePosition {
+
+				logrus.WithFields(logrus.Fields{
+					"sequenceIndex":     sequenceIndex,
+					"candidatePosition": candidatePosition,
+					"start":             matchedRegions[0].Start,
+				}).Info("unmatched region before first match")
+
+				// the target position is the position within the transcript sequence
+				for targetPosition := candidatePosition; targetPosition < matchedRegions[0].Start; targetPosition++ {
+
+					// the position within the read sequence
+					readOffset := targetPosition - candidatePosition
+
+					if read.Sequence[readOffset] != index.GetTranscriptSequenceDna(sequenceIndex)[targetPosition] {
+
+						logrus.WithFields(logrus.Fields{
+							"targetPosition": targetPosition,
+							"readOffset":     readOffset,
+							"readBase":       string(read.Sequence[readOffset]),
+							"refBase":        string(index.GetTranscriptSequenceDna(sequenceIndex)[targetPosition]),
+						}).Info("mismatch")
+
+						numMismatches += 1
+					}
+
+					if numMismatches > maxMismatches {
+						failed = true
+						break
+					}
+				}
+			}
+
+			if failed {
+				logrus.WithFields(logrus.Fields{
+					"sequenceIndex":     sequenceIndex,
+					"candidatePosition": candidatePosition,
+					"numMismatches":     numMismatches,
+				}).Info("discard this candidate position")
+				continue
+			}
+
+			// location 2: between two exact matched intervals
+			// the intervals are already sorted and merged (non-overlapping) which means that all regions between
+			// two consecutive intervals are unmatched regions.
+			for i := 0; i < len(matchedRegions)-1; i++ {
+
+				logrus.WithFields(logrus.Fields{
+					"sequenceIndex":     sequenceIndex,
+					"candidatePosition": candidatePosition,
+					"start":             matchedRegions[i].End,
+					"end":               matchedRegions[i+1].Start,
+				}).Info("unmatched region between matched regions")
+
+				// the target position is the position within the transcript sequence
+				for targetPosition := matchedRegions[i].End; targetPosition < matchedRegions[i+1].Start; targetPosition++ {
+
+					// the position within the read sequence
+					readOffset := targetPosition - candidatePosition
+
+					if read.Sequence[readOffset] != index.GetTranscriptSequenceDna(sequenceIndex)[targetPosition] {
+
+						logrus.WithFields(logrus.Fields{
+							"targetPosition": targetPosition,
+							"readOffset":     readOffset,
+							"readBase":       string(read.Sequence[readOffset]),
+							"refBase":        string(index.GetTranscriptSequenceDna(sequenceIndex)[targetPosition]),
+						}).Info("mismatch")
+
+						numMismatches += 1
+					}
+
+					if numMismatches > maxMismatches {
+						failed = true
+						break
+					}
+				}
+
+				if failed {
+					break
+				}
+			}
+
+			if failed {
+				logrus.WithFields(logrus.Fields{
+					"sequenceIndex":     sequenceIndex,
+					"candidatePosition": candidatePosition,
+					"numMismatches":     numMismatches,
+				}).Info("discard this candidate position")
+				continue
+			}
+
+			// location 3: between the end of the last exact matched interval and the position (candidate position + read length)
+			if matchedRegions[len(matchedRegions)-1].End < candidatePosition+len(read.Sequence) {
+
+				// the target position is the position within the transcript sequence
+				for targetPosition := matchedRegions[len(matchedRegions)-1].End; targetPosition < candidatePosition+len(read.Sequence); targetPosition++ {
+
+					readOffset := targetPosition - candidatePosition
+
+					if read.Sequence[readOffset] != index.GetTranscriptSequenceDna(sequenceIndex)[targetPosition] {
+
+						logrus.WithFields(logrus.Fields{
+							"targetPosition": targetPosition,
+							"readOffset":     readOffset,
+							"readBase":       string(read.Sequence[readOffset]),
+							"refBase":        string(index.GetTranscriptSequenceDna(sequenceIndex)[targetPosition]),
+						}).Info("mismatch")
+
+						numMismatches += 1
+					}
+
+					if numMismatches > maxMismatches {
+						failed = true
+						break
+					}
+				}
+			}
+
+			if failed {
+				logrus.WithFields(logrus.Fields{
+					"sequenceIndex":     sequenceIndex,
+					"candidatePosition": candidatePosition,
+					"numMismatches":     numMismatches,
+				}).Info("discard this candidate position")
+				continue
+			}
+
+			logrus.WithFields(logrus.Fields{
+				"sequenceIndex":     sequenceIndex,
+				"candidatePosition": candidatePosition,
+				"numMismatches":     numMismatches,
+			}).Info("candidate position passed all tests")
+		}
+
+	}
+
+	os.Exit(1)
 
 	// iterate the mappings (different contexts) on each sequence (identified by sequence index)
 	//for sequenceIndex, val := range matchMismatchCounts {

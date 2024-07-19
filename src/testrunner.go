@@ -184,8 +184,8 @@ func testMapping() {
 	pathReadsR1 := "./resources/reads/manual/reads_ccr9.1.fq"
 	pathReadsR2 := "./resources/reads/manual/reads_ccr9.2.fq"
 
-	//pathReadsR1 := "/usr/local/storage2/sam_fasta_test/fw.fastq"
-	//pathReadsR2 := "/usr/local/storage2/sam_fasta_test/rw.fastq"
+	//pathReadsR1 := "/home/sam/Data/isar/sam_fasta_test/fw.fastq"
+	//pathReadsR2 := "/home/sam/Data/isar/sam_fasta_test/rw.fastq"
 
 	reader := fastq.InitFromPaths(pathReadsR1, pathReadsR2)
 
@@ -220,8 +220,8 @@ func testMapping() {
 
 		// TODO: remove after testing (only process specific read pair)
 		name := strings.Split(readPair.ReadR1.Header, " ")[0]
-		if name != "@3-0002/1" {
-			//continue
+		if name != "@3-0004/1" {
+			continue
 		}
 
 		mappingTask := ReadPairMappingTask{
@@ -284,7 +284,7 @@ func mapReadPairWorker(workerId int, taskQueue <-chan ReadPairMappingTask, taskQ
 		logrus.WithFields(logrus.Fields{
 			"workerId": workerId,
 			"task":     task.ID,
-		}).Info("Processing task")
+		}).Debug("Processing task")
 
 		// TODO: result is currently only dummy
 		result := mapping.MapReadPairDev(task.ReadPair, gtaIndex)
@@ -307,7 +307,7 @@ func main() {
 	logrus.SetFormatter(&logrus.TextFormatter{
 		FullTimestamp: true,
 	})
-	logrus.SetLevel(logrus.DebugLevel)
+	logrus.SetLevel(logrus.InfoLevel)
 
 	//buildAndSerializeIndex()
 	//deserializeIndex()

@@ -740,12 +740,12 @@ func (t *SuffixTree) canonize(startNodeId int, input *SubString) (int, *SubStrin
 
 func (t *SuffixTree) FindPatternExact(pattern *string) *core.ExactMatchResult {
 
-	logrus.WithFields(logrus.Fields{
-		"pattern": *pattern,
-	}).Debug("find pattern exact")
+	//logrus.WithFields(logrus.Fields{
+	//	"pattern": *pattern,
+	//}).Debug("find pattern exact")
 
 	result := &core.ExactMatchResult{
-		Matches: make([]core.SequenceMatch, 0),
+		Matches: make([]*core.SequenceMatch, 0),
 	}
 
 	// the active point is used to point to a specific position in the tree
@@ -842,7 +842,7 @@ func (t *SuffixTree) FindPatternExact(pattern *string) *core.ExactMatchResult {
 	// add all positions of the target node to the result
 	for _, position := range targetNode.Positions {
 
-		result.Matches = append(result.Matches, core.SequenceMatch{
+		result.Matches = append(result.Matches, &core.SequenceMatch{
 			SequenceIndex: position.Index,
 			FromTarget:    position.Start,
 			ToTarget:      position.Start + len(*pattern),

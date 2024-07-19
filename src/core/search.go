@@ -22,19 +22,19 @@ type PatternMatch struct {
 type SequenceMatch struct {
 	// the index of the sequence within the trees sequences
 	SequenceIndex int
-	// the 0-based start position of the match within the source sequence
+	// the 0-based start position of the match within the source sequence (read)
 	FromSource int
-	// the end-exclusive position of the match within the source sequence
+	// the end-exclusive position of the match within the source sequence (read)
 	ToSource int
-	// the 0-based start position of the match within the target sequence
+	// the 0-based start position of the match within the target sequence (transcript)
 	FromTarget int
-	// the end-exclusive position of the match within the target sequence
+	// the end-exclusive position of the match within the target sequence (transcript)
 	ToTarget int
-	// the locations of the mismatches in the source sequence
+	// the locations of the mismatches in the source sequence (read)
 	Mismatches []int
 }
 
-type MatchesSortableByFromSource []SequenceMatch
+type MatchesSortableByFromSource []*SequenceMatch
 
 func (m MatchesSortableByFromSource) Len() int {
 	return len(m)
@@ -52,14 +52,14 @@ func (m MatchesSortableByFromSource) Last() (SequenceMatch, bool) {
 	if len(m) == 0 {
 		return SequenceMatch{}, false
 	}
-	return m[len(m)-1], true
+	return *m[len(m)-1], true
 }
-func (m MatchesSortableByFromSource) Add(match SequenceMatch) MatchesSortableByFromSource {
+func (m MatchesSortableByFromSource) Add(match *SequenceMatch) MatchesSortableByFromSource {
 	return append(m, match)
 }
 
 type ExactMatchResult struct {
-	Matches []SequenceMatch
+	Matches []*SequenceMatch
 }
 
 type DiscardStepMatchInformation struct {
@@ -73,20 +73,20 @@ type SequenceMatches struct {
 	Matches       MatchesSortableByFromSource // the matches to this sequence
 }
 
-type SequenceContextMatch struct {
-	// the index of the sequence within the target sequences (contained in the index tree)
-	SequenceIndex int
-	// the 0-based start position of the match within the target sequence
-	TargetIndex int
-	Matches     MatchesSortableByFromSource
-}
-
 type ReadMapResult struct {
 	SequenceMatches map[int]SequenceMapResult // key = sequence index in suffix tree
 }
 
 type SequenceMapResult struct {
 	SequenceContextMatches map[int]SequenceContextMatch // key = start index of read match on target sequence
+}
+
+type SequenceContextMatch struct {
+	// the index of the sequence within the target sequences (contained in the index tree)
+	SequenceIndex int
+	// the 0-based start position of the match within the target sequence
+	TargetIndex int
+	Matches     MatchesSortableByFromSource
 }
 
 func (c SequenceContextMatch) GetUnmatchedRegions(readLength int) []SequenceMatch {
@@ -134,4 +134,27 @@ func (c SequenceContextMatch) GetUnmatchedRegions(readLength int) []SequenceMatc
 	}
 
 	return unmatchedRegions
+}
+
+type Interval struct {
+	Start int
+	End   int
+}
+
+type Intervals []Interval
+
+func (intervals Intervals) Len() int {
+	return len(intervals)
+}
+func (intervals Intervals) Less(i, j int) bool {
+	return intervals[i].Start < intervals[j].Start
+}
+func (intervals Intervals) Swap(i, j int) {
+	intervals[i], intervals[j] = intervals[j], intervals[i]
+}
+
+type SequenceCandidateMatches struct {
+	SequenceIndex     int        // the id of the sequence within the suffix tree (transcript)
+	CandidatePosition int        // the 0-based start position of the candidate match within the target sequence (transcript)
+	MatchedIntervals  []Interval // sorted list of non-overlapping intervals of regions that are matched exactly
 }
