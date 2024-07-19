@@ -96,7 +96,7 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 
 	for i, transcript := range annotation.Genes[0].Transcripts {
 
-		// the index of the sequence in the suffix tree (used for retrieval)
+		//the index of the sequence in the suffix tree (used for retrieval)
 		sequenceIndexForward := len(gtaIndex.SuffixTree.Sequences)
 		timerBuildTree = time.Now()
 		gtaIndex.SuffixTree.AddSequence(transcript.SequenceDna, sequenceIndexForward)

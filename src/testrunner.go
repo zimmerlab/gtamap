@@ -215,12 +215,13 @@ func testMapping() {
 	// the number of read pairs that have been processed
 	taskCounter := 0
 
+	// add each read pair as a mapping task to the task queue
 	for readPair := reader.NextRead(); readPair != nil; readPair = reader.NextRead() {
 
 		// TODO: remove after testing (only process specific read pair)
 		name := strings.Split(readPair.ReadR1.Header, " ")[0]
 		if name != "@3-0002/1" {
-			continue
+			//continue
 		}
 
 		mappingTask := ReadPairMappingTask{
@@ -271,11 +272,8 @@ func writeOutputWorker(taskQueue <-chan string, wg *sync.WaitGroup, writer *data
 	logrus.Info("Finished writeOutputWorker")
 }
 
-func mapReadPairWorker(workerId int,
-	taskQueue <-chan ReadPairMappingTask,
-	taskQueueWriter chan<- string,
-	wg *sync.WaitGroup,
-	gtaIndex *index.GtaIndex) {
+func mapReadPairWorker(workerId int, taskQueue <-chan ReadPairMappingTask, taskQueueWriter chan<- string,
+	wg *sync.WaitGroup, gtaIndex *index.GtaIndex) {
 
 	logrus.WithFields(logrus.Fields{
 		"workerId": workerId,
@@ -309,12 +307,12 @@ func main() {
 	logrus.SetFormatter(&logrus.TextFormatter{
 		FullTimestamp: true,
 	})
-	logrus.SetLevel(logrus.InfoLevel)
+	logrus.SetLevel(logrus.DebugLevel)
 
-	buildAndSerializeIndex()
+	//buildAndSerializeIndex()
 	//deserializeIndex()
 
-	//testMapping()
+	testMapping()
 
 	//buildAndSerializeIndex()
 	////testMapping()

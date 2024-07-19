@@ -298,7 +298,7 @@ func (t *SuffixTree) AddSequence(sequence string, sequenceIndex int) {
 			Start:         i,
 			End:           len(sequence),
 		}
-		
+
 		//t.PrintEdgeList(true)
 
 		logrus.WithFields(logrus.Fields{
@@ -758,17 +758,18 @@ func (t *SuffixTree) FindPatternExact(pattern *string) *core.ExactMatchResult {
 
 	for indexPattern := 0; indexPattern < len(*pattern); indexPattern++ {
 
-		logrus.WithFields(logrus.Fields{
-			"indexPattern": indexPattern,
-			"activeNode":   activeNodeId,
-			"activeEdge":   activeEdgeId,
-			"activeLength": activeLength,
-			"char":         string((*pattern)[indexPattern]),
-		}).Debug("find pattern exact loop")
+		//logrus.WithFields(logrus.Fields{
+		//	"indexPattern": indexPattern,
+		//	"activeNode":   activeNodeId,
+		//	"activeEdge":   activeEdgeId,
+		//	"activeLength": activeLength,
+		//	"char":         string((*pattern)[indexPattern]),
+		//}).Debug("find pattern exact loop")
 
+		// determine the active edge if there is none
 		if activeEdgeId == 0 {
 
-			logrus.Debug("currently there is no active edge")
+			//logrus.Debug("currently there is no active edge")
 
 			// find the edge that starts with the character of the pattern at position indexPattern
 			activeEdgeId = t.GetNode(activeNodeId).Edges[(*pattern)[indexPattern]]
@@ -777,93 +778,82 @@ func (t *SuffixTree) FindPatternExact(pattern *string) *core.ExactMatchResult {
 				return result
 			}
 
-			logrus.WithFields(logrus.Fields{
-				"activeEdge": activeEdgeId,
-				"edgeLabel":  t.GetEdgeLabelStringByEdgeId(activeEdgeId),
-				"char":       string((*pattern)[indexPattern]),
-			}).Debug("found new active edge")
+			//logrus.WithFields(logrus.Fields{
+			//	"activeEdge": activeEdgeId,
+			//	"edgeLabel":  t.GetEdgeLabelStringByEdgeId(activeEdgeId),
+			//	"char":       string((*pattern)[indexPattern]),
+			//}).Debug("found new active edge")
 		}
 
-		logrus.WithFields(logrus.Fields{
-			"activeEdge": activeEdgeId,
-			"edgeLabel":  t.GetEdgeLabelStringByEdgeId(activeEdgeId),
-		}).Debug("active edge information")
+		//logrus.WithFields(logrus.Fields{
+		//	"activeEdge": activeEdgeId,
+		//	"edgeLabel":  t.GetEdgeLabelStringByEdgeId(activeEdgeId),
+		//}).Debug("active edge information")
 
 		// the next character on the current edge does not match the current character in the pattern
 		if t.GetEdgeLabelStringByEdgeId(activeEdgeId)[activeLength] != (*pattern)[indexPattern] {
 
-			logrus.Debug("next character on active edge does not match current character in pattern")
+			//logrus.Debug("next character on active edge does not match current character in pattern")
 
 			return result
 		}
 
-		logrus.Debug("char on active edge matches char in pattern")
+		//logrus.Debug("char on active edge matches char in pattern")
 
 		// there are additional characters on the string of the current edge
 		activeLength++
 
-		// the end of the current edge is reached
+		// the end of the current edge is reached -> update the active node
 		if t.GetEdge(activeEdgeId).Label.length() == activeLength {
 			// update the active point information
 			activeNodeId = t.GetEdge(activeEdgeId).To
 			activeLength = 0
 			activeEdgeId = 0
 
-			logrus.WithFields(logrus.Fields{
-				"activeNode":   activeNodeId,
-				"activeEdge":   activeEdgeId,
-				"activeLength": activeLength,
-			}).Debug("end of active edge reached")
+			//logrus.WithFields(logrus.Fields{
+			//	"activeNode":   activeNodeId,
+			//	"activeEdge":   activeEdgeId,
+			//	"activeLength": activeLength,
+			//}).Debug("end of active edge reached")
 
 			continue
 		}
 
-		logrus.WithFields(logrus.Fields{
-			"activeEdge":   activeEdgeId,
-			"activeLength": activeLength,
-		}).Debug("walking on edge")
+		//logrus.WithFields(logrus.Fields{
+		//	"activeEdge":   activeEdgeId,
+		//	"activeLength": activeLength,
+		//}).Debug("walking on edge")
 	}
 
-	logrus.Debug("pattern found")
+	// at least one exact match of the pattern was found at this point
 
-	//// TODO: leaf nodes are not required anymore to find all positions of the pattern!
-	//
-	//// determine the node from which to start the search for leaf nodes
-	//startNodeId := activeNodeId
-	//if activeEdgeId != 0 {
-	//	// the active edge is not fully traversed, the leaf search must start from its target node
-	//	startNodeId = t.GetEdge(activeEdgeId).To
-	//}
-	//
-	//// list of node ids of all leaf nodes that are descendants of the start node
-	//leafNodeIds := t.findLeafNodesRecursive(startNodeId)
-	//
-	//logrus.WithFields(logrus.Fields{
-	//	"nodeIds":  leafNodeIds,
-	//	"numLeafs": len(leafNodeIds),
-	//}).Debug("found leaf nodes")
-	//
-	//// determine the actual sequence position of the pattern matches using the leaf nodes
-	//for _, leafNodeId := range leafNodeIds {
-	//
-	//	leafNode := t.GetNode(leafNodeId)
-	//
-	//	fmt.Println(leafNode)
-	//
-	//	// TODO: SequenceIndex and SequenceStart are not needed anymore
-	//
-	//	result.Matches = append(result.Matches, core.SequenceMatch{
-	//		SequenceIndex: leafNode.SequenceIndex,
-	//		FromTarget:    leafNode.SequenceStart,
-	//		ToTarget:      leafNode.SequenceStart + len(*pattern),
-	//	})
-	//
-	//	logrus.WithFields(logrus.Fields{
-	//		"sequenceIndex": leafNode.SequenceIndex,
-	//		"from":          leafNode.SequenceStart,
-	//		"to":            leafNode.SequenceStart + len(*pattern),
-	//	}).Debug("determined pattern match")
-	//}
+	//logrus.Debug("pattern found")
+
+	// the positions of the pattern match(es) are stored in the next node (contains all positions of all descendants)
+	// the next node is the active node if there is no active edge or the active length is 0
+	// otherwise the next node is the target node of the active edge
+	var targetNode *Node
+	if activeEdgeId == 0 || activeLength == 0 {
+		targetNode = t.GetNode(activeNodeId)
+	} else {
+		targetNode = t.GetNode(t.GetEdge(activeEdgeId).To)
+	}
+
+	// add all positions of the target node to the result
+	for _, position := range targetNode.Positions {
+
+		result.Matches = append(result.Matches, core.SequenceMatch{
+			SequenceIndex: position.Index,
+			FromTarget:    position.Start,
+			ToTarget:      position.Start + len(*pattern),
+		})
+
+		logrus.WithFields(logrus.Fields{
+			"SequenceIndex": position.Index,
+			"FromTarget":    position.Start,
+			"ToTarget":      position.Start + len(*pattern),
+		}).Debug("determined pattern match")
+	}
 
 	return result
 }
