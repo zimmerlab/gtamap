@@ -1,7 +1,6 @@
 package datawriter
 
 import (
-	"fmt"
 	"github.com/sirupsen/logrus"
 	"os"
 )
@@ -33,7 +32,7 @@ func (writer Writer) Write(s string) {
 		return
 	}
 
-	fmt.Println("write to file done")
+	//fmt.Println("write to file done")
 }
 
 func (writer Writer) Close() {

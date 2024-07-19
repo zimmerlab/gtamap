@@ -379,15 +379,16 @@ func MapReadPairDev(readPair *fastq.ReadPair, index *index.GtaIndex) string {
 
 	resultString := ""
 
-	_, valid1 := MapRead(readPair.ReadR1, index)
-	//resultR1, valid1 := MapRead(readPair.ReadR1, index)
-
-	//fmt.Println("result R1")
-	//fmt.Println(valid1)
-	//fmt.Println(resultR1)
+	resultR1, valid1 := MapRead(readPair.ReadR1, index)
 
 	if valid1 {
+
 		resultString += readPair.ReadR1.Header + "\tkeep"
+
+		for _, match := range resultR1 {
+			fmt.Println(match)
+		}
+
 	} else {
 		resultString += readPair.ReadR1.Header + "\tdiscard"
 	}
@@ -586,10 +587,10 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int]*core.InexactMatc
 
 	// discard the read because each sequence exceeded the allowed number of mismatches
 	if failed {
-		logrus.Info("discard this read!")
+		logrus.Debug("discard this read!")
 		return inexactMatchResults, false
 	} else {
-		logrus.Info("keep this read!")
+		logrus.Debug("keep this read!")
 	}
 
 	// Idea:
@@ -606,8 +607,8 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int]*core.InexactMatc
 
 	for sequenceIndex, matches := range matchesPerSequenceMap {
 
-		fmt.Println("sequenceIndex", sequenceIndex)
-		fmt.Println("numMatches", matches.NumMatches)
+		//fmt.Println("sequenceIndex", sequenceIndex)
+		//fmt.Println("numMatches", matches.NumMatches)
 
 		candidatePositions := make(map[int]core.Intervals)
 
@@ -633,8 +634,8 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int]*core.InexactMatc
 			// sort the intervals by start position
 			sort.Sort(intervals)
 
-			fmt.Println("candidate position", candidatePosition)
-			fmt.Println(intervals)
+			//fmt.Println("candidate position", candidatePosition)
+			//fmt.Println(intervals)
 
 			matchedRegions := make([]core.Interval, 0)
 
@@ -665,9 +666,9 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int]*core.InexactMatc
 				matchedRegions = append(matchedRegions, currentInterval)
 			}
 
-			fmt.Println(matchedRegions)
+			//fmt.Println(matchedRegions)
 
-			logrus.Info("starting inexact matching in unmatched regions")
+			logrus.Debug("starting inexact matching in unmatched regions")
 
 			// Idea:
 			// Determine all unmatched positions for each candidate position by iterating the sorted list of intervals
@@ -693,7 +694,7 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int]*core.InexactMatc
 					"sequenceIndex":     sequenceIndex,
 					"candidatePosition": candidatePosition,
 					"start":             matchedRegions[0].Start,
-				}).Info("unmatched region before first match")
+				}).Debug("unmatched region before first match")
 
 				// the target position is the position within the transcript sequence
 				for targetPosition := candidatePosition; targetPosition < matchedRegions[0].Start; targetPosition++ {
@@ -708,7 +709,7 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int]*core.InexactMatc
 							"readOffset":     readOffset,
 							"readBase":       string(read.Sequence[readOffset]),
 							"refBase":        string(index.GetTranscriptSequenceDna(sequenceIndex)[targetPosition]),
-						}).Info("mismatch")
+						}).Debug("mismatch")
 
 						mismatches = append(mismatches, readOffset)
 					}
@@ -726,7 +727,7 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int]*core.InexactMatc
 					"candidatePosition": candidatePosition,
 					"numMismatches":     len(mismatches),
 					"mismatches":        mismatches,
-				}).Info("discard this candidate position")
+				}).Debug("discard this candidate position")
 				continue
 			}
 
@@ -740,7 +741,7 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int]*core.InexactMatc
 					"candidatePosition": candidatePosition,
 					"start":             matchedRegions[i].End,
 					"end":               matchedRegions[i+1].Start,
-				}).Info("unmatched region between matched regions")
+				}).Debug("unmatched region between matched regions")
 
 				// the target position is the position within the transcript sequence
 				for targetPosition := matchedRegions[i].End; targetPosition < matchedRegions[i+1].Start; targetPosition++ {
@@ -755,7 +756,7 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int]*core.InexactMatc
 							"readOffset":     readOffset,
 							"readBase":       string(read.Sequence[readOffset]),
 							"refBase":        string(index.GetTranscriptSequenceDna(sequenceIndex)[targetPosition]),
-						}).Info("mismatch")
+						}).Debug("mismatch")
 
 						mismatches = append(mismatches, readOffset)
 					}
@@ -777,7 +778,7 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int]*core.InexactMatc
 					"candidatePosition": candidatePosition,
 					"numMismatches":     len(mismatches),
 					"mismatches":        mismatches,
-				}).Info("discard this candidate position")
+				}).Debug("discard this candidate position")
 				continue
 			}
 
@@ -796,7 +797,7 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int]*core.InexactMatc
 							"readOffset":     readOffset,
 							"readBase":       string(read.Sequence[readOffset]),
 							"refBase":        string(index.GetTranscriptSequenceDna(sequenceIndex)[targetPosition]),
-						}).Info("mismatch")
+						}).Debug("mismatch")
 
 						mismatches = append(mismatches, readOffset)
 					}
@@ -814,7 +815,7 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int]*core.InexactMatc
 					"candidatePosition": candidatePosition,
 					"numMismatches":     len(mismatches),
 					"mismatches":        mismatches,
-				}).Info("discard this candidate position")
+				}).Debug("discard this candidate position")
 				continue
 			}
 
@@ -823,7 +824,7 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int]*core.InexactMatc
 				"candidatePosition": candidatePosition,
 				"numMismatches":     len(mismatches),
 				"mismatches":        mismatches,
-			}).Info("candidate position passed all tests")
+			}).Debug("candidate position passed all tests")
 
 			// the candidate position passed all tests and is added to the final result
 			if _, ok := inexactMatchResults[sequenceIndex]; !ok {
@@ -837,7 +838,8 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int]*core.InexactMatc
 		}
 	}
 
-	return inexactMatchResults, true
+	// return the map of inexact matching results and true if there are any results, else false
+	return inexactMatchResults, len(inexactMatchResults) > 0
 }
 
 func MapBaseByBase(fromSource int, toSource int, fromTarget int, toTarget int,

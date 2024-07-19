@@ -237,15 +237,15 @@ func testMapping() {
 
 	waitgroupMapping.Wait()
 
-	fmt.Println("mapping finished")
-	fmt.Println("num tasks: ", taskCounter)
+	//fmt.Println("mapping finished")
+	//fmt.Println("num tasks: ", taskCounter)
 
 	close(taskQueueWriter)
 
 	waitgroupWriter.Wait()
 	writer.Close()
 
-	fmt.Println("writer finished")
+	//fmt.Println("writer finished")
 
 	totalDuration := time.Since(timerStartTotal)
 
@@ -261,7 +261,7 @@ type ReadPairMappingTask struct {
 
 func writeOutputWorker(taskQueue <-chan string, wg *sync.WaitGroup, writer *datawriter.Writer) {
 
-	logrus.Info("Started writeOutputWorker")
+	logrus.Debug("Started writeOutputWorker")
 
 	for task := range taskQueue {
 		writer.Write(task)
@@ -269,7 +269,7 @@ func writeOutputWorker(taskQueue <-chan string, wg *sync.WaitGroup, writer *data
 
 	wg.Done()
 
-	logrus.Info("Finished writeOutputWorker")
+	logrus.Debug("Finished writeOutputWorker")
 }
 
 func mapReadPairWorker(workerId int, taskQueue <-chan ReadPairMappingTask, taskQueueWriter chan<- string,
