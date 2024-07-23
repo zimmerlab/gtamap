@@ -13,12 +13,13 @@ type Annotation struct {
 }
 
 type Gene struct {
-	GeneIdEnsembl   string
-	Chromosome      string
-	IsForwardStrand bool
-	StartGenomic    uint32
-	EndGenomic      uint32
-	Transcripts     []*Transcript
+	GeneIdEnsembl       string
+	Chromosome          string
+	IsForwardStrand     bool
+	StartGenomic        uint32
+	EndGenomic          uint32
+	Transcripts         []*Transcript
+	ConsensusTranscript *Transcript
 }
 
 type Transcript struct {

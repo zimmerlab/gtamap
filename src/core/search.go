@@ -1,6 +1,8 @@
 package core
 
 import (
+	"github.com/KleinSamuel/gtamap/src/formats/fastq"
+	"github.com/KleinSamuel/gtamap/src/formats/sam"
 	"sort"
 )
 
@@ -136,26 +138,34 @@ func (c SequenceContextMatch) GetUnmatchedRegions(readLength int) []SequenceMatc
 	return unmatchedRegions
 }
 
-type Interval struct {
-	Start int
-	End   int
-}
-
-type Intervals []Interval
-
-func (intervals Intervals) Len() int {
-	return len(intervals)
-}
-func (intervals Intervals) Less(i, j int) bool {
-	return intervals[i].Start < intervals[j].Start
-}
-func (intervals Intervals) Swap(i, j int) {
-	intervals[i], intervals[j] = intervals[j], intervals[i]
-}
-
 type InexactMatchResult struct {
 	SequenceIndex int   // the id of the sequence within the suffix tree (transcript)
 	FromTarget    int   // the 0-based start position of the match within the target sequence
 	ToTarget      int   // the end-exclusive position of the match within the target sequence
 	Mismatches    []int // the locations of the mismatches in the source sequence (read)
+}
+
+type ProperPairCandidate struct {
+	ReferenceIndex int  // the index of the reference (transcript) determined by the sequence indices of R1 and R2
+	FragmentLength int  // the fragment length of the pair (distance between the 5' ends of the reads)
+	R1isForward    bool // true if R1 is on the forward strand
+	ResultR1       *InexactMatchResult
+	ResultR2       *InexactMatchResult
+}
+
+// ReadMappingPreResult is the result of mapping step where the reads are mapped to the suffix tree
+// and each read can have multiple locations on multiple references.
+type ReadMappingPreResult struct {
+	ReadR1    *fastq.Read
+	ReadR2    *fastq.Read
+	ResultsR1 *map[int][]*InexactMatchResult
+	ResultsR2 *map[int][]*InexactMatchResult
+}
+
+// ReadMappingResult is the result of the mapping step where the positions of the reads are determined
+// using the relevant parameters (proper pair level, fragment length, etc.) and SAM record pairs are created.
+type ReadMappingResult struct {
+	ReadR1         *fastq.Read
+	ReadR2         *fastq.Read
+	SamRecordPairs []*sam.RecordPair
 }

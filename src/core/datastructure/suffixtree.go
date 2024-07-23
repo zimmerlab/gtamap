@@ -22,8 +22,9 @@ import (
 // This way, the position of a certain string can be determined without traversing all the way down to the leaf nodes.
 
 type SuffixPosition struct {
-	Index int
-	Start int
+	Index        int
+	Start        int
+	StartGenomic int
 }
 
 func (s SuffixPosition) copy() SuffixPosition {

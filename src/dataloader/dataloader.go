@@ -77,7 +77,7 @@ func GenerateInputForIndex(gtfFile *os.File, fastaFile *os.File, fastaIndexFile 
 			"geneIdEnsembl": gene.GeneIdEnsembl,
 		}).Info("Process gene")
 
-		index := fastaIndex.Entries[gene.Chromosome]
+		//index := fastaIndex.Entries[gene.Chromosome]
 
 		for _, trans := range gene.Transcripts {
 
@@ -98,55 +98,110 @@ func GenerateInputForIndex(gtfFile *os.File, fastaFile *os.File, fastaIndexFile 
 				logrus.WithFields(logrus.Fields{
 					"startRelative": exon.StartRelative,
 					"endRelative":   exon.EndRelative,
-				}).Info("Extract CDS sequence")
+				}).Info("Extract exon sequence")
 
-				// the start position of the transcript relative to its chromosome
-				startRelativeChromosome := gene.StartGenomic + exon.StartRelative
-				// the number of newlines contained between the start of the chromosome and the start of the transcript
-				lineNumber := int64(startRelativeChromosome) / int64(index.Linebases)
-				// the number of bases contained in the last line that the exon is on
-				offsetWithinLine := int64(startRelativeChromosome) % int64(index.Linebases)
+				startGenomic := gene.StartGenomic + exon.StartRelative
+				endGenomic := gene.StartGenomic + exon.EndRelative
 
-				// the offset to the start of the transcript
-				filePosition := index.Offset + lineNumber*int64(index.Linewidth) + offsetWithinLine
-
-				_, errSeek := fastaFile.Seek(filePosition, 0)
-				if errSeek != nil {
-					panic(errSeek)
-				}
-
-				// the length of the exon sequence in nucleotides
-				lengthBases := int64(exon.EndRelative - exon.StartRelative)
-				// the number of characters in the current line until the next newline
-				numCharsInLineLeft := int64(index.Linebases) - offsetWithinLine
-				// the number of newlines contained between the start and end of the exon sequence
-				numNewlines := int64(0)
-				// adds a newline if the exon sequence spans across the current line
-				if numCharsInLineLeft < lengthBases {
-					numNewlines += 1
-				}
-				// adds the number of lines that the exon sequence spans across as newlines
-				numNewlines += (lengthBases - numCharsInLineLeft) / int64(index.Linebases)
-
-				// the total length of the exon sequence in bytes (including newlines)
-				lengthBuffer := lengthBases + numNewlines
-
-				buffer := make([]byte, lengthBuffer)
-
-				_, errRead := fastaFile.Read(buffer)
-				if errRead != nil {
-					panic(errRead)
-				}
-
-				transcriptSequence = append(transcriptSequence, buffer...)
+				transcriptSequence = append(transcriptSequence, ExtractSequenceAsBytesFromFasta(fastaFile, fastaIndex,
+					gene.Chromosome, startGenomic, endGenomic)...)
 			}
 
 			trans.SequenceDna = strings.ReplaceAll(string(transcriptSequence), "\n", "")
 		}
+
+		//// generate the consensus transcript
+		//
+		//exonIntervals := make([]*interval.Interval, 0)
+		//
+		//for _, trans := range gene.Transcripts {
+		//	for _, exon := range trans.Exons {
+		//		exonIntervals = append(exonIntervals, &interval.Interval{
+		//			Start: int(exon.StartRelative),
+		//			End:   int(exon.EndRelative),
+		//		})
+		//	}
+		//}
+
+		//mergedExonIntervals := interval.MergeIntervals(exonIntervals)
+		//
+		//consensusExons := make([]*gtf.Exon, len(mergedExonIntervals))
+		//dnaSequence := make([]byte, 0)
+		//
+		//for i, consensusInterval := range mergedExonIntervals {
+		//	consensusExons[i] = &gtf.Exon{
+		//		StartRelative: uint32(consensusInterval.Start),
+		//		EndRelative:   uint32(consensusInterval.End),
+		//	}
+		//	startGenomic := gene.StartGenomic + consensusExons[i].StartRelative
+		//	endGenomic := gene.StartGenomic + consensusExons[i].EndRelative
+		//	dnaSequence = append(dnaSequence, ExtractSequenceAsBytesFromFasta(fastaFile, fastaIndex, gene.Chromosome, startGenomic, endGenomic)...)
+		//}
+		//
+		//gene.ConsensusTranscript = &gtf.Transcript{
+		//	TranscriptIdEnsembl: "consensus",
+		//	StartRelative:       consensusExons[0].StartRelative,
+		//	EndRelative:         consensusExons[len(consensusExons)-1].EndRelative,
+		//	SequenceDna:         strings.ReplaceAll(string(dnaSequence), "\n", ""),
+		//	Exons:               consensusExons,
+		//}
+		//
+		//// add the consensus transcript as the first transcript in the list of transcripts of the gene
+		//gene.Transcripts = append([]*gtf.Transcript{gene.ConsensusTranscript}, gene.Transcripts...)
 
 		// TODO: currently only supporting the first gene within the gtf file
 		break
 	}
 
 	return annotation
+}
+
+func ExtractSequenceAsStringFromFasta(fastaFile *os.File, fastaIndex *fasta.Index, chromosome string, startGenomic uint32, endGenomic uint32) string {
+	buffer := ExtractSequenceAsBytesFromFasta(fastaFile, fastaIndex, chromosome, startGenomic, endGenomic)
+	return strings.ReplaceAll(string(buffer), "\n", "")
+}
+
+func ExtractSequenceAsBytesFromFasta(fastaFile *os.File, fastaIndex *fasta.Index, chromosome string, startGenomic uint32, endGenomic uint32) []byte {
+
+	index := fastaIndex.Entries[chromosome]
+
+	// the start position of the transcript relative to its chromosome
+	startRelativeChromosome := startGenomic
+	// the number of newlines contained between the start of the chromosome and the start of the transcript
+	lineNumber := int64(startRelativeChromosome) / int64(index.Linebases)
+	// the number of bases contained in the last line that the exon is on
+	offsetWithinLine := int64(startRelativeChromosome) % int64(index.Linebases)
+
+	// the offset to the start of the transcript
+	filePosition := index.Offset + lineNumber*int64(index.Linewidth) + offsetWithinLine
+
+	_, errSeek := fastaFile.Seek(filePosition, 0)
+	if errSeek != nil {
+		panic(errSeek)
+	}
+
+	// the length of the exon sequence in nucleotides
+	lengthBases := int64(endGenomic - startGenomic)
+	// the number of characters in the current line until the next newline
+	numCharsInLineLeft := int64(index.Linebases) - offsetWithinLine
+	// the number of newlines contained between the start and end of the exon sequence
+	numNewlines := int64(0)
+	// adds a newline if the exon sequence spans across the current line
+	if numCharsInLineLeft < lengthBases {
+		numNewlines += 1
+	}
+	// adds the number of lines that the exon sequence spans across as newlines
+	numNewlines += (lengthBases - numCharsInLineLeft) / int64(index.Linebases)
+
+	// the total length of the exon sequence in bytes (including newlines)
+	lengthBuffer := lengthBases + numNewlines
+
+	buffer := make([]byte, lengthBuffer)
+
+	_, errRead := fastaFile.Read(buffer)
+	if errRead != nil {
+		panic(errRead)
+	}
+
+	return buffer
 }

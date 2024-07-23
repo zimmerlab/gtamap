@@ -14,22 +14,152 @@ import (
 type GtaIndex struct {
 	Gene         *Gene                     // information about the gene
 	Transcripts  []*Transcript             // all transcripts of the gene
-	SuffixTree   *datastructure.SuffixTree // a single suffix tree containing all transcripts
+	SuffixTree   *datastructure.SuffixTree // a single suffix tree containing all transcript sequences forward and reverse complemented
 	NumSequences int
 }
 
-// GetTranscriptSequenceDna returns the DNA sequence of the transcript for the given sequence index
-// sequenceIndex is the index of the sequence in the suffix tree
-// the index of the transcript is sequenceIndex / 2
-// if sequenceIndex is even, the sequence is on the forward strand, otherwise on the reverse strand
+func (i GtaIndex) TransIndexToTransName(transcriptIndex uint32) string {
+	return i.Transcripts[transcriptIndex].TranscriptIdEnsembl
+}
+
+func (i GtaIndex) SequenceIndexToTranscriptIndex(sequenceIndex uint32) uint32 {
+	return sequenceIndex / 2
+}
+
+func (i GtaIndex) SequenceIndexIsForward(sequenceIndex uint32) bool {
+	return sequenceIndex%2 == 0
+}
+
+// GetTranscriptSequenceDna returns the DNA sequence of the sequence at the given index.
+// This returns the forward sequence if the index is even and the reverse sequence if the index is odd.
 func (i GtaIndex) GetTranscriptSequenceDna(sequenceIndex int) string {
-	//// the index of the transcript
-	//var transcriptIndex uint8 = uint8(sequenceIndex / 2)
-	//// true if forward strand, false if reverse strand
-	//var isForward bool = sequenceIndex%2 == 0
-	//// return the sequence of the transcript
-	//return i.Transcripts[transcriptIndex].GetSequenceDna(isForward)
 	return i.SuffixTree.Sequences[sequenceIndex]
+}
+
+// TranslateRwTransPosToFwTransPos translates a relative position revTransPos within a reverse
+// transcript to a relative position within the forward transcript for the transcript at index transcriptIndex.
+func (i GtaIndex) TranslateRwTransPosToFwTransPos(transcriptIndex uint32,
+	revTransPos uint32) uint32 {
+
+	transcript := i.Transcripts[transcriptIndex]
+
+	if revTransPos >= uint32(transcript.SequenceLength) {
+		panic("Relative position is out of bounds")
+	}
+
+	return uint32(transcript.SequenceLength) - revTransPos
+}
+
+// TranslateRelativeTranscriptPositionToRelativeGenePosition translates a relative position within a transcript to the
+// relative position within the gene. Can be used to check whether two transcript positions relate to the same
+// position on the gene.
+// TODO: untested function
+func (i GtaIndex) TranslateRelativeTranscriptPositionToRelativeGenePosition(transcriptIndex uint32,
+	relativeTranscriptPosition uint32) uint32 {
+
+	transcript := i.Transcripts[transcriptIndex]
+
+	if relativeTranscriptPosition > uint32(transcript.SequenceLength) {
+		panic("Relative position is out of bounds")
+	}
+
+	// Find the exon that contains the relative position by iterating over all exons and subtracting the
+	// length of the exons that are before the relative position until the relative position is within the exon
+	// then return the genomic location by adding the relative position to the genomic start location of the exon.
+	for _, exon := range transcript.Exons {
+
+		exonLength := exon.EndRelative - exon.StartRelative
+
+		if relativeTranscriptPosition >= exonLength {
+			relativeTranscriptPosition -= exonLength
+			continue
+		}
+
+		return exon.StartRelative + relativeTranscriptPosition
+	}
+
+	// panic if the relative position could not be translated to a genomic location
+	// should never happen because every relative position should be within the exons
+	panic("Could not translate to genomic location")
+}
+
+// TransIntervalToGenomicIntervals translates a relative interval on a transcript to genomic intervals.
+// The transcript interval is one continuous interval on the transcript sequence. This interval can span across
+// multiple exons and can therefore consist of multiple genomic intervals.
+// Idea:
+// Iterate over the exons of the transcript and check if the interval intersects with the current exon.
+// The length of each exon is subtracted from the relative transcript start position and until the relative start
+// is larger than the length of the current exon, they do not overlap.
+// When an exon overlaps the transcript interval, then the interval starts either at the start or within the exon.
+// The interval starts at the start of the exon if the relative start position is larger than 0.
+// The interval ends either at the end of the exon or within the exon.
+// The interval ends at the end of the exon if the relative end position is larger than the length of the exon.
+// Otherwise the offset (transcript start or transcript end) is added to the start of the exon to get the position
+// within the exon.
+// TODO: untested function
+func (i GtaIndex) TransIntervalToGenomicIntervals(tranIndex uint32, startTransPos int, endTransPos int) []uint32 {
+
+	transcript := i.Transcripts[tranIndex]
+
+	//intervals := make([]*core.Interval, 0)
+	intervals := make([]uint32, 0)
+
+	for _, exon := range transcript.Exons {
+
+		exonLength := exon.EndRelative - exon.StartRelative
+
+		if startTransPos >= int(exonLength) {
+			startTransPos -= int(exonLength)
+			endTransPos -= int(exonLength)
+			continue
+		}
+
+		var startGenomic uint32
+		var endGenomic uint32
+
+		if startTransPos >= 0 {
+			startGenomic = exon.StartRelative + uint32(startTransPos)
+			startTransPos -= int(exonLength)
+		} else {
+			startGenomic = exon.StartRelative
+		}
+
+		if endTransPos >= int(exonLength) {
+			endGenomic = exon.EndRelative
+			endTransPos -= int(exonLength)
+		} else {
+			endGenomic = exon.StartRelative + uint32(endTransPos)
+		}
+
+		//intervals = append(intervals, &core.Interval{
+		//	Start: int(startGenomic),
+		//	End:   int(endGenomic),
+		//})
+		intervals = append(intervals, startGenomic)
+		intervals = append(intervals, endGenomic)
+	}
+
+	return intervals
+}
+
+// AddGenomicLocationsToNodes adds the genomic locations to the nodes of the suffix tree.
+// Each node in the suffix tree has a list of positions which are the start positions of the suffix
+// on each of the transcript sequences (forward and reverse). This function adds the genomic locations
+// (the start positions of the suffix on the gene) to the positions.
+func (i GtaIndex) AddGenomicLocationsToNodes() {
+	for _, node := range i.SuffixTree.Nodes {
+		for _, pos := range node.Positions {
+
+			transcriptIndex := i.SequenceIndexToTranscriptIndex(uint32(pos.Index))
+
+			transPos := uint32(pos.Start)
+			if !i.SequenceIndexIsForward(uint32(pos.Index)) {
+				transPos = i.TranslateRwTransPosToFwTransPos(transcriptIndex, uint32(pos.Start))
+			}
+
+			pos.StartGenomic = int(i.TranslateRelativeTranscriptPositionToRelativeGenePosition(transcriptIndex, transPos))
+		}
+	}
 }
 
 type Gene struct {
@@ -94,6 +224,7 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 
 	gtaIndex.SuffixTree = datastructure.CreateTree()
 
+	// add the regular transcripts to the suffix tree and the index
 	for i, transcript := range annotation.Genes[0].Transcripts {
 
 		//the index of the sequence in the suffix tree (used for retrieval)
@@ -129,6 +260,7 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 	// suffix links are only required for tree construction but not for the search
 	timerBuildTree = time.Now()
 	gtaIndex.SuffixTree.RemoveAllSuffixLinks()
+	//gtaIndex.AddGenomicLocationsToNodes()
 	durationBuildTree += time.Since(timerBuildTree)
 
 	// write the index to file as a serialized gob

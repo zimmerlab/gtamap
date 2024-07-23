@@ -171,6 +171,7 @@ func testMapping() {
 		ToolVersion:             config.ToolVersion(),
 		Transcripts:             make([]*sam.TranscriptInfo, len(gtaIndex.Transcripts)),
 	}
+	// TODO: exclude consensus transcript
 	for i, transcript := range gtaIndex.Transcripts {
 		samHeader.Transcripts[i] = &sam.TranscriptInfo{
 			Id:                  "T" + strconv.Itoa(i),
@@ -181,11 +182,11 @@ func testMapping() {
 
 	timerStart = time.Now()
 
-	pathReadsR1 := "./resources/reads/manual/reads_ccr9.1.fq"
-	pathReadsR2 := "./resources/reads/manual/reads_ccr9.2.fq"
+	//pathReadsR1 := "./resources/reads/manual/reads_ccr9.1.fq"
+	//pathReadsR2 := "./resources/reads/manual/reads_ccr9.2.fq"
 
-	//pathReadsR1 := "/home/sam/Data/isar/sam_fasta_test/fw.fastq"
-	//pathReadsR2 := "/home/sam/Data/isar/sam_fasta_test/rw.fastq"
+	pathReadsR1 := "/home/sam/Data/isar/sam_fasta_test/fw.fastq"
+	pathReadsR2 := "/home/sam/Data/isar/sam_fasta_test/rw.fastq"
 
 	reader := fastq.InitFromPaths(pathReadsR1, pathReadsR2)
 
@@ -220,7 +221,7 @@ func testMapping() {
 
 		// TODO: remove after testing (only process specific read pair)
 		name := strings.Split(readPair.ReadR1.Header, " ")[0]
-		if name != "@3-0004/1" {
+		if name != "@3-0002/1" {
 			//continue
 		}
 
@@ -277,7 +278,7 @@ func mapReadPairWorker(workerId int, taskQueue <-chan ReadPairMappingTask, taskQ
 
 	logrus.WithFields(logrus.Fields{
 		"workerId": workerId,
-	}).Info("Started mapReadPairWorker")
+	}).Debug("Started mapReadPairWorker")
 
 	for task := range taskQueue {
 
@@ -289,7 +290,7 @@ func mapReadPairWorker(workerId int, taskQueue <-chan ReadPairMappingTask, taskQ
 		// TODO: result is currently only dummy
 		result := mapping.MapReadPairDev(task.ReadPair, gtaIndex)
 
-		fmt.Println("result: ", result)
+		//fmt.Println("result: ", result)
 
 		taskQueueWriter <- result
 	}
@@ -311,7 +312,6 @@ func main() {
 
 	//buildAndSerializeIndex()
 	//deserializeIndex()
-
 	testMapping()
 
 	//buildAndSerializeIndex()
