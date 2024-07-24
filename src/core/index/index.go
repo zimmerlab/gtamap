@@ -5,6 +5,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/keywordtree"
+	"github.com/KleinSamuel/gtamap/src/core/interval"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
 	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
@@ -13,13 +14,49 @@ import (
 	"time"
 )
 
+type EquivalenceClass struct {
+	Id          uint32
+	FromGenomic uint32
+	ToGenomic   uint32
+}
+
+type ExonJunction struct {
+	Id          uint32
+	FromGenomic uint32
+	ToGenomic   uint32
+}
+
+type Gene struct {
+	GeneIdEnsembl  string // e.g. "ENSG00000173585"
+	Chromosome     string // e.g. "1", "2", "X", "Y", "MT"
+	IsFowardStrand bool   // true if on forward strand
+	StartGenomic   uint32 // 0-based genomic start location
+	EndGenomic     uint32 // exclusive genomic end location
+}
+
+type Transcript struct {
+	TranscriptIdEnsembl       string // e.g. "ENST00000342992"
+	SequenceDnaForward53Index int    // the index of the forward sequence in the sequence list of the suffix tree
+	SequenceDnaReverse53Index int    // the index in the reverse sequence in the sequence list of the suffix tree
+	SequenceLength            int    // the length of the dna sequence
+	Exons                     []*Exon
+	SequenceDnaForward        string
+	SequenceDnaReverse        string
+}
+
+type Exon struct {
+	StartRelative uint32 // 0-based start location relative to genomic location of parent gene
+	EndRelative   uint32 // exclusive end location relative to genomic location of parent gene
+}
+
 type GtaIndex struct {
-	Gene         *Gene                     // information about the gene
-	Transcripts  []*Transcript             // all transcripts of the gene
-	SuffixTree   *datastructure.SuffixTree // a single suffix tree containing all transcript sequences forward and reverse complemented
-	NumSequences int
-	Sequences    []string
-	KeywordTree  *keywordtree.KeywordTree
+	Gene               *Gene                     // information about the gene
+	Transcripts        []*Transcript             // all transcripts of the gene
+	SuffixTree         *datastructure.SuffixTree // a single suffix tree containing all transcript sequences forward and reverse complemented
+	NumSequences       int
+	Sequences          []string
+	KeywordTree        *keywordtree.KeywordTree
+	EquivalenceClasses []*EquivalenceClass
 }
 
 func (i GtaIndex) TransIndexToTransName(transcriptIndex uint32) string {
@@ -55,7 +92,7 @@ func (i GtaIndex) TranslateRwTransPosToFwTransPos(transcriptIndex uint32,
 		panic("Relative position is out of bounds")
 	}
 
-	return uint32(transcript.SequenceLength) - revTransPos
+	return uint32(transcript.SequenceLength) - revTransPos - 1
 }
 
 // TranslateRelativeTranscriptPositionToRelativeGenePosition translates a relative position within a transcript to the
@@ -67,6 +104,9 @@ func (i GtaIndex) TranslateRelativeTranscriptPositionToRelativeGenePosition(tran
 
 	transcript := i.Transcripts[transcriptIndex]
 
+	if relativeTranscriptPosition < 0 {
+		panic("Relative position is out of bounds (less than 0)")
+	}
 	if relativeTranscriptPosition > uint32(transcript.SequenceLength) {
 		panic("Relative position is out of bounds")
 	}
@@ -170,27 +210,100 @@ func (i GtaIndex) AddGenomicLocationsToNodes() {
 	}
 }
 
-type Gene struct {
-	GeneIdEnsembl  string // e.g. "ENSG00000173585"
-	Chromosome     string // e.g. "1", "2", "X", "Y", "MT"
-	IsFowardStrand bool   // true if on forward strand
-	StartGenomic   uint32 // 0-based genomic start location
-	EndGenomic     uint32 // exclusive genomic end location
+func (i GtaIndex) FindEquivalenceClassByGenomicLocation(genomicLocation uint32) *EquivalenceClass {
+	for _, ec := range i.EquivalenceClasses {
+		if genomicLocation >= ec.FromGenomic && genomicLocation < ec.ToGenomic {
+			return ec
+		}
+	}
+	return nil
 }
 
-type Transcript struct {
-	TranscriptIdEnsembl       string // e.g. "ENST00000342992"
-	SequenceDnaForward53Index int    // the index of the forward sequence in the sequence list of the suffix tree
-	SequenceDnaReverse53Index int    // the index in the reverse sequence in the sequence list of the suffix tree
-	SequenceLength            int    // the length of the dna sequence
-	Exons                     []*Exon
-	SequenceDnaForward        string
-	SequenceDnaReverse        string
+// GetCoveredEquivalenceClassIds returns the ids of the equivalence classes that are covered by
+// the given interval.
+// The given startRelative and endRelative position is relative to the sequence (transcript) and not the gene.
+// Idea:
+// Each position of a transcript must be contained within an equivalence class because these are built upon
+// the exons of all transcripts.
+// The start position is translated to a genomic location and the equivalence class that contains this location
+// is obtained as the initial and current equivalence class.
+// While the given interval spans across the current equivalence class, the next equivalence class is retrieved.
+// TODO: not tested
+func (i GtaIndex) GetCoveredEquivalenceClassIds(sequenceIndex int, startRelative int, endRelative int) []uint32 {
+
+	ecIds := make([]uint32, 0)
+
+	transcriptIndex := i.SequenceIndexToTranscriptIndex(uint32(sequenceIndex))
+
+	if !i.SequenceIndexIsForward(uint32(sequenceIndex)) {
+		startRelative = int(i.TranslateRwTransPosToFwTransPos(transcriptIndex, uint32(startRelative)))
+		endRelative = int(i.TranslateRwTransPosToFwTransPos(transcriptIndex, uint32(endRelative)))
+	}
+
+	start := i.TranslateRelativeTranscriptPositionToRelativeGenePosition(transcriptIndex, uint32(startRelative))
+
+	ec := i.FindEquivalenceClassByGenomicLocation(start)
+
+	if ec == nil {
+		// should not happen because the equivalence class are based on the positions covered by exons
+		panic("Could not find equivalence class for start position")
+	}
+
+	posRelative := startRelative + int(ec.FromGenomic-ec.ToGenomic)
+	ecIds = append(ecIds, ec.Id)
+
+	for posRelative < endRelative {
+
+		// the given interval spans across the current equivalence class
+		// find the next equivalence class
+		ec := i.EquivalenceClasses[ec.Id+1]
+		ecIds = append(ecIds, ec.Id)
+
+		posRelative += int(ec.ToGenomic - ec.FromGenomic)
+	}
+
+	return ecIds
 }
 
-type Exon struct {
-	StartRelative uint32 // 0-based start location relative to genomic location of parent gene
-	EndRelative   uint32 // exclusive end location relative to genomic location of parent gene
+// AddSequenceToKeywordTree adds all keywords of a sequence to the keyword tree.
+// The length of each keyword is defined by the keyword length of the keyword tree.
+// Each keyword contained in the sequence is added to the keyword tree and the position of the keyword
+// within the sequence is added to the keyword node as well as all equivalence classes that are covered by the
+// keyword.
+// TODO: not tested
+func (i GtaIndex) AddSequenceToKeywordTree(sequence *string, sequenceIndex uint32) {
+
+	for kStart := 0; kStart < len(*sequence)-int(i.KeywordTree.KeywordLength); kStart++ {
+
+		kEnd := kStart + int(i.KeywordTree.KeywordLength)
+
+		ecIds := i.GetCoveredEquivalenceClassIds(int(sequenceIndex), kStart, kEnd)
+
+		node := i.KeywordTree.AddKeyword((*sequence)[kStart:kEnd])
+
+		node.Positions = append(node.Positions, keywordtree.Position{
+			SequenceIndex:       sequenceIndex,
+			Position:            uint32(kStart),
+			EquivalenceClassIds: ecIds,
+		})
+
+		//break
+	}
+}
+
+func (i GtaIndex) EquivalenceClassIdsMatch(ecIds1 []uint32, ecIds2 []uint32) bool {
+
+	if len(ecIds1) != len(ecIds2) {
+		return false
+	}
+
+	for i, ecId := range ecIds1 {
+		if ecId != ecIds2[i] {
+			return false
+		}
+	}
+
+	return true
 }
 
 func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os.File) {
@@ -232,25 +345,65 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 
 	gtaIndex.Transcripts = make([]*Transcript, len(annotation.Genes[0].Transcripts))
 
+	// add the transcripts and its information of the first gene to the index
+	for i, transcript := range annotation.Genes[0].Transcripts {
+
+		gtaIndex.Transcripts[i] = &Transcript{
+			TranscriptIdEnsembl:       transcript.TranscriptIdEnsembl,
+			SequenceDnaForward53Index: i * 2,
+			SequenceDnaReverse53Index: i*2 + 1,
+			SequenceDnaForward:        transcript.SequenceDna,
+			SequenceDnaReverse:        utils.ReverseComplementDNA(transcript.SequenceDna),
+			SequenceLength:            len(transcript.SequenceDna),
+			Exons:                     make([]*Exon, len(transcript.Exons)),
+		}
+
+		// the exons of the transcript are added to the transcript in the index
+		for j, exon := range transcript.Exons {
+			gtaIndex.Transcripts[i].Exons[j] = &Exon{
+				StartRelative: exon.StartRelative,
+				EndRelative:   exon.EndRelative,
+			}
+		}
+	}
+
+	// generate equivalence classes
+	exonIntervals := make([]*interval.Interval, 0)
+
+	for _, transcript := range gtaIndex.Transcripts {
+		for _, exon := range transcript.Exons {
+			exonIntervals = append(exonIntervals, &interval.Interval{
+				Start: int(exon.StartRelative),
+				End:   int(exon.EndRelative),
+			})
+		}
+	}
+
+	equivalenceClasses := interval.GenerateEquivalenceClasses(exonIntervals)
+
+	gtaIndex.EquivalenceClasses = make([]*EquivalenceClass, len(equivalenceClasses))
+
+	for i, ec := range equivalenceClasses {
+		gtaIndex.EquivalenceClasses[i] = &EquivalenceClass{
+			Id:          uint32(i),
+			FromGenomic: uint32(ec.Start),
+			ToGenomic:   uint32(ec.End),
+		}
+	}
+
 	//gtaIndex.SuffixTree = datastructure.CreateTree()
 
 	gtaIndex.KeywordTree = keywordtree.NewKeywordTree(config.KmerLength())
 
-	// Add the regular transcripts of the first gene to the suffix tree and the index
-	// Only one gene is supported at the moment.
-	for i, transcript := range annotation.Genes[0].Transcripts {
+	for _, transcript := range gtaIndex.Transcripts {
 
-		sequenceIndexForward := gtaIndex.NumSequences
-		sequenceDnaForward := transcript.SequenceDna
 		timerBuildTree = time.Now()
-		gtaIndex.KeywordTree.AddAllKeywords(sequenceDnaForward, uint32(sequenceIndexForward))
+		gtaIndex.AddSequenceToKeywordTree(&transcript.SequenceDnaForward, uint32(transcript.SequenceDnaForward53Index))
 		durationBuildTree += time.Since(timerBuildTree)
 		gtaIndex.NumSequences++
 
-		sequenceIndexReverse := gtaIndex.NumSequences
-		sequenceDnaReverse := utils.ReverseComplementDNA(transcript.SequenceDna)
 		timerBuildTree = time.Now()
-		gtaIndex.KeywordTree.AddAllKeywords(sequenceDnaReverse, uint32(sequenceIndexReverse))
+		gtaIndex.AddSequenceToKeywordTree(&transcript.SequenceDnaReverse, uint32(transcript.SequenceDnaReverse53Index))
 		durationBuildTree += time.Since(timerBuildTree)
 		gtaIndex.NumSequences++
 
@@ -269,24 +422,6 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 		////gtaIndex.SuffixTree.AddSequence(utils.ReverseComplementDNA(seq), sequenceIndexReverse)
 		//durationBuildTree += time.Since(timerBuildTree)
 		//gtaIndex.NumSequences++
-
-		gtaIndex.Transcripts[i] = &Transcript{
-			TranscriptIdEnsembl:       transcript.TranscriptIdEnsembl,
-			SequenceDnaForward53Index: sequenceIndexForward,
-			SequenceDnaReverse53Index: sequenceIndexReverse,
-			SequenceDnaForward:        sequenceDnaForward,
-			SequenceDnaReverse:        sequenceDnaReverse,
-			SequenceLength:            len(transcript.SequenceDna),
-			Exons:                     make([]*Exon, len(transcript.Exons)),
-		}
-
-		// the exons of the transcript are added to the transcript in the index
-		for j, exon := range transcript.Exons {
-			gtaIndex.Transcripts[i].Exons[j] = &Exon{
-				StartRelative: exon.StartRelative,
-				EndRelative:   exon.EndRelative,
-			}
-		}
 
 		//break
 	}

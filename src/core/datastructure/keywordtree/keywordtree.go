@@ -18,8 +18,9 @@ type Edge struct {
 }
 
 type Position struct {
-	SequenceIndex uint32
-	Position      uint32
+	SequenceIndex       uint32
+	Position            uint32
+	EquivalenceClassIds []uint32
 }
 
 type KeywordTree struct {
@@ -41,18 +42,22 @@ func NewKeywordTree(keywordLength uint8) *KeywordTree {
 	}
 }
 
-func (t *KeywordTree) AddAllKeywords(word string, sequenceIndex uint32) {
-	for i := 0; i < len(word)-int(t.KeywordLength); i++ {
-		t.AddKeyword(word[i:i+int(t.KeywordLength)], sequenceIndex, uint32(i))
-	}
-}
+// AddKeyword adds a keyword to the tree.
+// The keyword must have exactly the length as specified in the tree.
+// For every character in the keyword either the existing edge is followed or a new edge is created.
+// The last node on which this keyword ends is returned.
+// The position of the keyword in the sequence is not added in this function but must be added afterwards.
+func (t *KeywordTree) AddKeyword(keyword string) *Node {
 
-func (t *KeywordTree) AddKeyword(keyword string, sequenceIndex uint32, position uint32) {
+	if len(keyword) != int(t.KeywordLength) {
+		logrus.WithFields(logrus.Fields{
+			"keyword": keyword,
+		}).Error("Keyword has invalid length")
+		panic(fmt.Sprintf("Keyword has invalid length: %s", keyword))
+	}
 
 	logrus.WithFields(logrus.Fields{
-		"keyword":       keyword,
-		"sequenceIndex": sequenceIndex,
-		"position":      position,
+		"keyword": keyword,
 	}).Debug("Adding keyword to tree")
 
 	activeNode := t.Nodes[t.RootId]
@@ -78,9 +83,9 @@ func (t *KeywordTree) AddKeyword(keyword string, sequenceIndex uint32, position 
 		activeNode.Positions = make([]Position, 0)
 	}
 
-	activeNode.Positions = append(activeNode.Positions, Position{SequenceIndex: sequenceIndex, Position: position})
-
 	logrus.Debug("Keyword was added to the tree")
+
+	return activeNode
 }
 
 func (t *KeywordTree) FindKeyword(keyword *string) *core.ExactMatchResult {
@@ -106,9 +111,10 @@ func (t *KeywordTree) FindKeyword(keyword *string) *core.ExactMatchResult {
 
 	for i, position := range activeNode.Positions {
 		result.Matches[i] = &core.SequenceMatch{
-			SequenceIndex: int(position.SequenceIndex),
-			FromTarget:    int(position.Position),
-			ToTarget:      int(position.Position + uint32(len(*keyword))),
+			SequenceIndex:       int(position.SequenceIndex),
+			FromTarget:          int(position.Position),
+			ToTarget:            int(position.Position + uint32(len(*keyword))),
+			EquivalenceClassIds: position.EquivalenceClassIds,
 		}
 	}
 

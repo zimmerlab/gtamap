@@ -6,6 +6,9 @@ const toolVersion string = "0.1"
 
 var kmerLength uint8 = 10
 
+// the maximum error rate allowed per read
+var errorRate float64 = 0.05
+
 var includeReadsImproperlyPaired bool = false
 var includeReadsAmbiguouslyMapped bool = false
 var includeReadsUnmapped bool = false
@@ -28,6 +31,10 @@ func Env() string {
 
 func ToolVersion() string {
 	return toolVersion
+}
+
+func ErrorRate() float64 {
+	return errorRate
 }
 
 func KmerLength() uint8 {

@@ -110,45 +110,6 @@ func GenerateInputForIndex(gtfFile *os.File, fastaFile *os.File, fastaIndexFile 
 			trans.SequenceDna = strings.ReplaceAll(string(transcriptSequence), "\n", "")
 		}
 
-		//// generate the consensus transcript
-		//
-		//exonIntervals := make([]*interval.Interval, 0)
-		//
-		//for _, trans := range gene.Transcripts {
-		//	for _, exon := range trans.Exons {
-		//		exonIntervals = append(exonIntervals, &interval.Interval{
-		//			Start: int(exon.StartRelative),
-		//			End:   int(exon.EndRelative),
-		//		})
-		//	}
-		//}
-
-		//mergedExonIntervals := interval.MergeIntervals(exonIntervals)
-		//
-		//consensusExons := make([]*gtf.Exon, len(mergedExonIntervals))
-		//dnaSequence := make([]byte, 0)
-		//
-		//for i, consensusInterval := range mergedExonIntervals {
-		//	consensusExons[i] = &gtf.Exon{
-		//		StartRelative: uint32(consensusInterval.Start),
-		//		EndRelative:   uint32(consensusInterval.End),
-		//	}
-		//	startGenomic := gene.StartGenomic + consensusExons[i].StartRelative
-		//	endGenomic := gene.StartGenomic + consensusExons[i].EndRelative
-		//	dnaSequence = append(dnaSequence, ExtractSequenceAsBytesFromFasta(fastaFile, fastaIndex, gene.Chromosome, startGenomic, endGenomic)...)
-		//}
-		//
-		//gene.ConsensusTranscript = &gtf.Transcript{
-		//	TranscriptIdEnsembl: "consensus",
-		//	StartRelative:       consensusExons[0].StartRelative,
-		//	EndRelative:         consensusExons[len(consensusExons)-1].EndRelative,
-		//	SequenceDna:         strings.ReplaceAll(string(dnaSequence), "\n", ""),
-		//	Exons:               consensusExons,
-		//}
-		//
-		//// add the consensus transcript as the first transcript in the list of transcripts of the gene
-		//gene.Transcripts = append([]*gtf.Transcript{gene.ConsensusTranscript}, gene.Transcripts...)
-
 		// TODO: currently only supporting the first gene within the gtf file
 		break
 	}

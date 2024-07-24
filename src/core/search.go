@@ -22,18 +22,13 @@ type PatternMatch struct {
 }
 
 type SequenceMatch struct {
-	// the index of the sequence within the trees sequences
-	SequenceIndex int
-	// the 0-based start position of the match within the source sequence (read)
-	FromSource int
-	// the end-exclusive position of the match within the source sequence (read)
-	ToSource int
-	// the 0-based start position of the match within the target sequence (transcript)
-	FromTarget int
-	// the end-exclusive position of the match within the target sequence (transcript)
-	ToTarget int
-	// the locations of the mismatches in the source sequence (read)
-	Mismatches []int
+	SequenceIndex       int   // the index of the sequence within the trees sequences
+	FromSource          int   // the 0-based start position of the match within the source sequence (read)
+	ToSource            int   // the end-exclusive position of the match within the source sequence (read)
+	FromTarget          int   // the 0-based start position of the match within the target sequence (transcript)
+	ToTarget            int   // the end-exclusive position of the match within the target sequence (transcript)
+	Mismatches          []int // the locations of the mismatches in the source sequence (read)
+	EquivalenceClassIds []uint32
 }
 
 type MatchesSortableByFromSource []*SequenceMatch
@@ -139,10 +134,12 @@ func (c SequenceContextMatch) GetUnmatchedRegions(readLength int) []SequenceMatc
 }
 
 type InexactMatchResult struct {
-	SequenceIndex int   // the id of the sequence within the suffix tree (transcript)
-	FromTarget    int   // the 0-based start position of the match within the target sequence
-	ToTarget      int   // the end-exclusive position of the match within the target sequence
-	Mismatches    []int // the locations of the mismatches in the source sequence (read)
+	SequenceIndex       int      // the id of the sequence within the suffix tree (transcript)
+	FromTarget          int      // the 0-based start position of the match within the target sequence (transcript)
+	ToTarget            int      // the end-exclusive position of the match within the target sequence (transcript)
+	Mismatches          []int    // the locations of the mismatches in the source sequence (read)
+	EquivalenceClassIds []uint32 // the ids of the equivalence classes that the match overlaps with
+	FromGene            uint32   // the 0-based start position of the match within the gene
 }
 
 type ProperPairCandidate struct {

@@ -10,7 +10,6 @@ import (
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
 	"github.com/sirupsen/logrus"
 	"math/rand"
-	"sort"
 	"strconv"
 )
 
@@ -269,8 +268,6 @@ func MapReadPairDev(readPair *fastq.ReadPair, index *index.GtaIndex) string {
 
 	if wasMappedR1 {
 		result.ResultsR1 = &resultsR1
-
-		fmt.Println("r1 ok")
 	}
 
 	if readPair.ReadR2 != nil {
@@ -279,8 +276,6 @@ func MapReadPairDev(readPair *fastq.ReadPair, index *index.GtaIndex) string {
 
 		if wasMappedR2 {
 			result.ResultsR2 = &resultsR2
-
-			fmt.Println("r2 ok")
 		}
 	}
 
@@ -307,7 +302,8 @@ func DetermineReadLocation(result *core.ReadMappingPreResult, index *index.GtaIn
 	} else if result.ResultsR1 != nil && result.ResultsR2 != nil {
 		logrus.Info("both reads have been mapped")
 
-		return DetermineReadLocationPaired(result, index)
+		//return DetermineReadLocationPaired(result, index)
+		return DetermineReadLocationUnpaired(result, index)
 
 	} else {
 		logrus.Info("only one read has been mapped")
@@ -325,95 +321,15 @@ type ReadLocationsOnReference struct {
 func DetermineReadLocationPaired(result *core.ReadMappingPreResult, index *index.GtaIndex) *[]*sam.RecordPair {
 	logrus.Info("determine read location paired")
 
-	// genomic start position to list of inexact matches
-	//genomicLocations := make(map[uint32][]*core.InexactMatchResult)
-	//
-	//locations := make([]*[]uint32, 0)
-	//locationsToResults := make(map[int][]*core.InexactMatchResult)
-	//
-	//for seqIndexR1, resultsR1 := range *result.ResultsR1 {
-	//
-	//	transIndex := uint32(seqIndexR1 / 2)
-	//	isForwardStrandR1 := seqIndexR1%2 == 0
-	//
-	//	for _, resultR1 := range resultsR1 {
-	//
-	//		var genPos uint32
-	//
-	//		if isForwardStrandR1 {
-	//			genPos = index.TranslateRelativeTranscriptPositionToRelativeGenePosition(transIndex, uint32(resultR1.FromTarget))
-	//		} else {
-	//			transPos := index.TranslateRwTransPosToFwTransPostranscriptIndex(transIndex, uint32(resultR1.FromTarget))
-	//			genPos = index.TranslateRelativeTranscriptPositionToRelativeGenePosition(transIndex, transPos)
-	//		}
-	//
-	//		genomicLocations[genPos] = append(genomicLocations[genPos], resultR1)
-	//
-	//		fmt.Println("transcript interval")
-	//		fmt.Println(resultR1.FromTarget, resultR1.ToTarget)
-	//		fmt.Println("genomic interval")
-	//		genomicIntervals := index.TransIntervalToGenomicIntervals(transIndex, resultR1.FromTarget, resultR1.ToTarget)
-	//
-	//		if len(locations) == 0 {
-	//			locations = append(locations, &genomicIntervals)
-	//			locationsToResults[0] = append(locationsToResults[0], resultR1)
-	//		} else {
-	//			match := false
-	//
-	//			for locationIndex, location := range locations {
-	//
-	//				if len(*location) != len(genomicIntervals) {
-	//					continue
-	//				}
-	//
-	//				skip := false
-	//
-	//				for i, gLoc := range *location {
-	//					if gLoc != genomicIntervals[i] {
-	//						skip = true
-	//						break
-	//					}
-	//				}
-	//
-	//				if skip {
-	//					continue
-	//				}
-	//
-	//				match = true
-	//				locationsToResults[locationIndex] = append(locationsToResults[locationIndex], resultR1)
-	//				break
-	//			}
-	//
-	//			if !match {
-	//				locations = append(locations, &genomicIntervals)
-	//				locationsToResults[len(locations)-1] = append(locationsToResults[len(locations)-1], resultR1)
-	//			}
-	//		}
-	//	}
-	//}
-	//
-	//fmt.Println("locations")
-	//for _, location := range locations {
-	//	fmt.Println(*location)
-	//}
-	//for locationIndex, results := range locationsToResults {
-	//	fmt.Println("location index: ", locationIndex)
-	//	for _, result := range results {
-	//		fmt.Println(result)
-	//	}
-	//}
-
-	//os.Exit(1)
-
 	properPairs := make([]*core.ProperPairCandidate, 0)
 
 	// find proper pairs
 	for sequenceIndexR1, resultsR1 := range *result.ResultsR1 {
 
-		referenceIndex := sequenceIndexR1 / 2
-		isForwardStrandR1 := sequenceIndexR1%2 == 0
+		transcriptIndex := index.SequenceIndexToTranscriptIndex(uint32(sequenceIndexR1))
+		isForwardStrandR1 := index.SequenceIndexIsForward(uint32(sequenceIndexR1))
 
-		matchingSequenceIndex := referenceIndex * 2
+		matchingSequenceIndex := int(transcriptIndex) * 2
 		if isForwardStrandR1 {
 			matchingSequenceIndex += 1
 		}
@@ -432,14 +348,14 @@ func DetermineReadLocationPaired(result *core.ReadMappingPreResult, index *index
 			// positions are considered.
 			positionOnReferenceR1 := resultR1.FromTarget
 			if !isForwardStrandR1 {
-				positionOnReferenceR1 = index.Transcripts[referenceIndex].SequenceLength - resultR1.FromTarget
+				positionOnReferenceR1 = index.Transcripts[transcriptIndex].SequenceLength - resultR1.FromTarget
 			}
 
 			for _, resultR2 := range resultsR2 {
 
 				positionOnReferenceR2 := resultR2.FromTarget
 				if isForwardStrandR1 {
-					positionOnReferenceR2 = index.Transcripts[referenceIndex].SequenceLength - resultR2.FromTarget
+					positionOnReferenceR2 = index.Transcripts[transcriptIndex].SequenceLength - resultR2.FromTarget
 				}
 
 				fragmentLength := positionOnReferenceR2 - positionOnReferenceR1
@@ -447,14 +363,14 @@ func DetermineReadLocationPaired(result *core.ReadMappingPreResult, index *index
 					fragmentLength = -fragmentLength
 				}
 
-				fmt.Println(fragmentLength)
+				//fmt.Println(fragmentLength)
 
 				// TODO: use fragment length to filter proper pairs
 
 				// TODO: for now every pair on the same reference but different strands is considered a proper pair
 
 				properPairs = append(properPairs, &core.ProperPairCandidate{
-					ReferenceIndex: referenceIndex,
+					ReferenceIndex: int(transcriptIndex),
 					FragmentLength: fragmentLength,
 					R1isForward:    isForwardStrandR1,
 					ResultR1:       resultR1,
@@ -606,7 +522,189 @@ func DetermineReadLocationPaired(result *core.ReadMappingPreResult, index *index
 func DetermineReadLocationUnpaired(result *core.ReadMappingPreResult, index *index.GtaIndex) *[]*sam.RecordPair {
 	logrus.Info("determine read location unpaired")
 
-	return nil
+	matches := make([]*core.InexactMatchResult, 0)
+
+	if result.ResultsR1 != nil {
+		for _, results := range *result.ResultsR1 {
+			matches = append(matches, results...)
+		}
+	} else {
+		for _, results := range *result.ResultsR2 {
+			matches = append(matches, results...)
+		}
+	}
+
+	genePositions := make([]uint32, 0)
+	matchesPerGenePosition := make(map[uint32][]*core.InexactMatchResult)
+
+	fmt.Println(len(matches))
+
+	for _, match := range matches {
+
+		fmt.Println(match)
+
+		if _, ok := matchesPerGenePosition[match.FromGene]; !ok {
+			matchesPerGenePosition[match.FromGene] = make([]*core.InexactMatchResult, 0)
+		}
+
+		genePositions = append(genePositions, match.FromGene)
+		matchesPerGenePosition[match.FromGene] = append(matchesPerGenePosition[match.FromGene], match)
+	}
+
+	isAmbiguouslyMapped := false
+
+	if len(genePositions) > 1 {
+		// the read is ambiguously mapped if there are multiple gene positions
+		isAmbiguouslyMapped = true
+	} else {
+
+		ecIds := matchesPerGenePosition[genePositions[0]][0].EquivalenceClassIds
+
+		// can still be ambiguously mapped if the equivalent classes are different
+		for i, match := range matchesPerGenePosition[genePositions[0]] {
+			if i == 0 {
+				continue
+			}
+			if !index.EquivalenceClassIdsMatch(ecIds, match.EquivalenceClassIds) {
+				isAmbiguouslyMapped = true
+				break
+			}
+		}
+	}
+
+	recordPairs := make([]*sam.RecordPair, 0)
+
+	if isAmbiguouslyMapped {
+		if config.IncludeReadsAmbiguouslyMapped() {
+			// TODO: return all
+			// TODO: determine main mapping location
+		} else {
+			return nil
+		}
+	} else {
+		// The default case where the read was uniquely mapped to a single gene position
+		// and all potential transcript positions span across the same equivalence classes.
+
+		if result.ReadR2 != nil {
+			// the reads are paired
+
+			if result.ResultsR1 != nil {
+				// only R1 was mapped
+
+				flagMapped := sam.Flag{}
+				flagMapped.SetPaired()
+				flagMapped.SetMateUnmapped()
+				flagMapped.SetFirstInPair()
+
+				cigarString := strconv.Itoa(len(result.ReadR1.Sequence)) + "M"
+
+				transcriptIds := make([]int, len(matchesPerGenePosition[genePositions[0]]))
+				for i, match := range matchesPerGenePosition[genePositions[0]] {
+					transcriptIds[i] = int(index.SequenceIndexToTranscriptIndex(uint32(match.SequenceIndex)))
+				}
+
+				mappedRecord := &sam.Record{
+					Qname:         result.ReadR1.Header,
+					Flag:          flagMapped,
+					Rname:         index.Gene.Chromosome,
+					Pos:           int(genePositions[0]),
+					Mapq:          255, // TODO: figure this out
+					Cigar:         cigarString,
+					Rnext:         result.ReadR2.Header,
+					Pnext:         0,
+					Tlen:          0, // set to 0 because only one read was mapped
+					Seq:           result.ReadR1.Sequence,
+					Qual:          result.ReadR1.Quality,
+					TranscriptIds: transcriptIds,
+				}
+
+				flagUnmapped := sam.Flag{}
+				flagUnmapped.SetPaired()
+				flagUnmapped.SetUnmapped()
+				flagUnmapped.SetSecondInPair()
+
+				unmappedRecord := &sam.Record{
+					Qname:         result.ReadR2.Header,
+					Flag:          flagUnmapped,
+					Rname:         "*",
+					Pos:           0,
+					Mapq:          255,
+					Cigar:         "*",
+					Rnext:         result.ReadR1.Header,
+					Pnext:         0,
+					Tlen:          0,
+					Seq:           result.ReadR2.Sequence,
+					Qual:          result.ReadR2.Quality,
+					TranscriptIds: nil,
+				}
+
+				recordPairs = append(recordPairs, &sam.RecordPair{
+					First:  mappedRecord,
+					Second: unmappedRecord,
+				})
+			} else {
+				// only R2 was mapped
+
+				flagMapped := sam.Flag{}
+				flagMapped.SetPaired()
+				flagMapped.SetMateUnmapped()
+				flagMapped.SetSecondInPair()
+
+				cigarString := strconv.Itoa(len(result.ReadR1.Sequence)) + "M"
+
+				transcriptIds := make([]int, len(matchesPerGenePosition[genePositions[0]]))
+				for i, match := range matchesPerGenePosition[genePositions[0]] {
+					transcriptIds[i] = int(index.SequenceIndexToTranscriptIndex(uint32(match.SequenceIndex)))
+				}
+
+				mappedRecord := &sam.Record{
+					Qname:         result.ReadR2.Header,
+					Flag:          flagMapped,
+					Rname:         index.Gene.Chromosome,
+					Pos:           int(genePositions[0]),
+					Mapq:          255,
+					Cigar:         cigarString,
+					Rnext:         result.ReadR1.Header,
+					Pnext:         0,
+					Tlen:          0, // set to 0 because only one read was mapped
+					Seq:           result.ReadR2.Sequence,
+					Qual:          result.ReadR2.Quality,
+					TranscriptIds: transcriptIds,
+				}
+
+				flagUnmapped := sam.Flag{}
+				flagUnmapped.SetPaired()
+				flagUnmapped.SetUnmapped()
+				flagUnmapped.SetFirstInPair()
+
+				unmappedRecord := &sam.Record{
+					Qname:         result.ReadR1.Header,
+					Flag:          flagUnmapped,
+					Rname:         "*",
+					Pos:           0,
+					Mapq:          255,
+					Cigar:         "*",
+					Rnext:         result.ReadR2.Header,
+					Pnext:         0,
+					Tlen:          0,
+					Seq:           result.ReadR1.Sequence,
+					Qual:          result.ReadR1.Quality,
+					TranscriptIds: nil,
+				}
+
+				recordPairs = append(recordPairs, &sam.RecordPair{
+					First:  unmappedRecord,
+					Second: mappedRecord,
+				})
+			}
+
+		} else {
+			// the read was not paired so only R1 is mapped
+
+		}
+	}
+
+	return &recordPairs
 }
 
 // MapRead maps a single read to the reference using the index
@@ -630,22 +728,18 @@ func DetermineReadLocationUnpaired(result *core.ReadMappingPreResult, index *ind
 // can never be counted twice for the same sequence even when there are multiple matches.
 func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int][]*core.InexactMatchResult, bool) {
 
-	// TODO: move this to config
-	// the maximum error rate allowed per read
-	errorRate := 0.05
-
 	// The final result of this method. Contains positions of the read on the reference sequence within the
 	// allowed range of mismatches.
 	// The key is the sequence index (transcript) and the value is the result of the inexact matching.
 	inexactMatchResults := make(map[int][]*core.InexactMatchResult)
 
 	// the maximum number of mismatches allowed given the length of the sequence and the error rate
-	maxMismatches := int(float64(len(read.Sequence)) * errorRate)
+	maxMismatches := int(float64(len(read.Sequence)) * config.ErrorRate())
 
 	logrus.WithFields(logrus.Fields{
 		"maxMismatches": maxMismatches,
 		"numKmers":      len(read.Sequence) / int(index.KeywordTree.KeywordLength),
-	}).Debug("discard constraints")
+	}).Debug("Set discard constraints")
 
 	// the current position within the read
 	position := 0
@@ -803,7 +897,8 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int][]*core.InexactMa
 		//fmt.Println("sequenceIndex", sequenceIndex)
 		//fmt.Println("numMatches", matches.NumMatches)
 
-		candidatePositions := make(map[int]interval.Intervals)
+		candidatePositions := make(map[int][]*interval.Interval)
+		candidatePositionsEcIds := make(map[int][]uint32)
 
 		// collect the exact matched intervals per candidate position
 		for _, match := range matches.Matches {
@@ -813,53 +908,22 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int][]*core.InexactMa
 
 			// create the candidate position if it does not exist yet
 			if _, ok := candidatePositions[candidatePosition]; !ok {
-				candidatePositions[candidatePosition] = make([]interval.Interval, 0)
+				candidatePositions[candidatePosition] = make([]*interval.Interval, 0)
+				candidatePositionsEcIds[candidatePosition] = make([]uint32, 0)
 			}
 			// add the interval for the current candidate position
-			candidatePositions[candidatePosition] = append(candidatePositions[candidatePosition], interval.Interval{
+			candidatePositions[candidatePosition] = append(candidatePositions[candidatePosition], &interval.Interval{
 				Start: match.FromTarget,
 				End:   match.ToTarget,
 			})
+			candidatePositionsEcIds[candidatePosition] = append(candidatePositionsEcIds[candidatePosition], match.EquivalenceClassIds...)
 		}
 
 		// sort and merge all overlapping intervals for each candidate position
 		for candidatePosition, intervals := range candidatePositions {
-			// sort the intervals by start position
-			sort.Sort(intervals)
 
-			//fmt.Println("candidate position", candidatePosition)
-			//fmt.Println(intervals)
-
-			matchedRegions := make([]interval.Interval, 0)
-
-			// Idea:
-			// Combine consecutive or overlapping intervals by iterating the sorted list of intervals and
-			// extending the current interval if overlapping or consecutive. If not consecutive or overlapping,
-			// then the current interval is added to the final list of intervals.
-			// Finally, the current interval is added to the final list of intervals if it was not added yet.
-			currentInterval := intervals[0]
-			// true when the last interval was added to the matched intervals, false otherwise
-			addedLast := false
-
-			for _, interval := range intervals[1:] {
-				// the current interval overlaps or is consecutive with the next interval
-				if currentInterval.End >= interval.Start {
-					// extend the current interval
-					currentInterval.End = interval.End
-					addedLast = false
-				} else {
-					// add the current interval to the final list of intervals
-					matchedRegions = append(matchedRegions, currentInterval)
-					currentInterval = interval
-					addedLast = true
-				}
-			}
-			// add the last interval which was not added yet
-			if !addedLast {
-				matchedRegions = append(matchedRegions, currentInterval)
-			}
-
-			//fmt.Println(matchedRegions)
+			// contains consecutive intervals of exactly matched positions
+			matchedRegions := interval.MergeIntervals(intervals)
 
 			logrus.Debug("starting inexact matching in unmatched regions")
 
@@ -1021,6 +1085,20 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int][]*core.InexactMa
 
 			// the candidate position passed all tests and is added to the final result
 
+			// make the equivalence class id list unique
+			uniqueEcIds := make(map[uint32]bool)
+			for _, ecId := range candidatePositionsEcIds[candidatePosition] {
+				uniqueEcIds[ecId] = true
+			}
+			ecIds := make([]uint32, 0)
+			for ecId, _ := range uniqueEcIds {
+				ecIds = append(ecIds, ecId)
+			}
+
+			// determine the start position relative to the gene
+			transcriptIndex := index.SequenceIndexToTranscriptIndex(uint32(sequenceIndex))
+			startPosition := index.TranslateRelativeTranscriptPositionToRelativeGenePosition(transcriptIndex, uint32(candidatePosition))
+
 			// create a new list of inexact match results if it does not exist yet for this sequence index
 			if _, ok := inexactMatchResults[sequenceIndex]; !ok {
 				inexactMatchResults[sequenceIndex] = make([]*core.InexactMatchResult, 0)
@@ -1028,10 +1106,12 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int][]*core.InexactMa
 			// add the current candidate position to the list of inexactly matched positions for this sequence index
 			inexactMatchResults[sequenceIndex] = append(inexactMatchResults[sequenceIndex],
 				&core.InexactMatchResult{
-					SequenceIndex: sequenceIndex,
-					FromTarget:    candidatePosition,
-					ToTarget:      candidatePosition + len(read.Sequence),
-					Mismatches:    mismatches,
+					SequenceIndex:       sequenceIndex,
+					FromTarget:          candidatePosition,
+					ToTarget:            candidatePosition + len(read.Sequence),
+					Mismatches:          mismatches,
+					EquivalenceClassIds: ecIds,
+					FromGene:            startPosition,
 				})
 		}
 	}
