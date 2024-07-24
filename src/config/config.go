@@ -4,7 +4,7 @@ var env string = "development"
 
 const toolVersion string = "0.1"
 
-var kmerLength int = 8
+var kmerLength uint8 = 10
 
 var includeReadsImproperlyPaired bool = false
 var includeReadsAmbiguouslyMapped bool = false
@@ -30,7 +30,7 @@ func ToolVersion() string {
 	return toolVersion
 }
 
-func KmerLength() int {
+func KmerLength() uint8 {
 	return kmerLength
 }
 

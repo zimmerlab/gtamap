@@ -2,7 +2,9 @@ package index
 
 import (
 	"encoding/gob"
+	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
+	"github.com/KleinSamuel/gtamap/src/core/datastructure/keywordtree"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
 	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
@@ -16,6 +18,8 @@ type GtaIndex struct {
 	Transcripts  []*Transcript             // all transcripts of the gene
 	SuffixTree   *datastructure.SuffixTree // a single suffix tree containing all transcript sequences forward and reverse complemented
 	NumSequences int
+	Sequences    []string
+	KeywordTree  *keywordtree.KeywordTree
 }
 
 func (i GtaIndex) TransIndexToTransName(transcriptIndex uint32) string {
@@ -30,10 +34,14 @@ func (i GtaIndex) SequenceIndexIsForward(sequenceIndex uint32) bool {
 	return sequenceIndex%2 == 0
 }
 
-// GetTranscriptSequenceDna returns the DNA sequence of the sequence at the given index.
+// GetSequenceByIndex returns the DNA sequence of the sequence at the given index.
 // This returns the forward sequence if the index is even and the reverse sequence if the index is odd.
-func (i GtaIndex) GetTranscriptSequenceDna(sequenceIndex int) string {
-	return i.SuffixTree.Sequences[sequenceIndex]
+func (i GtaIndex) GetSequenceByIndex(sequenceIndex int) *string {
+	if i.SequenceIndexIsForward(uint32(sequenceIndex)) {
+		return &i.Transcripts[i.SequenceIndexToTranscriptIndex(uint32(sequenceIndex))].SequenceDnaForward
+	} else {
+		return &i.Transcripts[i.SequenceIndexToTranscriptIndex(uint32(sequenceIndex))].SequenceDnaReverse
+	}
 }
 
 // TranslateRwTransPosToFwTransPos translates a relative position revTransPos within a reverse
@@ -176,6 +184,8 @@ type Transcript struct {
 	SequenceDnaReverse53Index int    // the index in the reverse sequence in the sequence list of the suffix tree
 	SequenceLength            int    // the length of the dna sequence
 	Exons                     []*Exon
+	SequenceDnaForward        string
+	SequenceDnaReverse        string
 }
 
 type Exon struct {
@@ -222,46 +232,116 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 
 	gtaIndex.Transcripts = make([]*Transcript, len(annotation.Genes[0].Transcripts))
 
-	gtaIndex.SuffixTree = datastructure.CreateTree()
+	//gtaIndex.SuffixTree = datastructure.CreateTree()
 
-	// add the regular transcripts to the suffix tree and the index
+	gtaIndex.KeywordTree = keywordtree.NewKeywordTree(config.KmerLength())
+
+	// Add the regular transcripts of the first gene to the suffix tree and the index
+	// Only one gene is supported at the moment.
 	for i, transcript := range annotation.Genes[0].Transcripts {
 
-		//the index of the sequence in the suffix tree (used for retrieval)
-		sequenceIndexForward := len(gtaIndex.SuffixTree.Sequences)
+		sequenceIndexForward := gtaIndex.NumSequences
+		sequenceDnaForward := transcript.SequenceDna
 		timerBuildTree = time.Now()
-		gtaIndex.SuffixTree.AddSequence(transcript.SequenceDna, sequenceIndexForward)
+		gtaIndex.KeywordTree.AddAllKeywords(sequenceDnaForward, uint32(sequenceIndexForward))
 		durationBuildTree += time.Since(timerBuildTree)
 		gtaIndex.NumSequences++
 
-		// the index of the sequence in the suffix tree (used for retrieval)
-		sequenceIndexReverse := len(gtaIndex.SuffixTree.Sequences)
+		sequenceIndexReverse := gtaIndex.NumSequences
+		sequenceDnaReverse := utils.ReverseComplementDNA(transcript.SequenceDna)
 		timerBuildTree = time.Now()
-		gtaIndex.SuffixTree.AddSequence(utils.ReverseComplementDNA(transcript.SequenceDna), sequenceIndexReverse)
+		gtaIndex.KeywordTree.AddAllKeywords(sequenceDnaReverse, uint32(sequenceIndexReverse))
 		durationBuildTree += time.Since(timerBuildTree)
 		gtaIndex.NumSequences++
+
+		//// the index of the forward sequence in the suffix tree (used for retrieval)
+		//sequenceIndexForward := len(gtaIndex.SuffixTree.Sequences)
+		//timerBuildTree = time.Now()
+		//gtaIndex.SuffixTree.AddSequence(transcript.SequenceDna, sequenceIndexForward)
+		////gtaIndex.SuffixTree.AddSequence(seq, sequenceIndexForward)
+		//durationBuildTree += time.Since(timerBuildTree)
+		//gtaIndex.NumSequences++
+		//
+		//// the index of the reverse complement sequence in the suffix tree (used for retrieval)
+		//sequenceIndexReverse := len(gtaIndex.SuffixTree.Sequences)
+		//timerBuildTree = time.Now()
+		//gtaIndex.SuffixTree.AddSequence(utils.ReverseComplementDNA(transcript.SequenceDna), sequenceIndexReverse)
+		////gtaIndex.SuffixTree.AddSequence(utils.ReverseComplementDNA(seq), sequenceIndexReverse)
+		//durationBuildTree += time.Since(timerBuildTree)
+		//gtaIndex.NumSequences++
 
 		gtaIndex.Transcripts[i] = &Transcript{
 			TranscriptIdEnsembl:       transcript.TranscriptIdEnsembl,
 			SequenceDnaForward53Index: sequenceIndexForward,
 			SequenceDnaReverse53Index: sequenceIndexReverse,
+			SequenceDnaForward:        sequenceDnaForward,
+			SequenceDnaReverse:        sequenceDnaReverse,
 			SequenceLength:            len(transcript.SequenceDna),
 			Exons:                     make([]*Exon, len(transcript.Exons)),
 		}
 
+		// the exons of the transcript are added to the transcript in the index
 		for j, exon := range transcript.Exons {
 			gtaIndex.Transcripts[i].Exons[j] = &Exon{
 				StartRelative: exon.StartRelative,
 				EndRelative:   exon.EndRelative,
 			}
 		}
+
+		//break
 	}
 
 	// suffix links are only required for tree construction but not for the search
-	timerBuildTree = time.Now()
-	gtaIndex.SuffixTree.RemoveAllSuffixLinks()
-	//gtaIndex.AddGenomicLocationsToNodes()
-	durationBuildTree += time.Since(timerBuildTree)
+	//timerBuildTree = time.Now()
+	//gtaIndex.SuffixTree.RemoveAllSuffixLinks()
+	//durationBuildTree += time.Since(timerBuildTree)
+
+	//posPerSeq := make(map[int][]int)
+	//
+	//for _, node := range gtaIndex.SuffixTree.Nodes {
+	//	//fmt.Println("node id: ", node.Id)
+	//
+	//	for _, pos := range node.Positions {
+	//		//fmt.Println("pos: ", pos)
+	//		posPerSeq[pos.Index] = append(posPerSeq[pos.Index], pos.Start)
+	//	}
+	//}
+	//
+	//fmt.Println(len(gtaIndex.SuffixTree.Sequences))
+	//
+	//for i := 0; i < len(gtaIndex.SuffixTree.Sequences); i++ {
+	//	fmt.Println("seqIndex:\t", i)
+	//	fmt.Println("length:\t\t", len(gtaIndex.SuffixTree.Sequences[i]))
+	//
+	//	seen := make(map[int]bool) // Map to store seen integers
+	//	var unique []int
+	//
+	//	for _, num := range posPerSeq[i] {
+	//		if !seen[num] {
+	//			seen[num] = true
+	//			unique = append(unique, num)
+	//		}
+	//	}
+	//
+	//	sort.Ints(unique)
+	//
+	//	fmt.Println("length pos\t", len(unique))
+	//
+	//	for j := 0; j < len(unique); j++ {
+	//		if unique[j] != j {
+	//			fmt.Println("missing: ", j)
+	//		}
+	//	}
+	//
+	//	fmt.Println("")
+	//}
+
+	/*
+		for seqIndex, positions := range posPerSeq {
+			fmt.Println("seqIndex: ", seqIndex)
+			fmt.Println("positions: ", positions)
+		}
+	*/
 
 	// write the index to file as a serialized gob
 	SerializeFromFile(&gtaIndex, outputFile)
@@ -270,7 +350,7 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 		"build": durationBuildTree.String(),
 		"read":  durationReadReference.String(),
 		"total": time.Since(timerStart).String(),
-	}).Info("Successfully built and serialized GTAMap index")
+	}).Info("Successfully built and serialized the GTAMap index")
 }
 
 func SerializeFromPath(gtaIndex *GtaIndex, filePath string) {
@@ -290,6 +370,22 @@ func SerializeFromFile(gtaIndex *GtaIndex, outputFile *os.File) {
 	enc := gob.NewEncoder(outputFile)
 
 	if err := enc.Encode(gtaIndex); err != nil {
+		log.Fatal("encode error:", err)
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"duration": time.Since(timerStart),
+		"output":   outputFile.Name(),
+	}).Info("Serialized index")
+}
+
+func SerializeFromFileTest(tree *keywordtree.KeywordTree, outputFile *os.File) {
+
+	timerStart := time.Now()
+
+	enc := gob.NewEncoder(outputFile)
+
+	if err := enc.Encode(tree); err != nil {
 		log.Fatal("encode error:", err)
 	}
 

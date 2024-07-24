@@ -154,12 +154,7 @@ func testMapping() {
 
 	timerStartTotal := time.Now()
 
-	timerStart := time.Now()
-
 	gtaIndex := deserializeIndex()
-
-	fmt.Println("read tree")
-	fmt.Println("duration: ", time.Since(timerStart))
 
 	samHeader := sam.Header{
 		Version:                 sam.Version,
@@ -171,7 +166,8 @@ func testMapping() {
 		ToolVersion:             config.ToolVersion(),
 		Transcripts:             make([]*sam.TranscriptInfo, len(gtaIndex.Transcripts)),
 	}
-	// TODO: exclude consensus transcript
+
+	// add the transcripts to the SAM header
 	for i, transcript := range gtaIndex.Transcripts {
 		samHeader.Transcripts[i] = &sam.TranscriptInfo{
 			Id:                  "T" + strconv.Itoa(i),
@@ -179,8 +175,6 @@ func testMapping() {
 			TranscriptLength:    transcript.SequenceLength,
 		}
 	}
-
-	timerStart = time.Now()
 
 	//pathReadsR1 := "./resources/reads/manual/reads_ccr9.1.fq"
 	//pathReadsR2 := "./resources/reads/manual/reads_ccr9.2.fq"
@@ -311,8 +305,18 @@ func main() {
 	logrus.SetLevel(logrus.InfoLevel)
 
 	//buildAndSerializeIndex()
-	//deserializeIndex()
+	//index := deserializeIndex()
 	testMapping()
+
+	//seq := "ATGTGGATAG"
+	//
+	//tree := keywordtree.NewKeywordTree()
+	//tree.AddKeyword(seq, 0, 0)
+	//
+	////tree.PrintEdgeList()
+	//
+	//res := tree.Search("ATGTGGATAG")
+	//fmt.Println(res)
 
 	//buildAndSerializeIndex()
 	////testMapping()

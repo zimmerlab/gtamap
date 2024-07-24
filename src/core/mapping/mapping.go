@@ -30,12 +30,12 @@ func drawNextKmerIndex(startIndices []int) int {
 	return nextIndex
 }
 
-func addKmerMatchToCigar(cigarList *[]rune) *[]rune {
-	for i := 0; i < config.KmerLength(); i++ {
-		*cigarList = append(*cigarList, 'M')
-	}
-	return cigarList
-}
+//func addKmerMatchToCigar(cigarList *[]rune) *[]rune {
+//	for i := 0; i < config.KmerLength(); i++ {
+//		*cigarList = append(*cigarList, 'M')
+//	}
+//	return cigarList
+//}
 
 func finalizeCigar(cigarList *[]rune, startPositionInTranscript uint32, transcript *index.Transcript) (int, string) {
 
@@ -631,9 +631,6 @@ func DetermineReadLocationUnpaired(result *core.ReadMappingPreResult, index *ind
 func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int][]*core.InexactMatchResult, bool) {
 
 	// TODO: move this to config
-	// the exact length of each k-mer
-	lenKmer := 8
-	// TODO: move this to config
 	// the maximum error rate allowed per read
 	errorRate := 0.05
 
@@ -647,7 +644,7 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int][]*core.InexactMa
 
 	logrus.WithFields(logrus.Fields{
 		"maxMismatches": maxMismatches,
-		"numKmers":      len(read.Sequence) / lenKmer,
+		"numKmers":      len(read.Sequence) / int(index.KeywordTree.KeywordLength),
 	}).Debug("discard constraints")
 
 	// the current position within the read
@@ -672,12 +669,12 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int][]*core.InexactMa
 	// generates every k-mer from the read and exact matches it to the reference
 	// it is guaranteed that each k-mer has the length k, if the last k-mer is shorter than k, it is ignored for
 	// the exact matching and must later be extended in the same way that k-mers are extended when they are combined
-	for position < len(read.Sequence)-lenKmer {
+	for position < len(read.Sequence)-int(index.KeywordTree.KeywordLength) {
 
 		countKmer += 1
 
 		// the actual kmer sequence
-		kmer := read.Sequence[position : position+lenKmer]
+		kmer := read.Sequence[position : position+int(index.KeywordTree.KeywordLength)]
 
 		//logrus.WithFields(logrus.Fields{
 		//	"position": position,
@@ -686,7 +683,8 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int][]*core.InexactMa
 		//}).Info("create new kmer")
 
 		// the result of the exact matching of this kmer using the suffix tree
-		mappingResult := index.SuffixTree.FindPatternExact(&kmer)
+		//mappingResult := index.SuffixTree.FindPatternExact(&kmer)
+		mappingResult := index.KeywordTree.FindKeyword(&kmer)
 
 		// contains true for each sequence index that has a match
 		// used to count this k-mer only once for each sequence
@@ -704,7 +702,7 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int][]*core.InexactMa
 
 				// set the source positions for the match
 				match.FromSource = position
-				match.ToSource = position + lenKmer
+				match.ToSource = position + int(index.KeywordTree.KeywordLength)
 
 				// the candidate position of this read based on the matched position on the reference (FromTarget)
 				// and the offset within the read (FromSource)
@@ -715,7 +713,7 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int][]*core.InexactMa
 					continue
 				}
 				// if the candidate position plus the length of the read exceeds the length of the transcript, discard the match
-				if candidatePosition+len(read.Sequence) > len(index.SuffixTree.Sequences[match.SequenceIndex]) {
+				if candidatePosition+len(read.Sequence) > len(*index.GetSequenceByIndex(match.SequenceIndex)) {
 					continue
 				}
 
@@ -777,7 +775,7 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int][]*core.InexactMa
 			break
 		}
 
-		position += lenKmer
+		position += int(index.KeywordTree.KeywordLength)
 	}
 
 	// discard the read because each sequence exceeded the allowed number of mismatches
@@ -897,13 +895,13 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int][]*core.InexactMa
 					// the position within the read sequence
 					readOffset := targetPosition - candidatePosition
 
-					if read.Sequence[readOffset] != index.GetTranscriptSequenceDna(sequenceIndex)[targetPosition] {
+					if read.Sequence[readOffset] != (*index.GetSequenceByIndex(sequenceIndex))[targetPosition] {
 
 						logrus.WithFields(logrus.Fields{
 							"targetPosition": targetPosition,
 							"readOffset":     readOffset,
 							"readBase":       string(read.Sequence[readOffset]),
-							"refBase":        string(index.GetTranscriptSequenceDna(sequenceIndex)[targetPosition]),
+							"refBase":        string((*index.GetSequenceByIndex(sequenceIndex))[targetPosition]),
 						}).Debug("mismatch")
 
 						mismatches = append(mismatches, readOffset)
@@ -944,13 +942,13 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int][]*core.InexactMa
 					// the position within the read sequence
 					readOffset := targetPosition - candidatePosition
 
-					if read.Sequence[readOffset] != index.GetTranscriptSequenceDna(sequenceIndex)[targetPosition] {
+					if read.Sequence[readOffset] != (*index.GetSequenceByIndex(sequenceIndex))[targetPosition] {
 
 						logrus.WithFields(logrus.Fields{
 							"targetPosition": targetPosition,
 							"readOffset":     readOffset,
 							"readBase":       string(read.Sequence[readOffset]),
-							"refBase":        string(index.GetTranscriptSequenceDna(sequenceIndex)[targetPosition]),
+							"refBase":        string((*index.GetSequenceByIndex(sequenceIndex))[targetPosition]),
 						}).Debug("mismatch")
 
 						mismatches = append(mismatches, readOffset)
@@ -985,13 +983,13 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int][]*core.InexactMa
 
 					readOffset := targetPosition - candidatePosition
 
-					if read.Sequence[readOffset] != index.GetTranscriptSequenceDna(sequenceIndex)[targetPosition] {
+					if read.Sequence[readOffset] != (*index.GetSequenceByIndex(sequenceIndex))[targetPosition] {
 
 						logrus.WithFields(logrus.Fields{
 							"targetPosition": targetPosition,
 							"readOffset":     readOffset,
 							"readBase":       string(read.Sequence[readOffset]),
-							"refBase":        string(index.GetTranscriptSequenceDna(sequenceIndex)[targetPosition]),
+							"refBase":        string((*index.GetSequenceByIndex(sequenceIndex))[targetPosition]),
 						}).Debug("mismatch")
 
 						mismatches = append(mismatches, readOffset)
