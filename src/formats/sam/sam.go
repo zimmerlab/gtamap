@@ -56,6 +56,11 @@ type Record struct {
 }
 
 func (entry *Record) String() string {
+
+	if entry == nil {
+		return ""
+	}
+
 	alignmentLineString := fmt.Sprintf("%s\t%s\t%s\t%d\t%d\t%s\t%s\t%d\t%d\t%s\t%s", entry.Qname, entry.Flag.String(), entry.Rname, entry.Pos, entry.Mapq, entry.Cigar, entry.Rnext, entry.Pnext, entry.Tlen, entry.Seq, entry.Qual)
 	//alignmentLineString += fmt.Sprintf("\tXT:Z:T%d", entry.TranscriptId)
 

@@ -520,6 +520,8 @@ func DetermineReadLocationPaired(result *core.ReadMappingPreResult, index *index
 }
 
 func DetermineReadLocationUnpaired(result *core.ReadMappingPreResult, index *index.GtaIndex) *[]*sam.RecordPair {
+
+	// TODO: change to debugging
 	logrus.Info("determine read location unpaired")
 
 	matches := make([]*core.InexactMatchResult, 0)
@@ -537,35 +539,46 @@ func DetermineReadLocationUnpaired(result *core.ReadMappingPreResult, index *ind
 	genePositions := make([]uint32, 0)
 	matchesPerGenePosition := make(map[uint32][]*core.InexactMatchResult)
 
-	fmt.Println(len(matches))
-
 	for _, match := range matches {
 
-		fmt.Println(match)
-
 		if _, ok := matchesPerGenePosition[match.FromGene]; !ok {
+			genePositions = append(genePositions, match.FromGene)
 			matchesPerGenePosition[match.FromGene] = make([]*core.InexactMatchResult, 0)
+			matchesPerGenePosition[match.FromGene] = append(matchesPerGenePosition[match.FromGene], match)
+		} else {
+			matchesPerGenePosition[match.FromGene] = append(matchesPerGenePosition[match.FromGene], match)
 		}
-
-		genePositions = append(genePositions, match.FromGene)
-		matchesPerGenePosition[match.FromGene] = append(matchesPerGenePosition[match.FromGene], match)
 	}
+
+	logrus.Info("check if read is uniquely mapped")
 
 	isAmbiguouslyMapped := false
 
 	if len(genePositions) > 1 {
 		// the read is ambiguously mapped if there are multiple gene positions
+
+		logrus.WithFields(logrus.Fields{
+			"genePositions": genePositions,
+		}).Info("read is ambiguously mapped because of multiple gene positions")
+
 		isAmbiguouslyMapped = true
 	} else {
+		// The read is mapped to a single gene position, but it can still be
+		// ambiguously mapped if the equivalent classes are different.
 
+		// use the first set of equivalence classes as the reference
 		ecIds := matchesPerGenePosition[genePositions[0]][0].EquivalenceClassIds
 
-		// can still be ambiguously mapped if the equivalent classes are different
-		for i, match := range matchesPerGenePosition[genePositions[0]] {
-			if i == 0 {
-				continue
-			}
+		// compare every other set of equivalence classes with the reference
+		for _, match := range matchesPerGenePosition[genePositions[0]][1:] {
+			// the classes do not match
 			if !index.EquivalenceClassIdsMatch(ecIds, match.EquivalenceClassIds) {
+
+				logrus.WithFields(logrus.Fields{
+					"other": ecIds,
+					"this":  match.EquivalenceClassIds,
+				}).Info("read is ambiguously mapped because of different equivalence classes")
+
 				isAmbiguouslyMapped = true
 				break
 			}
@@ -575,26 +588,217 @@ func DetermineReadLocationUnpaired(result *core.ReadMappingPreResult, index *ind
 	recordPairs := make([]*sam.RecordPair, 0)
 
 	if isAmbiguouslyMapped {
+
+		logrus.Info("read is ambiguously mapped")
+
 		if config.IncludeReadsAmbiguouslyMapped() {
+
+			logrus.Info("include ambiguously mapped reads")
+
 			// TODO: return all
-			// TODO: determine main mapping location
+			// TODO: determine main mapping location (currently the first one)
+			isMainMappingLocation := true
+
+			for _, genePosition := range genePositions {
+
+				transcriptIds := make([]int, len(matchesPerGenePosition[genePosition]))
+				for i, match := range matchesPerGenePosition[genePosition] {
+					transcriptIds[i] = int(index.SequenceIndexToTranscriptIndex(uint32(match.SequenceIndex)))
+				}
+
+				if result.ReadR2 != nil {
+					// the reads are paired
+
+					logrus.Info("reads are paired")
+
+					if result.ResultsR1 != nil {
+						// only R1 was mapped
+
+						logrus.Info("only R1 was mapped")
+
+						flagMapped := sam.Flag{}
+						flagMapped.SetPaired()
+						flagMapped.SetMateUnmapped()
+						flagMapped.SetFirstInPair()
+
+						if !isMainMappingLocation {
+							flagMapped.SetNotPrimaryAlignment()
+						}
+
+						isForward := index.SequenceIndexIsForward(uint32(matchesPerGenePosition[genePosition][0].SequenceIndex))
+						if !isForward {
+							flagMapped.SetReverseStrand()
+						}
+
+						cigarString := strconv.Itoa(len(result.ReadR1.Sequence)) + "M"
+
+						mappedRecord := &sam.Record{
+							Qname:         result.ReadR1.Header,
+							Flag:          flagMapped,
+							Rname:         index.Gene.Chromosome,
+							Pos:           int(genePosition),
+							Mapq:          255, // TODO: figure this out
+							Cigar:         cigarString,
+							Rnext:         result.ReadR2.Header,
+							Pnext:         0,
+							Tlen:          0, // set to 0 because only one read was mapped
+							Seq:           result.ReadR1.Sequence,
+							Qual:          result.ReadR1.Quality,
+							TranscriptIds: transcriptIds,
+						}
+
+						flagUnmapped := sam.Flag{}
+						flagUnmapped.SetPaired()
+						flagUnmapped.SetUnmapped()
+						flagUnmapped.SetSecondInPair()
+
+						unmappedRecord := &sam.Record{
+							Qname:         result.ReadR2.Header,
+							Flag:          flagUnmapped,
+							Rname:         "*",
+							Pos:           0,
+							Mapq:          255,
+							Cigar:         "*",
+							Rnext:         result.ReadR1.Header,
+							Pnext:         0,
+							Tlen:          0,
+							Seq:           result.ReadR2.Sequence,
+							Qual:          result.ReadR2.Quality,
+							TranscriptIds: nil,
+						}
+
+						recordPairs = append(recordPairs, &sam.RecordPair{
+							First:  mappedRecord,
+							Second: unmappedRecord,
+						})
+
+					} else {
+						// only R2 was mapped
+
+						logrus.Info("only R2 was mapped")
+
+						flagMapped := sam.Flag{}
+						flagMapped.SetPaired()
+						flagMapped.SetMateUnmapped()
+						flagMapped.SetSecondInPair()
+
+						if !isMainMappingLocation {
+							flagMapped.SetNotPrimaryAlignment()
+						}
+
+						isForward := index.SequenceIndexIsForward(uint32(matchesPerGenePosition[genePosition][0].SequenceIndex))
+						if !isForward {
+							flagMapped.SetReverseStrand()
+						}
+
+						cigarString := strconv.Itoa(len(result.ReadR1.Sequence)) + "M"
+
+						mappedRecord := &sam.Record{
+							Qname:         result.ReadR2.Header,
+							Flag:          flagMapped,
+							Rname:         index.Gene.Chromosome,
+							Pos:           int(genePosition),
+							Mapq:          255,
+							Cigar:         cigarString,
+							Rnext:         result.ReadR1.Header,
+							Pnext:         0,
+							Tlen:          0, // set to 0 because only one read was mapped
+							Seq:           result.ReadR2.Sequence,
+							Qual:          result.ReadR2.Quality,
+							TranscriptIds: transcriptIds,
+						}
+
+						flagUnmapped := sam.Flag{}
+						flagUnmapped.SetPaired()
+						flagUnmapped.SetUnmapped()
+						flagUnmapped.SetFirstInPair()
+
+						unmappedRecord := &sam.Record{
+							Qname:         result.ReadR1.Header,
+							Flag:          flagUnmapped,
+							Rname:         "*",
+							Pos:           0,
+							Mapq:          255,
+							Cigar:         "*",
+							Rnext:         result.ReadR2.Header,
+							Pnext:         0,
+							Tlen:          0,
+							Seq:           result.ReadR1.Sequence,
+							Qual:          result.ReadR1.Quality,
+							TranscriptIds: nil,
+						}
+
+						recordPairs = append(recordPairs, &sam.RecordPair{
+							First:  unmappedRecord,
+							Second: mappedRecord,
+						})
+					}
+				} else {
+					// the read was not paired so only R1 is mapped
+
+					logrus.Info("read was not paired so only R1 was mapped")
+
+					flagMapped := sam.Flag{}
+					isForward := index.SequenceIndexIsForward(uint32(matchesPerGenePosition[genePosition][0].SequenceIndex))
+					if !isForward {
+						flagMapped.SetReverseStrand()
+					}
+
+					cigarString := strconv.Itoa(len(result.ReadR1.Sequence)) + "M"
+
+					mappedRecord := &sam.Record{
+						Qname:         result.ReadR1.Header,
+						Flag:          flagMapped,
+						Rname:         index.Gene.Chromosome,
+						Pos:           int(genePosition),
+						Mapq:          255, // TODO: figure this out
+						Cigar:         cigarString,
+						Rnext:         "*",
+						Pnext:         0,
+						Tlen:          0, // set to 0 because only one read was mapped
+						Seq:           result.ReadR1.Sequence,
+						Qual:          result.ReadR1.Quality,
+						TranscriptIds: transcriptIds,
+					}
+
+					recordPairs = append(recordPairs, &sam.RecordPair{
+						First:  mappedRecord,
+						Second: nil,
+					})
+				}
+
+				isMainMappingLocation = false
+			}
+
 		} else {
 			return nil
 		}
+
 	} else {
 		// The default case where the read was uniquely mapped to a single gene position
 		// and all potential transcript positions span across the same equivalence classes.
 
+		logrus.Info("read was uniquely mapped")
+
 		if result.ReadR2 != nil {
 			// the reads are paired
 
+			logrus.Info("reads are paired")
+
 			if result.ResultsR1 != nil {
 				// only R1 was mapped
+
+				logrus.Info("only R1 was mapped")
 
 				flagMapped := sam.Flag{}
 				flagMapped.SetPaired()
 				flagMapped.SetMateUnmapped()
 				flagMapped.SetFirstInPair()
+
+				isForward := index.SequenceIndexIsForward(uint32(matchesPerGenePosition[genePositions[0]][0].SequenceIndex))
+				if !isForward {
+					flagMapped.SetReverseStrand()
+				}
 
 				cigarString := strconv.Itoa(len(result.ReadR1.Sequence)) + "M"
 
@@ -645,10 +849,17 @@ func DetermineReadLocationUnpaired(result *core.ReadMappingPreResult, index *ind
 			} else {
 				// only R2 was mapped
 
+				logrus.Info("only R2 was mapped")
+
 				flagMapped := sam.Flag{}
 				flagMapped.SetPaired()
 				flagMapped.SetMateUnmapped()
 				flagMapped.SetSecondInPair()
+
+				isForward := index.SequenceIndexIsForward(uint32(matchesPerGenePosition[genePositions[0]][0].SequenceIndex))
+				if !isForward {
+					flagMapped.SetReverseStrand()
+				}
 
 				cigarString := strconv.Itoa(len(result.ReadR1.Sequence)) + "M"
 
@@ -701,6 +912,40 @@ func DetermineReadLocationUnpaired(result *core.ReadMappingPreResult, index *ind
 		} else {
 			// the read was not paired so only R1 is mapped
 
+			logrus.Info("read was not paired so only R1 was mapped")
+
+			flagMapped := sam.Flag{}
+			isForward := index.SequenceIndexIsForward(uint32(matchesPerGenePosition[genePositions[0]][0].SequenceIndex))
+			if !isForward {
+				flagMapped.SetReverseStrand()
+			}
+
+			cigarString := strconv.Itoa(len(result.ReadR1.Sequence)) + "M"
+
+			transcriptIds := make([]int, len(matchesPerGenePosition[genePositions[0]]))
+			for i, match := range matchesPerGenePosition[genePositions[0]] {
+				transcriptIds[i] = int(index.SequenceIndexToTranscriptIndex(uint32(match.SequenceIndex)))
+			}
+
+			mappedRecord := &sam.Record{
+				Qname:         result.ReadR1.Header,
+				Flag:          flagMapped,
+				Rname:         index.Gene.Chromosome,
+				Pos:           int(genePositions[0]),
+				Mapq:          255, // TODO: figure this out
+				Cigar:         cigarString,
+				Rnext:         "*",
+				Pnext:         0,
+				Tlen:          0, // set to 0 because only one read was mapped
+				Seq:           result.ReadR1.Sequence,
+				Qual:          result.ReadR1.Quality,
+				TranscriptIds: transcriptIds,
+			}
+
+			recordPairs = append(recordPairs, &sam.RecordPair{
+				First:  mappedRecord,
+				Second: nil,
+			})
 		}
 	}
 

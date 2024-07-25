@@ -2,7 +2,6 @@ package fastq
 
 import (
 	"bufio"
-	"fmt"
 	"github.com/sirupsen/logrus"
 	"os"
 )
@@ -48,7 +47,7 @@ func InitFromPaths(pathR1Reads string, pathR2Reads string) *Reader {
 
 	// if R2 reads are given, open them as well
 	if len(pathR2Reads) > 0 {
-		fmt.Println("Reverse reads given")
+		logrus.Debug("Reverse reads given")
 		fileR2Reads, errR2 = os.Open(pathR2Reads)
 		if errR2 != nil {
 			logrus.Fatal("Error reading R2 reads", errR2)

@@ -226,6 +226,11 @@ func testMapping() {
 		taskQueueMapping <- mappingTask
 
 		taskCounter++
+
+		// TODO: remove after testing
+		if taskCounter == 2 {
+			//break
+		}
 	}
 
 	close(taskQueueMapping)
