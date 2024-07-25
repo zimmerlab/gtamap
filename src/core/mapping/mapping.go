@@ -6,11 +6,13 @@ import (
 	"github.com/KleinSamuel/gtamap/src/core"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/interval"
+	"github.com/KleinSamuel/gtamap/src/core/timer"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
 	"github.com/sirupsen/logrus"
 	"math/rand"
 	"strconv"
+	"time"
 )
 
 // Info the mapping information about a kmer
@@ -231,7 +233,7 @@ func finalizeCigar(cigarList *[]rune, startPositionInTranscript uint32, transcri
 // After mapping both reads, a list of possible locations is returned which contains the transcript, the position
 // and the locations of the mismatches.
 // The results of R1 and R2 are combined to determine the most likely transcript.
-func MapReadPairDev(readPair *fastq.ReadPair, index *index.GtaIndex) string {
+func MapReadPairDev(readPair *fastq.ReadPair, index *index.GtaIndex, timerChannel chan<- *timer.Timer) string {
 
 	//logrus.Info("map new read pair")
 
@@ -264,22 +266,36 @@ func MapReadPairDev(readPair *fastq.ReadPair, index *index.GtaIndex) string {
 
 	resultString := ""
 
-	resultsR1, wasMappedR1 := MapRead(readPair.ReadR1, index)
+	t := timer.NewTimer()
+
+	timerStart := time.Now()
+
+	resultsR1, wasMappedR1 := MapRead(readPair.ReadR1, index, t)
+
+	t.MapR1 = time.Since(timerStart)
 
 	if wasMappedR1 {
 		result.ResultsR1 = &resultsR1
 	}
 
-	if readPair.ReadR2 != nil {
+	if readPair.ReadR2 != nil && (wasMappedR1 || config.IncludeReadsImproperlyPaired()) {
 
-		resultsR2, wasMappedR2 := MapRead(readPair.ReadR2, index)
+		timerStart = time.Now()
+
+		resultsR2, wasMappedR2 := MapRead(readPair.ReadR2, index, t)
+
+		t.MapR2 = time.Since(timerStart)
 
 		if wasMappedR2 {
 			result.ResultsR2 = &resultsR2
 		}
 	}
 
+	timerStart = time.Now()
+
 	recordPairs := DetermineReadLocation(result, index)
+
+	t.DetermineReadLocation = time.Since(timerStart)
 
 	if recordPairs != nil {
 		for _, recordPair := range *recordPairs {
@@ -287,26 +303,27 @@ func MapReadPairDev(readPair *fastq.ReadPair, index *index.GtaIndex) string {
 		}
 	}
 
+	timerChannel <- t
+
 	return resultString
 }
 
 func DetermineReadLocation(result *core.ReadMappingPreResult, index *index.GtaIndex) *[]*sam.RecordPair {
 
-	logrus.Info("determine read location")
+	logrus.Debug("determine read location")
 
 	if result.ResultsR1 == nil && result.ResultsR2 == nil {
-		logrus.Info("both reads were not mapped")
+		logrus.Debug("both reads were not mapped")
 
 		return nil
 
 	} else if result.ResultsR1 != nil && result.ResultsR2 != nil {
-		logrus.Info("both reads have been mapped")
+		logrus.Debug("both reads have been mapped")
 
-		//return DetermineReadLocationPaired(result, index)
-		return DetermineReadLocationUnpaired(result, index)
+		return DetermineReadLocationPaired(result, index)
 
 	} else {
-		logrus.Info("only one read has been mapped")
+		logrus.Debug("only one read has been mapped")
 
 		return DetermineReadLocationUnpaired(result, index)
 	}
@@ -319,7 +336,8 @@ type ReadLocationsOnReference struct {
 }
 
 func DetermineReadLocationPaired(result *core.ReadMappingPreResult, index *index.GtaIndex) *[]*sam.RecordPair {
-	logrus.Info("determine read location paired")
+
+	logrus.Debug("determine read location paired")
 
 	properPairs := make([]*core.ProperPairCandidate, 0)
 
@@ -381,7 +399,7 @@ func DetermineReadLocationPaired(result *core.ReadMappingPreResult, index *index
 	}
 
 	if !config.IncludeReadsImproperlyPaired() && len(properPairs) == 0 {
-		logrus.Info("no proper pair found")
+		logrus.Debug("no proper pair found")
 		return nil
 	}
 
@@ -398,13 +416,11 @@ func DetermineReadLocationPaired(result *core.ReadMappingPreResult, index *index
 		}
 	}
 
-	fmt.Println("genomic positions: ", len(genomicPositions))
-
 	if len(genomicPositions) > 1 && !config.IncludeReadsAmbiguouslyMapped() {
 
 		logrus.WithFields(logrus.Fields{
 			"genomicPositions": genomicPositions,
-		}).Info("read is ambiguously mapped")
+		}).Debug("read is ambiguously mapped")
 
 		for _, properPair := range properPairs {
 
@@ -522,7 +538,7 @@ func DetermineReadLocationPaired(result *core.ReadMappingPreResult, index *index
 func DetermineReadLocationUnpaired(result *core.ReadMappingPreResult, index *index.GtaIndex) *[]*sam.RecordPair {
 
 	// TODO: change to debugging
-	logrus.Info("determine read location unpaired")
+	logrus.Debug("determine read location unpaired")
 
 	matches := make([]*core.InexactMatchResult, 0)
 
@@ -550,7 +566,7 @@ func DetermineReadLocationUnpaired(result *core.ReadMappingPreResult, index *ind
 		}
 	}
 
-	logrus.Info("check if read is uniquely mapped")
+	logrus.Debug("check if read is uniquely mapped")
 
 	isAmbiguouslyMapped := false
 
@@ -559,7 +575,7 @@ func DetermineReadLocationUnpaired(result *core.ReadMappingPreResult, index *ind
 
 		logrus.WithFields(logrus.Fields{
 			"genePositions": genePositions,
-		}).Info("read is ambiguously mapped because of multiple gene positions")
+		}).Debug("read is ambiguously mapped because of multiple gene positions")
 
 		isAmbiguouslyMapped = true
 	} else {
@@ -577,7 +593,7 @@ func DetermineReadLocationUnpaired(result *core.ReadMappingPreResult, index *ind
 				logrus.WithFields(logrus.Fields{
 					"other": ecIds,
 					"this":  match.EquivalenceClassIds,
-				}).Info("read is ambiguously mapped because of different equivalence classes")
+				}).Debug("read is ambiguously mapped because of different equivalence classes")
 
 				isAmbiguouslyMapped = true
 				break
@@ -589,11 +605,11 @@ func DetermineReadLocationUnpaired(result *core.ReadMappingPreResult, index *ind
 
 	if isAmbiguouslyMapped {
 
-		logrus.Info("read is ambiguously mapped")
+		logrus.Debug("read is ambiguously mapped")
 
 		if config.IncludeReadsAmbiguouslyMapped() {
 
-			logrus.Info("include ambiguously mapped reads")
+			logrus.Debug("include ambiguously mapped reads")
 
 			// TODO: return all
 			// TODO: determine main mapping location (currently the first one)
@@ -609,12 +625,12 @@ func DetermineReadLocationUnpaired(result *core.ReadMappingPreResult, index *ind
 				if result.ReadR2 != nil {
 					// the reads are paired
 
-					logrus.Info("reads are paired")
+					logrus.Debug("reads are paired")
 
 					if result.ResultsR1 != nil {
 						// only R1 was mapped
 
-						logrus.Info("only R1 was mapped")
+						logrus.Debug("only R1 was mapped")
 
 						flagMapped := sam.Flag{}
 						flagMapped.SetPaired()
@@ -675,7 +691,7 @@ func DetermineReadLocationUnpaired(result *core.ReadMappingPreResult, index *ind
 					} else {
 						// only R2 was mapped
 
-						logrus.Info("only R2 was mapped")
+						logrus.Debug("only R2 was mapped")
 
 						flagMapped := sam.Flag{}
 						flagMapped.SetPaired()
@@ -736,7 +752,7 @@ func DetermineReadLocationUnpaired(result *core.ReadMappingPreResult, index *ind
 				} else {
 					// the read was not paired so only R1 is mapped
 
-					logrus.Info("read was not paired so only R1 was mapped")
+					logrus.Debug("read was not paired so only R1 was mapped")
 
 					flagMapped := sam.Flag{}
 					isForward := index.SequenceIndexIsForward(uint32(matchesPerGenePosition[genePosition][0].SequenceIndex))
@@ -778,17 +794,17 @@ func DetermineReadLocationUnpaired(result *core.ReadMappingPreResult, index *ind
 		// The default case where the read was uniquely mapped to a single gene position
 		// and all potential transcript positions span across the same equivalence classes.
 
-		logrus.Info("read was uniquely mapped")
+		logrus.Debug("read was uniquely mapped")
 
 		if result.ReadR2 != nil {
 			// the reads are paired
 
-			logrus.Info("reads are paired")
+			logrus.Debug("reads are paired")
 
 			if result.ResultsR1 != nil {
 				// only R1 was mapped
 
-				logrus.Info("only R1 was mapped")
+				logrus.Debug("only R1 was mapped")
 
 				flagMapped := sam.Flag{}
 				flagMapped.SetPaired()
@@ -849,7 +865,7 @@ func DetermineReadLocationUnpaired(result *core.ReadMappingPreResult, index *ind
 			} else {
 				// only R2 was mapped
 
-				logrus.Info("only R2 was mapped")
+				logrus.Debug("only R2 was mapped")
 
 				flagMapped := sam.Flag{}
 				flagMapped.SetPaired()
@@ -912,7 +928,7 @@ func DetermineReadLocationUnpaired(result *core.ReadMappingPreResult, index *ind
 		} else {
 			// the read was not paired so only R1 is mapped
 
-			logrus.Info("read was not paired so only R1 was mapped")
+			logrus.Debug("read was not paired so only R1 was mapped")
 
 			flagMapped := sam.Flag{}
 			isForward := index.SequenceIndexIsForward(uint32(matchesPerGenePosition[genePositions[0]][0].SequenceIndex))
@@ -971,7 +987,7 @@ func DetermineReadLocationUnpaired(result *core.ReadMappingPreResult, index *ind
 // When matching the 15. k-mer, there must be at least max(0, 15 - 5) = 10 exact matches in any of the sequences.
 // A k-mer can be matched to multiple sequences, for each of which the number of matches is increased but one k-mer
 // can never be counted twice for the same sequence even when there are multiple matches.
-func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int][]*core.InexactMatchResult, bool) {
+func MapRead(read *fastq.Read, index *index.GtaIndex, t *timer.Timer) (map[int][]*core.InexactMatchResult, bool) {
 
 	// The final result of this method. Contains positions of the read on the reference sequence within the
 	// allowed range of mismatches.
@@ -1023,7 +1039,9 @@ func MapRead(read *fastq.Read, index *index.GtaIndex) (map[int][]*core.InexactMa
 
 		// the result of the exact matching of this kmer using the suffix tree
 		//mappingResult := index.SuffixTree.FindPatternExact(&kmer)
+		timerStart := time.Now()
 		mappingResult := index.KeywordTree.FindKeyword(&kmer)
+		t.ExactMatch += time.Since(timerStart)
 
 		// contains true for each sequence index that has a match
 		// used to count this k-mer only once for each sequence

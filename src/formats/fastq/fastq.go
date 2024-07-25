@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"github.com/sirupsen/logrus"
 	"os"
+	"time"
 )
 
 type Read struct {
@@ -20,9 +21,10 @@ type ReadPair struct {
 type Reader struct {
 	scannerR1 *bufio.Scanner
 	scannerR2 *bufio.Scanner
+	Duration  *time.Duration
 }
 
-func InitFromPaths(pathR1Reads string, pathR2Reads string) *Reader {
+func InitFromPaths(pathR1Reads *string, pathR2Reads *string) *Reader {
 
 	logrus.WithFields(logrus.Fields{
 		"R1": pathR1Reads,
@@ -37,7 +39,7 @@ func InitFromPaths(pathR1Reads string, pathR2Reads string) *Reader {
 	var errR2 error = nil
 	var scannerR2 *bufio.Scanner = nil
 
-	fileR1Reads, errR1 = os.Open(pathR1Reads)
+	fileR1Reads, errR1 = os.Open(*pathR1Reads)
 	if errR1 != nil {
 		logrus.Fatal("Error reading R1 reads", errR1)
 	}
@@ -46,9 +48,9 @@ func InitFromPaths(pathR1Reads string, pathR2Reads string) *Reader {
 	logrus.Debug("Initialized reader with R1 reads")
 
 	// if R2 reads are given, open them as well
-	if len(pathR2Reads) > 0 {
+	if pathR2Reads != nil {
 		logrus.Debug("Reverse reads given")
-		fileR2Reads, errR2 = os.Open(pathR2Reads)
+		fileR2Reads, errR2 = os.Open(*pathR2Reads)
 		if errR2 != nil {
 			logrus.Fatal("Error reading R2 reads", errR2)
 		}
@@ -57,13 +59,18 @@ func InitFromPaths(pathR1Reads string, pathR2Reads string) *Reader {
 		logrus.Debug("Initialized reader with R2 reads")
 	}
 
+	d := time.Duration(0)
+
 	return &Reader{
 		scannerR1: scannerR1,
 		scannerR2: scannerR2,
+		Duration:  &d,
 	}
 }
 
 func (r Reader) NextRead() *ReadPair {
+
+	timerStart := time.Now()
 
 	if !r.scannerR1.Scan() {
 		return nil
@@ -101,6 +108,8 @@ func (r Reader) NextRead() *ReadPair {
 			Quality:  quality,
 		}
 	}
+
+	*r.Duration += time.Since(timerStart)
 
 	return &ReadPair{
 		ReadR1: fwRead,

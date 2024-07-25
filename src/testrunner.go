@@ -5,6 +5,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapping"
+	"github.com/KleinSamuel/gtamap/src/core/timer"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
 	"github.com/KleinSamuel/gtamap/src/datawriter"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
@@ -12,8 +13,8 @@ import (
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
 	"github.com/sirupsen/logrus"
 	"os"
+	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -142,7 +143,7 @@ func testFastqReader() {
 	pathReadsFw := "../resources/reads_first_1.1.fq"
 	//pathReadsRv := "../resources/reads_first_1.2.fq"
 
-	reader := fastq.InitFromPaths(pathReadsFw, "")
+	reader := fastq.InitFromPaths(&pathReadsFw, nil)
 
 	read := reader.NextRead()
 
@@ -151,6 +152,8 @@ func testFastqReader() {
 }
 
 func testMapping() {
+
+	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	timerStartTotal := time.Now()
 
@@ -182,7 +185,10 @@ func testMapping() {
 	pathReadsR1 := "/home/sam/Data/isar/sam_fasta_test/fw.fastq"
 	pathReadsR2 := "/home/sam/Data/isar/sam_fasta_test/rw.fastq"
 
-	reader := fastq.InitFromPaths(pathReadsR1, pathReadsR2)
+	//pathReadsR1 := "/home/sam/Data/sra/SRR29933931.fastq"
+	//var pathReadsR2 *string = nil
+
+	reader := fastq.InitFromPaths(&pathReadsR1, &pathReadsR2)
 
 	writer := datawriter.InitFromPath("./out/reads_ccr9.sam")
 	writer.Write(samHeader.String())
@@ -191,6 +197,7 @@ func testMapping() {
 
 	taskQueueMapping := make(chan ReadPairMappingTask)
 	taskQueueWriter := make(chan string)
+	timerChannel := make(chan *timer.Timer)
 
 	// wait group that keeps track of the mapping goroutines that are still running
 	var waitgroupMapping sync.WaitGroup
@@ -198,7 +205,7 @@ func testMapping() {
 	// start the mapping worker goroutine pool
 	for i := 0; i < numWorkers; i++ {
 		waitgroupMapping.Add(1)
-		go mapReadPairWorker(i, taskQueueMapping, taskQueueWriter, &waitgroupMapping, gtaIndex)
+		go mapReadPairWorker(i, taskQueueMapping, taskQueueWriter, &waitgroupMapping, gtaIndex, timerChannel)
 	}
 
 	// wait group that keeps track of the writer goroutine that is still running
@@ -207,6 +214,10 @@ func testMapping() {
 	waitgroupWriter.Add(1)
 	go writeOutputWorker(taskQueueWriter, &waitgroupWriter, writer)
 
+	var waitGroupTimer sync.WaitGroup
+	waitGroupTimer.Add(1)
+	go timerAccumulator(timerChannel, &waitGroupTimer)
+
 	// the number of read pairs that have been processed
 	taskCounter := 0
 
@@ -214,10 +225,10 @@ func testMapping() {
 	for readPair := reader.NextRead(); readPair != nil; readPair = reader.NextRead() {
 
 		// TODO: remove after testing (only process specific read pair)
-		name := strings.Split(readPair.ReadR1.Header, " ")[0]
-		if name != "@3-0002/1" {
-			//continue
-		}
+		//name := strings.Split(readPair.ReadR1.Header, " ")[0]
+		//if name != "@3-0002/1" {
+		//	continue
+		//}
 
 		mappingTask := ReadPairMappingTask{
 			ID:       taskCounter,
@@ -228,22 +239,25 @@ func testMapping() {
 		taskCounter++
 
 		// TODO: remove after testing
-		if taskCounter == 2 {
-			//break
-		}
+		//if taskCounter == 2 {
+		//	break
+		//}
 	}
 
 	close(taskQueueMapping)
 
 	waitgroupMapping.Wait()
 
-	//fmt.Println("mapping finished")
-	//fmt.Println("num tasks: ", taskCounter)
+	close(timerChannel)
+	waitGroupTimer.Wait()
 
 	close(taskQueueWriter)
 
 	waitgroupWriter.Wait()
 	writer.Close()
+
+	fmt.Println("mapping finished")
+	fmt.Println("num tasks: ", taskCounter)
 
 	//fmt.Println("writer finished")
 
@@ -251,12 +265,35 @@ func testMapping() {
 
 	logrus.WithFields(logrus.Fields{
 		"duration": totalDuration,
+		"io":       reader.Duration,
 	}).Info("Finished mapping")
 }
 
 type ReadPairMappingTask struct {
 	ID       int
 	ReadPair *fastq.ReadPair
+}
+
+func timerAccumulator(timerChannel <-chan *timer.Timer, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	totalMapR1 := time.Duration(0)
+	totalMapR2 := time.Duration(0)
+	totalDetermineReadLocation := time.Duration(0)
+	totalExactMatch := time.Duration(0)
+
+	for t := range timerChannel {
+		totalMapR1 += t.MapR1
+		totalMapR2 += t.MapR2
+		totalDetermineReadLocation += t.DetermineReadLocation
+		totalExactMatch += t.ExactMatch
+	}
+
+	logrus.Info("Total mapping time: ", totalMapR1+totalMapR2)
+	logrus.Info("Total mapping time R1: ", totalMapR1)
+	logrus.Info("Total mapping time R2: ", totalMapR2)
+	logrus.Info("Total determine read location time: ", totalDetermineReadLocation)
+	logrus.Info("Total exact match time: ", totalExactMatch)
 }
 
 func writeOutputWorker(taskQueue <-chan string, wg *sync.WaitGroup, writer *datawriter.Writer) {
@@ -273,7 +310,7 @@ func writeOutputWorker(taskQueue <-chan string, wg *sync.WaitGroup, writer *data
 }
 
 func mapReadPairWorker(workerId int, taskQueue <-chan ReadPairMappingTask, taskQueueWriter chan<- string,
-	wg *sync.WaitGroup, gtaIndex *index.GtaIndex) {
+	wg *sync.WaitGroup, gtaIndex *index.GtaIndex, timerChannel chan<- *timer.Timer) {
 
 	logrus.WithFields(logrus.Fields{
 		"workerId": workerId,
@@ -286,10 +323,7 @@ func mapReadPairWorker(workerId int, taskQueue <-chan ReadPairMappingTask, taskQ
 			"task":     task.ID,
 		}).Debug("Processing task")
 
-		// TODO: result is currently only dummy
-		result := mapping.MapReadPairDev(task.ReadPair, gtaIndex)
-
-		//fmt.Println("result: ", result)
+		result := mapping.MapReadPairDev(task.ReadPair, gtaIndex, timerChannel)
 
 		taskQueueWriter <- result
 	}
@@ -299,7 +333,7 @@ func mapReadPairWorker(workerId int, taskQueue <-chan ReadPairMappingTask, taskQ
 
 	logrus.WithFields(logrus.Fields{
 		"workerId": workerId,
-	}).Info("Finished mapReadPairWorker")
+	}).Debug("Finished mapReadPairWorker")
 }
 
 func main() {
