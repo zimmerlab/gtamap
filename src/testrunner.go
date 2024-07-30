@@ -343,9 +343,9 @@ func main() {
 	})
 	logrus.SetLevel(logrus.InfoLevel)
 
-	//buildAndSerializeIndex()
+	buildAndSerializeIndex()
 	//index := deserializeIndex()
-	testMapping()
+	//testMapping()
 
 	//seq := "ATGTGGATAG"
 	//
