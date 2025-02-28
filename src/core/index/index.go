@@ -59,6 +59,11 @@ type GtaIndex struct {
 	EquivalenceClasses []*EquivalenceClass
 }
 
+type GenomeIndex struct {
+	Sequence    *string // the genome sequence
+	KeywordTree *keywordtree.KeywordTree
+}
+
 func (i GtaIndex) TransIndexToTransName(transcriptIndex uint32) string {
 	return i.Transcripts[transcriptIndex].TranscriptIdEnsembl
 }
@@ -304,6 +309,16 @@ func (i GtaIndex) EquivalenceClassIdsMatch(ecIds1 []uint32, ecIds2 []uint32) boo
 	}
 
 	return true
+}
+
+func BuildGenomeIndex(sequence *string) *GenomeIndex {
+
+	var index = GenomeIndex{
+		Sequence:    sequence,
+		KeywordTree: keywordtree.NewKeywordTree(config.KmerLength()),
+	}
+
+	index.KeywordTree.AddSequenceToKeywordTree(sequence)
 }
 
 func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os.File) {

@@ -61,6 +61,25 @@ func buildAndSerializeIndex() {
 	index.BuildAndSerializeIndex(gtfFile, fastaFile, outputFile)
 }
 
+func buildAndSerializeIndexGenome() {
+
+	pathFasta := "./resources/ENSG00000173585.zeroed.fasta"
+	pathOutput := "./resources/ENSG00000173585.genome.gtai"
+
+	fastaFile, errFasta := os.Open(pathFasta)
+	if errFasta != nil {
+		logrus.Fatal("Error reading fasta file", errFasta)
+	}
+
+	outputFile, errOutput := os.Create(pathOutput)
+	if errOutput != nil {
+		logrus.Fatal("Error creating output file (.fai)", errOutput)
+	}
+
+	index.BuildAndSerializeIndexGenome(fastaFile, outputFile)
+
+}
+
 func deserializeIndex() *index.GtaIndex {
 	return index.DezerializeFromPath("./resources/ENSG00000173585.dev.gtai")
 }
@@ -182,8 +201,8 @@ func testMapping() {
 	//pathReadsR1 := "./resources/reads/manual/reads_ccr9.1.fq"
 	//pathReadsR2 := "./resources/reads/manual/reads_ccr9.2.fq"
 
-	pathReadsR1 := "/home/sam/Data/isar/sam_fasta_test/fw.fastq"
-	pathReadsR2 := "/home/sam/Data/isar/sam_fasta_test/rw.fastq"
+	pathReadsR1 := "/home/sam/Data/genome-sam/1m.fw.fq"
+	pathReadsR2 := "/home/sam/Data/genome-sam/1m.rw.fq"
 
 	//pathReadsR1 := "/home/sam/Data/sra/SRR29933931.fastq"
 	//var pathReadsR2 *string = nil
