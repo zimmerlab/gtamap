@@ -9,8 +9,8 @@ import (
 
 type Read struct {
 	Header   string
-	Sequence string
-	Quality  string
+	Sequence *[]byte
+	Quality  *[]byte
 }
 
 type ReadPair struct {
@@ -41,7 +41,7 @@ func InitFromPaths(pathR1Reads *string, pathR2Reads *string) *Reader {
 
 	fileR1Reads, errR1 = os.Open(*pathR1Reads)
 	if errR1 != nil {
-		logrus.Fatal("Error reading R1 reads", errR1)
+		logrus.Fatal("Error reading R1 reads: ", errR1)
 	}
 	scannerR1 = bufio.NewScanner(fileR1Reads)
 
@@ -52,7 +52,7 @@ func InitFromPaths(pathR1Reads *string, pathR2Reads *string) *Reader {
 		logrus.Debug("Reverse reads given")
 		fileR2Reads, errR2 = os.Open(*pathR2Reads)
 		if errR2 != nil {
-			logrus.Fatal("Error reading R2 reads", errR2)
+			logrus.Fatal("Error reading R2 reads: ", errR2)
 		}
 		scannerR2 = bufio.NewScanner(fileR2Reads)
 
@@ -78,15 +78,15 @@ func (r Reader) NextRead() *ReadPair {
 
 	header := r.scannerR1.Text()
 	r.scannerR1.Scan()
-	sequence := r.scannerR1.Text()
+	sequence := r.scannerR1.Bytes()
 	r.scannerR1.Scan()
 	r.scannerR1.Scan()
-	quality := r.scannerR1.Text()
+	quality := r.scannerR1.Bytes()
 
 	var fwRead *Read = &Read{
 		Header:   header,
-		Sequence: sequence,
-		Quality:  quality,
+		Sequence: &sequence,
+		Quality:  &quality,
 	}
 	var rvRead *Read = nil
 
@@ -97,15 +97,15 @@ func (r Reader) NextRead() *ReadPair {
 
 		header := r.scannerR2.Text()
 		r.scannerR2.Scan()
-		sequence := r.scannerR2.Text()
+		sequence := r.scannerR2.Bytes()
 		r.scannerR2.Scan()
 		r.scannerR2.Scan()
-		quality := r.scannerR2.Text()
+		quality := r.scannerR2.Bytes()
 
 		rvRead = &Read{
 			Header:   header,
-			Sequence: sequence,
-			Quality:  quality,
+			Sequence: &sequence,
+			Quality:  &quality,
 		}
 	}
 

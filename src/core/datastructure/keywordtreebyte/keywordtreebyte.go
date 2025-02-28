@@ -1,10 +1,15 @@
-package keywordtree
+package keywordtreebyte
 
 import (
 	"fmt"
-	"github.com/KleinSamuel/gtamap/src/core"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/matchutils"
 	"github.com/sirupsen/logrus"
 )
+
+type Position struct {
+	SequenceIndex uint32
+	Position      uint32
+}
 
 type Node struct {
 	Id        uint32
@@ -17,14 +22,9 @@ type Edge struct {
 	Label byte
 }
 
-type Position struct {
-	SequenceIndex       uint32
-	Position            uint32
-	EquivalenceClassIds []uint32
-}
-
 type KeywordTree struct {
 	KeywordLength uint8            // the length of every keyword in this tree
+	NumSequences  uint8            // the number of sequences in the tree
 	RootId        uint32           // the id of the root node
 	Nodes         map[uint32]*Node // all nodes in the tree, key = node id
 }
@@ -36,6 +36,7 @@ func NewKeywordTree(keywordLength uint8) *KeywordTree {
 	}
 
 	return &KeywordTree{
+		NumSequences:  0,
 		KeywordLength: keywordLength,
 		RootId:        0,
 		Nodes:         map[uint32]*Node{0: rootNode},
@@ -47,7 +48,7 @@ func NewKeywordTree(keywordLength uint8) *KeywordTree {
 // For every character in the keyword either the existing edge is followed or a new edge is created.
 // The last node on which this keyword ends is returned.
 // The position of the keyword in the sequence is not added in this function but must be added afterward.
-func (t *KeywordTree) AddKeyword(keyword string) *Node {
+func (t *KeywordTree) AddKeyword(keyword []byte) *Node {
 
 	if len(keyword) != int(t.KeywordLength) {
 		logrus.WithFields(logrus.Fields{
@@ -88,12 +89,11 @@ func (t *KeywordTree) AddKeyword(keyword string) *Node {
 	return activeNode
 }
 
-func (t *KeywordTree) FindKeyword(keyword *string) *core.ExactMatchResult {
+func (t *KeywordTree) FindKeyword(keyword *[]byte, posInRead int) []*matchutils.Match {
 
 	activeNode := t.Nodes[t.RootId]
 
 	for i := 0; i < len(*keyword); i++ {
-
 		if nextNodeId, ok := activeNode.Edges[(*keyword)[i]]; ok {
 			// there is an edge with the current character
 			// update the active node to the next node
@@ -105,16 +105,17 @@ func (t *KeywordTree) FindKeyword(keyword *string) *core.ExactMatchResult {
 		}
 	}
 
-	result := &core.ExactMatchResult{
-		Matches: make([]*core.SequenceMatch, len(activeNode.Positions)),
-	}
+	result := make([]*matchutils.Match, len(activeNode.Positions))
 
 	for i, position := range activeNode.Positions {
-		result.Matches[i] = &core.SequenceMatch{
-			SequenceIndex:       int(position.SequenceIndex),
-			FromTarget:          int(position.Position),
-			ToTarget:            int(position.Position + uint32(len(*keyword))),
-			EquivalenceClassIds: position.EquivalenceClassIds,
+
+		result[i] = &matchutils.Match{
+			SequenceIndex: int(position.SequenceIndex),
+			FromGenome:    int(position.Position),
+			ToGenome:      int(position.Position + uint32(len(*keyword))),
+			FromRead:      posInRead,
+			ToRead:        posInRead + int(t.KeywordLength),
+			StartGenome:   int(position.Position) - posInRead,
 		}
 	}
 
@@ -122,7 +123,6 @@ func (t *KeywordTree) FindKeyword(keyword *string) *core.ExactMatchResult {
 }
 
 func (t *KeywordTree) PrintEdgeList() {
-
 	for nodeId, node := range t.Nodes {
 		for label, to := range node.Edges {
 			fmt.Println(nodeId, to, string(label))

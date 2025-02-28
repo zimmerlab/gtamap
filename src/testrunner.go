@@ -61,25 +61,6 @@ func buildAndSerializeIndex() {
 	index.BuildAndSerializeIndex(gtfFile, fastaFile, outputFile)
 }
 
-func buildAndSerializeIndexGenome() {
-
-	pathFasta := "./resources/ENSG00000173585.zeroed.fasta"
-	pathOutput := "./resources/ENSG00000173585.genome.gtai"
-
-	fastaFile, errFasta := os.Open(pathFasta)
-	if errFasta != nil {
-		logrus.Fatal("Error reading fasta file", errFasta)
-	}
-
-	outputFile, errOutput := os.Create(pathOutput)
-	if errOutput != nil {
-		logrus.Fatal("Error creating output file (.fai)", errOutput)
-	}
-
-	index.BuildAndSerializeIndexGenome(fastaFile, outputFile)
-
-}
-
 func deserializeIndex() *index.GtaIndex {
 	return index.DezerializeFromPath("./resources/ENSG00000173585.dev.gtai")
 }
@@ -362,7 +343,9 @@ func main() {
 	})
 	logrus.SetLevel(logrus.InfoLevel)
 
-	buildAndSerializeIndex()
+	buildAndSerializeIndexGenome()
+
+	//buildAndSerializeIndex()
 	//index := deserializeIndex()
 	//testMapping()
 

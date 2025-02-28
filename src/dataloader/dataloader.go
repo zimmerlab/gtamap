@@ -1,6 +1,8 @@
 package dataloader
 
 import (
+	"bufio"
+	"bytes"
 	"github.com/KleinSamuel/gtamap/src/formats/fasta"
 	"github.com/KleinSamuel/gtamap/src/formats/gtf"
 	"github.com/sirupsen/logrus"
@@ -115,6 +117,26 @@ func GenerateInputForIndex(gtfFile *os.File, fastaFile *os.File, fastaIndexFile 
 	}
 
 	return annotation
+}
+
+func ExtractSequenceFromSingleHeaderFasta(fastaFile *os.File) ([]byte, error) {
+
+	scanner := bufio.NewScanner(fastaFile)
+
+	var sequence []byte
+
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) > 0 && line[0] != '>' {
+			sequence = append(sequence, bytes.TrimSpace(line)...)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return sequence, nil
 }
 
 func ExtractSequenceAsStringFromFasta(fastaFile *os.File, fastaIndex *fasta.Index, chromosome string, startGenomic uint32, endGenomic uint32) string {

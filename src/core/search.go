@@ -66,8 +66,8 @@ type DiscardStepMatchInformation struct {
 
 type SequenceMatches struct {
 	SequenceIndex int                         // the index of the sequence within the target sequences
-	NumMatches    int                         // the number of unique k-mer matches to this sequence
-	Matches       MatchesSortableByFromSource // the matches to this sequence
+	NumMatches    int                         // the number of unique k-mer matchutils to this sequence
+	Matches       MatchesSortableByFromSource // the matchutils to this sequence
 }
 
 type ReadMapResult struct {

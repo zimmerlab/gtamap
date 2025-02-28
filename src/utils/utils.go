@@ -41,3 +41,31 @@ func ReverseString(s string) string {
 	}
 	return string(runes)
 }
+
+var complementMapBytes = map[byte]byte{
+	'A': 'T',
+	'T': 'A',
+	'G': 'C',
+	'C': 'G',
+}
+
+func ReverseComplementDnaBytes(dna []byte) []byte {
+	return ReverseBytes(ComplementDnaBytes(dna))
+}
+
+func ComplementDnaBytes(dna []byte) []byte {
+	complement := make([]byte, len(dna))
+
+	for i, nucleotide := range dna {
+		complement[i] = complementMapBytes[nucleotide]
+	}
+
+	return complement
+}
+
+func ReverseBytes(s []byte) []byte {
+	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
+		s[i], s[j] = s[j], s[i]
+	}
+	return s
+}
