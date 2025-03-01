@@ -135,7 +135,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 
 		// TODO: remove after testing (only process specific read pair)
 		name := strings.Split(readPair.ReadR1.Header, " ")[0]
-		if name != "@3-0000/3-fw" {
+		if name != "@3-0000/6-fw" {
 			continue
 		}
 
@@ -258,10 +258,18 @@ func FindAnchors(pair *fastq.ReadPair, genomeIndex *index.GenomeIndex) {
 			continue
 		}
 
+		logrus.Info("computing best match for sequence with index: ", seqIndex)
+
 		// 1. find the best diagonal (most matches)
 		// 2. find gaps in diagonal (unmatched regions via regionvector)
-		// 3. fill gaps in digonal (easy just check each position for a match or mismatch)
-		// 4. iterate repeat 1-4 until every position in the read was matched
+		// 3. fill gaps in digonal (each position for a match or mismatch)
+		// 4. iterate repeat 1-4 until there are no fitting diagonals left
+		// now there are multiple options left:
+		// - the read is fully matched already -> done
+		// - there are multiple diagonals with unmatched positions in between
+		//   (probably due to a junction -> extend both diagonals as far as possible)
+		// - there are unmatched positions in the front or back of the read
+		//   (extend but if not possible then search for another diagonal with shorter kmer)
 
 		result := matchutils.ReadMatchResult{
 			SequenceIndex:  seqIndex,
@@ -270,41 +278,43 @@ func FindAnchors(pair *fastq.ReadPair, genomeIndex *index.GenomeIndex) {
 			MismatchesRead: make([]int, 0),
 		}
 
-		diagonalsUsed := make(map[int]bool)
+		diagonalHandler := matchutils.NewDiagonalHandlerWithData(sequenceMatches.MatchesPerDiagonal)
 
 		for result.MatchedRead.Length() < len(*pair.ReadR1.Sequence) {
 
-			bestDiagonal := -1
-			bestNumMatches := 0
+			logrus.Info("searching for next best diagonal")
 
-			for i, diagonal := range sequenceMatches.MatchesPerDiagonal {
-				if len(diagonal) > bestNumMatches && !diagonalsUsed[i] {
-					bestDiagonal = i
-					bestNumMatches = len(diagonal)
-				}
-			}
+			bestDiagonal, bestDiagonalLength := diagonalHandler.GetBestDiagonal()
 
 			if bestDiagonal == -1 {
-				fmt.Println("No best diagonal found")
+				logrus.Info("no suitable diagonal found")
 				break
 			}
-
-			diagonalsUsed[bestDiagonal] = true
 
 			diagonalRead := regionvector.NewRegionVector()
 			diagonalGenome := regionvector.NewRegionVector()
 
 			for _, match := range sequenceMatches.MatchesPerDiagonal[bestDiagonal] {
 				// the region can not be part of another diagonal that is already used
+				if match.Used {
+					continue
+				}
 				diagonalRead.AddRegion(match.FromRead, match.ToRead)
 				diagonalGenome.AddRegion(match.FromGenome, match.ToGenome)
 			}
 
-			// find gaps in diagonal
-			fmt.Println("diagonal read: ", diagonalRead)
-			fmt.Println("diagonal genome: ", diagonalGenome)
+			logrus.WithFields(logrus.Fields{
+				"posGenome": bestDiagonal,
+				"length":    bestDiagonalLength,
+				"read":      diagonalRead,
+				"genome":    diagonalGenome,
+				"gaps":      len(diagonalRead.Regions) - 1,
+			}).Info("found best diagonal")
 
+			// find gaps in diagonal and fill them (matches and mismatches)
 			mismatches := make([]int, 0)
+
+			foundGap := len(diagonalRead.Regions) > 1
 
 			// more than one element means there is a gap
 			// the regionvectors of read and genome should have the same length as they are coupled
@@ -312,6 +322,11 @@ func FindAnchors(pair *fastq.ReadPair, genomeIndex *index.GenomeIndex) {
 
 				gapRead := diagonalRead.GetFirstGap()
 				gapGenome := diagonalGenome.GetFirstGap()
+
+				logrus.WithFields(logrus.Fields{
+					"read":   gapRead,
+					"genome": gapGenome,
+				}).Info("found gap")
 
 				diagonalRead.AddRegion(gapRead.Start, gapRead.End)
 				for i := gapRead.Start; i < gapRead.End; i++ {
@@ -322,26 +337,51 @@ func FindAnchors(pair *fastq.ReadPair, genomeIndex *index.GenomeIndex) {
 
 					if readByte != genomeByte {
 						mismatches = append(mismatches, i)
+
+						logrus.Info("mismatch at read position: ", i)
 					}
 				}
 				diagonalGenome.AddRegion(gapGenome.Start, gapGenome.End)
 			}
 
-			fmt.Println("diagonal read after gap filling: ", diagonalRead)
-			fmt.Println("diagonal genome after gap filling: ", diagonalGenome)
-			fmt.Println("mismatches: ", mismatches)
+			if foundGap {
+				logrus.WithFields(logrus.Fields{
+					"read":       diagonalRead,
+					"genome":     diagonalGenome,
+					"mismatches": mismatches,
+				}).Info("filled gap")
+			}
 
 			// add digonal to result (diagonal rv should have length 1 after gap filling)
 			result.MatchedRead.AddRegion(diagonalRead.GetFirstRegion().Start, diagonalRead.GetFirstRegion().End)
 			result.MatchedGenome.AddRegion(diagonalGenome.GetFirstRegion().Start, diagonalGenome.GetFirstRegion().End)
 			result.MismatchesRead = append(result.MismatchesRead, mismatches...)
 
+			// remove diagonal from handler
+			diagonalHandler.ConsumeDiagonal(bestDiagonal)
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"read":   result.MatchedRead,
+			"genome": result.MatchedGenome,
+		}).Info("done processing diagonals")
+
+		if result.MatchedRead.Length() == len(*pair.ReadR1.Sequence) {
+			fmt.Println("MATCHED FULLY")
 			break
 		}
 
-		fmt.Println("seq index: ", result.SequenceIndex)
-		fmt.Println("matched read: ", result.MatchedRead)
-		fmt.Println("matched genome: ", result.MatchedGenome)
+		if len(result.MatchedRead.Regions) > 1 {
+			fmt.Println("UNMATCHED POSITIONS WITHIN READ")
+		}
+
+		if result.MatchedRead.GetFirstRegion().Start > 0 {
+			fmt.Println("UNMATCHED POSITIONS IN FRONT OF READ")
+		}
+
+		if result.MatchedRead.GetLastRegion().End < len(*pair.ReadR1.Sequence) {
+			fmt.Println("UNMATCHED POSITIONS IN BACK OF READ")
+		}
 
 		break
 	}
