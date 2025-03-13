@@ -2,6 +2,7 @@ package index
 
 import (
 	"encoding/gob"
+	"fmt"
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/genemodel"
@@ -12,6 +13,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
 	"log"
+	"math"
 	"os"
 	"time"
 )
@@ -548,11 +550,26 @@ type GenomeIndex struct {
 	Sequence        *[]byte                      // the genome sequence
 	SequenceRevComp *[]byte                      // the reverse complement of the genome sequence
 	KeywordTree     *keywordtreebyte.KeywordTree // the keyword tree containing all kmers of both genome sequences
+	KeywordMap      map[[10]byte][]*keywordtreebyte.Position
 }
 
-func (i GenomeIndex) AddSequenceToKeywordTree(sequence *[]byte, sequenceIndex uint32) {
+func (i GenomeIndex) AddKeywordToMap(keyword [10]byte, sequenceIndex uint8, position uint32) {
+	if _, ok := i.KeywordMap[keyword]; !ok {
+		i.KeywordMap[keyword] = make([]*keywordtreebyte.Position, 0)
+	}
+	i.KeywordMap[keyword] = append(i.KeywordMap[keyword], &keywordtreebyte.Position{
+		SequenceIndex: sequenceIndex,
+		Position:      position,
+	})
+}
 
-	for kStart := 0; kStart < len(*sequence)-int(i.KeywordTree.KeywordLength); kStart++ {
+func (i GenomeIndex) GetKeywordFromMap(keyword [10]byte) []*keywordtreebyte.Position {
+	return i.KeywordMap[keyword]
+}
+
+func (i GenomeIndex) AddSequenceToKeywordTree(sequence *[]byte, sequenceIndex uint8) {
+
+	for kStart := 0; kStart <= len(*sequence)-int(i.KeywordTree.KeywordLength); kStart++ {
 
 		kEnd := kStart + int(i.KeywordTree.KeywordLength)
 
@@ -562,7 +579,18 @@ func (i GenomeIndex) AddSequenceToKeywordTree(sequence *[]byte, sequenceIndex ui
 			SequenceIndex: sequenceIndex,
 			Position:      uint32(kStart),
 		})
+
+		seqBytes := *(*[10]byte)((*sequence)[kStart:kEnd])
+
+		//fmt.Println("seqBytes: ", seqBytes, string((*sequence)[kStart:kEnd]))
+
+		i.AddKeywordToMap(seqBytes, sequenceIndex, uint32(kStart))
 	}
+
+	fmt.Println(len(*sequence))
+	fmt.Println((*sequence)[len(*sequence)-10:])
+	fmt.Println(string((*sequence)[len(*sequence)-10:]))
+
 }
 
 func BuildGenomeIndex(sequence *[]byte) *GenomeIndex {
@@ -573,6 +601,7 @@ func BuildGenomeIndex(sequence *[]byte) *GenomeIndex {
 		Sequence:        sequence,
 		SequenceRevComp: &sequenceRevComp,
 		KeywordTree:     keywordtreebyte.NewKeywordTree(config.KmerLength()),
+		KeywordMap:      make(map[[10]byte][]*keywordtreebyte.Position, int(math.Pow(4, 10))),
 	}
 
 	index.AddSequenceToKeywordTree(index.Sequence, 0)

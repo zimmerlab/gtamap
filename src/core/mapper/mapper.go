@@ -11,7 +11,9 @@ import (
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
 	"github.com/sirupsen/logrus"
+	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -36,9 +38,11 @@ func MapperWorker(workerId int, taskQueue <-chan MappingTask, taskQueueWriter ch
 			"task":     task.ID,
 		}).Debug("Processing task")
 
-		result := MapReadPair(task.ReadPair, genomeIndex, timerChannel)
+		result, isMappable := MapReadPair(task.ReadPair, genomeIndex, timerChannel)
 
-		taskQueueWriter <- result
+		if isMappable {
+			taskQueueWriter <- result
+		}
 	}
 
 	// signal that the worker has finished
@@ -135,7 +139,10 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 
 		// TODO: remove after testing (only process specific read pair)
 		name := strings.Split(readPair.ReadR1.Header, " ")[0]
-		if name != "@3-0000/6-fw" {
+		//if name != "@3-0000/7-fw" {
+		//	continue
+		//}
+		if name != "@7" {
 			continue
 		}
 
@@ -176,54 +183,98 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	}).Info("Finished mapping")
 }
 
-func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex, timerChannel chan<- *timer.Timer) string {
+func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex, timerChannel chan<- *timer.Timer) (string, bool) {
 
 	keepFw := Filter(readPair.ReadR1.Sequence, genomeIndex)
 	keepRw := Filter(readPair.ReadR2.Sequence, genomeIndex)
 
 	if !keepFw || !keepRw {
-		return "DISCARD\n"
+		return "", false
 	}
 
-	FindAnchors(readPair, genomeIndex)
+	resultFw, isMappableFw := MapRead(readPair.ReadR1, genomeIndex)
+	resultRw, isMappableRw := MapRead(readPair.ReadR2, genomeIndex)
 
-	return "result\n"
+	if !isMappableFw || !isMappableRw {
+		return "", false
+	}
+
+	if len(resultFw) == 0 || len(resultRw) == 0 {
+		return "", false
+	}
+
+	resString := readPair.ReadR1.Header + "_fw\t"
+	for _, resFw := range resultFw {
+		resString += strconv.Itoa(resFw.SequenceIndex) + ":" + strconv.Itoa(resFw.MatchedGenome.GetFirstRegion().Start) + " "
+	}
+	resString = resString + "\n"
+
+	resString += readPair.ReadR2.Header + "_rw\t"
+	for _, resRw := range resultRw {
+		resString += strconv.Itoa(resRw.SequenceIndex) + ":" + strconv.Itoa(resRw.MatchedGenome.GetFirstRegion().Start) + " "
+	}
+	resString = resString + "\n"
+
+	return resString, true
 }
 
 // Filter the read sequence by checking if it contains at least 5 matching kmers
-// TODO: replace this by map
 func Filter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
 
 	numMatching := 0
+
+	numMatchingFw := 0
+	numMatchingRw := 0
 
 	for i := 0; i <= len(*readSequence)-(int(config.KmerLength())); i += int(config.KmerLength()) {
 
 		kmer := (*readSequence)[i : i+int(config.KmerLength())]
 
-		matches := genomeIndex.KeywordTree.FindKeyword(&kmer, i)
+		//matches := genomeIndex.KeywordTree.FindKeyword(&kmer, i)
+		matches := genomeIndex.GetKeywordFromMap(*(*[10]byte)(kmer))
+
+		okFw := false
+		okRv := false
+		for _, m := range matches {
+			if m.SequenceIndex == 0 {
+				okFw = true
+			} else {
+				okRv = true
+			}
+		}
+
+		if okFw {
+			numMatchingFw++
+		}
+		if okRv {
+			numMatchingRw++
+		}
 
 		if matches != nil {
 			numMatching++
 		}
 	}
 
-	return numMatching >= 5
+	fmt.Println("numMatchingFw: ", numMatchingFw)
+	fmt.Println("numMatchingRw: ", numMatchingRw)
+
+	return numMatching >= 7
 }
 
-func FindAnchors(pair *fastq.ReadPair, genomeIndex *index.GenomeIndex) {
+func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]matchutils.ReadMatchResult, bool) {
 
-	fmt.Println("FindAnchors")
-
-	//diagonals := make(map[int]int)
+	logrus.WithFields(logrus.Fields{
+		"read": read.Header,
+	}).Info("Mapping read")
 
 	globalMatches := matchutils.GlobalMatchResult{
 		MatchesPerSequence: make([]*matchutils.SequenceMatchResult, genomeIndex.KeywordTree.NumSequences),
 	}
 
 	// create all non-overlapping k-mers for the read pair
-	for i := 0; i <= len(*pair.ReadR1.Sequence)-(int(config.KmerLength())); i += int(config.KmerLength()) {
+	for i := 0; i <= len(*read.Sequence)-(int(config.KmerLength())); i += int(config.KmerLength()) {
 
-		kmer := (*pair.ReadR1.Sequence)[i : i+int(config.KmerLength())]
+		kmer := (*read.Sequence)[i : i+int(config.KmerLength())]
 
 		match := genomeIndex.KeywordTree.FindKeyword(&kmer, i)
 
@@ -252,6 +303,20 @@ func FindAnchors(pair *fastq.ReadPair, genomeIndex *index.GenomeIndex) {
 		}
 	}
 
+	results := make([]matchutils.ReadMatchResult, 0)
+
+	for seqIndex, sequenceMatches := range globalMatches.MatchesPerSequence {
+
+		if sequenceMatches == nil {
+			continue
+		}
+
+		for diagonal, matches := range sequenceMatches.MatchesPerDiagonal {
+			fmt.Println(seqIndex, diagonal, len(matches))
+		}
+	}
+
+sequenceLoop:
 	for seqIndex, sequenceMatches := range globalMatches.MatchesPerSequence {
 
 		if sequenceMatches == nil {
@@ -280,7 +345,7 @@ func FindAnchors(pair *fastq.ReadPair, genomeIndex *index.GenomeIndex) {
 
 		diagonalHandler := matchutils.NewDiagonalHandlerWithData(sequenceMatches.MatchesPerDiagonal)
 
-		for result.MatchedRead.Length() < len(*pair.ReadR1.Sequence) {
+		for result.MatchedRead.Length() < len(*read.Sequence) {
 
 			logrus.Info("searching for next best diagonal")
 
@@ -331,7 +396,7 @@ func FindAnchors(pair *fastq.ReadPair, genomeIndex *index.GenomeIndex) {
 				diagonalRead.AddRegion(gapRead.Start, gapRead.End)
 				for i := gapRead.Start; i < gapRead.End; i++ {
 
-					readByte := (*pair.ReadR1.Sequence)[i]
+					readByte := (*read.Sequence)[i]
 					gIndex := diagonalGenome.GetFirstRegion().Start + i
 					genomeByte := (*genomeIndex.Sequence)[gIndex]
 
@@ -339,6 +404,12 @@ func FindAnchors(pair *fastq.ReadPair, genomeIndex *index.GenomeIndex) {
 						mismatches = append(mismatches, i)
 
 						logrus.Info("mismatch at read position: ", i)
+
+						// TODO: make max allowed mismatches configurable
+						if len(mismatches) > 5 {
+							logrus.Info("too many mismatches")
+							continue sequenceLoop
+						}
 					}
 				}
 				diagonalGenome.AddRegion(gapGenome.Start, gapGenome.End)
@@ -366,23 +437,219 @@ func FindAnchors(pair *fastq.ReadPair, genomeIndex *index.GenomeIndex) {
 			"genome": result.MatchedGenome,
 		}).Info("done processing diagonals")
 
-		if result.MatchedRead.Length() == len(*pair.ReadR1.Sequence) {
+		if result.MatchedRead.Length() == len(*read.Sequence) {
 			fmt.Println("MATCHED FULLY")
-			break
+		} else {
+
+			if len(result.MatchedRead.Regions) > 1 {
+				fmt.Println("UNMATCHED POSITIONS WITHIN READ")
+
+				for len(result.MatchedRead.Regions) > 1 {
+
+					fmt.Println("resolving borders because of junction")
+
+					// position in read where the gap starts
+					lRead := result.MatchedRead.GetFirstGap().Start
+					// position in genome where the gap starts
+					lGenome := result.MatchedGenome.GetFirstGap().Start
+					// position in read where the gap ends
+					rRead := result.MatchedRead.GetFirstGap().End
+					// position in genome where the gap ends
+					rGenome := result.MatchedGenome.GetFirstGap().End
+
+					readSequence := (*read.Sequence)[lRead:rRead]
+					genomeSequenceL := (*genomeIndex.Sequence)[lGenome : lGenome+15]
+					genomeSequenceR := (*genomeIndex.Sequence)[rGenome-15 : rGenome]
+
+					fmt.Println("READ:\t\t", string(readSequence))
+					fmt.Println("GENOME L:\t", string(genomeSequenceL))
+					fmt.Println("GENOME R:\t", string(genomeSequenceR))
+
+					fmt.Println(lRead, lGenome, rRead, rGenome)
+
+					extensionLength := rRead - lRead
+
+					fmt.Println("extension length: ", extensionLength)
+
+					lErrors := make([]int, extensionLength+1)
+					rErrors := make([]int, extensionLength+1)
+
+					lErrors[0] = 0
+					rErrors[0] = 0
+
+					for i := 1; i <= extensionLength; i++ {
+						lErrors[i] = lErrors[i-1]
+						if (*read.Sequence)[lRead+i-1] != (*genomeIndex.Sequence)[lGenome+i-1] {
+							lErrors[i]++
+						}
+
+						rErrors[i] = rErrors[i-1]
+						if (*read.Sequence)[rRead-i] != (*genomeIndex.Sequence)[rGenome-i] {
+							rErrors[i]++
+						}
+					}
+
+					fmt.Println("lErrors: ", lErrors)
+					fmt.Println("rErrors: ", rErrors)
+
+					splits := make([]int, 0, extensionLength+1)
+
+					for i := 0; i <= extensionLength; i++ {
+
+						lPos := i
+						rPos := extensionLength - i
+
+						numMismatches := lErrors[lPos] + rErrors[rPos]
+
+						if numMismatches == 0 {
+							splits = append(splits, i)
+						}
+
+						fmt.Println("lPos: ", lPos)
+						fmt.Println("rPos: ", rPos)
+						fmt.Println("numMismatches: ", numMismatches)
+						fmt.Println("--")
+					}
+
+					fmt.Println("splits: ", splits)
+
+					for _, split := range splits {
+						fmt.Println("split: ", split)
+
+						donorSiteStart := result.MatchedGenome.GetFirstGap().Start + split
+						donorSiteSeq := (*genomeIndex.Sequence)[donorSiteStart : donorSiteStart+2]
+
+						splitRev := extensionLength - split
+
+						acceptorSiteStart := result.MatchedGenome.GetFirstGap().End - splitRev
+						acceptorSiteSeq := (*genomeIndex.Sequence)[acceptorSiteStart-2 : acceptorSiteStart]
+
+						fmt.Println("donor", string(donorSiteSeq))
+						fmt.Println("acceptor", string(acceptorSiteSeq))
+					}
+
+					os.Exit(1)
+				}
+
+				//for len(result.MatchedRead.Regions) > 1 {
+				//
+				//	startRead := result.MatchedRead.GetFirstGap().Start
+				//	endRead := result.MatchedRead.GetFirstGap().End
+				//	unmappedRead := (*read.Sequence)[startRead:endRead]
+				//
+				//	startGenome := result.MatchedGenome.GetFirstGap().Start
+				//	endGenome := result.MatchedGenome.GetFirstGap().End
+				//	unmappedGenome := (*genomeIndex.Sequence)[startGenome:endGenome]
+				//
+				//	mismatches := make([]int, 0)
+				//
+				//	if len(unmappedRead) != len(unmappedGenome) {
+				//		break
+				//	}
+				//
+				//	fmt.Println("unmappedRead: ", unmappedRead)
+				//	fmt.Println("unmappedGenome: ", unmappedGenome)
+				//
+				//	for i := 0; i < len(unmappedRead); i++ {
+				//		if unmappedRead[i] != unmappedGenome[i] {
+				//			mismatches = append(mismatches, i)
+				//		}
+				//	}
+				//
+				//	result.MatchedRead.AddRegion(startRead, endRead)
+				//	result.MatchedGenome.AddRegion(startGenome, endGenome)
+				//	result.MismatchesRead = append(result.MismatchesRead, mismatches...)
+				//}
+			}
+
+			if result.MatchedRead.GetFirstRegion().Start > 0 {
+				fmt.Println("UNMATCHED POSITIONS IN FRONT OF READ")
+
+				//// read sequence
+				//unmappedRead := (*read.Sequence)[0:result.MatchedRead.GetFirstRegion().Start]
+				//// genome sequence
+				//endGenome := result.MatchedGenome.GetFirstRegion().Start
+				//startGenome := result.MatchedGenome.GetFirstRegion().Start - result.MatchedRead.GetFirstRegion().Start
+				//unmappedGenome := (*genomeIndex.Sequence)[startGenome:endGenome]
+				//
+				//mismatches := make([]int, 0)
+				//
+				//for i := 0; i < len(unmappedRead); i++ {
+				//	if unmappedRead[i] != unmappedGenome[i] {
+				//		mismatches = append(mismatches, i)
+				//	}
+				//}
+				//
+				//result.MatchedRead.AddRegion(0, result.MatchedRead.GetFirstRegion().Start)
+				//result.MatchedGenome.AddRegion(startGenome, endGenome)
+				//result.MismatchesRead = append(result.MismatchesRead, mismatches...)
+			}
+
+			if result.MatchedRead.GetLastRegion().End < len(*read.Sequence) {
+				fmt.Println("UNMATCHED POSITIONS IN BACK OF READ")
+
+				//// read sequence
+				//startRead := result.MatchedRead.GetLastRegion().End
+				//endRead := len(*read.Sequence)
+				//unmappedRead := (*read.Sequence)[startRead:endRead]
+				//// genome sequence
+				//startGenome := result.MatchedGenome.GetLastRegion().End
+				//endGenome := result.MatchedGenome.GetLastRegion().End + (endRead - startRead)
+				//unmappedGenome := (*genomeIndex.Sequence)[startGenome:endGenome]
+				//
+				//mismatches := make([]int, 0)
+				//
+				//for i := 0; i < len(unmappedRead); i++ {
+				//	if unmappedRead[i] != unmappedGenome[i] {
+				//		mismatches = append(mismatches, i)
+				//	}
+				//}
+				//
+				//result.MatchedRead.AddRegion(startRead, endRead)
+				//result.MatchedGenome.AddRegion(startGenome, endGenome)
+				//result.MismatchesRead = append(result.MismatchesRead, mismatches...)
+			}
+
 		}
 
-		if len(result.MatchedRead.Regions) > 1 {
-			fmt.Println("UNMATCHED POSITIONS WITHIN READ")
-		}
+		results = append(results, result)
 
-		if result.MatchedRead.GetFirstRegion().Start > 0 {
-			fmt.Println("UNMATCHED POSITIONS IN FRONT OF READ")
-		}
-
-		if result.MatchedRead.GetLastRegion().End < len(*pair.ReadR1.Sequence) {
-			fmt.Println("UNMATCHED POSITIONS IN BACK OF READ")
-		}
-
-		break
+		//break
 	}
+
+	if len(results) == 0 {
+		return results, false
+	}
+	return results, true
+
+	/*
+		for _, result := range results {
+
+			if result.MatchedRead.Length() != len(*read.Sequence) {
+				continue
+			}
+
+			qname := read.Header
+			flag := 0
+			rname := "tbd"
+			pos := 45884425 + result.MatchedGenome.GetFirstRegion().Start
+			mapq := 0
+			cigar := strconv.Itoa(len(*read.Sequence)) + "M"
+			rnext := "*"
+			pnext := 0
+			tlen := 0
+			seq := string(*read.Sequence)
+			qual := string(*read.Quality)
+
+			//mm := fmt.Sprint(result.MismatchesRead)
+
+			res := fmt.Sprintf("%s\t%d\t%s\t%d\t%d\t%s\t%s\t%d\t%d\t%s\t%s\n", qname, flag, rname, pos, mapq, cigar, rnext, pnext, tlen, seq, qual)
+
+			//fmt.Println(result.MatchedGenome.GetFirstRegion().Start)
+			//fmt.Println(res)
+			return res, true
+		}
+
+		return "unmappable\n", false
+	*/
 }

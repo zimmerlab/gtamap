@@ -51,7 +51,6 @@ func testFastqReader2() {
 	reader := fastq.InitFromPaths(&pathReadsFw, &pathReadsRw)
 
 	read := reader.NextRead()
-
 	fmt.Println(read.ReadR1)
 	fmt.Println(read.ReadR2)
 }
@@ -64,17 +63,31 @@ func main() {
 	logrus.SetLevel(logrus.InfoLevel)
 
 	//buildAndSerializeIndexGenome()
-	//deserializeGenomeIndex()
+	//m := deserializeGenomeInSdex()
+
+	//testString := "ACAACTGCAT"
+	//test := []byte(testString)
+	//test2 := *(*[10]byte)(test)
+	//
+	//for _, match := range m.GetKeywordFromMap(test2) {
+	//	fmt.Println(match)
+	//}
+	//
+	//for _, match := range m.KeywordTree.FindKeyword(&test, 0) {
+	//	fmt.Println(match)
+	//}
 
 	//testFastqReader2()
 
 	genomeIndexPath := "./resources/ENSG00000173585.genome.gtai"
 	outputPath := "./out/test.sam"
-	readsFwPath := "./resources/reads/manual/reads_ccr9.1.fq"
-	readsRwPath := "./resources/reads/manual/reads_ccr9.2.fq"
+	//readsFwPath := "./resources/reads/manual/reads_ccr9.1.fq"
+	//readsRwPath := "./resources/reads/manual/reads_ccr9.2.fq"
+	readsFwPath := "/home/sam/Data/reads/sim_ccr9/10mio/fw.fastq"
+	readsRvPath := "/home/sam/Data/reads/sim_ccr9/10mio/rw.fastq"
 
 	genomeIndex := index.ReadGenomeIndexByPath(genomeIndexPath)
-	reader := fastq.InitFromPaths(&readsFwPath, &readsRwPath)
+	reader := fastq.InitFromPaths(&readsFwPath, &readsRvPath)
 	writer := datawriter.InitFromPath(outputPath)
 
 	mapper.MapAll(genomeIndex, reader, writer)

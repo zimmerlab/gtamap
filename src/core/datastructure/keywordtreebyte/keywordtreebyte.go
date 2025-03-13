@@ -7,7 +7,7 @@ import (
 )
 
 type Position struct {
-	SequenceIndex uint32
+	SequenceIndex uint8
 	Position      uint32
 }
 
