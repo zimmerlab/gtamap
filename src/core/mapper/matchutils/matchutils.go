@@ -3,6 +3,8 @@ package matchutils
 import (
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/sirupsen/logrus"
+	"strconv"
+	"strings"
 )
 
 type Match struct {
@@ -28,6 +30,28 @@ type ReadMatchResult struct {
 	MatchedRead    *regionvector.RegionVector // region vector containing the matched positions in the read
 	MatchedGenome  *regionvector.RegionVector // region vector containing the matched positions in the genome
 	MismatchesRead []int                      // the positions of the mismatches in the read
+}
+
+func (m ReadMatchResult) GetCigar() string {
+	var builder strings.Builder
+
+	index := 0
+
+	for index < len(m.MatchedGenome.Regions) {
+		numMatches := m.MatchedGenome.Regions[index].End - m.MatchedGenome.Regions[index].Start
+		builder.WriteString(strconv.Itoa(numMatches))
+		builder.WriteString("M")
+
+		if index+1 < len(m.MatchedGenome.Regions) {
+			numSkipped := m.MatchedGenome.Regions[index+1].Start - m.MatchedGenome.Regions[index].End
+			builder.WriteString(strconv.Itoa(numSkipped))
+			builder.WriteString("N")
+		}
+		
+		index++
+	}
+
+	return builder.String()
 }
 
 /* DIAGONAL HANDLER */
