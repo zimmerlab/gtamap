@@ -9,11 +9,13 @@ import (
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/sirupsen/logrus"
 	"os"
+	"strconv"
 )
 
 func buildAndSerializeIndexGenome() {
 
-	pathFasta := "./resources/ENSG00000173585.zeroed.fasta"
+	//pathFasta := "./resources/ENSG00000173585.zeroed.fasta"
+	pathFasta := "./resources/test.2.fasta"
 	pathOutput := "./resources/ENSG00000173585.genome.gtai"
 
 	fastaFile, errFasta := os.Open(pathFasta)
@@ -26,15 +28,24 @@ func buildAndSerializeIndexGenome() {
 		logrus.Fatal("Error creating output file (.fai)", errOutput)
 	}
 
-	sequence, err := dataloader.ExtractSequenceFromSingleHeaderFasta(fastaFile)
+	fastaEntries, err := dataloader.ReadFasta(fastaFile)
 
 	if err != nil {
 		logrus.Fatal("Error extracting sequence from fasta file", err)
 	}
 
-	logrus.Info("Sequence length: ", len(sequence))
+	logrus.WithFields(logrus.Fields{
+		"NumSequences": len(fastaEntries),
+	}).Info("Read sequence(s) from fasta")
 
-	genomeIndex := index.BuildGenomeIndex(&sequence)
+	for i, entry := range fastaEntries {
+		logrus.WithFields(logrus.Fields{
+			"Header": entry.Header,
+			"Length": len(entry.Sequence),
+		}).Info("Added sequence #" + strconv.Itoa(i+1))
+	}
+
+	genomeIndex := index.BuildGenomeIndex(fastaEntries)
 
 	index.WriteGenomeIndex(genomeIndex, outputFile)
 }
@@ -60,10 +71,10 @@ func main() {
 	logrus.SetFormatter(&logrus.TextFormatter{
 		FullTimestamp: true,
 	})
-	logrus.SetLevel(logrus.ErrorLevel)
+	logrus.SetLevel(logrus.InfoLevel)
 
 	//buildAndSerializeIndexGenome()
-	//m := deserializeGenomeInSdex()
+	//m := deserializeGenomeIndex()
 
 	//testString := "ACAACTGCAT"
 	//test := []byte(testString)

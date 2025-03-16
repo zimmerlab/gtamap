@@ -10,6 +10,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/datawriter"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
+	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
 	"os"
 	"runtime"
@@ -95,10 +96,11 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 
 	timerStartTotal := time.Now()
 
+	sequenceInfos := genomeIndex.GetSequenceInfos()
+
 	samHeader := sam.Header{
 		Version:                 sam.Version,
-		ReferenceSequenceName:   "test",
-		ReferenceSequenceLength: int(len(*genomeIndex.Sequence)),
+		SequenceInfos:           sequenceInfos,
 		GenomeAnnotationVersion: "",
 		GenomeAssemblyVersion:   "",
 		OrganismTaxId:           "",
@@ -139,13 +141,13 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	for readPair := reader.NextRead(); readPair != nil; readPair = reader.NextRead() {
 
 		// TODO: remove after testing (only process specific read pair)
-		//name := strings.Split(readPair.ReadR1.Header, " ")[0]
+		name := strings.Split(readPair.ReadR1.Header, " ")[0]
 		//if name != "@3-0000/7-fw" {
 		//	continue
 		//}
-		//if name != "@90" {
-		//	continue
-		//}
+		if name != "@7" {
+			continue
+		}
 
 		mappingTask := MappingTask{
 			ID:       taskCounter,
@@ -156,7 +158,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 		taskCounter++
 
 		// TODO: remove after testing
-		if taskCounter == 400 {
+		if taskCounter == 1 {
 			break
 		}
 	}
@@ -224,10 +226,11 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex, timer
 	builder.WriteString(strconv.Itoa(0))
 	builder.WriteString("\t")
 	// RNAME
-	builder.WriteString(strconv.Itoa(resFw.SequenceIndex))
+	builder.WriteString(genomeIndex.GetSequenceHeader(resFw.SequenceIndex))
 	builder.WriteString("\t")
 	// POS
 	startRelativeFw := resFw.MatchedGenome.GetFirstRegion().Start
+	// TODO: use actual start position of sequence from index
 	startGenomeFw := 45884425 + startRelativeFw
 
 	builder.WriteString(strconv.Itoa(startGenomeFw))
@@ -248,7 +251,11 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex, timer
 	builder.WriteString(strconv.Itoa(0))
 	builder.WriteString("\t")
 	// SEQ
-	builder.WriteString(string(*readPair.ReadR1.Sequence))
+	if genomeIndex.IsSequenceForward(resFw.SequenceIndex) {
+		builder.WriteString(string(*readPair.ReadR1.Sequence))
+	} else {
+		builder.WriteString(string(utils.ReverseComplementDnaBytes(*readPair.ReadR1.Sequence)))
+	}
 	builder.WriteString("\t")
 	// QUAL
 	builder.WriteString(string(*readPair.ReadR1.Quality))
@@ -286,7 +293,11 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex, timer
 	builder.WriteString(strconv.Itoa(0))
 	builder.WriteString("\t")
 	// SEQ
-	builder.WriteString(string(*readPair.ReadR2.Sequence))
+	if genomeIndex.IsSequenceForward(resRw.SequenceIndex) {
+		builder.WriteString(string(*readPair.ReadR2.Sequence))
+	} else {
+		builder.WriteString(string(utils.ReverseComplementDnaBytes(*readPair.ReadR2.Sequence)))
+	}
 	builder.WriteString("\t")
 	// QUAL
 	builder.WriteString(string(*readPair.ReadR2.Quality))
@@ -556,7 +567,7 @@ sequenceLoop:
 
 					readByte := (*read.Sequence)[i]
 					gIndex := diagonalGenome.GetFirstRegion().Start + i
-					genomeByte := (*genomeIndex.Sequence)[gIndex]
+					genomeByte := (*genomeIndex.Sequences[seqIndex])[gIndex]
 
 					if readByte != genomeByte {
 						mismatches = append(mismatches, i)
@@ -603,28 +614,43 @@ sequenceLoop:
 
 				logrus.Info("UNMATCHED POSITIONS WITHIN READ")
 
+				genomeGapIndex := 0
+
 				// resolve the borders within the read where at least one junction was found
 				for len(result.MatchedRead.Regions) > 1 {
 
 					// position in read where the gap starts
 					lRead := result.MatchedRead.GetFirstGap().Start
 					// position in genome where the gap starts
-					lGenome := result.MatchedGenome.GetFirstGap().Start
+					lGenome := result.MatchedGenome.GetGap(genomeGapIndex).Start
 					// position in read where the gap ends
 					rRead := result.MatchedRead.GetFirstGap().End
 					// position in genome where the gap ends
-					rGenome := result.MatchedGenome.GetFirstGap().End
+					rGenome := result.MatchedGenome.GetGap(genomeGapIndex).End
 
-					//readSequence := (*read.Sequence)[lRead:rRead]
-					//genomeSequenceL := (*genomeIndex.Sequence)[lGenome : lGenome+15]
-					//genomeSequenceR := (*genomeIndex.Sequence)[rGenome-15 : rGenome]
-					//fmt.Println("READ:\t\t", string(readSequence))
-					//fmt.Println("GENOME L:\t", string(genomeSequenceL))
-					//fmt.Println("GENOME R:\t", string(genomeSequenceR))
-					//fmt.Println(lRead, lGenome, rRead, rGenome)
+					fmt.Println("handling gap:")
+					fmt.Println("lRead: ", lRead)
+					fmt.Println("rRead: ", rRead)
+					fmt.Println("lGenome: ", lGenome)
+					fmt.Println("rGenome: ", rGenome)
+
+					// TODO: make seq and seq rev comp accessible by seq index
+					readSequence := (*read.Sequence)[lRead:rRead]
+					genomeSequenceL := (*genomeIndex.Sequences[seqIndex])[lGenome : lGenome+15]
+					genomeSequenceR := (*genomeIndex.Sequences[seqIndex])[rGenome-15 : rGenome]
+					fmt.Println("READ:\t\t", string(readSequence))
+					fmt.Println("GENOME L:\t", string(genomeSequenceL))
+					fmt.Println("GENOME R:\t", string(genomeSequenceR))
+
+					fmt.Println("READ (rev):\t", string(utils.ReverseComplementDnaBytes(readSequence)))
+					fmt.Println("GENOME L (rev):\t", string(utils.ReverseComplementDnaBytes(genomeSequenceR)))
+					fmt.Println("GENOME R (rev):\t", string(utils.ReverseComplementDnaBytes(genomeSequenceL)))
+					fmt.Println(lRead, lGenome, rRead, rGenome)
 
 					// the length of the extension based on the number if unmapped bases in the read
 					extensionLength := rRead - lRead
+
+					fmt.Println("extension length: ", extensionLength)
 
 					// cululative mismatch count for the left and right extensions
 					// for lErrors the index i represents the number of mismatches for the first i positions of the extension
@@ -637,15 +663,18 @@ sequenceLoop:
 
 					for i := 1; i <= extensionLength; i++ {
 						lErrors[i] = lErrors[i-1]
-						if (*read.Sequence)[lRead+i-1] != (*genomeIndex.Sequence)[lGenome+i-1] {
+						if (*read.Sequence)[lRead+i-1] != (*genomeIndex.Sequences[seqIndex])[lGenome+i-1] {
 							lErrors[i]++
 						}
 
 						rErrors[i] = rErrors[i-1]
-						if (*read.Sequence)[rRead-i] != (*genomeIndex.Sequence)[rGenome-i] {
+						if (*read.Sequence)[rRead-i] != (*genomeIndex.Sequences[seqIndex])[rGenome-i] {
 							rErrors[i]++
 						}
 					}
+
+					fmt.Println("lErrors:", lErrors)
+					fmt.Println("rErrors:", rErrors)
 
 					// the minimum number of mismatches
 					minErrors := lErrors[extensionLength] + rErrors[extensionLength]
@@ -663,40 +692,31 @@ sequenceLoop:
 
 						numMismatches := lErrors[lPos] + rErrors[rPos]
 
-						donorSiteStart := result.MatchedGenome.GetFirstGap().Start + i
-						donorSiteSeq := (*genomeIndex.Sequence)[donorSiteStart : donorSiteStart+2]
+						donorSiteStart := result.MatchedGenome.GetGap(genomeGapIndex).Start + i
+						donorSiteSeq := (*genomeIndex.Sequences[seqIndex])[donorSiteStart : donorSiteStart+2]
 
 						splitRev := extensionLength - i
-						acceptorSiteStart := result.MatchedGenome.GetFirstGap().End - splitRev
-						acceptorSiteSeq := (*genomeIndex.Sequence)[acceptorSiteStart-2 : acceptorSiteStart]
+						acceptorSiteStart := result.MatchedGenome.GetGap(genomeGapIndex).End - splitRev
+						acceptorSiteSeq := (*genomeIndex.Sequences[seqIndex])[acceptorSiteStart-2 : acceptorSiteStart]
 
-						if donorSiteSeq[0] == byte('G') && donorSiteSeq[1] == byte('T') {
-							// canonical splice donor site dinucleotide GT
-							numMismatches += 0
-						} else if donorSiteSeq[0] == byte('G') && donorSiteSeq[1] == byte('C') {
-							// non-canonical splice donor site dinucleotide GC
-							numMismatches += 1
-						} else if donorSiteSeq[0] == byte('A') && donorSiteSeq[1] == byte('T') {
-							// non-canonical splice donor site dinucleotide GC
-							numMismatches += 1
-						} else {
-							// all other splice donor site dinucleotides
-							numMismatches += 2
-						}
+						// TODO: breaks if the sequence at index 0 is not forward strand or there are more than 1
+						// sequences in the index (fw+rv = 1 sequence)
+						isForwardStrand := genomeIndex.IsSequenceForward(seqIndex)
 
-						if acceptorSiteSeq[0] == byte('A') && acceptorSiteSeq[1] == byte('G') {
-							// canonical splice acceptor site dinucleotide AG
-							numMismatches += 0
-						} else if acceptorSiteSeq[0] == byte('A') && acceptorSiteSeq[1] == byte('C') {
-							numMismatches += 1
-						} else {
-							numMismatches += 2
-						}
+						fmt.Println("is +: ", isForwardStrand)
+						fmt.Println("split: ", i)
+						fmt.Println("donor: ", string(donorSiteSeq))
+						fmt.Println("acceptor: ", string(acceptorSiteSeq))
+
+						numMismatches += spliceSiteDonorScore(donorSiteSeq[0], donorSiteSeq[1], isForwardStrand)
+						numMismatches += spliceSiteAcceptorScore(acceptorSiteSeq[0], acceptorSiteSeq[1], isForwardStrand)
 
 						if numMismatches < minErrors {
 							minErrors = numMismatches
 							minSplit = i
 						}
+
+						fmt.Println(numMismatches)
 					}
 
 					// apply the best split
@@ -705,11 +725,30 @@ sequenceLoop:
 						os.Exit(1)
 					}
 
+					fmt.Println("chose: ", minSplit)
+
+					fmt.Println("read before", result.MatchedRead.String())
+					fmt.Println("genome before", result.MatchedGenome.String())
+
+					fmt.Println("add l read: ", lRead, lRead+minSplit)
+					fmt.Println("add l genome: ", lGenome, lGenome+minSplit)
+
 					result.MatchedRead.AddRegion(lRead, lRead+minSplit)
 					result.MatchedGenome.AddRegion(lGenome, lGenome+minSplit)
 
+					fmt.Println("read after add l: ", result.MatchedRead.String())
+					fmt.Println("genome after add l: ", result.MatchedGenome.String())
+
+					fmt.Println("add r read: ", rRead-(extensionLength-minSplit), rRead)
+					fmt.Println("add r genome: ", rGenome-(extensionLength-minSplit), rGenome)
+
 					result.MatchedRead.AddRegion(rRead-(extensionLength-minSplit), rRead)
 					result.MatchedGenome.AddRegion(rGenome-(extensionLength-minSplit), rGenome)
+
+					fmt.Println("read after add r: ", result.MatchedRead.String())
+					fmt.Println("genome after add r: ", result.MatchedGenome.String())
+
+					genomeGapIndex++
 				}
 			}
 
@@ -774,4 +813,58 @@ sequenceLoop:
 		return results, false
 	}
 	return results, true
+}
+
+func spliceSiteDonorScore(first byte, second byte, isForwardStrand bool) int {
+	if isForwardStrand {
+		if first == byte('G') && second == byte('T') {
+			// canonical splice donor site dinucleotide GT
+			return 0
+		} else if first == byte('G') && second == byte('C') {
+			// non-canonical splice donor site dinucleotide GC
+			return 1
+		} else if first == byte('A') && second == byte('T') {
+			// non-canonical splice donor site dinucleotide GC
+			return 1
+		} else {
+			// all other splice donor site dinucleotides
+			return 2
+		}
+	} else {
+		if first == byte('C') && second == byte('T') {
+			// canonical splice acceptor site dinucleotide AG
+			return 0
+		} else if first == byte('G') && second == byte('T') {
+			return 1
+		} else {
+			return 2
+		}
+	}
+}
+
+func spliceSiteAcceptorScore(first byte, second byte, isForwardStrand bool) int {
+	if isForwardStrand {
+		if first == byte('A') && second == byte('G') {
+			// canonical splice acceptor site dinucleotide AG
+			return 0
+		} else if first == byte('A') && second == byte('C') {
+			return 1
+		} else {
+			return 2
+		}
+	} else {
+		if first == byte('A') && second == byte('C') {
+			// canonical splice donor site dinucleotide GT
+			return 0
+		} else if first == byte('G') && second == byte('C') {
+			// non-canonical splice donor site dinucleotide GC
+			return 1
+		} else if first == byte('A') && second == byte('T') {
+			// non-canonical splice donor site dinucleotide GC
+			return 1
+		} else {
+			// all other splice donor site dinucleotides
+			return 2
+		}
+	}
 }

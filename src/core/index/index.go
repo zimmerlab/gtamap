@@ -2,7 +2,6 @@ package index
 
 import (
 	"encoding/gob"
-	"fmt"
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/genemodel"
@@ -10,6 +9,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/keywordtreebyte"
 	"github.com/KleinSamuel/gtamap/src/core/interval"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
+	"github.com/KleinSamuel/gtamap/src/formats/sam"
 	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
 	"log"
@@ -547,8 +547,8 @@ func DezerializeFromFile(indexFile *os.File) *GtaIndex {
 /* GENOME INDEX */
 
 type GenomeIndex struct {
-	Sequence        *[]byte                      // the genome sequence
-	SequenceRevComp *[]byte                      // the reverse complement of the genome sequence
+	SequenceHeaders []string                     // the headers of the sequences at indices 0(+1), 2(+3), 4(+5), etc.
+	Sequences       []*[]byte                    // the genome sequences (0: forward, 1: reverse complement, etc.)
 	KeywordTree     *keywordtreebyte.KeywordTree // the keyword tree containing all kmers of both genome sequences
 	KeywordMap      map[[10]byte][]*keywordtreebyte.Position
 }
@@ -582,32 +582,67 @@ func (i GenomeIndex) AddSequenceToKeywordTree(sequence *[]byte, sequenceIndex ui
 
 		seqBytes := *(*[10]byte)((*sequence)[kStart:kEnd])
 
-		//fmt.Println("seqBytes: ", seqBytes, string((*sequence)[kStart:kEnd]))
-
 		i.AddKeywordToMap(seqBytes, sequenceIndex, uint32(kStart))
 	}
-
-	fmt.Println(len(*sequence))
-	fmt.Println((*sequence)[len(*sequence)-10:])
-	fmt.Println(string((*sequence)[len(*sequence)-10:]))
-
 }
 
-func BuildGenomeIndex(sequence *[]byte) *GenomeIndex {
+func (i GenomeIndex) GetSequenceInfos() []sam.SequenceInfo {
+	infos := make([]sam.SequenceInfo, len(i.SequenceHeaders))
 
-	sequenceRevComp := utils.ReverseComplementDnaBytes(*sequence)
+	for seqIndex, header := range i.SequenceHeaders {
+		infos[seqIndex] = sam.SequenceInfo{
+			Name:   header,
+			Length: len(*i.Sequences[seqIndex*2]),
+		}
+	}
+
+	return infos
+}
+
+func (i GenomeIndex) IsSequenceForward(sequenceIndex int) bool {
+	return sequenceIndex%2 == 0
+}
+
+func (i GenomeIndex) GetRevCompIndex(sequenceIndex int) int {
+	if i.IsSequenceForward(sequenceIndex) {
+		return sequenceIndex + 1
+	} else {
+		return sequenceIndex - 1
+	}
+}
+
+func (i GenomeIndex) GetSequenceHeader(sequenceIndex int) string {
+	if i.IsSequenceForward(sequenceIndex) {
+		return i.SequenceHeaders[sequenceIndex]
+	} else {
+		return i.SequenceHeaders[sequenceIndex-1]
+	}
+}
+
+func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry) *GenomeIndex {
 
 	var index = GenomeIndex{
-		Sequence:        sequence,
-		SequenceRevComp: &sequenceRevComp,
+		SequenceHeaders: make([]string, len(fastaEntries)),
+		Sequences:       make([]*[]byte, len(fastaEntries)*2),
 		KeywordTree:     keywordtreebyte.NewKeywordTree(config.KmerLength()),
 		KeywordMap:      make(map[[10]byte][]*keywordtreebyte.Position, int(math.Pow(4, 10))),
 	}
 
-	index.AddSequenceToKeywordTree(index.Sequence, 0)
-	index.AddSequenceToKeywordTree(index.SequenceRevComp, 1)
+	for i, entry := range fastaEntries {
+		sequence := entry.Sequence
+		sequenceRevComp := utils.ReverseComplementDnaBytes(sequence)
 
-	index.KeywordTree.NumSequences = 2
+		index.SequenceHeaders[i] = entry.Header
+
+		index.Sequences[i*2] = &sequence
+		index.Sequences[i*2+1] = &sequenceRevComp
+	}
+
+	for i, seq := range index.Sequences {
+		index.AddSequenceToKeywordTree(seq, uint8(i))
+	}
+
+	index.KeywordTree.NumSequences = uint8(len(index.Sequences))
 
 	return &index
 }

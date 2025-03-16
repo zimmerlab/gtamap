@@ -35,20 +35,42 @@ type ReadMatchResult struct {
 func (m ReadMatchResult) GetCigar() string {
 	var builder strings.Builder
 
-	index := 0
+	isForwardStrand := m.SequenceIndex == 0
 
-	for index < len(m.MatchedGenome.Regions) {
-		numMatches := m.MatchedGenome.Regions[index].End - m.MatchedGenome.Regions[index].Start
-		builder.WriteString(strconv.Itoa(numMatches))
-		builder.WriteString("M")
+	if isForwardStrand {
 
-		if index+1 < len(m.MatchedGenome.Regions) {
-			numSkipped := m.MatchedGenome.Regions[index+1].Start - m.MatchedGenome.Regions[index].End
-			builder.WriteString(strconv.Itoa(numSkipped))
-			builder.WriteString("N")
+		index := 0
+
+		for index < len(m.MatchedGenome.Regions) {
+			numMatches := m.MatchedGenome.Regions[index].End - m.MatchedGenome.Regions[index].Start
+			builder.WriteString(strconv.Itoa(numMatches))
+			builder.WriteString("M")
+
+			if index+1 < len(m.MatchedGenome.Regions) {
+				numSkipped := m.MatchedGenome.Regions[index+1].Start - m.MatchedGenome.Regions[index].End
+				builder.WriteString(strconv.Itoa(numSkipped))
+				builder.WriteString("N")
+			}
+
+			index++
 		}
-		
-		index++
+	} else {
+
+		index := len(m.MatchedGenome.Regions) - 1
+
+		for index >= 0 {
+			numMatches := m.MatchedGenome.Regions[index].End - m.MatchedGenome.Regions[index].Start
+			builder.WriteString(strconv.Itoa(numMatches))
+			builder.WriteString("M")
+
+			if index-1 >= 0 {
+				numSkipped := m.MatchedGenome.Regions[index].Start - m.MatchedGenome.Regions[index-1].End
+				builder.WriteString(strconv.Itoa(numSkipped))
+				builder.WriteString("N")
+			}
+
+			index--
+		}
 	}
 
 	return builder.String()

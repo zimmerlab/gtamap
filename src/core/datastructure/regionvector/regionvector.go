@@ -100,6 +100,17 @@ func (rv *RegionVector) GetFirstGap() *Region {
 	}
 }
 
+func (rv *RegionVector) GetGap(gapIndex int) *Region {
+	if gapIndex >= len(rv.Regions) {
+		return nil
+	}
+
+	return &Region{
+		Start: rv.Regions[gapIndex].End,
+		End:   rv.Regions[gapIndex+1].Start,
+	}
+}
+
 func (rv *RegionVector) GetFirstRegion() *Region {
 	if len(rv.Regions) == 0 {
 		return nil

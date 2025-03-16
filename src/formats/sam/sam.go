@@ -5,14 +5,20 @@ import "fmt"
 const Version string = "1.6"
 
 type Header struct {
-	Version                 string // version of the SAM format (e.g. 1.6)
-	ReferenceSequenceName   string // the chromosome of the gene
-	ReferenceSequenceLength int    // the length of the chromosome
-	GenomeAnnotationVersion string // ensembl version of the gtf file (e.g. 108)
-	GenomeAssemblyVersion   string // version of the genome (e.g. hg38)
-	OrganismTaxId           string // taxonomy id of the organism (e.g. 9606)
+	Version                 string         // version of the SAM format (e.g. 1.6)
+	ReferenceSequenceName   string         // the chromosome of the gene
+	ReferenceSequenceLength int            // the length of the chromosome
+	SequenceInfos           []SequenceInfo // information about the contained sequences
+	GenomeAnnotationVersion string         // ensembl version of the gtf file (e.g. 108)
+	GenomeAssemblyVersion   string         // version of the genome (e.g. hg38)
+	OrganismTaxId           string         // taxonomy id of the organism (e.g. 9606)
 	ToolVersion             string
 	Transcripts             []*TranscriptInfo
+}
+
+type SequenceInfo struct {
+	Name   string
+	Length int
 }
 
 type TranscriptInfo struct {

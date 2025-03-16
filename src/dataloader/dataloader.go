@@ -119,24 +119,46 @@ func GenerateInputForIndex(gtfFile *os.File, fastaFile *os.File, fastaIndexFile 
 	return annotation
 }
 
-func ExtractSequenceFromSingleHeaderFasta(fastaFile *os.File) ([]byte, error) {
+type FastaEntry struct {
+	Header   string
+	Sequence []byte
+}
+
+func ReadFasta(fastaFile *os.File) ([]*FastaEntry, error) {
 
 	scanner := bufio.NewScanner(fastaFile)
 
+	entries := make([]*FastaEntry, 0)
+
+	var header string
 	var sequence []byte
 
 	for scanner.Scan() {
 		line := scanner.Bytes()
-		if len(line) > 0 && line[0] != '>' {
+
+		if len(line) == 0 {
+			continue
+		}
+
+		if line[0] == '>' {
+			if header != "" {
+				entries = append(entries, &FastaEntry{Header: header, Sequence: sequence})
+			}
+			header = string(line)
+			sequence = nil
+		} else {
 			sequence = append(sequence, bytes.TrimSpace(line)...)
 		}
+	}
+	if header != "" {
+		entries = append(entries, &FastaEntry{Header: header, Sequence: sequence})
 	}
 
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
 
-	return sequence, nil
+	return entries, nil
 }
 
 func ExtractSequenceAsStringFromFasta(fastaFile *os.File, fastaIndex *fasta.Index, chromosome string, startGenomic uint32, endGenomic uint32) string {
