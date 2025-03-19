@@ -14,8 +14,8 @@ import (
 
 func buildAndSerializeIndexGenome() {
 
-	//pathFasta := "./resources/ENSG00000173585.zeroed.fasta"
-	pathFasta := "./resources/test.2.fasta"
+	pathFasta := "./resources/ENSG00000173585.zeroed.fasta"
+	//pathFasta := "./resources/test.2.fasta"
 	pathOutput := "./resources/ENSG00000173585.genome.gtai"
 
 	fastaFile, errFasta := os.Open(pathFasta)
@@ -68,27 +68,20 @@ func testFastqReader2() {
 
 func main() {
 
+	//f, _ := os.Create("cpu_profile.prof")
+	//err := pprof.StartCPUProfile(f)
+	//if err != nil {
+	//	return
+	//}
+	//defer pprof.StopCPUProfile()
+
 	logrus.SetFormatter(&logrus.TextFormatter{
 		FullTimestamp: true,
 	})
-	logrus.SetLevel(logrus.InfoLevel)
+	logrus.SetLevel(logrus.ErrorLevel)
 
 	//buildAndSerializeIndexGenome()
 	//m := deserializeGenomeIndex()
-
-	//testString := "ACAACTGCAT"
-	//test := []byte(testString)
-	//test2 := *(*[10]byte)(test)
-	//
-	//for _, match := range m.GetKeywordFromMap(test2) {
-	//	fmt.Println(match)
-	//}
-	//
-	//for _, match := range m.KeywordTree.FindKeyword(&test, 0) {
-	//	fmt.Println(match)
-	//}
-
-	//testFastqReader2()
 
 	genomeIndexPath := "./resources/ENSG00000173585.genome.gtai"
 	outputPath := "./out/test.sam"

@@ -76,17 +76,25 @@ func (r Reader) NextRead() *ReadPair {
 		return nil
 	}
 
-	header := r.scannerR1.Text()
+	// read the header, sequence and quality of the read R1
+	// scanner.Text() returns a copy of the string but .Bytes() returns a reference
+	// to the scanners internal buffer which means it has to be copied to a new slice
+	// to avoid clashes when reading the next line
+	headerR1 := r.scannerR1.Text()
 	r.scannerR1.Scan()
-	sequence := r.scannerR1.Bytes()
+	sequenceR1Bytes := r.scannerR1.Bytes()
+	sequenceR1 := make([]byte, len(sequenceR1Bytes))
+	copy(sequenceR1, sequenceR1Bytes)
 	r.scannerR1.Scan()
 	r.scannerR1.Scan()
-	quality := r.scannerR1.Bytes()
+	qualityR1Bytes := r.scannerR1.Bytes()
+	qualityR1 := make([]byte, len(qualityR1Bytes))
+	copy(qualityR1, qualityR1Bytes)
 
 	var fwRead *Read = &Read{
-		Header:   header,
-		Sequence: &sequence,
-		Quality:  &quality,
+		Header:   headerR1,
+		Sequence: &sequenceR1,
+		Quality:  &qualityR1,
 	}
 	var rvRead *Read = nil
 
@@ -95,17 +103,21 @@ func (r Reader) NextRead() *ReadPair {
 			return nil
 		}
 
-		header := r.scannerR2.Text()
+		headerR2 := r.scannerR2.Text()
 		r.scannerR2.Scan()
-		sequence := r.scannerR2.Bytes()
+		sequenceR2Bytes := r.scannerR2.Bytes()
+		sequenceR2 := make([]byte, len(sequenceR2Bytes))
+		copy(sequenceR2, sequenceR2Bytes)
 		r.scannerR2.Scan()
 		r.scannerR2.Scan()
-		quality := r.scannerR2.Bytes()
+		qualityR2Bytes := r.scannerR2.Bytes()
+		qualityR2 := make([]byte, len(qualityR2Bytes))
+		copy(qualityR2, qualityR2Bytes)
 
 		rvRead = &Read{
-			Header:   header,
-			Sequence: &sequence,
-			Quality:  &quality,
+			Header:   headerR2,
+			Sequence: &sequenceR2,
+			Quality:  &qualityR2,
 		}
 	}
 

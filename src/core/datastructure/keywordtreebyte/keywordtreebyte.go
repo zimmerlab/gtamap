@@ -2,7 +2,7 @@ package keywordtreebyte
 
 import (
 	"fmt"
-	"github.com/KleinSamuel/gtamap/src/core/mapper/matchutils"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/sirupsen/logrus"
 )
 
@@ -89,7 +89,7 @@ func (t *KeywordTree) AddKeyword(keyword []byte) *Node {
 	return activeNode
 }
 
-func (t *KeywordTree) FindKeyword(keyword *[]byte, posInRead int) []*matchutils.Match {
+func (t *KeywordTree) FindKeyword(keyword *[]byte, posInRead int) []*mapperutils.Match {
 
 	activeNode := t.Nodes[t.RootId]
 
@@ -105,11 +105,11 @@ func (t *KeywordTree) FindKeyword(keyword *[]byte, posInRead int) []*matchutils.
 		}
 	}
 
-	result := make([]*matchutils.Match, len(activeNode.Positions))
+	result := make([]*mapperutils.Match, len(activeNode.Positions))
 
 	for i, position := range activeNode.Positions {
 
-		result[i] = &matchutils.Match{
+		result[i] = &mapperutils.Match{
 			SequenceIndex: int(position.SequenceIndex),
 			FromGenome:    int(position.Position),
 			ToGenome:      int(position.Position + uint32(len(*keyword))),

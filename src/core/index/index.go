@@ -551,6 +551,7 @@ type GenomeIndex struct {
 	Sequences       []*[]byte                    // the genome sequences (0: forward, 1: reverse complement, etc.)
 	KeywordTree     *keywordtreebyte.KeywordTree // the keyword tree containing all kmers of both genome sequences
 	KeywordMap      map[[10]byte][]*keywordtreebyte.Position
+	KeywordMapSmall map[[5]byte][]*keywordtreebyte.Position
 }
 
 func (i GenomeIndex) AddKeywordToMap(keyword [10]byte, sequenceIndex uint8, position uint32) {
@@ -563,8 +564,22 @@ func (i GenomeIndex) AddKeywordToMap(keyword [10]byte, sequenceIndex uint8, posi
 	})
 }
 
+func (i GenomeIndex) AddKeywordToMapSmall(keyword [5]byte, sequenceIndex uint8, position uint32) {
+	if _, ok := i.KeywordMapSmall[keyword]; !ok {
+		i.KeywordMapSmall[keyword] = make([]*keywordtreebyte.Position, 0)
+	}
+	i.KeywordMapSmall[keyword] = append(i.KeywordMapSmall[keyword], &keywordtreebyte.Position{
+		SequenceIndex: sequenceIndex,
+		Position:      position,
+	})
+}
+
 func (i GenomeIndex) GetKeywordFromMap(keyword [10]byte) []*keywordtreebyte.Position {
 	return i.KeywordMap[keyword]
+}
+
+func (i GenomeIndex) GetKeywordFromMapSmall(keyword [5]byte) []*keywordtreebyte.Position {
+	return i.KeywordMapSmall[keyword]
 }
 
 func (i GenomeIndex) AddSequenceToKeywordTree(sequence *[]byte, sequenceIndex uint8) {
@@ -583,6 +598,18 @@ func (i GenomeIndex) AddSequenceToKeywordTree(sequence *[]byte, sequenceIndex ui
 		seqBytes := *(*[10]byte)((*sequence)[kStart:kEnd])
 
 		i.AddKeywordToMap(seqBytes, sequenceIndex, uint32(kStart))
+	}
+}
+
+func (i GenomeIndex) AddSequenceToMapSmall(sequence *[]byte, sequenceIndex uint8) {
+
+	for kStart := 0; kStart <= len(*sequence)-5; kStart++ {
+
+		kEnd := kStart + 5
+
+		seqBytes := *(*[5]byte)((*sequence)[kStart:kEnd])
+
+		i.AddKeywordToMapSmall(seqBytes, sequenceIndex, uint32(kStart))
 	}
 }
 
@@ -626,6 +653,7 @@ func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry) *GenomeIndex {
 		Sequences:       make([]*[]byte, len(fastaEntries)*2),
 		KeywordTree:     keywordtreebyte.NewKeywordTree(config.KmerLength()),
 		KeywordMap:      make(map[[10]byte][]*keywordtreebyte.Position, int(math.Pow(4, 10))),
+		KeywordMapSmall: make(map[[5]byte][]*keywordtreebyte.Position, int(math.Pow(4, 5))),
 	}
 
 	for i, entry := range fastaEntries {
@@ -640,6 +668,7 @@ func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry) *GenomeIndex {
 
 	for i, seq := range index.Sequences {
 		index.AddSequenceToKeywordTree(seq, uint8(i))
+		index.AddSequenceToMapSmall(seq, uint8(i))
 	}
 
 	index.KeywordTree.NumSequences = uint8(len(index.Sequences))
