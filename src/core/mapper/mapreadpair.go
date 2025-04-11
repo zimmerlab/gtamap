@@ -7,6 +7,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/core/timer"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/KleinSamuel/gtamap/src/utils"
+	"github.com/sirupsen/logrus"
 	"strconv"
 	"strings"
 )
@@ -17,6 +18,11 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 
 	keepFw := Filter(readPair.ReadR1.Sequence, genomeIndex)
 	keepRw := Filter(readPair.ReadR2.Sequence, genomeIndex)
+
+	logrus.WithFields(logrus.Fields{
+		"keepFw": keepFw,
+		"keepRv": keepRw,
+	}).Debug("Filter results")
 
 	if !keepFw || !keepRw {
 		return "", false
@@ -88,6 +94,9 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	resFw := resultFw[0]
 	resRv := resultRv[0]
 
+	geneStartRelativeToContig := 0
+	geneEndRelativeToContig := 0
+
 	var builder strings.Builder
 
 	// QNAME
@@ -102,7 +111,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	// POS
 	startRelativeFw := resFw.MatchedGenome.GetFirstRegion().Start
 	// TODO: use actual start position of sequence from index
-	startGenomeFw := 45884425 + startRelativeFw
+	startGenomeFw := geneStartRelativeToContig + startRelativeFw
 
 	builder.WriteString(strconv.Itoa(startGenomeFw))
 	builder.WriteString("\t")
@@ -112,10 +121,10 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	// CIGAR
 	builder.WriteString(resFw.GetCigar())
 	builder.WriteString("\t")
-	// PNEXT
-	builder.WriteString(strconv.Itoa(0))
-	builder.WriteString("\t")
 	// RNEXT
+	builder.WriteString("*")
+	builder.WriteString("\t")
+	// PNEXT
 	builder.WriteString(strconv.Itoa(0))
 	builder.WriteString("\t")
 	// TLEN
@@ -145,7 +154,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	builder.WriteString("\t")
 	// POS
 	startRelativeRw := resRv.MatchedGenome.GetLastRegion().End
-	startGenomeRw := 45903174 - startRelativeRw + 1
+	startGenomeRw := geneEndRelativeToContig - startRelativeRw + 1
 	builder.WriteString(strconv.Itoa(startGenomeRw))
 	builder.WriteString("\t")
 	// MAPQ
@@ -154,10 +163,10 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	// CIGAR
 	builder.WriteString(resRv.GetCigar())
 	builder.WriteString("\t")
-	// PNEXT
-	builder.WriteString(strconv.Itoa(0))
-	builder.WriteString("\t")
 	// RNEXT
+	builder.WriteString("*")
+	builder.WriteString("\t")
+	// PNEXT
 	builder.WriteString(strconv.Itoa(0))
 	builder.WriteString("\t")
 	// TLEN

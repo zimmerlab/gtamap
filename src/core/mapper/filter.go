@@ -43,6 +43,13 @@ func Filter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
 		}
 	}
 
+	//if numMatchingFw > 0 || numMatchingRw > 0 {
+	//	logrus.WithFields(logrus.Fields{
+	//		"numMatchingFw": numMatchingFw,
+	//		"numMatchingRv": numMatchingRw,
+	//	}).Info("Filtering result")
+	//}
+
 	//fmt.Println("numMatchingFw: ", numMatchingFw)
 	//fmt.Println("numMatchingRw: ", numMatchingRw)
 

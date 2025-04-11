@@ -144,7 +144,8 @@ func ReadFasta(fastaFile *os.File) ([]*FastaEntry, error) {
 			if header != "" {
 				entries = append(entries, &FastaEntry{Header: header, Sequence: sequence})
 			}
-			header = string(line)
+			// store new header and remove leading '>' character
+			header = string(line)[1:]
 			sequence = nil
 		} else {
 			sequence = append(sequence, bytes.TrimSpace(line)...)
@@ -161,12 +162,39 @@ func ReadFasta(fastaFile *os.File) ([]*FastaEntry, error) {
 	return entries, nil
 }
 
-func ExtractSequenceAsStringFromFasta(fastaFile *os.File, fastaIndex *fasta.Index, chromosome string, startGenomic uint32, endGenomic uint32) string {
+func ExtractSequenceAsStringFromFastaUsingPath(fastaPath string, fastaIndex *fasta.Index, chromosome string,
+	startGenomic uint32, endGenomic uint32) (string, error) {
+
+	fastaFile, err := os.Open(fastaPath)
+	if err != nil {
+		return "", err
+	}
+	defer fastaFile.Close()
+
+	return ExtractSequenceAsStringFromFasta(fastaFile, fastaIndex, chromosome, startGenomic, endGenomic), nil
+}
+
+func ExtractSequenceAsStringFromFasta(fastaFile *os.File, fastaIndex *fasta.Index, chromosome string,
+	startGenomic uint32, endGenomic uint32) string {
+
 	buffer := ExtractSequenceAsBytesFromFasta(fastaFile, fastaIndex, chromosome, startGenomic, endGenomic)
 	return strings.ReplaceAll(string(buffer), "\n", "")
 }
 
-func ExtractSequenceAsBytesFromFasta(fastaFile *os.File, fastaIndex *fasta.Index, chromosome string, startGenomic uint32, endGenomic uint32) []byte {
+func ExtractSequenceAsBytesFromFastaUsingPath(fastaPath string, fastaIndex *fasta.Index, chromosome string,
+	startGenomic uint32, endGenomic uint32) ([]byte, error) {
+
+	fastaFile, err := os.Open(fastaPath)
+	if err != nil {
+		return nil, err
+	}
+	defer fastaFile.Close()
+
+	return ExtractSequenceAsBytesFromFasta(fastaFile, fastaIndex, chromosome, startGenomic, endGenomic), nil
+}
+
+func ExtractSequenceAsBytesFromFasta(fastaFile *os.File, fastaIndex *fasta.Index, chromosome string,
+	startGenomic uint32, endGenomic uint32) []byte {
 
 	index := fastaIndex.Entries[chromosome]
 

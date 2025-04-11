@@ -378,26 +378,49 @@ sequenceLoop:
 			if result.MatchedRead.GetFirstRegion().Start > 0 {
 				logrus.Info("UNMATCHED POSITIONS IN FRONT OF READ")
 
-				//os.Exit(1)
+				startRead := 0
+				endRead := result.MatchedRead.GetFirstRegion().Start
+				extensionLength := endRead - startRead
 
-				//// read sequence
-				//unmappedRead := (*read.Sequence)[0:result.MatchedRead.GetFirstRegion().Start]
-				//// genome sequence
-				//endGenome := result.MatchedGenome.GetFirstRegion().Start
-				//startGenome := result.MatchedGenome.GetFirstRegion().Start - result.MatchedRead.GetFirstRegion().Start
-				//unmappedGenome := (*genomeIndex.Sequence)[startGenome:endGenome]
-				//
-				//mismatches := make([]int, 0)
-				//
-				//for i := 0; i < len(unmappedRead); i++ {
-				//	if unmappedRead[i] != unmappedGenome[i] {
-				//		mismatches = append(mismatches, i)
-				//	}
-				//}
-				//
-				//result.MatchedRead.AddRegion(0, result.MatchedRead.GetFirstRegion().Start)
-				//result.MatchedGenome.AddRegion(startGenome, endGenome)
-				//result.MismatchesRead = append(result.MismatchesRead, mismatches...)
+				startGenome := result.MatchedGenome.GetFirstRegion().Start - extensionLength
+
+				readSequence := (*read.Sequence)[startRead:endRead]
+
+				// TODO: this could be a use case for clipping
+				// when a read maps to the target sequence but would go out of bounds
+				// it could still be a valid mapping but it needs to be clipped
+				if startGenome < 0 {
+					logrus.Info("genome index out of bounds")
+					continue sequenceLoop
+				}
+
+				genomeSequence := (*genomeIndex.Sequences[seqIndex])[startGenome : startGenome+len(readSequence)]
+
+				numMismatches := 0
+
+				// trying to extend the read to the left
+				for i := 0; i < extensionLength; i++ {
+					if readSequence[i] != genomeSequence[i] {
+						numMismatches++
+					}
+					if numMismatches > 5 {
+						break
+					}
+				}
+
+				if numMismatches > 5 {
+					// TODO: add to second pass
+					logrus.Info("TODO: add to second pass")
+
+					result.SecondPass = true
+
+					results = append(results, result)
+
+					continue sequenceLoop
+				}
+
+				result.MatchedRead.AddRegion(startRead, endRead)
+				result.MatchedGenome.AddRegion(startGenome, startGenome+extensionLength)
 			}
 
 			if result.MatchedRead.GetLastRegion().End < len(*read.Sequence) {
@@ -410,6 +433,15 @@ sequenceLoop:
 				startGenome := result.MatchedGenome.GetLastRegion().End
 
 				readSequence := (*read.Sequence)[startRead:endRead]
+
+				// TODO: this could be a use case for clipping
+				// when a read maps to the target sequence but would go out of bounds
+				// it could still be a valid mapping but it needs to be clipped
+				if startGenome+len(readSequence) > len(*genomeIndex.Sequences[seqIndex]) {
+					logrus.Info("genome index out of bounds")
+					continue sequenceLoop
+				}
+
 				genomeSequence := (*genomeIndex.Sequences[seqIndex])[startGenome : startGenome+len(readSequence)]
 
 				fmt.Println("seqIndex: ", seqIndex)

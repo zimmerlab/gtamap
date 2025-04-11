@@ -3,20 +3,14 @@ package main
 import (
 	"fmt"
 	"github.com/KleinSamuel/gtamap/src/core/index"
-	"github.com/KleinSamuel/gtamap/src/core/mapper"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
-	"github.com/KleinSamuel/gtamap/src/datawriter"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/sirupsen/logrus"
 	"os"
 	"strconv"
 )
 
-func buildAndSerializeIndexGenome() {
-
-	pathFasta := "./resources/ENSG00000173585.zeroed.fasta"
-	//pathFasta := "./resources/test.2.fasta"
-	pathOutput := "./resources/ENSG00000173585.genome.gtai"
+func buildAndSerializeIndexGenome(pathFasta string, pathOutput string) {
 
 	fastaFile, errFasta := os.Open(pathFasta)
 	if errFasta != nil {
@@ -66,6 +60,19 @@ func testFastqReader2() {
 	fmt.Println(read.ReadR2)
 }
 
+func extractGeneSequenceFromGtfAndFastaForIndex() {
+
+	geneIds := make(map[string]struct{})
+	geneIds["ENSG00000173585"] = struct{}{}
+
+	gtfPath := "/home/sam/Data/gtamap/Homo_sapiens.GRCh38.113.chr.gtf"
+	fastaPath := "/home/sam/Data/gtamap/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+	//fastaIndexPath := "/home/sam/Data/gtamap/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai"
+	outputPath := "/home/sam/Data/gtamap/"
+
+	index.ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath, fastaPath, outputPath, geneIds)
+}
+
 func main() {
 
 	//f, _ := os.Create("cpu_profile.prof")
@@ -78,22 +85,41 @@ func main() {
 	logrus.SetFormatter(&logrus.TextFormatter{
 		FullTimestamp: true,
 	})
-	logrus.SetLevel(logrus.ErrorLevel)
+	logrus.SetLevel(logrus.InfoLevel)
 
-	//buildAndSerializeIndexGenome()
 	//m := deserializeGenomeIndex()
 
-	genomeIndexPath := "./resources/ENSG00000173585.genome.gtai"
-	outputPath := "./out/test.sam"
+	//genomeSeqPath := "./resources/ENSG00000173585.zeroed.fasta"
+	//genomeIndexPath := "./resources/ENSG00000173585.genome.gtai"
+
+	//genomeSeqPath := ""
+	//genomeIndexPath := "./tas2r39.gtai"
+
+	//outputPath := "./out/test.sam"
+
 	//readsFwPath := "./resources/reads/manual/reads_ccr9.1.fq"
 	//readsRwPath := "./resources/reads/manual/reads_ccr9.2.fq"
-	readsFwPath := "/home/sam/Data/reads/sim_ccr9/10mio/fw.fastq"
-	readsRvPath := "/home/sam/Data/reads/sim_ccr9/10mio/rw.fastq"
+	//readsFwPath := "/home/sam/Data/reads/sim_ccr9/10mio/fw.fastq"
+	//readsRvPath := "/home/sam/Data/reads/sim_ccr9/10mio/rw.fastq"
 
-	genomeIndex := index.ReadGenomeIndexByPath(genomeIndexPath)
-	reader := fastq.InitFromPaths(&readsFwPath, &readsRvPath)
-	writer := datawriter.InitFromPath(outputPath)
+	//readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.10k.fastq"
+	//readsRvPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_2.10k.fastq"
 
-	mapper.MapAll(genomeIndex, reader, writer)
+	//readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.fastq.gz"
+	//readsRvPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_2.fastq.gz"
 
+	//readsFwPath := "/home/sam/Data/genomes/test.r1.fastq"
+	//readsRvPath := "/home/sam/Data/genomes/test.r2.fastq"
+
+	//buildAndSerializeIndexGenome(genomeSeqPath, genomeIndexPath)
+
+	//genomeIndex := index.ReadGenomeIndexByPath(genomeIndexPath)
+	//reader := fastq.InitFromPaths(&readsFwPath, &readsRvPath)
+	//writer := datawriter.InitFromPath(outputPath)
+	//
+	//numThreads := 1
+	//
+	//mapper.MapAll(genomeIndex, reader, writer, &numThreads)
+
+	extractGeneSequenceFromGtfAndFastaForIndex()
 }

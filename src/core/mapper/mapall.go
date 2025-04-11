@@ -15,7 +15,8 @@ import (
 	"time"
 )
 
-func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawriter.Writer) {
+func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawriter.Writer,
+	numThreads *int) {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
@@ -34,13 +35,19 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 
 	writer.Write(samHeader.String())
 
-	numWorkers := 1
+	numWorkers := runtime.NumCPU()
+
+	if *numThreads > 0 {
+		numWorkers = *numThreads
+	}
+
 	// the size of the task queue buffer
 	bufferSizeMultiplier := 4
 
 	// TODO: remove after testing
-	maxTasks := 1100
+	maxTasks := 0
 	specificQname := ""
+	//specificQname := "@A00604:202:HLYW3DSXY:3:1257:26775:6496 2:N:0:AACTCGGA+TCTGGACA"
 	//specificQname := "@43"
 
 	// reads to be debugged:

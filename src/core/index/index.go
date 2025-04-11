@@ -9,12 +9,15 @@ import (
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/keywordtreebyte"
 	"github.com/KleinSamuel/gtamap/src/core/interval"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
+	"github.com/KleinSamuel/gtamap/src/formats/gtf"
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
 	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
 	"log"
 	"math"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -548,6 +551,7 @@ func DezerializeFromFile(indexFile *os.File) *GtaIndex {
 
 type GenomeIndex struct {
 	SequenceHeaders []string                     // the headers of the sequences at indices 0(+1), 2(+3), 4(+5), etc.
+	SequenceInfo    []*gtf.GeneBasic             // information about the sequences 0(+1) 2(+3) ..
 	Sequences       []*[]byte                    // the genome sequences (0: forward, 1: reverse complement, etc.)
 	KeywordTree     *keywordtreebyte.KeywordTree // the keyword tree containing all kmers of both genome sequences
 	KeywordMap      map[[10]byte][]*keywordtreebyte.Position
@@ -650,6 +654,7 @@ func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry) *GenomeIndex {
 
 	var index = GenomeIndex{
 		SequenceHeaders: make([]string, len(fastaEntries)),
+		SequenceInfo:    make([]*gtf.GeneBasic, len(fastaEntries)),
 		Sequences:       make([]*[]byte, len(fastaEntries)*2),
 		KeywordTree:     keywordtreebyte.NewKeywordTree(config.KmerLength()),
 		KeywordMap:      make(map[[10]byte][]*keywordtreebyte.Position, int(math.Pow(4, 10))),
@@ -660,6 +665,9 @@ func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry) *GenomeIndex {
 		sequence := entry.Sequence
 		sequenceRevComp := utils.ReverseComplementDnaBytes(sequence)
 
+		info := parseFastaHeader(entry.Header)
+		index.SequenceInfo[i] = info
+		
 		index.SequenceHeaders[i] = entry.Header
 
 		index.Sequences[i*2] = &sequence
@@ -674,6 +682,37 @@ func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry) *GenomeIndex {
 	index.KeywordTree.NumSequences = uint8(len(index.Sequences))
 
 	return &index
+}
+
+func parseFastaHeader(header string) *gtf.GeneBasic {
+
+	headerParts := strings.Split(header, "\t")
+
+	if len(headerParts) < 4 {
+		logrus.Fatal("invalid header:", header)
+	}
+
+	geneId := headerParts[0]
+	contig := headerParts[1]
+	isForwardStrand := headerParts[2] == "+"
+	startGenomicInt, err := strconv.Atoi(headerParts[3])
+	if err != nil {
+		logrus.Fatal("invalid start genomic position:", header)
+	}
+	startGenomic := uint32(startGenomicInt)
+	endGenomicInt, err := strconv.Atoi(headerParts[4])
+	if err != nil {
+		logrus.Fatal("invalid end genomic position:", header)
+	}
+	endGenomic := uint32(endGenomicInt)
+
+	return &gtf.GeneBasic{
+		GeneId:          geneId,
+		Contig:          contig,
+		IsForwardStrand: isForwardStrand,
+		StartGenomic:    startGenomic,
+		EndGenomic:      endGenomic,
+	}
 }
 
 func WriteGenomeIndex(genomeIndex *GenomeIndex, outputFile *os.File) {
@@ -721,4 +760,28 @@ func ReadGenomeIndexByFile(indexFile *os.File) *GenomeIndex {
 	}).Info("Deserialized index")
 
 	return &genomeIndex
+}
+
+func BuildAndSerializeGenomeIndex(fastaFile *os.File, outputFile *os.File) {
+
+	fastaEntries, err := dataloader.ReadFasta(fastaFile)
+
+	if err != nil {
+		logrus.Fatal("Error extracting sequence from fasta file", err)
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"NumSequences": len(fastaEntries),
+	}).Info("Read sequence(s) from fasta")
+
+	for i, entry := range fastaEntries {
+		logrus.WithFields(logrus.Fields{
+			"Header": entry.Header,
+			"Length": len(entry.Sequence),
+		}).Info("Added sequence #" + strconv.Itoa(i+1))
+	}
+
+	genomeIndex := BuildGenomeIndex(fastaEntries)
+
+	WriteGenomeIndex(genomeIndex, outputFile)
 }

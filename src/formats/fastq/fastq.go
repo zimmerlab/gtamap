@@ -2,8 +2,11 @@ package fastq
 
 import (
 	"bufio"
+	"compress/gzip"
 	"github.com/sirupsen/logrus"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -26,36 +29,64 @@ type Reader struct {
 
 func InitFromPaths(pathR1Reads *string, pathR2Reads *string) *Reader {
 
-	logrus.WithFields(logrus.Fields{
-		"R1": pathR1Reads,
-		"R2": pathR2Reads,
-	}).Debug("Initializing reader")
-
 	var fileR1Reads *os.File = nil
 	var errR1 error = nil
-	var scannerR1 *bufio.Scanner = nil
 
 	var fileR2Reads *os.File = nil
 	var errR2 error = nil
-	var scannerR2 *bufio.Scanner = nil
 
 	fileR1Reads, errR1 = os.Open(*pathR1Reads)
 	if errR1 != nil {
 		logrus.Fatal("Error reading R1 reads: ", errR1)
 	}
-	scannerR1 = bufio.NewScanner(fileR1Reads)
-
-	logrus.Debug("Initialized reader with R1 reads")
 
 	// if R2 reads are given, open them as well
 	if pathR2Reads != nil {
-		logrus.Debug("Reverse reads given")
 		fileR2Reads, errR2 = os.Open(*pathR2Reads)
 		if errR2 != nil {
 			logrus.Fatal("Error reading R2 reads: ", errR2)
 		}
-		scannerR2 = bufio.NewScanner(fileR2Reads)
+	}
 
+	return InitFromFiles(fileR1Reads, fileR2Reads)
+}
+
+func InitFromFiles(fastqR1File *os.File, fastqR2File *os.File) *Reader {
+
+	logrus.WithFields(logrus.Fields{
+		"R1": fastqR1File.Name(),
+		"R2": fastqR2File.Name(),
+	}).Debug("Initializing reader")
+
+	var scannerR1 *bufio.Scanner = nil
+
+	var scannerR2 *bufio.Scanner = nil
+
+	if strings.ToLower(filepath.Ext(fastqR1File.Name())) == ".gz" {
+		gzipReader, errGzip := gzip.NewReader(fastqR1File)
+		if errGzip != nil {
+			logrus.Fatal("Error reading gzipped R1 reads: ", errGzip)
+		}
+		scannerR1 = bufio.NewScanner(gzipReader)
+	} else {
+		scannerR1 = bufio.NewScanner(fastqR1File)
+	}
+
+	logrus.Debug("Initialized reader with R1 reads")
+
+	// if R2 reads are given, open them as well
+	if fastqR2File != nil {
+		logrus.Debug("Reverse reads given")
+
+		if strings.ToLower(filepath.Ext(fastqR2File.Name())) == ".gz" {
+			gzipReader, errGzip := gzip.NewReader(fastqR2File)
+			if errGzip != nil {
+				logrus.Fatal("Error reading gzipped R2 reads: ", errGzip)
+			}
+			scannerR2 = bufio.NewScanner(gzipReader)
+		} else {
+			scannerR2 = bufio.NewScanner(fastqR2File)
+		}
 		logrus.Debug("Initialized reader with R2 reads")
 	}
 
@@ -80,7 +111,9 @@ func (r Reader) NextRead() *ReadPair {
 	// scanner.Text() returns a copy of the string but .Bytes() returns a reference
 	// to the scanners internal buffer which means it has to be copied to a new slice
 	// to avoid clashes when reading the next line
-	headerR1 := r.scannerR1.Text()
+
+	// remove the leading '@' character from the header
+	headerR1 := r.scannerR1.Text()[1:]
 	r.scannerR1.Scan()
 	sequenceR1Bytes := r.scannerR1.Bytes()
 	sequenceR1 := make([]byte, len(sequenceR1Bytes))
@@ -103,7 +136,8 @@ func (r Reader) NextRead() *ReadPair {
 			return nil
 		}
 
-		headerR2 := r.scannerR2.Text()
+		// remove the leading '@' character from the header
+		headerR2 := r.scannerR2.Text()[1:]
 		r.scannerR2.Scan()
 		sequenceR2Bytes := r.scannerR2.Bytes()
 		sequenceR2 := make([]byte, len(sequenceR2Bytes))
