@@ -22,15 +22,10 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 
 	timerStartTotal := time.Now()
 
-	sequenceInfos := genomeIndex.GetSequenceInfos()
-
 	samHeader := sam.Header{
-		Version:                 sam.Version,
-		SequenceInfos:           sequenceInfos,
-		GenomeAnnotationVersion: "",
-		GenomeAssemblyVersion:   "",
-		OrganismTaxId:           "",
-		ToolVersion:             config.ToolVersion(),
+		Version:       sam.Version,
+		SequenceInfos: genomeIndex.GetSequenceInfos(),
+		ToolVersion:   config.ToolVersion(),
 	}
 
 	writer.Write(samHeader.String())

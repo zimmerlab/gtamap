@@ -618,12 +618,12 @@ func (i GenomeIndex) AddSequenceToMapSmall(sequence *[]byte, sequenceIndex uint8
 }
 
 func (i GenomeIndex) GetSequenceInfos() []sam.SequenceInfo {
-	infos := make([]sam.SequenceInfo, len(i.SequenceHeaders))
+	infos := make([]sam.SequenceInfo, len(i.SequenceInfo))
 
-	for seqIndex, header := range i.SequenceHeaders {
+	for seqIndex, seqInfo := range i.SequenceInfo {
 		infos[seqIndex] = sam.SequenceInfo{
-			Name:   header,
-			Length: len(*i.Sequences[seqIndex*2]),
+			Name:   seqInfo.Contig,
+			Length: int(seqInfo.EndGenomic - seqInfo.StartGenomic),
 		}
 	}
 
@@ -650,6 +650,22 @@ func (i GenomeIndex) GetSequenceHeader(sequenceIndex int) string {
 	}
 }
 
+func (i GenomeIndex) GetSequenceInfo(sequenceIndex int) *gtf.GeneBasic {
+	if i.IsSequenceForward(sequenceIndex) {
+		return i.SequenceInfo[sequenceIndex]
+	} else {
+		return i.SequenceInfo[sequenceIndex-1]
+	}
+}
+
+func (i GenomeIndex) GetSequenceContig(sequenceIndex int) string {
+	if i.IsSequenceForward(sequenceIndex) {
+		return i.SequenceInfo[sequenceIndex].Contig
+	} else {
+		return i.SequenceInfo[sequenceIndex-1].Contig
+	}
+}
+
 func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry) *GenomeIndex {
 
 	var index = GenomeIndex{
@@ -667,7 +683,7 @@ func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry) *GenomeIndex {
 
 		info := parseFastaHeader(entry.Header)
 		index.SequenceInfo[i] = info
-		
+
 		index.SequenceHeaders[i] = entry.Header
 
 		index.Sequences[i*2] = &sequence

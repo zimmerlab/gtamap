@@ -5,15 +5,9 @@ import "fmt"
 const Version string = "1.6"
 
 type Header struct {
-	Version                 string         // version of the SAM format (e.g. 1.6)
-	ReferenceSequenceName   string         // the chromosome of the gene
-	ReferenceSequenceLength int            // the length of the chromosome
-	SequenceInfos           []SequenceInfo // information about the contained sequences
-	GenomeAnnotationVersion string         // ensembl version of the gtf file (e.g. 108)
-	GenomeAssemblyVersion   string         // version of the genome (e.g. hg38)
-	OrganismTaxId           string         // taxonomy id of the organism (e.g. 9606)
-	ToolVersion             string
-	Transcripts             []*TranscriptInfo
+	Version       string         // version of the SAM format (e.g. 1.6)
+	SequenceInfos []SequenceInfo // information about the contained sequences
+	ToolVersion   string
 }
 
 type SequenceInfo struct {
@@ -29,11 +23,9 @@ type TranscriptInfo struct {
 
 func (header *Header) String() string {
 	headerString := fmt.Sprintf("@HD\tVN:%s\n", header.Version)
-	headerString += fmt.Sprintf("@SQ\tSN:%s\tLN:%d\tSP:%s\tAS:%s\tDS:%s\n",
-		header.ReferenceSequenceName, header.ReferenceSequenceLength, header.OrganismTaxId, header.GenomeAssemblyVersion, "annotation ensembl version "+header.GenomeAnnotationVersion)
 
-	for _, transcriptInfo := range header.Transcripts {
-		headerString += fmt.Sprintf("@SQ\tSN:%s\tLN:%d\tDS:%s\n", transcriptInfo.Id, transcriptInfo.TranscriptLength, transcriptInfo.TranscriptEnsemblId)
+	for _, seqInfo := range header.SequenceInfos {
+		headerString += fmt.Sprintf("@SQ\tSN:%s\tLN:%d\n", seqInfo.Name, seqInfo.Length)
 	}
 
 	headerString += fmt.Sprintf("@PG\tID:%s\tPN:%s\tVN:%s\n", "GTAMap", "GTAMap", header.ToolVersion)
@@ -109,7 +101,7 @@ func (flag *Flag) SetPaired() {
 	flag.Value |= 1 << 0
 }
 func (flag *Flag) IsPaired() bool {
-	return flag.Value&(1<<0) == 1
+	return (flag.Value & (1 << 0)) != 0
 }
 
 // SetProperlyPaired sets the read as properly paired
@@ -121,7 +113,7 @@ func (flag *Flag) SetProperlyPaired() {
 	flag.Value |= 1 << 1
 }
 func (flag *Flag) IsProperlyPaired() bool {
-	return flag.Value&(1<<1) == 1
+	return (flag.Value & (1 << 1)) != 0
 }
 
 // SetUnmapped sets the read as unmapped which means that the read could not be aligned to the reference
@@ -129,7 +121,7 @@ func (flag *Flag) SetUnmapped() {
 	flag.Value |= 1 << 2
 }
 func (flag *Flag) IsUnmapped() bool {
-	return flag.Value&(1<<2) == 1
+	return (flag.Value & (1 << 2)) != 0
 }
 
 // SetMateUnmapped sets the mate as unmapped which means that the mate of the read could not be aligned to the reference
@@ -137,7 +129,7 @@ func (flag *Flag) SetMateUnmapped() {
 	flag.Value |= 1 << 3
 }
 func (flag *Flag) IsMateUnmapped() bool {
-	return flag.Value&(1<<3) == 1
+	return (flag.Value & (1 << 3)) != 0
 }
 
 // SetReverseStrand sets the read as mapped to the reverse strand of the reference
@@ -145,7 +137,7 @@ func (flag *Flag) SetReverseStrand() {
 	flag.Value |= 1 << 4
 }
 func (flag *Flag) IsReverseStrand() bool {
-	return flag.Value&(1<<4) == 1
+	return (flag.Value & (1 << 4)) != 0
 }
 
 // SetMateReverseStrand sets the mate as mapped to the reverse strand of the reference
@@ -153,7 +145,7 @@ func (flag *Flag) SetMateReverseStrand() {
 	flag.Value |= 1 << 5
 }
 func (flag *Flag) IsMateReverseStrand() bool {
-	return flag.Value&(1<<5) == 1
+	return (flag.Value & (1 << 5)) != 0
 }
 
 // SetFirstInPair sets the read as the first in the pair which means that
@@ -161,7 +153,7 @@ func (flag *Flag) SetFirstInPair() {
 	flag.Value |= 1 << 6
 }
 func (flag *Flag) IsFirstInPair() bool {
-	return flag.Value&(1<<6) == 1
+	return (flag.Value & (1 << 6)) != 0
 }
 
 // SetSecondInPair sets the read as the second in the pair which means that
@@ -169,7 +161,7 @@ func (flag *Flag) SetSecondInPair() {
 	flag.Value |= 1 << 7
 }
 func (flag *Flag) IsSecondInPair() bool {
-	return flag.Value&(1<<7) == 1
+	return (flag.Value & (1 << 7)) != 0
 }
 
 // SetNotPrimaryAlignment sets the read as not primary alignment which means that this alignment is not
@@ -179,7 +171,7 @@ func (flag *Flag) SetNotPrimaryAlignment() {
 	flag.Value |= 1 << 8
 }
 func (flag *Flag) IsNotPrimaryAlignment() bool {
-	return flag.Value&(1<<8) == 1
+	return (flag.Value & (1 << 8)) != 0
 }
 
 // SetFailsQualityCheck sets the read as failing quality check
@@ -187,7 +179,7 @@ func (flag *Flag) SetFailsQualityCheck() {
 	flag.Value |= 1 << 9
 }
 func (flag *Flag) FailsQualityCheck() bool {
-	return flag.Value&(1<<9) == 1
+	return (flag.Value & (1 << 9)) != 0
 }
 
 // SetDuplicate sets the read as a duplicate which means that the read is a PCR or optical duplicate
@@ -195,7 +187,7 @@ func (flag *Flag) SetDuplicate() {
 	flag.Value |= 1 << 10
 }
 func (flag *Flag) IsDuplicate() bool {
-	return flag.Value&(1<<10) == 1
+	return (flag.Value & (1 << 10)) != 0
 }
 
 // SetSupplementary sets the read as supplementary which means that the read is part of a chimeric alignment
@@ -203,7 +195,7 @@ func (flag *Flag) SetSupplementary() {
 	flag.Value |= 1 << 11
 }
 func (flag *Flag) IsSupplementary() bool {
-	return flag.Value&(1<<11) == 1
+	return (flag.Value & (1 << 11)) != 0
 }
 
 type FlagBuilder struct {

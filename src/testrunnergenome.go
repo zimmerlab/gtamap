@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"github.com/KleinSamuel/gtamap/src/core/index"
+	"github.com/KleinSamuel/gtamap/src/core/mapper"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
+	"github.com/KleinSamuel/gtamap/src/datawriter"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/sirupsen/logrus"
 	"os"
@@ -73,6 +75,42 @@ func extractGeneSequenceFromGtfAndFastaForIndex() {
 	index.ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath, fastaPath, outputPath, geneIds)
 }
 
+func testTas2Read() {
+
+	genomeIndexPath := "/home/sam/Data/gtamap/tas2/tas2r4/index/ENSG00000127364.gtai"
+
+	readsFwPath := "/home/sam/Data/gtamap/tas2/tas2r4/reads/tas2r4.1-1.fastq"
+	readsRvPath := "/home/sam/Data/gtamap/tas2/tas2r4/reads/tas2r4.1-2.fastq"
+
+	outputPath := "/home/sam/Data/gtamap/tas2/tas2r4/aligned.sam"
+
+	genomeIndex := index.ReadGenomeIndexByPath(genomeIndexPath)
+	reader := fastq.InitFromPaths(&readsFwPath, &readsRvPath)
+	writer := datawriter.InitFromPath(outputPath)
+
+	numThreads := 1
+
+	mapper.MapAll(genomeIndex, reader, writer, &numThreads)
+}
+
+func testIndex() {
+
+	pattern := "CAAATAAATCTTAAAATTTTATAAATTACATGACTTTTCTCATT"
+
+	var p1 [10]byte
+	copy(p1[:], pattern[0:10])
+
+	genomeIndexPath := "/home/sam/Data/gtamap/tas2/tas2r4/index/ENSG00000127364.gtai"
+
+	genomeIndex := index.ReadGenomeIndexByPath(genomeIndexPath)
+
+	matches := genomeIndex.GetKeywordFromMap(p1)
+
+	for _, match := range matches {
+		fmt.Println("Match found: ", match)
+	}
+}
+
 func main() {
 
 	//f, _ := os.Create("cpu_profile.prof")
@@ -121,5 +159,8 @@ func main() {
 	//
 	//mapper.MapAll(genomeIndex, reader, writer, &numThreads)
 
-	extractGeneSequenceFromGtfAndFastaForIndex()
+	//extractGeneSequenceFromGtfAndFastaForIndex()
+
+	testTas2Read()
+	//testIndex()
 }

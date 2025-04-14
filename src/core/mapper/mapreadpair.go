@@ -6,6 +6,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/core/timer"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
+	"github.com/KleinSamuel/gtamap/src/formats/sam"
 	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
 	"strconv"
@@ -91,11 +92,31 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 		return builder.String(), true
 	}
 
+	// multimapping was handled before so length is always 1
 	resFw := resultFw[0]
 	resRv := resultRv[0]
 
-	geneStartRelativeToContig := 0
-	geneEndRelativeToContig := 0
+	flagFw := sam.Flag{}
+	flagRv := sam.Flag{}
+
+	flagFw.SetPaired()
+	flagFw.SetProperlyPaired()
+	flagFw.SetFirstInPair()
+	if !genomeIndex.IsSequenceForward(resFw.SequenceIndex) {
+		flagFw.SetReverseStrand()
+		flagRv.SetMateReverseStrand()
+	}
+
+	flagRv.SetPaired()
+	flagRv.SetProperlyPaired()
+	flagRv.SetSecondInPair()
+	if !genomeIndex.IsSequenceForward(resRv.SequenceIndex) {
+		flagRv.SetReverseStrand()
+		flagFw.SetMateReverseStrand()
+	}
+
+	geneStartRelativeToContig := int(genomeIndex.GetSequenceInfo(resFw.SequenceIndex).StartGenomic)
+	geneEndRelativeToContig := int(genomeIndex.GetSequenceInfo(resRv.SequenceIndex).EndGenomic)
 
 	var builder strings.Builder
 
@@ -103,17 +124,28 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	builder.WriteString(readPair.ReadR1.Header)
 	builder.WriteString("\t")
 	// FLAG
-	builder.WriteString(strconv.Itoa(0))
+	builder.WriteString(strconv.Itoa(flagFw.Value))
 	builder.WriteString("\t")
 	// RNAME
-	builder.WriteString(genomeIndex.GetSequenceHeader(resFw.SequenceIndex))
+	builder.WriteString(genomeIndex.GetSequenceInfo(resFw.SequenceIndex).Contig)
 	builder.WriteString("\t")
 	// POS
-	startRelativeFw := resFw.MatchedGenome.GetFirstRegion().Start
-	// TODO: use actual start position of sequence from index
-	startGenomeFw := geneStartRelativeToContig + startRelativeFw
+	// the offset is the start of the first region in the matched genome which corresponds to the first
+	// mapped position of the read
+	offsetFw := resFw.MatchedGenome.GetFirstRegion().Start
 
-	builder.WriteString(strconv.Itoa(startGenomeFw))
+	// if the read is mapped to the reverse strand, we need to calculate the offset because the target sequence
+	// was reverse complemented. therefore the start position in 5'-3' direction of the original sequence is the
+	// end position of the reverse complemented sequence
+	if flagFw.IsReverseStrand() {
+		geneLength := geneEndRelativeToContig - geneStartRelativeToContig
+		offsetFw = geneLength - resFw.MatchedGenome.GetLastRegion().End
+	}
+
+	startGenomeFw := geneStartRelativeToContig + offsetFw
+
+	// +1 because the sam format is 1-based
+	builder.WriteString(strconv.Itoa(startGenomeFw + 1))
 	builder.WriteString("\t")
 	// MAPQ
 	builder.WriteString(strconv.Itoa(255))
@@ -131,7 +163,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	builder.WriteString(strconv.Itoa(0))
 	builder.WriteString("\t")
 	// SEQ
-	if genomeIndex.IsSequenceForward(resFw.SequenceIndex) {
+	if !flagFw.IsReverseStrand() {
 		builder.WriteString(string(*readPair.ReadR1.Sequence))
 	} else {
 		builder.WriteString(string(utils.ReverseComplementDnaBytes(*readPair.ReadR1.Sequence)))
@@ -147,15 +179,23 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	builder.WriteString(readPair.ReadR2.Header)
 	builder.WriteString("\t")
 	// FLAG
-	builder.WriteString(strconv.Itoa(0))
+	builder.WriteString(strconv.Itoa(flagRv.Value))
 	builder.WriteString("\t")
 	// RNAME
-	builder.WriteString(genomeIndex.GetSequenceHeader(resRv.SequenceIndex))
+	builder.WriteString(genomeIndex.GetSequenceInfo(resRv.SequenceIndex).Contig)
 	builder.WriteString("\t")
 	// POS
-	startRelativeRw := resRv.MatchedGenome.GetLastRegion().End
-	startGenomeRw := geneEndRelativeToContig - startRelativeRw + 1
-	builder.WriteString(strconv.Itoa(startGenomeRw))
+	offsetRv := resRv.MatchedGenome.GetFirstRegion().Start
+
+	if flagRv.IsReverseStrand() {
+		geneLength := geneEndRelativeToContig - geneStartRelativeToContig
+		offsetRv = geneLength - resRv.MatchedGenome.GetLastRegion().End
+	}
+
+	startGenomeRv := geneStartRelativeToContig + offsetRv
+
+	// +1 because the sam format is 1-based
+	builder.WriteString(strconv.Itoa(startGenomeRv + 1))
 	builder.WriteString("\t")
 	// MAPQ
 	builder.WriteString(strconv.Itoa(255))
@@ -173,7 +213,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	builder.WriteString(strconv.Itoa(0))
 	builder.WriteString("\t")
 	// SEQ
-	if genomeIndex.IsSequenceForward(resRv.SequenceIndex) {
+	if !flagRv.IsReverseStrand() {
 		builder.WriteString(string(*readPair.ReadR2.Sequence))
 	} else {
 		builder.WriteString(string(utils.ReverseComplementDnaBytes(*readPair.ReadR2.Sequence)))
@@ -182,22 +222,6 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	// QUAL
 	builder.WriteString(string(*readPair.ReadR2.Quality))
 	builder.WriteString("\n")
-
-	//resString := readPair.ReadR1.Header + "_fw\t"
-	//for _, resFw := range resultFw {
-	//	startRelative := resFw.MatchedGenome.GetFirstRegion().Start
-	//	startGenome := 45884425 + startRelative
-	//	resString += strconv.Itoa(resFw.SequenceIndex) + ":" + strconv.Itoa(startRelative) + "|" + strconv.Itoa(startGenome) + ":" + strconv.Itoa(resFw.MatchedRead.Length()) + " "
-	//}
-	//resString = resString + "\n"
-	//
-	//resString += readPair.ReadR2.Header + "_rw\t"
-	//for _, resRw := range resultRw {
-	//	startRelative := resRw.MatchedGenome.GetLastRegion().End
-	//	startGenome := 45903174 - startRelative + 1
-	//	resString += strconv.Itoa(resRw.SequenceIndex) + ":" + strconv.Itoa(startRelative) + "|" + strconv.Itoa(startGenome) + ":" + strconv.Itoa(resRw.MatchedRead.Length()) + " "
-	//}
-	//resString = resString + "\n"
 
 	return builder.String(), true
 }
