@@ -74,6 +74,13 @@ func (rv *RegionVector) AddRegionNonOverlapping(start int, end int) error {
 // The regions are sorted in ascending order based on their start position.
 func (rv *RegionVector) AddRegionObjNonOverlapping(region *Region) error {
 
+	if region.Start == region.End {
+		return fmt.Errorf("region start and end are equal")
+	}
+	if region.Start > region.End {
+		return fmt.Errorf("region start is greater than end")
+	}
+	
 	// just add the region if the vector is empty
 	if len(rv.Regions) == 0 {
 		rv.Regions = append(rv.Regions, region)

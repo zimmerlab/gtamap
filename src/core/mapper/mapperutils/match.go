@@ -3,6 +3,7 @@ package mapperutils
 import (
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
+	"github.com/sirupsen/logrus"
 	"strconv"
 	"strings"
 )
@@ -40,17 +41,48 @@ func (m ReadMatchResult) GetCigar() string {
 
 	if isForwardStrand {
 
-		index := 0
+		// number of cumulative aligned positions (matches or mismatches) between the read and the genome
+		numMatchesSum := 0
 
-		for index < len(m.MatchedGenome.Regions) {
-			numMatches := m.MatchedGenome.Regions[index].End - m.MatchedGenome.Regions[index].Start
-			builder.WriteString(strconv.Itoa(numMatches))
+		// the regions in MatchedGenome and MatchedRead have the same dimensions
+		for i := 0; i < len(m.MatchedGenome.Regions); i++ {
+
+			// each pair of regions represent a match
+			numMatchesSum += m.MatchedGenome.Regions[i].Length()
+
+			// if this is the last match, add the number of matches
+			if i == len(m.MatchedGenome.Regions)-1 {
+				builder.WriteString(strconv.Itoa(numMatchesSum))
+				builder.WriteString("M")
+				break
+			}
+
+			gapInGenome := m.MatchedGenome.Regions[i].End < m.MatchedGenome.Regions[i+1].Start
+			gapInRead := m.MatchedRead.Regions[i].End < m.MatchedRead.Regions[i+1].Start
+
+			if gapInGenome && gapInRead {
+				logrus.WithFields(logrus.Fields{
+					"read":   m.MatchedRead,
+					"genome": m.MatchedGenome,
+				}).Fatal("Gap in genome and read at the same time")
+			}
+
+			if !gapInGenome && !gapInRead {
+				continue
+			}
+
+			builder.WriteString(strconv.Itoa(numMatchesSum))
 			builder.WriteString("M")
+			numMatchesSum = 0
 
-			if index+1 < len(m.MatchedGenome.Regions) {
-				numSkipped := m.MatchedGenome.Regions[index+1].Start - m.MatchedGenome.Regions[index].End
+			// intron or deletion
+			if gapInGenome {
+				// number of skipped bases in the reference
+				numSkipped := m.MatchedGenome.Regions[i+1].Start - m.MatchedGenome.Regions[i].End
+
 				builder.WriteString(strconv.Itoa(numSkipped))
 
+				// determine whether the gap is an intron or a deletion
 				if numSkipped < config.IntronLengthMin() {
 					builder.WriteString("D")
 				} else {
@@ -58,21 +90,61 @@ func (m ReadMatchResult) GetCigar() string {
 				}
 			}
 
-			index++
+			// insertion
+			if gapInRead {
+				// number of skipped bases in the read
+				numSkipped := m.MatchedRead.Regions[i+1].Start - m.MatchedRead.Regions[i].End
+
+				builder.WriteString(strconv.Itoa(numSkipped))
+				builder.WriteString("I")
+			}
 		}
+
 	} else {
 
-		index := len(m.MatchedGenome.Regions) - 1
+		// reverse the order of the regions in MatchedGenome
+		// this is because the read is on the reverse strand
 
-		for index >= 0 {
-			numMatches := m.MatchedGenome.Regions[index].End - m.MatchedGenome.Regions[index].Start
-			builder.WriteString(strconv.Itoa(numMatches))
+		numMatchesSum := 0
+
+		// the regions in MatchedGenome and MatchedRead have the same dimensions
+		for i := len(m.MatchedGenome.Regions) - 1; i >= 0; i-- {
+
+			numMatchesSum += m.MatchedGenome.Regions[i].Length()
+
+			// if this is the last match, add the number of matches
+			if i == 0 {
+				builder.WriteString(strconv.Itoa(numMatchesSum))
+				builder.WriteString("M")
+				break
+			}
+
+			gapInGenome := m.MatchedGenome.Regions[i].Start > m.MatchedGenome.Regions[i-1].End
+			gapInRead := m.MatchedRead.Regions[i].Start > m.MatchedRead.Regions[i-1].End
+
+			if gapInGenome && gapInRead {
+				logrus.WithFields(logrus.Fields{
+					"read":   m.MatchedRead,
+					"genome": m.MatchedGenome,
+				}).Fatal("Gap in genome and read at the same time")
+			}
+
+			if !gapInGenome && !gapInRead {
+				continue
+			}
+
+			builder.WriteString(strconv.Itoa(numMatchesSum))
 			builder.WriteString("M")
+			numMatchesSum = 0
 
-			if index-1 >= 0 {
-				numSkipped := m.MatchedGenome.Regions[index].Start - m.MatchedGenome.Regions[index-1].End
+			// intron or deletion
+			if gapInGenome {
+				// number of skipped bases in the reference
+				numSkipped := m.MatchedGenome.Regions[i-1].Start - m.MatchedGenome.Regions[i].End
+
 				builder.WriteString(strconv.Itoa(numSkipped))
 
+				// determine whether the gap is an intron or a deletion
 				if numSkipped < config.IntronLengthMin() {
 					builder.WriteString("D")
 				} else {
@@ -80,7 +152,15 @@ func (m ReadMatchResult) GetCigar() string {
 				}
 			}
 
-			index--
+			// insertion
+			if gapInRead {
+				// number of skipped bases in the read
+				numSkipped := m.MatchedRead.Regions[i-1].Start - m.MatchedRead.Regions[i].End
+
+				builder.WriteString(strconv.Itoa(numSkipped))
+				builder.WriteString("I")
+			}
+
 		}
 	}
 

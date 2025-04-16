@@ -36,7 +36,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	}
 
 	// the size of the task queue buffer
-	bufferSizeMultiplier := 4
+	bufferSizeMultiplier := 100
 
 	// TODO: remove after testing
 	maxTasks := 0
@@ -45,6 +45,8 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	//specificQname := "A00604:202:HLYW3DSXY:3:2114:17020:15562"
 	// rv with left normalization required
 	//specificQname := "A00604:202:HLYW3DSXY:3:2169:25527:10316"
+	// adding region where start == end
+	//specificQname := "A00604:202:HLYW3DSXY:3:1103:32217:18991"
 
 	specificQname := ""
 
