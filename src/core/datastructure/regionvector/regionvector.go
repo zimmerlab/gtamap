@@ -2,6 +2,7 @@ package regionvector
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"slices"
 	"sort"
 )
@@ -25,11 +26,90 @@ func NewRegionVector() *RegionVector {
 	}
 }
 
-func (rv *RegionVector) AddRegion(start int, end int) {
-	rv.AddRegionObj(&Region{Start: start, End: end})
+// HasGaps checks if the region vector has any gaps between the regions.
+// A gap is defined as a region where the end of one region does not equal the start of the next region.
+// Only works if:
+// - the regions are sorted in ascending order by their start position
+// - the regions are non-overlapping
+func (rv *RegionVector) HasGaps() bool {
+
+	if len(rv.Regions) <= 1 {
+		return false
+	}
+
+	for i := 0; i < len(rv.Regions)-1; i++ {
+		if rv.Regions[i].End != rv.Regions[i+1].Start {
+			return true
+		}
+	}
+
+	return false
 }
 
-func (rv *RegionVector) AddRegionObj(r *Region) {
+// AddRegionNonOverlappingPanic adds a region to the region vector.
+// It does not allow overlapping regions and will panic if the region overlaps with any existing region.
+// The regions are sorted in ascending order based on their start position.
+func (rv *RegionVector) AddRegionNonOverlappingPanic(start int, end int) {
+
+	err := rv.AddRegionNonOverlapping(start, end)
+
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"start": start,
+			"end":   end,
+			"rv":    rv,
+		}).Fatal("Error adding region to region vector", err)
+	}
+}
+
+// AddRegionNonOverlapping adds a region to the region vector.
+// It does not allow overlapping regions and will return an error if the region overlaps with any existing region.
+// The regions are sorted in ascending order based on their start position.
+func (rv *RegionVector) AddRegionNonOverlapping(start int, end int) error {
+	return rv.AddRegionObjNonOverlapping(&Region{Start: start, End: end})
+}
+
+// AddRegionObjNonOverlapping adds a region to the region vector.
+// It does not allow overlapping regions and will return an error if the region overlaps with any existing region.
+// The regions are sorted in ascending order based on their start position.
+func (rv *RegionVector) AddRegionObjNonOverlapping(region *Region) error {
+
+	// just add the region if the vector is empty
+	if len(rv.Regions) == 0 {
+		rv.Regions = append(rv.Regions, region)
+		return nil
+	}
+
+	// find the index where the region should be inserted based on its start position
+	i := sort.Search(len(rv.Regions), func(i int) bool {
+		return rv.Regions[i].Start >= region.Start
+	})
+
+	if i < len(rv.Regions) {
+		if i > 0 && rv.Regions[i-1].End > region.Start {
+			// the region overlaps with the previous region
+			return fmt.Errorf("region overlaps with previous region")
+		}
+		if rv.Regions[i].Start < region.End {
+			// the region is overlaps the next region
+			return fmt.Errorf("region overlaps with next region")
+		}
+	}
+
+	rv.Regions = slices.Insert(rv.Regions, i, region)
+
+	return nil
+}
+
+// AddRegionAndMerge adds a region to the region vector and merges it with any overlapping regions.
+// The regions are sorted in ascending order based on their start position.
+func (rv *RegionVector) AddRegionAndMerge(start int, end int) {
+	rv.AddRegionObjAndMerge(&Region{Start: start, End: end})
+}
+
+// AddRegionObjAndMerge adds a region to the region vector and merges it with any overlapping regions.
+// The regions are sorted in ascending order based on their start position.
+func (rv *RegionVector) AddRegionObjAndMerge(r *Region) {
 
 	if len(rv.Regions) == 0 {
 		rv.Regions = append(rv.Regions, r)
@@ -94,26 +174,98 @@ func (rv *RegionVector) Length() int {
 }
 
 func (rv *RegionVector) GetFirstGap() *Region {
+	return rv.GetGap(0)
+}
+
+// GetGapAfterRegionIndex returns the gap after the region with given index.
+// It returns nil if the region index is out of bounds or if there is no gap after the region.
+func (rv *RegionVector) GetGapAfterRegionIndex(regionIndex int) *Region {
+
+	if regionIndex >= len(rv.Regions) {
+		return nil
+	}
+
+	gap := Region{
+		Start: rv.Regions[regionIndex].End,
+		End:   rv.Regions[regionIndex+1].Start,
+	}
+
+	if gap.Start >= gap.End {
+		return nil
+	}
+
+	return &gap
+}
+
+func (rv *RegionVector) GetGap(num int) *Region {
+
+	if num < 0 || num >= len(rv.Regions)-1 {
+		return nil
+	}
+
 	if len(rv.Regions) <= 1 {
 		return nil
 	}
 
-	return &Region{
-		Start: rv.Regions[0].End,
-		End:   rv.Regions[1].Start,
+	counter := 0
+
+	for i := 0; i < len(rv.Regions)-1; i++ {
+		if rv.Regions[i].End != rv.Regions[i+1].Start {
+			if counter == num {
+				return &Region{
+					Start: rv.Regions[i].End,
+					End:   rv.Regions[i+1].Start,
+				}
+			}
+			counter++
+		}
 	}
+
+	return nil
 }
 
-func (rv *RegionVector) GetGap(gapIndex int) *Region {
-	if gapIndex >= len(rv.Regions) {
-		return nil
+// GetGapIndexAfterPos returns the index of the first region after which a gap occurs,
+// that starts after the given position.
+// It returns -1 if there is no gap after the given position.
+//
+// Example:
+// If the region vector contains the regions [0,10], [10,15], [20,30]
+// When the position is 5, the function will return index 1 -> gap [15,20]
+// When the position is 14, the function will return index 1 -> gap [15,20]
+// When the position is 15, the function will return -1
+// When the position is 20, the function will return -1
+func (rv *RegionVector) GetGapIndexAfterPos(position int) int {
+
+	for i := 0; i < len(rv.Regions)-1; i++ {
+		if rv.Regions[i].End > position && rv.Regions[i].End < rv.Regions[i+1].Start {
+			return i
+		}
 	}
 
-	return &Region{
-		Start: rv.Regions[gapIndex].End,
-		End:   rv.Regions[gapIndex+1].Start,
-	}
+	return -1
 }
+
+//func (rv *RegionVector) GetFirstGap() *Region {
+//	if len(rv.Regions) <= 1 {
+//		return nil
+//	}
+//
+//	return &Region{
+//		Start: rv.Regions[0].End,
+//		End:   rv.Regions[1].Start,
+//	}
+//}
+
+//func (rv *RegionVector) GetGap(gapIndex int) *Region {
+//	if gapIndex >= len(rv.Regions) {
+//		return nil
+//	}
+//
+//	return &Region{
+//		Start: rv.Regions[gapIndex].End,
+//		End:   rv.Regions[gapIndex+1].Start,
+//	}
+//}
 
 func (rv *RegionVector) GetFirstRegion() *Region {
 	if len(rv.Regions) == 0 {

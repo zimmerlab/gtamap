@@ -179,7 +179,8 @@ func main() {
 
 	//extractGeneSequenceFromGtfAndFastaForIndex()
 
-	testTas2Read()
-	//testTas2r4DeletionReads()
+	//testTas2Read()
+	testTas2r4DeletionReads()
+
 	//testIndex()
 }

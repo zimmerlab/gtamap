@@ -8,7 +8,6 @@ import (
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/sirupsen/logrus"
-	"os"
 )
 
 func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]mapperutils.ReadMatchResult, bool) {
@@ -173,8 +172,9 @@ sequenceLoop:
 				if match.Used {
 					continue
 				}
-				diagonalRead.AddRegion(match.FromRead, match.ToRead)
-				diagonalGenome.AddRegion(match.FromGenome, match.ToGenome)
+
+				diagonalRead.AddRegionNonOverlappingPanic(match.FromRead, match.ToRead)
+				diagonalGenome.AddRegionNonOverlappingPanic(match.FromGenome, match.ToGenome)
 			}
 
 			logrus.WithFields(logrus.Fields{
@@ -188,11 +188,14 @@ sequenceLoop:
 			// find gaps in diagonal and fill them (matches and mismatches)
 			mismatches := make([]int, 0)
 
-			foundGap := len(diagonalRead.Regions) > 1
+			foundGap := diagonalRead.HasGaps()
 
-			// more than one element means there is a gap
+			// resolve gaps on the same diagonal
+			// gaps can occur because of mismatches in the read and genome which prevent exact kmer matching
+			// this is done by filling the gaps in the read and genome and counting the mismatches
 			// the regionvectors of read and genome should have the same length as they are coupled
-			for len(diagonalRead.Regions) > 1 {
+			// because they are part of the same diagonal (no indels, otherwise not on the same diagonal)
+			for diagonalRead.HasGaps() {
 
 				gapRead := diagonalRead.GetFirstGap()
 				gapGenome := diagonalGenome.GetFirstGap()
@@ -202,7 +205,11 @@ sequenceLoop:
 					"genome": gapGenome,
 				}).Debug("found gap")
 
-				diagonalRead.AddRegion(gapRead.Start, gapRead.End)
+				// fill the gap in the read by adding the gap as region
+				diagonalRead.AddRegionNonOverlappingPanic(gapRead.Start, gapRead.End)
+
+				// determine the number of mismatches between the read and genome
+				// TODO: maybe this can be discarded when we do not need to know the mismatches
 				for i := gapRead.Start; i < gapRead.End; i++ {
 
 					readByte := (*read.Sequence)[i]
@@ -221,7 +228,8 @@ sequenceLoop:
 						}
 					}
 				}
-				diagonalGenome.AddRegion(gapGenome.Start, gapGenome.End)
+
+				diagonalGenome.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.End)
 			}
 
 			if foundGap {
@@ -233,8 +241,12 @@ sequenceLoop:
 			}
 
 			// add digonal to result (diagonal rv should have length 1 after gap filling)
-			result.MatchedRead.AddRegion(diagonalRead.GetFirstRegion().Start, diagonalRead.GetFirstRegion().End)
-			result.MatchedGenome.AddRegion(diagonalGenome.GetFirstRegion().Start, diagonalGenome.GetFirstRegion().End)
+			result.MatchedRead.AddRegionNonOverlappingPanic(diagonalRead.GetFirstRegion().Start,
+				diagonalRead.GetFirstRegion().End)
+
+			result.MatchedGenome.AddRegionNonOverlappingPanic(diagonalGenome.GetFirstRegion().Start,
+				diagonalGenome.GetFirstRegion().End)
+
 			result.MismatchesRead = append(result.MismatchesRead, mismatches...)
 
 			// remove diagonal from handler
@@ -250,178 +262,257 @@ sequenceLoop:
 			logrus.Debug("read fully matched")
 		} else {
 
-			if len(result.MatchedRead.Regions) > 1 {
+			if result.MatchedRead.HasGaps() {
 
 				logrus.Debug("unmatched regions within read")
 
-				numGaps := len(result.MatchedRead.Regions) - 1
-				genomeGapIndex := 0
-
 				fmt.Println(read.Header)
+				fmt.Println("read", result.MatchedRead)
+				fmt.Println("genome", result.MatchedGenome)
 
-				// resolve the borders within the read where at least one junction was found
-				for len(result.MatchedRead.Regions) > 1 {
+				// used to keep track of the read position for the next gap
+				readGapPos := 0
+				indexRegionBeforeGap := result.MatchedRead.GetGapIndexAfterPos(readGapPos)
 
-					// position in read where the gap starts
-					lRead := result.MatchedRead.GetFirstGap().Start
-					// position in read where the gap ends
-					rRead := result.MatchedRead.GetFirstGap().End
+				for indexRegionBeforeGap > -1 {
 
-					gIndex, err := result.MatchedGenome.GetRegionIndexContainingPosRelative(lRead - 1)
-					if err != nil {
+					gapRead := result.MatchedRead.GetGapAfterRegionIndex(indexRegionBeforeGap)
+					gapGenome := result.MatchedGenome.GetGapAfterRegionIndex(indexRegionBeforeGap)
+
+					fmt.Println("readGapPos", readGapPos)
+					fmt.Println("indexRegionBeforeGap", indexRegionBeforeGap)
+					fmt.Println("gap read", gapRead)
+					fmt.Println("gap genome", gapGenome)
+
+					if gapGenome == nil {
 						logrus.WithFields(logrus.Fields{
 							"read":    result.MatchedRead,
 							"genome":  result.MatchedGenome,
-							"pos":     lRead - 1,
-							"gapRead": result.MatchedRead.GetFirstGap(),
-						}).Fatal("no genome region found for left read position")
-					}
+							"gapRead": gapRead,
+						}).Debug("insertion found")
+					} else {
 
-					genomeGap := result.MatchedGenome.GetGap(gIndex)
+						logrus.WithFields(logrus.Fields{
+							"gapRead":   gapRead,
+							"gapGenome": gapGenome,
+						}).Debug("found gap to be handled")
 
-					// position in genome where the gap starts
-					//lGenome := result.MatchedGenome.GetGap(genomeGapIndex).Start
-					lGenome := genomeGap.Start
-					// position in genome where the gap ends
-					//rGenome := result.MatchedGenome.GetGap(genomeGapIndex).End
-					rGenome := genomeGap.End
-					
-					logrus.WithFields(logrus.Fields{
-						"startRead":   lRead,
-						"endRead":     rRead,
-						"startGenome": lGenome,
-						"endGenome":   rGenome,
-					}).Debug("resolving gap within read")
+						// TODO: handle this
+						// when the gap in the read is larger than the gap in the genome
+						// there is maybe an insertion in the read
+						// currently the assumption is that this is a non-mapping read
+						if gapRead.Length() > gapGenome.Length() {
+							logrus.WithFields(logrus.Fields{
+								"gapRead":   gapRead,
+								"gapGenome": gapGenome,
+							}).Debug("gap read is larger than gap genome")
+							logrus.Debug("probably insertion in query genome")
 
-					//fmt.Println("handling gap:")
-					//fmt.Println("lRead: ", lRead)
-					//fmt.Println("rRead: ", rRead)
-					//fmt.Println("lGenome: ", lGenome)
-					//fmt.Println("rGenome: ", rGenome)
-
-					//readSequence := (*read.Sequence)[lRead:rRead]
-					//genomeSequenceL := (*genomeIndex.Sequences[seqIndex])[lGenome : lGenome+15]
-					//genomeSequenceR := (*genomeIndex.Sequences[seqIndex])[rGenome-15 : rGenome]
-					//fmt.Println("READ:\t\t", string(readSequence))
-					//fmt.Println("GENOME L:\t", string(genomeSequenceL))
-					//fmt.Println("GENOME R:\t", string(genomeSequenceR))
-					//
-					//fmt.Println("READ (rev):\t", string(utils.ReverseComplementDnaBytes(readSequence)))
-					//fmt.Println("GENOME L (rev):\t", string(utils.ReverseComplementDnaBytes(genomeSequenceR)))
-					//fmt.Println("GENOME R (rev):\t", string(utils.ReverseComplementDnaBytes(genomeSequenceL)))
-					//fmt.Println(lRead, lGenome, rRead, rGenome)
-
-					// the length of the extension based on the number if unmapped bases in the read
-					extensionLength := rRead - lRead
-
-					//fmt.Println("extension length: ", extensionLength)
-
-					// cululative mismatch count for the left and right extensions
-					// for lErrors the index i represents the number of mismatches for the first i positions of the extension
-					// for rErrors the index i represents the number of mismatches for the last i positions of the extension
-					lErrors := make([]int, extensionLength+1)
-					rErrors := make([]int, extensionLength+1)
-
-					lErrors[0] = 0
-					rErrors[0] = 0
-
-					for i := 1; i <= extensionLength; i++ {
-						lErrors[i] = lErrors[i-1]
-						if (*read.Sequence)[lRead+i-1] != (*genomeIndex.Sequences[seqIndex])[lGenome+i-1] {
-							lErrors[i]++
+							continue sequenceLoop
 						}
 
-						rErrors[i] = rErrors[i-1]
-						if (*read.Sequence)[rRead-i] != (*genomeIndex.Sequences[seqIndex])[rGenome-i] {
-							rErrors[i]++
+						bestSplit := determineBestSplit(genomeIndex, read, seqIndex, gapRead, gapGenome)
+
+						if bestSplit == -1 {
+							logrus.Fatal("no best split found!")
 						}
+
+						logrus.WithFields(logrus.Fields{
+							"split": bestSplit,
+						}).Debug("best split found")
+
+						logrus.WithFields(logrus.Fields{
+							"read":   result.MatchedRead,
+							"genome": result.MatchedGenome,
+						}).Debug("regions before")
+
+						result.MatchedRead.AddRegionNonOverlappingPanic(gapRead.Start, gapRead.Start+bestSplit)
+						result.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.Start+bestSplit)
+
+						logrus.WithFields(logrus.Fields{
+							"read":   result.MatchedRead,
+							"genome": result.MatchedGenome,
+						}).Debug("regions after left")
+
+						result.MatchedRead.AddRegionNonOverlappingPanic(gapRead.End-(gapRead.Length()-bestSplit), gapRead.End)
+						result.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.End-(gapRead.Length()-bestSplit), gapGenome.End)
+
+						logrus.WithFields(logrus.Fields{
+							"read":   result.MatchedRead,
+							"genome": result.MatchedGenome,
+						}).Debug("regions after right")
 					}
 
-					//fmt.Println("lErrors:", lErrors)
-					//fmt.Println("rErrors:", rErrors)
-
-					// the minimum number of mismatches
-					minErrors := lErrors[extensionLength] + rErrors[extensionLength]
-					// the position of the split with the minimum number of mismatches
-					minSplit := -1
-
-					// TODO: keep track of the actual mismatch positions
-					// TODO: if no suitable split is found then:
-					// - maybe there is another exon in between if enough bases missing from read
-					// - maybe keep the readpair for second pass
-					for i := 0; i <= extensionLength; i++ {
-
-						lPos := i
-						rPos := extensionLength - i
-
-						numMismatches := lErrors[lPos] + rErrors[rPos]
-
-						donorSiteStart := result.MatchedGenome.GetGap(genomeGapIndex).Start + i
-						donorSiteSeq := (*genomeIndex.Sequences[seqIndex])[donorSiteStart : donorSiteStart+2]
-
-						splitRev := extensionLength - i
-						acceptorSiteStart := result.MatchedGenome.GetGap(genomeGapIndex).End - splitRev
-						acceptorSiteSeq := (*genomeIndex.Sequences[seqIndex])[acceptorSiteStart-2 : acceptorSiteStart]
-
-						isForwardStrand := genomeIndex.IsSequenceForward(seqIndex)
-
-						// add a penalty if the splice site is not canonical
-						// 2 means that there is no known splice site
-						numMismatches += scoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
-							acceptorSiteSeq[0], acceptorSiteSeq[1], isForwardStrand)
-
-						if numMismatches < minErrors {
-							minErrors = numMismatches
-							minSplit = i
-						}
-					}
-
-					// apply the best split
-					if minSplit == -1 {
-						logrus.Error("no best split found!")
-						os.Exit(1)
-					}
-
-					//fmt.Println("chose: ", minSplit)
-					//fmt.Println("read before", result.MatchedRead.String())
-					//fmt.Println("genome before", result.MatchedGenome.String())
-					//fmt.Println("add l read: ", lRead, lRead+minSplit)
-					//fmt.Println("add l genome: ", lGenome, lGenome+minSplit)
-
-					logrus.WithFields(logrus.Fields{
-						"read":   result.MatchedRead,
-						"genome": result.MatchedGenome,
-					}).Debug("regions before")
-
-					result.MatchedRead.AddRegion(lRead, lRead+minSplit)
-					result.MatchedGenome.AddRegion(lGenome, lGenome+minSplit)
-
-					logrus.WithFields(logrus.Fields{
-						"read":   result.MatchedRead,
-						"genome": result.MatchedGenome,
-					}).Debug("regions after left")
-
-					//fmt.Println("read after add l: ", result.MatchedRead.String())
-					//fmt.Println("genome after add l: ", result.MatchedGenome.String())
-					//fmt.Println("add r read: ", rRead-(extensionLength-minSplit), rRead)
-					//fmt.Println("add r genome: ", rGenome-(extensionLength-minSplit), rGenome)
-
-					result.MatchedRead.AddRegion(rRead-(extensionLength-minSplit), rRead)
-					result.MatchedGenome.AddRegion(rGenome-(extensionLength-minSplit), rGenome)
-
-					logrus.WithFields(logrus.Fields{
-						"read":   result.MatchedRead,
-						"genome": result.MatchedGenome,
-					}).Debug("regions after right")
-
-					//fmt.Println("read after add r: ", result.MatchedRead.String())
-					//fmt.Println("genome after add r: ", result.MatchedGenome.String())
-
-					// only increment the gap index if no gap was removed during the split
-					if numGaps == len(result.MatchedGenome.Regions)-1 {
-						genomeGapIndex++
-					}
+					readGapPos = gapRead.End + 1
+					indexRegionBeforeGap = result.MatchedRead.GetGapIndexAfterPos(readGapPos)
 				}
+
+				//numGaps := len(result.MatchedRead.Regions) - 1
+				//genomeGapIndex := 0
+				//
+				//// resolve the borders within the read where at least one junction was found
+				//for result.MatchedRead.HasGaps() {
+				//
+				//	// position in read where the gap starts
+				//	lRead := result.MatchedRead.GetFirstGap().Start
+				//	// position in read where the gap ends
+				//	rRead := result.MatchedRead.GetFirstGap().End
+				//
+				//	gIndex, err := result.MatchedGenome.GetRegionIndexContainingPosRelative(lRead - 1)
+				//	if err != nil {
+				//		logrus.WithFields(logrus.Fields{
+				//			"read":    result.MatchedRead,
+				//			"genome":  result.MatchedGenome,
+				//			"pos":     lRead - 1,
+				//			"gapRead": result.MatchedRead.GetFirstGap(),
+				//		}).Fatal("no genome region found for left read position")
+				//	}
+				//
+				//	genomeGap := result.MatchedGenome.GetGap(gIndex)
+				//
+				//	// position in genome where the gap starts
+				//	//lGenome := result.MatchedGenome.GetGap(genomeGapIndex).Start
+				//	lGenome := genomeGap.Start
+				//	// position in genome where the gap ends
+				//	//rGenome := result.MatchedGenome.GetGap(genomeGapIndex).End
+				//	rGenome := genomeGap.End
+				//
+				//	logrus.WithFields(logrus.Fields{
+				//		"startRead":   lRead,
+				//		"endRead":     rRead,
+				//		"startGenome": lGenome,
+				//		"endGenome":   rGenome,
+				//	}).Debug("resolving gap within read")
+				//
+				//	//fmt.Println("handling gap:")
+				//	//fmt.Println("lRead: ", lRead)
+				//	//fmt.Println("rRead: ", rRead)
+				//	//fmt.Println("lGenome: ", lGenome)
+				//	//fmt.Println("rGenome: ", rGenome)
+				//
+				//	//readSequence := (*read.Sequence)[lRead:rRead]
+				//	//genomeSequenceL := (*genomeIndex.Sequences[seqIndex])[lGenome : lGenome+15]
+				//	//genomeSequenceR := (*genomeIndex.Sequences[seqIndex])[rGenome-15 : rGenome]
+				//	//fmt.Println("READ:\t\t", string(readSequence))
+				//	//fmt.Println("GENOME L:\t", string(genomeSequenceL))
+				//	//fmt.Println("GENOME R:\t", string(genomeSequenceR))
+				//	//
+				//	//fmt.Println("READ (rev):\t", string(utils.ReverseComplementDnaBytes(readSequence)))
+				//	//fmt.Println("GENOME L (rev):\t", string(utils.ReverseComplementDnaBytes(genomeSequenceR)))
+				//	//fmt.Println("GENOME R (rev):\t", string(utils.ReverseComplementDnaBytes(genomeSequenceL)))
+				//	//fmt.Println(lRead, lGenome, rRead, rGenome)
+				//
+				//	// the length of the extension based on the number if unmapped bases in the read
+				//	extensionLength := rRead - lRead
+				//
+				//	//fmt.Println("extension length: ", extensionLength)
+				//
+				//	// cululative mismatch count for the left and right extensions
+				//	// for lErrors the index i represents the number of mismatches for the first i positions of the extension
+				//	// for rErrors the index i represents the number of mismatches for the last i positions of the extension
+				//	lErrors := make([]int, extensionLength+1)
+				//	rErrors := make([]int, extensionLength+1)
+				//
+				//	lErrors[0] = 0
+				//	rErrors[0] = 0
+				//
+				//	for i := 1; i <= extensionLength; i++ {
+				//		lErrors[i] = lErrors[i-1]
+				//		if (*read.Sequence)[lRead+i-1] != (*genomeIndex.Sequences[seqIndex])[lGenome+i-1] {
+				//			lErrors[i]++
+				//		}
+				//
+				//		rErrors[i] = rErrors[i-1]
+				//		if (*read.Sequence)[rRead-i] != (*genomeIndex.Sequences[seqIndex])[rGenome-i] {
+				//			rErrors[i]++
+				//		}
+				//	}
+				//
+				//	//fmt.Println("lErrors:", lErrors)
+				//	//fmt.Println("rErrors:", rErrors)
+				//
+				//	// the minimum number of mismatches
+				//	minErrors := lErrors[extensionLength] + rErrors[extensionLength]
+				//	// the position of the split with the minimum number of mismatches
+				//	minSplit := -1
+				//
+				//	// TODO: keep track of the actual mismatch positions
+				//	// TODO: if no suitable split is found then:
+				//	// - maybe there is another exon in between if enough bases missing from read
+				//	// - maybe keep the readpair for second pass
+				//	for i := 0; i <= extensionLength; i++ {
+				//
+				//		lPos := i
+				//		rPos := extensionLength - i
+				//
+				//		numMismatches := lErrors[lPos] + rErrors[rPos]
+				//
+				//		donorSiteStart := result.MatchedGenome.GetGap(genomeGapIndex).Start + i
+				//		donorSiteSeq := (*genomeIndex.Sequences[seqIndex])[donorSiteStart : donorSiteStart+2]
+				//
+				//		splitRev := extensionLength - i
+				//		acceptorSiteStart := result.MatchedGenome.GetGap(genomeGapIndex).End - splitRev
+				//		acceptorSiteSeq := (*genomeIndex.Sequences[seqIndex])[acceptorSiteStart-2 : acceptorSiteStart]
+				//
+				//		isForwardStrand := genomeIndex.IsSequenceForward(seqIndex)
+				//
+				//		// add a penalty if the splice site is not canonical
+				//		// 2 means that there is no known splice site
+				//		numMismatches += scoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
+				//			acceptorSiteSeq[0], acceptorSiteSeq[1], isForwardStrand)
+				//
+				//		if numMismatches < minErrors {
+				//			minErrors = numMismatches
+				//			minSplit = i
+				//		}
+				//	}
+
+				//	// apply the best split
+				//	if minSplit == -1 {
+				//		logrus.Error("no best split found!")
+				//		os.Exit(1)
+				//	}
+				//
+				//	//fmt.Println("chose: ", minSplit)
+				//	//fmt.Println("read before", result.MatchedRead.String())
+				//	//fmt.Println("genome before", result.MatchedGenome.String())
+				//	//fmt.Println("add l read: ", lRead, lRead+minSplit)
+				//	//fmt.Println("add l genome: ", lGenome, lGenome+minSplit)
+				//
+				//	logrus.WithFields(logrus.Fields{
+				//		"read":   result.MatchedRead,
+				//		"genome": result.MatchedGenome,
+				//	}).Debug("regions before")
+				//
+				//	result.MatchedRead.AddRegionNonOverlappingPanic(lRead, lRead+minSplit)
+				//	result.MatchedGenome.AddRegionNonOverlappingPanic(lGenome, lGenome+minSplit)
+				//
+				//	logrus.WithFields(logrus.Fields{
+				//		"read":   result.MatchedRead,
+				//		"genome": result.MatchedGenome,
+				//	}).Debug("regions after left")
+				//
+				//	//fmt.Println("read after add l: ", result.MatchedRead.String())
+				//	//fmt.Println("genome after add l: ", result.MatchedGenome.String())
+				//	//fmt.Println("add r read: ", rRead-(extensionLength-minSplit), rRead)
+				//	//fmt.Println("add r genome: ", rGenome-(extensionLength-minSplit), rGenome)
+				//
+				//	result.MatchedRead.AddRegionNonOverlappingPanic(rRead-(extensionLength-minSplit), rRead)
+				//	result.MatchedGenome.AddRegionNonOverlappingPanic(rGenome-(extensionLength-minSplit), rGenome)
+				//
+				//	logrus.WithFields(logrus.Fields{
+				//		"read":   result.MatchedRead,
+				//		"genome": result.MatchedGenome,
+				//	}).Debug("regions after right")
+				//
+				//	//fmt.Println("read after add r: ", result.MatchedRead.String())
+				//	//fmt.Println("genome after add r: ", result.MatchedGenome.String())
+				//
+				//	// only increment the gap index if no gap was removed during the split
+				//	if numGaps == len(result.MatchedGenome.Regions)-1 {
+				//		genomeGapIndex++
+				//	}
+				//}
 			}
 
 			if result.MatchedRead.GetFirstRegion().Start > 0 {
@@ -470,8 +561,8 @@ sequenceLoop:
 					continue sequenceLoop
 				}
 
-				result.MatchedRead.AddRegion(startRead, endRead)
-				result.MatchedGenome.AddRegion(startGenome, startGenome+extensionLength)
+				result.MatchedRead.AddRegionNonOverlappingPanic(startRead, endRead)
+				result.MatchedGenome.AddRegionNonOverlappingPanic(startGenome, startGenome+extensionLength)
 			}
 
 			if result.MatchedRead.GetLastRegion().End < len(*read.Sequence) {
@@ -528,8 +619,8 @@ sequenceLoop:
 					continue sequenceLoop
 				}
 
-				result.MatchedRead.AddRegion(startRead, endRead)
-				result.MatchedGenome.AddRegion(startGenome, startGenome+extensionLength)
+				result.MatchedRead.AddRegionNonOverlappingPanic(startRead, endRead)
+				result.MatchedGenome.AddRegionNonOverlappingPanic(startGenome, startGenome+extensionLength)
 			}
 		}
 
@@ -541,4 +632,89 @@ sequenceLoop:
 		return results, false
 	}
 	return results, true
+}
+
+func determineBestSplit(
+	genomeIndex *index.GenomeIndex,
+	read *fastq.Read,
+	seqIndex int,
+	gapRead *regionvector.Region,
+	gapGenome *regionvector.Region) int {
+
+	logrus.WithFields(logrus.Fields{
+		"gapRead":   gapRead,
+		"gapGenome": gapGenome,
+	}).Debug("determining best split")
+
+	// cululative mismatch count for the left and right extensions
+	// for lErrors the index i represents the number of mismatches for the first i positions of the extension
+	// for rErrors the index i represents the number of mismatches for the last i positions of the extension
+	lErrors := make([]int, gapRead.Length()+1)
+	rErrors := make([]int, gapRead.Length()+1)
+
+	lErrors[0] = 0
+	rErrors[0] = 0
+
+	for i := 1; i <= gapRead.Length(); i++ {
+		lErrors[i] = lErrors[i-1]
+		if (*read.Sequence)[gapRead.Start+i-1] != (*genomeIndex.Sequences[seqIndex])[gapGenome.Start+i-1] {
+			lErrors[i]++
+		}
+
+		rErrors[i] = rErrors[i-1]
+		if (*read.Sequence)[gapRead.End-i] != (*genomeIndex.Sequences[seqIndex])[gapGenome.End-i] {
+			rErrors[i]++
+		}
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"lErrors": lErrors,
+		"rErrors": rErrors,
+	}).Debug("determined mismatches")
+
+	// the minimum number of mismatches
+	minErrors := lErrors[gapRead.Length()] + rErrors[gapRead.Length()]
+	// the position of the split with the minimum number of mismatches
+	minSplit := -1
+
+	// TODO: keep track of the actual mismatch positions
+	// TODO: if no suitable split is found then:
+	// - maybe there is another exon in between if enough bases missing from read
+	// - maybe keep the readpair for second pass
+	for i := 0; i <= gapRead.Length(); i++ {
+
+		lPos := i
+		rPos := gapRead.Length() - i
+
+		numMismatches := lErrors[lPos] + rErrors[rPos]
+
+		donorSiteStart := gapGenome.Start + i
+		donorSiteSeq := (*genomeIndex.Sequences[seqIndex])[donorSiteStart : donorSiteStart+2]
+
+		splitRev := gapRead.Length() - i
+		acceptorSiteStart := gapGenome.End - splitRev
+		acceptorSiteSeq := (*genomeIndex.Sequences[seqIndex])[acceptorSiteStart-2 : acceptorSiteStart]
+
+		isForwardStrand := genomeIndex.IsSequenceForward(seqIndex)
+
+		// add a penalty if the splice site is not canonical
+		// 2 means that there is no known splice site
+		spliceSitePenalty := scoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
+			acceptorSiteSeq[0], acceptorSiteSeq[1], isForwardStrand)
+
+		numMismatches += spliceSitePenalty
+
+		//logrus.WithFields(logrus.Fields{
+		//	"split":               i,
+		//	"splice site penalty": spliceSitePenalty,
+		//	"numMismatches":       numMismatches,
+		//}).Debug("possible split")
+
+		if numMismatches < minErrors {
+			minErrors = numMismatches
+			minSplit = i
+		}
+	}
+
+	return minSplit
 }
