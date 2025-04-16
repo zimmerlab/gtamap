@@ -140,7 +140,7 @@ func (m ReadMatchResult) GetCigar() string {
 			// intron or deletion
 			if gapInGenome {
 				// number of skipped bases in the reference
-				numSkipped := m.MatchedGenome.Regions[i-1].Start - m.MatchedGenome.Regions[i].End
+				numSkipped := m.MatchedGenome.Regions[i].Start - m.MatchedGenome.Regions[i-1].End
 
 				builder.WriteString(strconv.Itoa(numSkipped))
 
@@ -155,7 +155,7 @@ func (m ReadMatchResult) GetCigar() string {
 			// insertion
 			if gapInRead {
 				// number of skipped bases in the read
-				numSkipped := m.MatchedRead.Regions[i-1].Start - m.MatchedRead.Regions[i].End
+				numSkipped := m.MatchedRead.Regions[i].Start - m.MatchedRead.Regions[i-1].End
 
 				builder.WriteString(strconv.Itoa(numSkipped))
 				builder.WriteString("I")

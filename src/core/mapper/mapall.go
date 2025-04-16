@@ -36,7 +36,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	}
 
 	// the size of the task queue buffer
-	bufferSizeMultiplier := 100
+	bufferSizeMultiplier := 10000
 
 	// TODO: remove after testing
 	maxTasks := 0
