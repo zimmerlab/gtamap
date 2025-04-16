@@ -1,7 +1,6 @@
 package mapper
 
 import (
-	"fmt"
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
@@ -41,9 +40,13 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 
 	// TODO: remove after testing
 	maxTasks := 0
+
+	// fw with left normalization required
+	//specificQname := "A00604:202:HLYW3DSXY:3:2114:17020:15562"
+	// rv with left normalization required
+	//specificQname := "A00604:202:HLYW3DSXY:3:2169:25527:10316"
+
 	specificQname := ""
-	//specificQname := "@A00604:202:HLYW3DSXY:3:1257:26775:6496 2:N:0:AACTCGGA+TCTGGACA"
-	//specificQname := "@43"
 
 	// reads to be debugged:
 	// @43_fw		needs to be extended to the right
@@ -97,14 +100,10 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 
 	writer.Close()
 
-	fmt.Println("mapping finished")
-
 	totalDuration := time.Since(timerStartTotal)
 
 	logrus.WithFields(logrus.Fields{
 		"duration": totalDuration,
 		"io":       reader.Duration,
 	}).Info("Finished mapping")
-
-	fmt.Println("total mapping time: ", totalDuration)
 }

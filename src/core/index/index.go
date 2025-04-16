@@ -630,15 +630,27 @@ func (i GenomeIndex) GetSequenceInfos() []sam.SequenceInfo {
 	return infos
 }
 
+// IsSequenceForward checks if the sequence at the given index is forward or reverse complemented.
+// Returns true if the given sequence index refers to a 5->3 forward sequence.
 func (i GenomeIndex) IsSequenceForward(sequenceIndex int) bool {
 	return sequenceIndex%2 == 0
 }
 
+// GetRevCompIndex returns the index of the reverse complement sequence for the given sequence index.
 func (i GenomeIndex) GetRevCompIndex(sequenceIndex int) int {
 	if i.IsSequenceForward(sequenceIndex) {
 		return sequenceIndex + 1
 	} else {
 		return sequenceIndex - 1
+	}
+}
+
+// GetForwardSequence returns the forward sequence for the given sequence index.
+func (i GenomeIndex) GetForwardSequence(sequenceIndex int) *[]byte {
+	if i.IsSequenceForward(sequenceIndex) {
+		return i.Sequences[sequenceIndex]
+	} else {
+		return i.Sequences[sequenceIndex-1]
 	}
 }
 

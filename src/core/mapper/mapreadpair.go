@@ -96,6 +96,9 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	resFw := resultFw[0]
 	resRv := resultRv[0]
 
+	postprocessReadMatch(genomeIndex, readPair.ReadR1, &resFw)
+	postprocessReadMatch(genomeIndex, readPair.ReadR2, &resRv)
+
 	flagFw := sam.Flag{}
 	flagRv := sam.Flag{}
 
@@ -227,4 +230,157 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	builder.WriteString("\n")
 
 	return builder.String(), true
+}
+
+func postprocessReadMatch(genomeIndex *index.GenomeIndex, read *fastq.Read, result *mapperutils.ReadMatchResult) {
+	applyLeftNormalization(genomeIndex, read, result)
+}
+
+// applyLeftNormalization shifts the mapping in genome to the left if there are gaps in the genome
+// that have ambiguous bases (N) before and after the gap. If this is the case, the mapping can not
+// be determined, and it is up to the mapper to decide where to place the read.
+// This function shifts the gap to the leftmost position.
+func applyLeftNormalization(genomeIndex *index.GenomeIndex, read *fastq.Read, result *mapperutils.ReadMatchResult) {
+
+	if len(result.MatchedGenome.Regions) < 2 {
+		logrus.WithFields(logrus.Fields{
+			"read":      read.Header,
+			"isForward": genomeIndex.IsSequenceForward(result.SequenceIndex),
+		}).Debug("No left normalization required")
+		return
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"read":      read.Header,
+		"isForward": genomeIndex.IsSequenceForward(result.SequenceIndex),
+	}).Debug("apply left normalization")
+
+	logrus.WithFields(logrus.Fields{
+		"genome": result.MatchedGenome,
+	}).Debug("match before left normalization")
+
+	if genomeIndex.IsSequenceForward(result.SequenceIndex) {
+		determineLeftNormalizationShiftFw(genomeIndex, read, result)
+	} else {
+		determineLeftNormalizationShiftRv(genomeIndex, read, result)
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"genome": result.MatchedGenome,
+	}).Debug("match after left normalization")
+}
+
+// determineLeftNormalizationShiftFw determines the left normalization shift for forward reads.
+// It finds gaps in the genome and shifts the mapping in genome to the left based on the
+// value of shift.
+// The shift is the number of equal bases between the suffix of the read sequence before the gap
+// and the suffix of the genome sequence within the gap.
+// The maximum value of the shift is the size if the gap.
+func determineLeftNormalizationShiftFw(genomeIndex *index.GenomeIndex, read *fastq.Read, result *mapperutils.ReadMatchResult) {
+
+	logrus.Debug("determine left normalization for forward seq")
+
+	// find gaps in genome (bases in reference that are not present in read)
+	for i := 0; i < len(result.MatchedGenome.Regions)-1; i++ {
+
+		gap := result.MatchedGenome.GetGap(i)
+
+		// the rightmost position of the subsequence to be tested in the read
+		// (last position in the read before the gap in forward direction)
+		rRead, sizeErr := result.MatchedGenome.GetSizeLeftIncluding(i)
+		if sizeErr != nil {
+			logrus.Fatal("Error getting size left including", sizeErr)
+		}
+
+		// the rightmost position of the subsequence to be tested in the genome
+		// (end of the gap in the genome)
+		rGenome := gap.End
+
+		// DEBUG
+		//readSeqBeforeGap := (*read.Sequence)[rRead-gap.Length() : rRead]
+		//fmt.Println("readSeqBeforeGap\t", string(readSeqBeforeGap))
+		//genomeSeqInGap := (*genomeIndex.Sequences[result.SequenceIndex])[rGenome-gap.Length() : rGenome]
+		//fmt.Println("genomeSeqInGap\t\t", string(genomeSeqInGap))
+
+		shift := 0
+
+		for i := 0; i < gap.Length(); i++ {
+
+			charRead := (*read.Sequence)[rRead-1-i]
+
+			charGenome := (*genomeIndex.Sequences[result.SequenceIndex])[rGenome-1-i]
+
+			if charRead != charGenome {
+				break
+			}
+
+			shift++
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"shift": shift,
+		}).Debug("determined shift")
+
+		// shift the mapping in genome to left based on value of shift
+		result.MatchedGenome.Regions[i].End -= shift
+		result.MatchedGenome.Regions[i+1].Start -= shift
+	}
+}
+
+// determineLeftNormalizationShiftRv determines the left normalization shift for reverse reads.
+// The procedure is equivalent to the one for forward reads, but the direction of the
+// comparison is reversed.
+// The shift is now determined by the number of equal bases between the prefix of the read sequence
+// after the gap and the prefix of the genome sequence within the gap.
+func determineLeftNormalizationShiftRv(genomeIndex *index.GenomeIndex, read *fastq.Read, result *mapperutils.ReadMatchResult) {
+
+	logrus.Debug("determine left normalization for reverse seq")
+
+	// find gaps in genome (bases in reference that are not present in read)
+	for i := 0; i < len(result.MatchedGenome.Regions)-1; i++ {
+
+		gap := result.MatchedGenome.GetGap(i)
+
+		// the rightmost position of the subsequence to be tested in the read
+		// (last position in the read before the gap in forward direction)
+		// actually this is the first position in the read after the gap (because rv)
+		rRead, sizeErr := result.MatchedGenome.GetSizeLeftIncluding(i)
+		if sizeErr != nil {
+			logrus.Fatal("Error getting size left including", sizeErr)
+		}
+
+		// the rightmost position of the subsequence to be tested in the genome
+		// (end of the gap in the genome in forward direction)
+		// actually this is the first position in the gap (because rv)
+		rGenome := gap.Start
+
+		// DEBUG
+		//readSeqAfterGap := (*read.Sequence)[rRead : rRead+gap.Length()]
+		//fmt.Println("readSeqAfterGap\t", string(readSeqAfterGap))
+		//genomeSeqInGap := (*genomeIndex.Sequences[result.SequenceIndex])[rGenome : rGenome+gap.Length()]
+		//fmt.Println("genomeSeqInGap\t", string(genomeSeqInGap))
+
+		shift := 0
+
+		for i := 0; i < gap.Length(); i++ {
+
+			charRead := (*read.Sequence)[rRead+i]
+
+			charGenome := (*genomeIndex.Sequences[result.SequenceIndex])[rGenome+i]
+
+			if charRead != charGenome {
+				break
+			}
+
+			shift++
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"shift": shift,
+		}).Debug("determined shift")
+
+		// shift the mapping in genome to right based on value of shift
+		result.MatchedGenome.Regions[i].End += shift
+		result.MatchedGenome.Regions[i+1].Start += shift
+	}
 }

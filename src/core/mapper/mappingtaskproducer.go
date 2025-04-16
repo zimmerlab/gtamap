@@ -1,10 +1,9 @@
 package mapper
 
 import (
-	"fmt"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
+	"github.com/sirupsen/logrus"
 	"strings"
-	"sync"
 )
 
 func MappingTaskProducer(reader *fastq.Reader, taskChan chan<- MappingTask,
@@ -43,11 +42,5 @@ func MappingTaskProducer(reader *fastq.Reader, taskChan chan<- MappingTask,
 		}
 	}
 
-	fmt.Println("done producing tasks")
-}
-
-func MappingTaskWaiter(wgFirstPass *sync.WaitGroup, allTasksProcessedChan chan struct{}) {
-	wgFirstPass.Wait()
-	close(allTasksProcessedChan)
-	fmt.Println("Closed taskChan as all mapper workers finished")
+	logrus.Debug("MappingTaskProducer finished")
 }

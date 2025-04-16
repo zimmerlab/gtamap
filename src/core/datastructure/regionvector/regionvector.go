@@ -7,8 +7,12 @@ import (
 )
 
 type Region struct {
-	Start int
-	End   int
+	Start int // 0-based
+	End   int // end-exlusive
+}
+
+func (r *Region) Length() int {
+	return r.End - r.Start
 }
 
 type RegionVector struct {
@@ -123,4 +127,40 @@ func (rv *RegionVector) GetLastRegion() *Region {
 		return nil
 	}
 	return rv.Regions[len(rv.Regions)-1]
+}
+
+// GetSizeLeftIncluding returns the size of all regions in the region vector that come before the
+// region at the given index including the size of the region at that index.
+// Returns an error if the given index is out of bounds.
+func (rv *RegionVector) GetSizeLeftIncluding(regionIndex int) (int, error) {
+
+	if regionIndex < 0 || regionIndex >= len(rv.Regions) {
+		return -1, fmt.Errorf("region index out of bounds")
+	}
+
+	size := 0
+
+	for i := 0; i <= regionIndex; i++ {
+		size += rv.Regions[i].Length()
+	}
+
+	return size, nil
+}
+
+// GetSizeRightIncluding returns the size of all regions in the region vector that come after the
+// region at the given index including the size of the region at that index.
+// Returns an error if the given index is out of bounds.
+func (rv *RegionVector) GetSizeRightIncluding(regionIndex int) (int, error) {
+
+	if regionIndex < 0 || regionIndex >= len(rv.Regions) {
+		return -1, fmt.Errorf("region index out of bounds")
+	}
+
+	size := 0
+
+	for i := regionIndex; i < len(rv.Regions); i++ {
+		size += rv.Regions[i].Length()
+	}
+
+	return size, nil
 }
