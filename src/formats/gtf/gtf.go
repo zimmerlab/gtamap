@@ -12,6 +12,14 @@ type Annotation struct {
 	Genes []*Gene
 }
 
+type GeneBasic struct {
+	GeneId          string
+	Contig          string
+	IsForwardStrand bool
+	StartGenomic    uint32
+	EndGenomic      uint32
+}
+
 type Gene struct {
 	GeneIdEnsembl       string
 	Chromosome          string
@@ -48,6 +56,74 @@ func ReadGtfFromFile(filePath string) *Annotation {
 	return ReadGtf(file)
 }
 
+func ReadGenesFromGtfUsingPath(filePath string, geneIds map[string]struct{}) []*GeneBasic {
+
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil
+	}
+	defer file.Close()
+
+	return ReadGenesFromGtf(file, geneIds)
+}
+
+func ReadGenesFromGtf(gtfFile *os.File, geneIds map[string]struct{}) []*GeneBasic {
+
+	genes := make([]*GeneBasic, 0)
+
+	scanner := bufio.NewScanner(gtfFile)
+
+	for scanner.Scan() {
+
+		// skip header lines starting with "#!"
+		if strings.HasPrefix(scanner.Text(), "#") {
+			continue
+		}
+
+		line := strings.Split(scanner.Text(), "\t")
+
+		// skip lines that are not genes
+		if line[2] != "gene" {
+			continue
+		}
+
+		geneId := extractAttributeValue(line[8], "gene_id")
+		// skip genes that do not have a gene id
+		if geneId == nil {
+			continue
+		}
+		// skip genes that are not in the list of gene ids if given
+		if len(geneIds) > 0 {
+			if _, ok := geneIds[*geneId]; !ok {
+				continue
+			}
+		}
+
+		contigName := line[0]
+		startGenomicRaw, errStart := strconv.ParseUint(line[3], 10, 32)
+		endGenomicRaw, errEnd := strconv.ParseUint(line[4], 10, 32)
+
+		if errStart != nil || errEnd != nil {
+			fmt.Println("Could not parse start or end position in line:", line)
+			continue
+		}
+
+		startGenomic := uint32(startGenomicRaw) - 1 // convert to 0-based
+		endGenomic := uint32(endGenomicRaw)
+		isForwardStrand := line[6] == "+"
+
+		genes = append(genes, &GeneBasic{
+			GeneId:          *geneId,
+			Contig:          contigName,
+			IsForwardStrand: isForwardStrand,
+			StartGenomic:    startGenomic,
+			EndGenomic:      endGenomic,
+		})
+	}
+
+	return genes
+}
+
 func ReadGtf(gtfFile *os.File) *Annotation {
 
 	annot := Annotation{
@@ -79,7 +155,7 @@ func ReadGtf(gtfFile *os.File) *Annotation {
 		case "gene":
 
 			gene := Gene{
-				GeneIdEnsembl:   extractAttributeValue(line[8], "gene_id"),
+				GeneIdEnsembl:   *extractAttributeValue(line[8], "gene_id"),
 				Chromosome:      *seqName,
 				IsForwardStrand: isForwardStrand,
 				StartGenomic:    start,
@@ -93,7 +169,7 @@ func ReadGtf(gtfFile *os.File) *Annotation {
 		case "transcript":
 
 			transcript := Transcript{
-				TranscriptIdEnsembl: extractAttributeValue(line[8], "transcript_id"),
+				TranscriptIdEnsembl: *extractAttributeValue(line[8], "transcript_id"),
 				StartRelative:       start - currentGene.StartGenomic,
 				EndRelative:         end - currentGene.StartGenomic,
 				// the sequence is built later based on the exon structure and the supplied fasta file
@@ -118,12 +194,13 @@ func ReadGtf(gtfFile *os.File) *Annotation {
 	return &annot
 }
 
-func extractAttributeValue(attributeString string, attributeKey string) string {
+func extractAttributeValue(attributeString string, attributeKey string) *string {
 	for _, item := range strings.Split(attributeString, ";") {
 		split := strings.Split(strings.TrimSpace(item), " ")
 		if strings.TrimSpace(split[0]) == attributeKey {
-			return strings.Replace(strings.TrimSpace(split[1]), "\"", "", -1)
+			val := strings.Replace(strings.TrimSpace(split[1]), "\"", "", -1)
+			return &val
 		}
 	}
-	return ""
+	return nil
 }

@@ -2,15 +2,18 @@ package fastq
 
 import (
 	"bufio"
+	"compress/gzip"
 	"github.com/sirupsen/logrus"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
 type Read struct {
 	Header   string
-	Sequence string
-	Quality  string
+	Sequence *[]byte
+	Quality  *[]byte
 }
 
 type ReadPair struct {
@@ -26,36 +29,64 @@ type Reader struct {
 
 func InitFromPaths(pathR1Reads *string, pathR2Reads *string) *Reader {
 
-	logrus.WithFields(logrus.Fields{
-		"R1": pathR1Reads,
-		"R2": pathR2Reads,
-	}).Debug("Initializing reader")
-
 	var fileR1Reads *os.File = nil
 	var errR1 error = nil
-	var scannerR1 *bufio.Scanner = nil
 
 	var fileR2Reads *os.File = nil
 	var errR2 error = nil
-	var scannerR2 *bufio.Scanner = nil
 
 	fileR1Reads, errR1 = os.Open(*pathR1Reads)
 	if errR1 != nil {
-		logrus.Fatal("Error reading R1 reads", errR1)
+		logrus.Fatal("Error reading R1 reads: ", errR1)
 	}
-	scannerR1 = bufio.NewScanner(fileR1Reads)
+
+	// if R2 reads are given, open them as well
+	if pathR2Reads != nil {
+		fileR2Reads, errR2 = os.Open(*pathR2Reads)
+		if errR2 != nil {
+			logrus.Fatal("Error reading R2 reads: ", errR2)
+		}
+	}
+
+	return InitFromFiles(fileR1Reads, fileR2Reads)
+}
+
+func InitFromFiles(fastqR1File *os.File, fastqR2File *os.File) *Reader {
+
+	logrus.WithFields(logrus.Fields{
+		"R1": fastqR1File.Name(),
+		"R2": fastqR2File.Name(),
+	}).Debug("Initializing reader")
+
+	var scannerR1 *bufio.Scanner = nil
+
+	var scannerR2 *bufio.Scanner = nil
+
+	if strings.ToLower(filepath.Ext(fastqR1File.Name())) == ".gz" {
+		gzipReader, errGzip := gzip.NewReader(fastqR1File)
+		if errGzip != nil {
+			logrus.Fatal("Error reading gzipped R1 reads: ", errGzip)
+		}
+		scannerR1 = bufio.NewScanner(gzipReader)
+	} else {
+		scannerR1 = bufio.NewScanner(fastqR1File)
+	}
 
 	logrus.Debug("Initialized reader with R1 reads")
 
 	// if R2 reads are given, open them as well
-	if pathR2Reads != nil {
+	if fastqR2File != nil {
 		logrus.Debug("Reverse reads given")
-		fileR2Reads, errR2 = os.Open(*pathR2Reads)
-		if errR2 != nil {
-			logrus.Fatal("Error reading R2 reads", errR2)
-		}
-		scannerR2 = bufio.NewScanner(fileR2Reads)
 
+		if strings.ToLower(filepath.Ext(fastqR2File.Name())) == ".gz" {
+			gzipReader, errGzip := gzip.NewReader(fastqR2File)
+			if errGzip != nil {
+				logrus.Fatal("Error reading gzipped R2 reads: ", errGzip)
+			}
+			scannerR2 = bufio.NewScanner(gzipReader)
+		} else {
+			scannerR2 = bufio.NewScanner(fastqR2File)
+		}
 		logrus.Debug("Initialized reader with R2 reads")
 	}
 
@@ -76,17 +107,27 @@ func (r Reader) NextRead() *ReadPair {
 		return nil
 	}
 
-	header := r.scannerR1.Text()
+	// read the header, sequence and quality of the read R1
+	// scanner.Text() returns a copy of the string but .Bytes() returns a reference
+	// to the scanners internal buffer which means it has to be copied to a new slice
+	// to avoid clashes when reading the next line
+
+	// remove the leading '@' character from the header
+	headerR1 := r.scannerR1.Text()[1:]
 	r.scannerR1.Scan()
-	sequence := r.scannerR1.Text()
+	sequenceR1Bytes := r.scannerR1.Bytes()
+	sequenceR1 := make([]byte, len(sequenceR1Bytes))
+	copy(sequenceR1, sequenceR1Bytes)
 	r.scannerR1.Scan()
 	r.scannerR1.Scan()
-	quality := r.scannerR1.Text()
+	qualityR1Bytes := r.scannerR1.Bytes()
+	qualityR1 := make([]byte, len(qualityR1Bytes))
+	copy(qualityR1, qualityR1Bytes)
 
 	var fwRead *Read = &Read{
-		Header:   header,
-		Sequence: sequence,
-		Quality:  quality,
+		Header:   headerR1,
+		Sequence: &sequenceR1,
+		Quality:  &qualityR1,
 	}
 	var rvRead *Read = nil
 
@@ -95,17 +136,22 @@ func (r Reader) NextRead() *ReadPair {
 			return nil
 		}
 
-		header := r.scannerR2.Text()
+		// remove the leading '@' character from the header
+		headerR2 := r.scannerR2.Text()[1:]
 		r.scannerR2.Scan()
-		sequence := r.scannerR2.Text()
+		sequenceR2Bytes := r.scannerR2.Bytes()
+		sequenceR2 := make([]byte, len(sequenceR2Bytes))
+		copy(sequenceR2, sequenceR2Bytes)
 		r.scannerR2.Scan()
 		r.scannerR2.Scan()
-		quality := r.scannerR2.Text()
+		qualityR2Bytes := r.scannerR2.Bytes()
+		qualityR2 := make([]byte, len(qualityR2Bytes))
+		copy(qualityR2, qualityR2Bytes)
 
 		rvRead = &Read{
-			Header:   header,
-			Sequence: sequence,
-			Quality:  quality,
+			Header:   headerR2,
+			Sequence: &sequenceR2,
+			Quality:  &qualityR2,
 		}
 	}
 

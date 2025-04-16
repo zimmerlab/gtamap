@@ -4,59 +4,31 @@ import (
 	"encoding/gob"
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
+	"github.com/KleinSamuel/gtamap/src/core/datastructure/genemodel"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/keywordtree"
+	"github.com/KleinSamuel/gtamap/src/core/datastructure/keywordtreebyte"
 	"github.com/KleinSamuel/gtamap/src/core/interval"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
+	"github.com/KleinSamuel/gtamap/src/formats/gtf"
+	"github.com/KleinSamuel/gtamap/src/formats/sam"
 	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
 	"log"
+	"math"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 )
 
-type EquivalenceClass struct {
-	Id          uint32
-	FromGenomic uint32
-	ToGenomic   uint32
-}
-
-type ExonJunction struct {
-	Id          uint32
-	FromGenomic uint32
-	ToGenomic   uint32
-}
-
-type Gene struct {
-	GeneIdEnsembl  string // e.g. "ENSG00000173585"
-	Chromosome     string // e.g. "1", "2", "X", "Y", "MT"
-	IsFowardStrand bool   // true if on forward strand
-	StartGenomic   uint32 // 0-based genomic start location
-	EndGenomic     uint32 // exclusive genomic end location
-}
-
-type Transcript struct {
-	TranscriptIdEnsembl       string // e.g. "ENST00000342992"
-	SequenceDnaForward53Index int    // the index of the forward sequence in the sequence list of the suffix tree
-	SequenceDnaReverse53Index int    // the index in the reverse sequence in the sequence list of the suffix tree
-	SequenceLength            int    // the length of the dna sequence
-	Exons                     []*Exon
-	SequenceDnaForward        string
-	SequenceDnaReverse        string
-}
-
-type Exon struct {
-	StartRelative uint32 // 0-based start location relative to genomic location of parent gene
-	EndRelative   uint32 // exclusive end location relative to genomic location of parent gene
-}
-
 type GtaIndex struct {
-	Gene               *Gene                     // information about the gene
-	Transcripts        []*Transcript             // all transcripts of the gene
+	Gene               *genemodel.Gene           // information about the gene
+	Transcripts        []*genemodel.Transcript   // all transcripts of the gene
 	SuffixTree         *datastructure.SuffixTree // a single suffix tree containing all transcript sequences forward and reverse complemented
 	NumSequences       int
 	Sequences          []string
 	KeywordTree        *keywordtree.KeywordTree
-	EquivalenceClasses []*EquivalenceClass
+	EquivalenceClasses []*genemodel.EquivalenceClass
 }
 
 func (i GtaIndex) TransIndexToTransName(transcriptIndex uint32) string {
@@ -210,7 +182,7 @@ func (i GtaIndex) AddGenomicLocationsToNodes() {
 	}
 }
 
-func (i GtaIndex) FindEquivalenceClassByGenomicLocation(genomicLocation uint32) *EquivalenceClass {
+func (i GtaIndex) FindEquivalenceClassByGenomicLocation(genomicLocation uint32) *genemodel.EquivalenceClass {
 	for _, ec := range i.EquivalenceClasses {
 		if genomicLocation >= ec.FromGenomic && genomicLocation < ec.ToGenomic {
 			return ec
@@ -337,30 +309,30 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 	var annotation = dataloader.GenerateInputForIndex(gtfFile, fastaFile, fastaIndexFile)
 	durationReadReference += time.Since(timerReadReference)
 
-	gtaIndex.Gene = &Gene{
+	gtaIndex.Gene = &genemodel.Gene{
 		GeneIdEnsembl:  annotation.Genes[0].GeneIdEnsembl,
 		Chromosome:     annotation.Genes[0].Chromosome,
 		IsFowardStrand: annotation.Genes[0].IsForwardStrand,
 	}
 
-	gtaIndex.Transcripts = make([]*Transcript, len(annotation.Genes[0].Transcripts))
+	gtaIndex.Transcripts = make([]*genemodel.Transcript, len(annotation.Genes[0].Transcripts))
 
 	// add the transcripts and its information of the first gene to the index
 	for i, transcript := range annotation.Genes[0].Transcripts {
 
-		gtaIndex.Transcripts[i] = &Transcript{
+		gtaIndex.Transcripts[i] = &genemodel.Transcript{
 			TranscriptIdEnsembl:       transcript.TranscriptIdEnsembl,
 			SequenceDnaForward53Index: i * 2,
 			SequenceDnaReverse53Index: i*2 + 1,
 			SequenceDnaForward:        transcript.SequenceDna,
 			SequenceDnaReverse:        utils.ReverseComplementDNA(transcript.SequenceDna),
 			SequenceLength:            len(transcript.SequenceDna),
-			Exons:                     make([]*Exon, len(transcript.Exons)),
+			Exons:                     make([]*genemodel.Exon, len(transcript.Exons)),
 		}
 
 		// the exons of the transcript are added to the transcript in the index
 		for j, exon := range transcript.Exons {
-			gtaIndex.Transcripts[i].Exons[j] = &Exon{
+			gtaIndex.Transcripts[i].Exons[j] = &genemodel.Exon{
 				StartRelative: exon.StartRelative,
 				EndRelative:   exon.EndRelative,
 			}
@@ -381,10 +353,10 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 
 	equivalenceClasses := interval.GenerateEquivalenceClasses(exonIntervals)
 
-	gtaIndex.EquivalenceClasses = make([]*EquivalenceClass, len(equivalenceClasses))
+	gtaIndex.EquivalenceClasses = make([]*genemodel.EquivalenceClass, len(equivalenceClasses))
 
 	for i, ec := range equivalenceClasses {
-		gtaIndex.EquivalenceClasses[i] = &EquivalenceClass{
+		gtaIndex.EquivalenceClasses[i] = &genemodel.EquivalenceClass{
 			Id:          uint32(i),
 			FromGenomic: uint32(ec.Start),
 			ToGenomic:   uint32(ec.End),
@@ -573,4 +545,259 @@ func DezerializeFromFile(indexFile *os.File) *GtaIndex {
 	}
 
 	return &gtaIndex
+}
+
+/* GENOME INDEX */
+
+type GenomeIndex struct {
+	SequenceHeaders []string                     // the headers of the sequences at indices 0(+1), 2(+3), 4(+5), etc.
+	SequenceInfo    []*gtf.GeneBasic             // information about the sequences 0(+1) 2(+3) ..
+	Sequences       []*[]byte                    // the genome sequences (0: forward, 1: reverse complement, etc.)
+	KeywordTree     *keywordtreebyte.KeywordTree // the keyword tree containing all kmers of both genome sequences
+	KeywordMap      map[[10]byte][]*keywordtreebyte.Position
+	KeywordMapSmall map[[5]byte][]*keywordtreebyte.Position
+}
+
+func (i GenomeIndex) AddKeywordToMap(keyword [10]byte, sequenceIndex uint8, position uint32) {
+	if _, ok := i.KeywordMap[keyword]; !ok {
+		i.KeywordMap[keyword] = make([]*keywordtreebyte.Position, 0)
+	}
+	i.KeywordMap[keyword] = append(i.KeywordMap[keyword], &keywordtreebyte.Position{
+		SequenceIndex: sequenceIndex,
+		Position:      position,
+	})
+}
+
+func (i GenomeIndex) AddKeywordToMapSmall(keyword [5]byte, sequenceIndex uint8, position uint32) {
+	if _, ok := i.KeywordMapSmall[keyword]; !ok {
+		i.KeywordMapSmall[keyword] = make([]*keywordtreebyte.Position, 0)
+	}
+	i.KeywordMapSmall[keyword] = append(i.KeywordMapSmall[keyword], &keywordtreebyte.Position{
+		SequenceIndex: sequenceIndex,
+		Position:      position,
+	})
+}
+
+func (i GenomeIndex) GetKeywordFromMap(keyword [10]byte) []*keywordtreebyte.Position {
+	return i.KeywordMap[keyword]
+}
+
+func (i GenomeIndex) GetKeywordFromMapSmall(keyword [5]byte) []*keywordtreebyte.Position {
+	return i.KeywordMapSmall[keyword]
+}
+
+func (i GenomeIndex) AddSequenceToKeywordTree(sequence *[]byte, sequenceIndex uint8) {
+
+	for kStart := 0; kStart <= len(*sequence)-int(i.KeywordTree.KeywordLength); kStart++ {
+
+		kEnd := kStart + int(i.KeywordTree.KeywordLength)
+
+		node := i.KeywordTree.AddKeyword((*sequence)[kStart:kEnd])
+
+		node.Positions = append(node.Positions, keywordtreebyte.Position{
+			SequenceIndex: sequenceIndex,
+			Position:      uint32(kStart),
+		})
+
+		seqBytes := *(*[10]byte)((*sequence)[kStart:kEnd])
+
+		i.AddKeywordToMap(seqBytes, sequenceIndex, uint32(kStart))
+	}
+}
+
+func (i GenomeIndex) AddSequenceToMapSmall(sequence *[]byte, sequenceIndex uint8) {
+
+	for kStart := 0; kStart <= len(*sequence)-5; kStart++ {
+
+		kEnd := kStart + 5
+
+		seqBytes := *(*[5]byte)((*sequence)[kStart:kEnd])
+
+		i.AddKeywordToMapSmall(seqBytes, sequenceIndex, uint32(kStart))
+	}
+}
+
+func (i GenomeIndex) GetSequenceInfos() []sam.SequenceInfo {
+	infos := make([]sam.SequenceInfo, len(i.SequenceInfo))
+
+	for seqIndex, seqInfo := range i.SequenceInfo {
+		infos[seqIndex] = sam.SequenceInfo{
+			Name:   seqInfo.Contig,
+			Length: int(seqInfo.EndGenomic - seqInfo.StartGenomic),
+		}
+	}
+
+	return infos
+}
+
+func (i GenomeIndex) IsSequenceForward(sequenceIndex int) bool {
+	return sequenceIndex%2 == 0
+}
+
+func (i GenomeIndex) GetRevCompIndex(sequenceIndex int) int {
+	if i.IsSequenceForward(sequenceIndex) {
+		return sequenceIndex + 1
+	} else {
+		return sequenceIndex - 1
+	}
+}
+
+func (i GenomeIndex) GetSequenceHeader(sequenceIndex int) string {
+	if i.IsSequenceForward(sequenceIndex) {
+		return i.SequenceHeaders[sequenceIndex]
+	} else {
+		return i.SequenceHeaders[sequenceIndex-1]
+	}
+}
+
+func (i GenomeIndex) GetSequenceInfo(sequenceIndex int) *gtf.GeneBasic {
+	if i.IsSequenceForward(sequenceIndex) {
+		return i.SequenceInfo[sequenceIndex]
+	} else {
+		return i.SequenceInfo[sequenceIndex-1]
+	}
+}
+
+func (i GenomeIndex) GetSequenceContig(sequenceIndex int) string {
+	if i.IsSequenceForward(sequenceIndex) {
+		return i.SequenceInfo[sequenceIndex].Contig
+	} else {
+		return i.SequenceInfo[sequenceIndex-1].Contig
+	}
+}
+
+func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry) *GenomeIndex {
+
+	var index = GenomeIndex{
+		SequenceHeaders: make([]string, len(fastaEntries)),
+		SequenceInfo:    make([]*gtf.GeneBasic, len(fastaEntries)),
+		Sequences:       make([]*[]byte, len(fastaEntries)*2),
+		KeywordTree:     keywordtreebyte.NewKeywordTree(config.KmerLength()),
+		KeywordMap:      make(map[[10]byte][]*keywordtreebyte.Position, int(math.Pow(4, 10))),
+		KeywordMapSmall: make(map[[5]byte][]*keywordtreebyte.Position, int(math.Pow(4, 5))),
+	}
+
+	for i, entry := range fastaEntries {
+		sequence := entry.Sequence
+		sequenceRevComp := utils.ReverseComplementDnaBytes(sequence)
+
+		info := parseFastaHeader(entry.Header)
+		index.SequenceInfo[i] = info
+
+		index.SequenceHeaders[i] = entry.Header
+
+		index.Sequences[i*2] = &sequence
+		index.Sequences[i*2+1] = &sequenceRevComp
+	}
+
+	for i, seq := range index.Sequences {
+		index.AddSequenceToKeywordTree(seq, uint8(i))
+		index.AddSequenceToMapSmall(seq, uint8(i))
+	}
+
+	index.KeywordTree.NumSequences = uint8(len(index.Sequences))
+
+	return &index
+}
+
+func parseFastaHeader(header string) *gtf.GeneBasic {
+
+	headerParts := strings.Split(header, "\t")
+
+	if len(headerParts) < 4 {
+		logrus.Fatal("invalid header:", header)
+	}
+
+	geneId := headerParts[0]
+	contig := headerParts[1]
+	isForwardStrand := headerParts[2] == "+"
+	startGenomicInt, err := strconv.Atoi(headerParts[3])
+	if err != nil {
+		logrus.Fatal("invalid start genomic position:", header)
+	}
+	startGenomic := uint32(startGenomicInt)
+	endGenomicInt, err := strconv.Atoi(headerParts[4])
+	if err != nil {
+		logrus.Fatal("invalid end genomic position:", header)
+	}
+	endGenomic := uint32(endGenomicInt)
+
+	return &gtf.GeneBasic{
+		GeneId:          geneId,
+		Contig:          contig,
+		IsForwardStrand: isForwardStrand,
+		StartGenomic:    startGenomic,
+		EndGenomic:      endGenomic,
+	}
+}
+
+func WriteGenomeIndex(genomeIndex *GenomeIndex, outputFile *os.File) {
+
+	timerStart := time.Now()
+
+	enc := gob.NewEncoder(outputFile)
+
+	if err := enc.Encode(genomeIndex); err != nil {
+		log.Fatal("encode error:", err)
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"duration": time.Since(timerStart),
+		"output":   outputFile.Name(),
+	}).Info("Serialized index")
+}
+
+func ReadGenomeIndexByPath(indexFilePath string) *GenomeIndex {
+	// Open the file for reading
+	file, err := os.Open(indexFilePath)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	return ReadGenomeIndexByFile(file)
+}
+
+func ReadGenomeIndexByFile(indexFile *os.File) *GenomeIndex {
+
+	timerStart := time.Now()
+
+	// create a decoder and deserialize the person struct from the file
+	decoder := gob.NewDecoder(indexFile)
+
+	var genomeIndex GenomeIndex
+
+	if err := decoder.Decode(&genomeIndex); err != nil {
+		panic(err)
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"duration": time.Since(timerStart),
+	}).Info("Deserialized index")
+
+	return &genomeIndex
+}
+
+func BuildAndSerializeGenomeIndex(fastaFile *os.File, outputFile *os.File) {
+
+	fastaEntries, err := dataloader.ReadFasta(fastaFile)
+
+	if err != nil {
+		logrus.Fatal("Error extracting sequence from fasta file", err)
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"NumSequences": len(fastaEntries),
+	}).Info("Read sequence(s) from fasta")
+
+	for i, entry := range fastaEntries {
+		logrus.WithFields(logrus.Fields{
+			"Header": entry.Header,
+			"Length": len(entry.Sequence),
+		}).Info("Added sequence #" + strconv.Itoa(i+1))
+	}
+
+	genomeIndex := BuildGenomeIndex(fastaEntries)
+
+	WriteGenomeIndex(genomeIndex, outputFile)
 }

@@ -799,7 +799,7 @@ func (t *SuffixTree) FindPatternExact(pattern *string) *core.ExactMatchResult {
 			return result
 		}
 
-		//logrus.Debug("char on active edge matches char in pattern")
+		//logrus.Debug("char on active edge matchutils char in pattern")
 
 		// there are additional characters on the string of the current edge
 		activeLength++

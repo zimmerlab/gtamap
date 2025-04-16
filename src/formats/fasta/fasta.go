@@ -2,7 +2,7 @@ package fasta
 
 import (
 	"bufio"
-	"fmt"
+	"github.com/sirupsen/logrus"
 	"os"
 	"strconv"
 	"strings"
@@ -20,6 +20,17 @@ type IndexEntry struct {
 	Linewidth uint16
 }
 
+func ReadFastaIndexUsingPath(fastaIndexPath string) *Index {
+	fastaIndexFile, err := os.Open(fastaIndexPath)
+	if err != nil {
+		logrus.Error(err)
+		return nil
+	}
+	defer fastaIndexFile.Close()
+
+	return ReadFastaIndex(fastaIndexFile)
+}
+
 func ReadFastaIndex(fastaIndexFile *os.File) *Index {
 
 	fastaIndex := Index{
@@ -33,13 +44,25 @@ func ReadFastaIndex(fastaIndexFile *os.File) *Index {
 		line := strings.Split(scanner.Text(), "\t")
 
 		reference := line[0]
-		length64, errLrngth := strconv.ParseUint(line[1], 10, 16)
-		offset64, errOffset := strconv.ParseUint(line[2], 10, 16)
+		length64, errLrngth := strconv.ParseUint(line[1], 10, 32)
+		offset64, errOffset := strconv.ParseUint(line[2], 10, 32)
 		linebases64, errLinebases := strconv.ParseUint(line[3], 10, 16)
 		linewidth64, errLinewidth := strconv.ParseUint(line[4], 10, 16)
 
-		if errLrngth != nil || errOffset != nil || errLinebases != nil || errLinewidth != nil {
-			fmt.Println("Error while reading fasta index")
+		if errLrngth != nil {
+			logrus.Error("Could not parse fasta entry length: ", errLrngth)
+			return nil
+		}
+		if errOffset != nil {
+			logrus.Error("Could not parse fasta entry offset: ", errOffset)
+			return nil
+		}
+		if errLinebases != nil {
+			logrus.Error("Could not parse fasta entry linebases: ", errLinebases)
+			return nil
+		}
+		if errLinewidth != nil {
+			logrus.Error("Could not parse fasta entry linewidth: ", errLinewidth)
 			return nil
 		}
 

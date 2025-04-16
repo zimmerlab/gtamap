@@ -1,6 +1,8 @@
 package dataloader
 
 import (
+	"bufio"
+	"bytes"
 	"github.com/KleinSamuel/gtamap/src/formats/fasta"
 	"github.com/KleinSamuel/gtamap/src/formats/gtf"
 	"github.com/sirupsen/logrus"
@@ -117,12 +119,82 @@ func GenerateInputForIndex(gtfFile *os.File, fastaFile *os.File, fastaIndexFile 
 	return annotation
 }
 
-func ExtractSequenceAsStringFromFasta(fastaFile *os.File, fastaIndex *fasta.Index, chromosome string, startGenomic uint32, endGenomic uint32) string {
+type FastaEntry struct {
+	Header   string
+	Sequence []byte
+}
+
+func ReadFasta(fastaFile *os.File) ([]*FastaEntry, error) {
+
+	scanner := bufio.NewScanner(fastaFile)
+
+	entries := make([]*FastaEntry, 0)
+
+	var header string
+	var sequence []byte
+
+	for scanner.Scan() {
+		line := scanner.Bytes()
+
+		if len(line) == 0 {
+			continue
+		}
+
+		if line[0] == '>' {
+			if header != "" {
+				entries = append(entries, &FastaEntry{Header: header, Sequence: sequence})
+			}
+			// store new header and remove leading '>' character
+			header = string(line)[1:]
+			sequence = nil
+		} else {
+			sequence = append(sequence, bytes.TrimSpace(line)...)
+		}
+	}
+	if header != "" {
+		entries = append(entries, &FastaEntry{Header: header, Sequence: sequence})
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return entries, nil
+}
+
+func ExtractSequenceAsStringFromFastaUsingPath(fastaPath string, fastaIndex *fasta.Index, chromosome string,
+	startGenomic uint32, endGenomic uint32) (string, error) {
+
+	fastaFile, err := os.Open(fastaPath)
+	if err != nil {
+		return "", err
+	}
+	defer fastaFile.Close()
+
+	return ExtractSequenceAsStringFromFasta(fastaFile, fastaIndex, chromosome, startGenomic, endGenomic), nil
+}
+
+func ExtractSequenceAsStringFromFasta(fastaFile *os.File, fastaIndex *fasta.Index, chromosome string,
+	startGenomic uint32, endGenomic uint32) string {
+
 	buffer := ExtractSequenceAsBytesFromFasta(fastaFile, fastaIndex, chromosome, startGenomic, endGenomic)
 	return strings.ReplaceAll(string(buffer), "\n", "")
 }
 
-func ExtractSequenceAsBytesFromFasta(fastaFile *os.File, fastaIndex *fasta.Index, chromosome string, startGenomic uint32, endGenomic uint32) []byte {
+func ExtractSequenceAsBytesFromFastaUsingPath(fastaPath string, fastaIndex *fasta.Index, chromosome string,
+	startGenomic uint32, endGenomic uint32) ([]byte, error) {
+
+	fastaFile, err := os.Open(fastaPath)
+	if err != nil {
+		return nil, err
+	}
+	defer fastaFile.Close()
+
+	return ExtractSequenceAsBytesFromFasta(fastaFile, fastaIndex, chromosome, startGenomic, endGenomic), nil
+}
+
+func ExtractSequenceAsBytesFromFasta(fastaFile *os.File, fastaIndex *fasta.Index, chromosome string,
+	startGenomic uint32, endGenomic uint32) []byte {
 
 	index := fastaIndex.Entries[chromosome]
 

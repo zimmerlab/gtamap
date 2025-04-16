@@ -182,8 +182,8 @@ func testMapping() {
 	//pathReadsR1 := "./resources/reads/manual/reads_ccr9.1.fq"
 	//pathReadsR2 := "./resources/reads/manual/reads_ccr9.2.fq"
 
-	pathReadsR1 := "/home/sam/Data/isar/sam_fasta_test/fw.fastq"
-	pathReadsR2 := "/home/sam/Data/isar/sam_fasta_test/rw.fastq"
+	pathReadsR1 := "/home/sam/Data/genome-sam/1m.fw.fq"
+	pathReadsR2 := "/home/sam/Data/genome-sam/1m.rw.fq"
 
 	//pathReadsR1 := "/home/sam/Data/sra/SRR29933931.fastq"
 	//var pathReadsR2 *string = nil
@@ -343,7 +343,9 @@ func main() {
 	})
 	logrus.SetLevel(logrus.InfoLevel)
 
-	buildAndSerializeIndex()
+	buildAndSerializeIndexGenome()
+
+	//buildAndSerializeIndex()
 	//index := deserializeIndex()
 	//testMapping()
 

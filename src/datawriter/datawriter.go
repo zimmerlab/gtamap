@@ -16,9 +16,13 @@ func InitFromPath(outputFilePath string) *Writer {
 	if err != nil {
 		logrus.Fatal("Error creating file", err)
 	}
+	
+	return InitFromFile(file)
+}
 
+func InitFromFile(outputFile *os.File) *Writer {
 	return &Writer{
-		file: file,
+		file: outputFile,
 	}
 }
 

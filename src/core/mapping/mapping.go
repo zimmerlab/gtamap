@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core"
+	"github.com/KleinSamuel/gtamap/src/core/datastructure/genemodel"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/interval"
 	"github.com/KleinSamuel/gtamap/src/core/timer"
@@ -38,7 +39,7 @@ func drawNextKmerIndex(startIndices []int) int {
 //	return cigarList
 //}
 
-func finalizeCigar(cigarList *[]rune, startPositionInTranscript uint32, transcript *index.Transcript) (int, string) {
+func finalizeCigar(cigarList *[]rune, startPositionInTranscript uint32, transcript *genemodel.Transcript) (int, string) {
 
 	fmt.Println("finalizing cigar")
 	fmt.Println("startPositionInTranscript", startPositionInTranscript)
@@ -975,18 +976,18 @@ func DetermineReadLocationUnpaired(result *core.ReadMappingPreResult, index *ind
 // If the length of the read can not be divided by k, then there are some bases left over and excluded in the exact
 // matching step. This is to ensure that each k-mer has the exact length k.
 // These left-over bases have to be extended in the same way that k-mers are extended when they are combined.
-// The exact matches are counted per transcript (sequence) and if at any point there is no sequence which has at least
-// (number of current k-mer - x) exact matches, the read is discarded.
+// The exact matchutils are counted per transcript (sequence) and if at any point there is no sequence which has at least
+// (number of current k-mer - x) exact matchutils, the read is discarded.
 // Example: Say we have a read of length 150, and we want k-mers of length 8 and allow 5 mismatches:
 // 150 / 8 = 18 k-mers and 6 bases left over
 // At most 5 of these 18 k-mers are allowed to not match exactly to the reference sequence.
 // This does only mean that the read is not discarded directly, but it still can if there are more than 5 mismatches
 // within any of the k-mers that could not be matched exactly.
-// When matching the 1. k-mer, there must be at least one sequence which has max(0, 1 - 5) exact matches.
+// When matching the 1. k-mer, there must be at least one sequence which has max(0, 1 - 5) exact matchutils.
 // This means that when matching the 6. k-mer, there must be at least one sequence with an exact match.
-// When matching the 15. k-mer, there must be at least max(0, 15 - 5) = 10 exact matches in any of the sequences.
-// A k-mer can be matched to multiple sequences, for each of which the number of matches is increased but one k-mer
-// can never be counted twice for the same sequence even when there are multiple matches.
+// When matching the 15. k-mer, there must be at least max(0, 15 - 5) = 10 exact matchutils in any of the sequences.
+// A k-mer can be matched to multiple sequences, for each of which the number of matchutils is increased but one k-mer
+// can never be counted twice for the same sequence even when there are multiple matchutils.
 func MapRead(read *fastq.Read, index *index.GtaIndex, t *timer.Timer) (map[int][]*core.InexactMatchResult, bool) {
 
 	// The final result of this method. Contains positions of the read on the reference sequence within the
@@ -1007,7 +1008,7 @@ func MapRead(read *fastq.Read, index *index.GtaIndex, t *timer.Timer) (map[int][
 	// the state of the discard step, true if read is to be discarded
 	failed := false
 
-	// the matches per sequence index, sequence index is the key, the value is a list of matches for this sequence
+	// the matchutils per sequence index, sequence index is the key, the value is a list of matchutils for this sequence
 	matchesPerSequenceMap := make(map[int]*core.SequenceMatches, index.NumSequences)
 
 	for i := 0; i < index.NumSequences; i++ {
@@ -1018,10 +1019,10 @@ func MapRead(read *fastq.Read, index *index.GtaIndex, t *timer.Timer) (map[int][
 		}
 	}
 
-	// the number of processed k-mers, used to determine the minimum number of matches a sequence must have
+	// the number of processed k-mers, used to determine the minimum number of matchutils a sequence must have
 	countKmer := 0
 
-	// generates every k-mer from the read and exact matches it to the reference
+	// generates every k-mer from the read and exact matchutils it to the reference
 	// it is guaranteed that each k-mer has the length k, if the last k-mer is shorter than k, it is ignored for
 	// the exact matching and must later be extended in the same way that k-mers are extended when they are combined
 	for position < len(read.Sequence)-int(index.KeywordTree.KeywordLength) {
@@ -1047,7 +1048,7 @@ func MapRead(read *fastq.Read, index *index.GtaIndex, t *timer.Timer) (map[int][
 		// used to count this k-mer only once for each sequence
 		sequencesMatched := make(map[int]bool)
 
-		// add the matches to each sequence if there are any
+		// add the matchutils to each sequence if there are any
 		if mappingResult != nil {
 
 			for _, match := range mappingResult.Matches {
@@ -1080,13 +1081,13 @@ func MapRead(read *fastq.Read, index *index.GtaIndex, t *timer.Timer) (map[int][
 				sequencesMatched[match.SequenceIndex] = true
 			}
 
-			// increase the number of distinct k-mer matches for each sequence that has a match
+			// increase the number of distinct k-mer matchutils for each sequence that has a match
 			for sequenceIndex, _ := range sequencesMatched {
 				matchesPerSequenceMap[sequenceIndex].NumMatches += 1
 			}
 		}
 
-		// the minimum number of matches a sequences has to have to survive this round
+		// the minimum number of matchutils a sequences has to have to survive this round
 		minMatches := countKmer - maxMismatches
 
 		// only discard sequences if there must be at least one match
@@ -1102,15 +1103,15 @@ func MapRead(read *fastq.Read, index *index.GtaIndex, t *timer.Timer) (map[int][
 					continue
 				}
 				// the sequence has not gained a match with the current k-mer and is therefore a potential discard candidate
-				// discard the sequence if it has less than the required number of matches
+				// discard the sequence if it has less than the required number of matchutils
 				if matchesPerSequenceMap[sequenceIndex].NumMatches < minMatches {
 
 					//logrus.WithFields(logrus.Fields{
 					//	"sequenceIndex": sequenceIndex,
 					//	"round":         countKmer,
 					//	"minMatches":    minMatches,
-					//	"matches":       matchesPerSequenceMap[sequenceIndex].NumMatches,
-					//}).Debug("discard sequence index because too few matches")
+					//	"matchutils":       matchesPerSequenceMap[sequenceIndex].NumMatches,
+					//}).Debug("discard sequence index because too few matchutils")
 
 					delete(matchesPerSequenceMap, sequenceIndex)
 				}
@@ -1152,13 +1153,13 @@ func MapRead(read *fastq.Read, index *index.GtaIndex, t *timer.Timer) (map[int][
 	// Example: The k-mer starts at position 25 in the read and the exact match is at position 100 in the reference
 	// sequence. The candidate position of the read on the reference sequence is 100 - 25 = 75.
 	// Compute all unmatched positions for each candidate position and sequence index.
-	// Combine consecutive matches to contexts on each sequence index.
-	// Extend the matches to the left and right to find the best inexact-match.
+	// Combine consecutive matchutils to contexts on each sequence index.
+	// Extend the matchutils to the left and right to find the best inexact-match.
 
 	for sequenceIndex, matches := range matchesPerSequenceMap {
 
 		//fmt.Println("sequenceIndex", sequenceIndex)
-		//fmt.Println("numMatches", matches.NumMatches)
+		//fmt.Println("numMatches", matchutils.NumMatches)
 
 		candidatePositions := make(map[int][]*interval.Interval)
 		candidatePositionsEcIds := make(map[int][]uint32)
