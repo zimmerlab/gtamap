@@ -1,7 +1,6 @@
 package mapper
 
 import (
-	"fmt"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/core/timer"
@@ -40,13 +39,13 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 
 	for i, resFw := range resultFw {
 		if resFw.SecondPass {
-			fmt.Println("Second pass required for forward read: ", i)
+			logrus.Debug("Second pass required for forward read: ", i)
 			needSecondPass = true
 		}
 	}
 	for i, resRv := range resultRv {
 		if resRv.SecondPass {
-			fmt.Println("Second pass required for reverse read: ", i)
+			logrus.Debug("Second pass required for reverse read: ", i)
 			needSecondPass = true
 		}
 	}

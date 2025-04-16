@@ -13,6 +13,7 @@ func MapperWorker(workerId int, genomeIndex *index.GenomeIndex,
 	taskChan <-chan MappingTask,
 	secondPassChan *mapperutils.SecondPassChannel,
 	outputChan chan<- string,
+	progressChan chan<- bool,
 	timerChan chan<- *timer.Timer) {
 
 	defer wg.Done()
@@ -33,6 +34,8 @@ func MapperWorker(workerId int, genomeIndex *index.GenomeIndex,
 		if isMappable {
 			outputChan <- result
 		}
+
+		progressChan <- true
 	}
 
 	logrus.WithFields(logrus.Fields{

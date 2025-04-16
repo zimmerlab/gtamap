@@ -408,7 +408,7 @@ sequenceLoop:
 				// when a read maps to the target sequence but would go out of bounds
 				// it could still be a valid mapping but it needs to be clipped
 				if startGenome < 0 {
-					logrus.Warn("genome index out of bounds")
+					logrus.Debug("genome index out of bounds")
 					continue sequenceLoop
 				}
 
@@ -458,7 +458,7 @@ sequenceLoop:
 				// when a read maps to the target sequence but would go out of bounds
 				// it could still be a valid mapping but it needs to be clipped
 				if startGenome+len(readSequence) > len(*genomeIndex.Sequences[seqIndex]) {
-					logrus.Warn("genome index out of bounds")
+					logrus.Debug("genome index out of bounds")
 					continue sequenceLoop
 				}
 

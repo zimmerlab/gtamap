@@ -59,6 +59,12 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	outputChan := make(chan string)
 	// contains information about the duration of each step
 	timerChan := make(chan *timer.Timer)
+	// contains information about the progress of the mapping
+	progressChan := make(chan bool)
+
+	var waitgroupProgress sync.WaitGroup
+	waitgroupProgress.Add(1)
+	go ProgressWorker(progressChan, &waitgroupProgress)
 
 	var waitgroupWriter sync.WaitGroup
 	waitgroupWriter.Add(1)
@@ -75,7 +81,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	// start the mapping worker goroutine pool
 	for i := 0; i < numWorkers; i++ {
 		wgFirstPass.Add(1)
-		go MapperWorker(i, genomeIndex, &wgFirstPass, taskChan, secondPassChan, outputChan, timerChan)
+		go MapperWorker(i, genomeIndex, &wgFirstPass, taskChan, secondPassChan, outputChan, progressChan, timerChan)
 	}
 
 	wgSecondPass.Add(1)
