@@ -121,7 +121,9 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	var builder strings.Builder
 
 	// QNAME
-	builder.WriteString(readPair.ReadR1.Header)
+	// use only the string before any whitespace as the header
+	headerFw := strings.Split(readPair.ReadR1.Header, " ")[0]
+	builder.WriteString(headerFw)
 	builder.WriteString("\t")
 	// FLAG
 	builder.WriteString(strconv.Itoa(flagFw.Value))
@@ -176,7 +178,8 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	// R2 READ
 
 	// QNAME
-	builder.WriteString(readPair.ReadR2.Header)
+	headerRv := strings.Split(readPair.ReadR2.Header, " ")[0]
+	builder.WriteString(headerRv)
 	builder.WriteString("\t")
 	// FLAG
 	builder.WriteString(strconv.Itoa(flagRv.Value))

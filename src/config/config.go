@@ -6,6 +6,10 @@ const toolVersion string = "0.1"
 
 var kmerLength uint8 = 10
 
+// the minimum length of an intron (in base pairs)
+// used to decide whether a gap is a deletion (if below this length) or an intron
+var intronLengthMin = 20
+
 // the maximum error rate allowed per read
 var errorRate float64 = 0.05
 
@@ -39,6 +43,10 @@ func ErrorRate() float64 {
 
 func KmerLength() uint8 {
 	return kmerLength
+}
+
+func IntronLengthMin() int {
+	return intronLengthMin
 }
 
 func IncludeReadsImproperlyPaired() bool {

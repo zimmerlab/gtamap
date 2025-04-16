@@ -1,6 +1,7 @@
 package mapperutils
 
 import (
+	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"strconv"
 	"strings"
@@ -49,7 +50,12 @@ func (m ReadMatchResult) GetCigar() string {
 			if index+1 < len(m.MatchedGenome.Regions) {
 				numSkipped := m.MatchedGenome.Regions[index+1].Start - m.MatchedGenome.Regions[index].End
 				builder.WriteString(strconv.Itoa(numSkipped))
-				builder.WriteString("N")
+
+				if numSkipped < config.IntronLengthMin() {
+					builder.WriteString("D")
+				} else {
+					builder.WriteString("N")
+				}
 			}
 
 			index++
@@ -66,7 +72,12 @@ func (m ReadMatchResult) GetCigar() string {
 			if index-1 >= 0 {
 				numSkipped := m.MatchedGenome.Regions[index].Start - m.MatchedGenome.Regions[index-1].End
 				builder.WriteString(strconv.Itoa(numSkipped))
-				builder.WriteString("N")
+
+				if numSkipped < config.IntronLengthMin() {
+					builder.WriteString("D")
+				} else {
+					builder.WriteString("N")
+				}
 			}
 
 			index--

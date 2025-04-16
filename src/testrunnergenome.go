@@ -93,6 +93,24 @@ func testTas2Read() {
 	mapper.MapAll(genomeIndex, reader, writer, &numThreads)
 }
 
+func testTas2r4DeletionReads() {
+
+	genomeIndexPath := "/home/sam/Data/gtamap/tas2/tas2r4/index/ENSG00000127364.gtai"
+
+	readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.with-del.fastq"
+	readsRvPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_2.with-del.fastq"
+
+	outputPath := "/home/sam/Data/gtamap/tas2/tas2r4/aligned.with-del.sam"
+
+	genomeIndex := index.ReadGenomeIndexByPath(genomeIndexPath)
+	reader := fastq.InitFromPaths(&readsFwPath, &readsRvPath)
+	writer := datawriter.InitFromPath(outputPath)
+
+	numThreads := 1
+
+	mapper.MapAll(genomeIndex, reader, writer, &numThreads)
+}
+
 func testIndex() {
 
 	pattern := "CAAATAAATCTTAAAATTTTATAAATTACATGACTTTTCTCATT"
@@ -161,6 +179,7 @@ func main() {
 
 	//extractGeneSequenceFromGtfAndFastaForIndex()
 
-	testTas2Read()
+	//testTas2Read()
+	testTas2r4DeletionReads()
 	//testIndex()
 }

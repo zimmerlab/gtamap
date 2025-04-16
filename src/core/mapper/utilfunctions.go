@@ -13,56 +13,42 @@ func sortedIndicesDesc(list []int) []int {
 	return indices
 }
 
-func spliceSiteDonorScore(first byte, second byte, isForwardStrand bool) int {
-	if isForwardStrand {
-		if first == byte('G') && second == byte('T') {
-			// canonical splice donor site dinucleotide GT
-			return 0
-		} else if first == byte('G') && second == byte('C') {
-			// non-canonical splice donor site dinucleotide GC
-			return 1
-		} else if first == byte('A') && second == byte('T') {
-			// non-canonical splice donor site dinucleotide GC
-			return 1
-		} else {
-			// all other splice donor site dinucleotides
-			return 2
-		}
-	} else {
-		if first == byte('C') && second == byte('T') {
-			// canonical splice acceptor site dinucleotide AG
-			return 0
-		} else if first == byte('G') && second == byte('T') {
-			return 1
-		} else {
-			return 2
-		}
-	}
-}
+func scoreSpliceSites(donorFirstBase byte, donorSecondBase byte, acceptorFirstBase byte,
+	acceptorSecondBase byte, isForwardStrand bool) int {
 
-func spliceSiteAcceptorScore(first byte, second byte, isForwardStrand bool) int {
 	if isForwardStrand {
-		if first == byte('A') && second == byte('G') {
-			// canonical splice acceptor site dinucleotide AG
+
+		if donorFirstBase == byte('G') && donorSecondBase == byte('T') &&
+			acceptorFirstBase == byte('A') && acceptorSecondBase == byte('G') {
+			// canonical splice site GT/AG
 			return 0
-		} else if first == byte('A') && second == byte('C') {
+		} else if donorFirstBase == byte('G') && donorSecondBase == byte('C') &&
+			acceptorFirstBase == byte('A') && acceptorSecondBase == byte('G') {
+			// non-canonical splice site GC/AG
 			return 1
-		} else {
-			return 2
+		} else if donorFirstBase == byte('A') && donorSecondBase == byte('T') &&
+			acceptorFirstBase == byte('A') && acceptorSecondBase == byte('C') {
+			// non-canonical splice site AT/AC
+			return 1
 		}
+
 	} else {
-		if first == byte('A') && second == byte('C') {
-			// canonical splice donor site dinucleotide GT
+
+		if donorFirstBase == byte('C') && donorSecondBase == byte('T') &&
+			acceptorFirstBase == byte('A') && acceptorSecondBase == byte('C') {
+			// canonical splice site GT/AG on rev strand
 			return 0
-		} else if first == byte('G') && second == byte('C') {
-			// non-canonical splice donor site dinucleotide GC
+		} else if donorFirstBase == byte('C') && donorSecondBase == byte('T') &&
+			acceptorFirstBase == byte('G') && acceptorSecondBase == byte('C') {
+			// non-canonical splice site GC/AG on rev strand
 			return 1
-		} else if first == byte('A') && second == byte('T') {
-			// non-canonical splice donor site dinucleotide GC
+		} else if donorFirstBase == byte('G') && donorSecondBase == byte('T') &&
+			acceptorFirstBase == byte('A') && acceptorSecondBase == byte('T') {
+			// non-canonical splice site AT/AC on rev strand
 			return 1
-		} else {
-			// all other splice donor site dinucleotides
-			return 2
 		}
 	}
+
+	// all other non-canonical splice sites
+	return 2
 }

@@ -336,8 +336,10 @@ sequenceLoop:
 
 						isForwardStrand := genomeIndex.IsSequenceForward(seqIndex)
 
-						numMismatches += spliceSiteDonorScore(donorSiteSeq[0], donorSiteSeq[1], isForwardStrand)
-						numMismatches += spliceSiteAcceptorScore(acceptorSiteSeq[0], acceptorSiteSeq[1], isForwardStrand)
+						// add a penalty if the splice site is not canonical
+						// 2 means that there is no known splice site
+						numMismatches += scoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
+							acceptorSiteSeq[0], acceptorSiteSeq[1], isForwardStrand)
 
 						if numMismatches < minErrors {
 							minErrors = numMismatches
