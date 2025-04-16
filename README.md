@@ -29,6 +29,6 @@ The read sequence is `ATACAGT` which leaves the `C` base to be assigned to both 
 
 The gap could either be `CGGAAAGGT` or `GGAAAGGTC`.
 
-[!left-norm-2](resources/readme/left-norm.2.png)
+[![left-norm-2](resources/readme/left-norm.2.png)](resources/readme/left-norm.2.png)
 
 Left normalization uses the leftmost beginning for the gap.
