@@ -1,6 +1,7 @@
 package mapper
 
 import (
+	"fmt"
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/core/index"
@@ -256,18 +257,35 @@ sequenceLoop:
 				numGaps := len(result.MatchedRead.Regions) - 1
 				genomeGapIndex := 0
 
+				fmt.Println(read.Header)
+
 				// resolve the borders within the read where at least one junction was found
 				for len(result.MatchedRead.Regions) > 1 {
 
 					// position in read where the gap starts
 					lRead := result.MatchedRead.GetFirstGap().Start
-					// position in genome where the gap starts
-					lGenome := result.MatchedGenome.GetGap(genomeGapIndex).Start
 					// position in read where the gap ends
 					rRead := result.MatchedRead.GetFirstGap().End
-					// position in genome where the gap ends
-					rGenome := result.MatchedGenome.GetGap(genomeGapIndex).End
 
+					gIndex, err := result.MatchedGenome.GetRegionIndexContainingPosRelative(lRead - 1)
+					if err != nil {
+						logrus.WithFields(logrus.Fields{
+							"read":    result.MatchedRead,
+							"genome":  result.MatchedGenome,
+							"pos":     lRead - 1,
+							"gapRead": result.MatchedRead.GetFirstGap(),
+						}).Fatal("no genome region found for left read position")
+					}
+
+					genomeGap := result.MatchedGenome.GetGap(gIndex)
+
+					// position in genome where the gap starts
+					//lGenome := result.MatchedGenome.GetGap(genomeGapIndex).Start
+					lGenome := genomeGap.Start
+					// position in genome where the gap ends
+					//rGenome := result.MatchedGenome.GetGap(genomeGapIndex).End
+					rGenome := genomeGap.End
+					
 					logrus.WithFields(logrus.Fields{
 						"startRead":   lRead,
 						"endRead":     rRead,

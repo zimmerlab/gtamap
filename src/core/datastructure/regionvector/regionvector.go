@@ -164,3 +164,31 @@ func (rv *RegionVector) GetSizeRightIncluding(regionIndex int) (int, error) {
 
 	return size, nil
 }
+
+// GetRegionIndexContainingPosRelative returns the index of the region that contains
+// the given relative position.
+//
+// Example:
+// If the region vector contains the regions [0, 10], [20, 30], [40, 50] and the relative position
+// is 5, the function will return the first region 0 [0, 10].
+// If the relative position is 25, the function will return the second region 1 [20, 30].
+// If the relative position is 45, the function will return the third region 2 [40, 50].
+//
+// If the relative position is out of bounds, the function will return an error.
+func (rv *RegionVector) GetRegionIndexContainingPosRelative(relPos int) (int, error) {
+
+	if relPos < 0 || relPos >= rv.Length() {
+		return -1, fmt.Errorf("relative position out of bounds")
+	}
+
+	posDone := 0
+
+	for i, r := range rv.Regions {
+		if relPos >= posDone && relPos < posDone+r.Length() {
+			return i, nil
+		}
+		posDone += r.Length()
+	}
+
+	return -1, fmt.Errorf("relative position not found in any region")
+}
