@@ -32,6 +32,12 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	resultRv, isMappableRv := MapRead(readPair.ReadR2, genomeIndex)
 
 	if !isMappableFw || !isMappableRv || len(resultFw) == 0 || len(resultRv) == 0 {
+		logrus.WithFields(logrus.Fields{
+			"isMappableFw":  isMappableFw,
+			"isMappableRv":  isMappableRv,
+			"num resultsFw": len(resultFw),
+			"num resultsRv": len(resultRv),
+		}).Debug("readpair not mappable")
 		return "", false
 	}
 

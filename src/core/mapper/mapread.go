@@ -253,6 +253,7 @@ sequenceLoop:
 
 				logrus.Debug("unmatched regions within read")
 
+				numGaps := len(result.MatchedRead.Regions) - 1
 				genomeGapIndex := 0
 
 				// resolve the borders within the read where at least one junction was found
@@ -369,8 +370,18 @@ sequenceLoop:
 					//fmt.Println("add l read: ", lRead, lRead+minSplit)
 					//fmt.Println("add l genome: ", lGenome, lGenome+minSplit)
 
+					logrus.WithFields(logrus.Fields{
+						"read":   result.MatchedRead,
+						"genome": result.MatchedGenome,
+					}).Debug("regions before")
+
 					result.MatchedRead.AddRegion(lRead, lRead+minSplit)
 					result.MatchedGenome.AddRegion(lGenome, lGenome+minSplit)
+
+					logrus.WithFields(logrus.Fields{
+						"read":   result.MatchedRead,
+						"genome": result.MatchedGenome,
+					}).Debug("regions after left")
 
 					//fmt.Println("read after add l: ", result.MatchedRead.String())
 					//fmt.Println("genome after add l: ", result.MatchedGenome.String())
@@ -380,10 +391,18 @@ sequenceLoop:
 					result.MatchedRead.AddRegion(rRead-(extensionLength-minSplit), rRead)
 					result.MatchedGenome.AddRegion(rGenome-(extensionLength-minSplit), rGenome)
 
+					logrus.WithFields(logrus.Fields{
+						"read":   result.MatchedRead,
+						"genome": result.MatchedGenome,
+					}).Debug("regions after right")
+
 					//fmt.Println("read after add r: ", result.MatchedRead.String())
 					//fmt.Println("genome after add r: ", result.MatchedGenome.String())
 
-					genomeGapIndex++
+					// only increment the gap index if no gap was removed during the split
+					if numGaps == len(result.MatchedGenome.Regions)-1 {
+						genomeGapIndex++
+					}
 				}
 			}
 
@@ -500,6 +519,7 @@ sequenceLoop:
 	}
 
 	if len(results) == 0 {
+		logrus.Debug("no results found")
 		return results, false
 	}
 	return results, true

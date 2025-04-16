@@ -1,6 +1,10 @@
 package mapper
 
-import "sort"
+import (
+	"fmt"
+	"sort"
+	"time"
+)
 
 // sortedIndicesAsc sorts the indices of a list in ascending order based on the values at those indices.
 //
@@ -57,4 +61,20 @@ func scoreSpliceSites(donorFirstBase byte, donorSecondBase byte, acceptorFirstBa
 
 	// all other non-canonical splice sites
 	return 2
+}
+
+func formatDuration(d time.Duration) string {
+	if d.Hours() < 1 {
+		if d.Minutes() < 1 {
+			if d.Seconds() < 1 {
+				return fmt.Sprintf("%dms", int(d.Milliseconds()))
+			} else {
+				return fmt.Sprintf("%ds", int(d.Seconds()))
+			}
+		} else {
+			return fmt.Sprintf("%dm %ds", int(d.Minutes()), int(d.Seconds()))
+		}
+	} else {
+		return fmt.Sprintf("%dh %dm %ds", int(d.Hours()), int(d.Minutes()), int(d.Seconds()))
+	}
 }

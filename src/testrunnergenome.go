@@ -79,8 +79,8 @@ func testTas2Read() {
 
 	genomeIndexPath := "/home/sam/Data/gtamap/tas2/tas2r4/index/ENSG00000127364.gtai"
 
-	readsFwPath := "/home/sam/Data/gtamap/tas2/tas2r4/reads/tas2r4.1-1.fastq"
-	readsRvPath := "/home/sam/Data/gtamap/tas2/tas2r4/reads/tas2r4.1-2.fastq"
+	readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/r1.fastq"
+	readsRvPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/r2.fastq"
 
 	outputPath := "/home/sam/Data/gtamap/tas2/tas2r4/aligned.sam"
 
@@ -141,7 +141,7 @@ func main() {
 	logrus.SetFormatter(&logrus.TextFormatter{
 		FullTimestamp: true,
 	})
-	logrus.SetLevel(logrus.InfoLevel)
+	logrus.SetLevel(logrus.DebugLevel)
 
 	//m := deserializeGenomeIndex()
 
@@ -179,7 +179,7 @@ func main() {
 
 	//extractGeneSequenceFromGtfAndFastaForIndex()
 
-	//testTas2Read()
-	testTas2r4DeletionReads()
+	testTas2Read()
+	//testTas2r4DeletionReads()
 	//testIndex()
 }
