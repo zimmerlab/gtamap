@@ -21,7 +21,7 @@ configured number of intron bases.
 
 There exists a decision problem when there are bases that can be assigned to both sides of the gap.
 
-[!left-norm-1](resources/readme/left-norm.1.png)
+[![left-norm-1](resources/readme/left-norm.1.png)](resources/readme/left-norm.1.png)
 
 In this example, the sequenced individual has a 9bp deletion.
 
