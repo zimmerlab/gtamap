@@ -187,7 +187,11 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	}
 	builder.WriteString("\t")
 	// QUAL
-	builder.WriteString(string(*readPair.ReadR1.Quality))
+	if !flagFw.IsReverseStrand() {
+		builder.WriteString(string(*readPair.ReadR1.Quality))
+	} else {
+		builder.WriteString(string(utils.ReverseBytes(*readPair.ReadR1.Quality)))
+	}
 	builder.WriteString("\n")
 
 	// R2 READ
@@ -245,7 +249,11 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	}
 	builder.WriteString("\t")
 	// QUAL
-	builder.WriteString(string(*readPair.ReadR2.Quality))
+	if !flagRv.IsReverseStrand() {
+		builder.WriteString(string(*readPair.ReadR2.Quality))
+	} else {
+		builder.WriteString(string(utils.ReverseBytes(*readPair.ReadR2.Quality)))
+	}
 	builder.WriteString("\n")
 
 	return builder.String(), true
