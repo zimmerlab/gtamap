@@ -68,33 +68,42 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	if len(resultFw) > 1 || len(resultRv) > 1 {
 		// TODO: handle multimapping reads
 
-		var builder strings.Builder
+		logrus.WithFields(logrus.Fields{
+			"numResultsFw": len(resultFw),
+			"numResultsRv": len(resultRv),
+			"readFw":       readPair.ReadR1.Header,
+			"readRv":       readPair.ReadR2.Header,
+		}).Warn("multimapping reads not handled yet")
 
-		builder.WriteString(readPair.ReadR1.Header)
-		builder.WriteString("_fw\tMULTIMAPPING\t")
-		for i, resFw := range resultFw {
-			builder.WriteString(strconv.Itoa(i))
-			builder.WriteString(":\t")
-			builder.WriteString(resFw.GetCigar())
-			builder.WriteString("\t")
-			builder.WriteString(strconv.Itoa(resFw.MatchedRead.Length()))
-			builder.WriteString("\t")
-		}
-		builder.WriteString("\n")
+		//var builder strings.Builder
+		//
+		//builder.WriteString(readPair.ReadR1.Header)
+		//builder.WriteString("_fw\tMULTIMAPPING\t")
+		//for i, resFw := range resultFw {
+		//	builder.WriteString(strconv.Itoa(i))
+		//	builder.WriteString(":\t")
+		//	builder.WriteString(resFw.GetCigar())
+		//	builder.WriteString("\t")
+		//	builder.WriteString(strconv.Itoa(resFw.MatchedRead.Length()))
+		//	builder.WriteString("\t")
+		//}
+		//builder.WriteString("\n")
+		//
+		//builder.WriteString(readPair.ReadR2.Header)
+		//builder.WriteString("_rw\tMULTIMAPPING\t")
+		//for i, resRv := range resultRv {
+		//	builder.WriteString(strconv.Itoa(i))
+		//	builder.WriteString(":\t")
+		//	builder.WriteString(resRv.GetCigar())
+		//	builder.WriteString("\t")
+		//	builder.WriteString(strconv.Itoa(resRv.MatchedRead.Length()))
+		//	builder.WriteString("\t")
+		//}
+		//builder.WriteString("\n")
+		//
+		//return builder.String(), true
 
-		builder.WriteString(readPair.ReadR2.Header)
-		builder.WriteString("_rw\tMULTIMAPPING\t")
-		for i, resRv := range resultRv {
-			builder.WriteString(strconv.Itoa(i))
-			builder.WriteString(":\t")
-			builder.WriteString(resRv.GetCigar())
-			builder.WriteString("\t")
-			builder.WriteString(strconv.Itoa(resRv.MatchedRead.Length()))
-			builder.WriteString("\t")
-		}
-		builder.WriteString("\n")
-
-		return builder.String(), true
+		return "", false
 	}
 
 	// multimapping was handled before so length is always 1
