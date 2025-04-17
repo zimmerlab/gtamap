@@ -47,6 +47,8 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	//specificQname := "A00604:202:HLYW3DSXY:3:2169:25527:10316"
 	// adding region where start == end
 	//specificQname := "A00604:202:HLYW3DSXY:3:1103:32217:18991"
+	// cigar string contains 1D
+	//specificQname := "A00604:202:HLYW3DSXY:3:1157:15121:15468"
 
 	specificQname := ""
 

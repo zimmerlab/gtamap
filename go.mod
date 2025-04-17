@@ -1,6 +1,8 @@
 module github.com/KleinSamuel/gtamap
 
-go 1.20
+go 1.22
+
+toolchain go1.24.1
 
 require (
 	github.com/akamensky/argparse v1.4.0
@@ -8,4 +10,9 @@ require (
 	github.com/sirupsen/logrus v1.9.0
 )
 
-require golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8 // indirect
+require (
+	github.com/edsrzf/mmap-go v1.2.0 // indirect
+	github.com/klauspost/compress v1.18.0 // indirect
+	github.com/klauspost/pgzip v1.2.6 // indirect
+	golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8 // indirect
+)
