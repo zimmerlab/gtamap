@@ -8,6 +8,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
 	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -187,8 +188,28 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	pnextRv := startGenomeFw
 
 	// TLEN
-	tlenFw := (startGenomeRv - startGenomeFw) + len(*readPair.ReadR2.Sequence)
-	tlenRv := -1 * tlenFw
+	// signed observed Template LENgth. For primary reads where the primary alignments of all reads
+	// in the template are mapped to the same reference sequence, the absolute value of TLEN equals the
+	// distance between the mapped end of the template and the mapped start of the template, inclusively
+	// (i.e., end − start + 1).15 Note that mapped base is defined to be one that aligns to the reference as
+	// described by CIGAR, hence excludes soft-clipped bases. The TLEN field is positive for the leftmost
+	// segment of the template, negative for the rightmost, and the sign for any middle segment is undefined.
+	// If segments cover the same coordinates then the choice of which is leftmost and rightmost is arbitrary
+	// but the two ends must still have differing signs. It is set as 0 for a single-segment template or when
+	// the information is unavailable (e.g., when the first or last segment of a multi-segment template is
+	// unmapped or when the two are mapped to different reference sequences).
+	// The intention of this field is to indicate where the other end of the template has been aligned without
+	// needing to read the remainder of the SAM file. Unfortunately there has been no clear consensus on
+	// the definitions of the template mapped start and end. Thus the exact definitions are implementation-defined.
+	tlen := int(math.Abs(float64(startGenomeFw-startGenomeRv))) + len(*readPair.ReadR1.Sequence)
+	tlenFw := tlen
+	if startGenomeFw > startGenomeRv {
+		tlenFw = -1 * tlen
+	}
+	tlenRv := tlen
+	if startGenomeRv >= startGenomeFw {
+		tlenRv = -1 * tlen
+	}
 
 	// SEQ
 	seqFw := string(*readPair.ReadR1.Sequence)

@@ -17,7 +17,7 @@ func MappingTaskProducer(reader *fastq.Reader, taskChan chan<- MappingTask,
 
 	// add each read pair as a mapping task to the task queue
 	for readPair := reader.NextRead(); readPair != nil; readPair = reader.NextRead() {
-
+		
 		if specificQname != "" {
 			name := strings.Split(readPair.ReadR1.Header, " ")[0]
 			if name != specificQname {
