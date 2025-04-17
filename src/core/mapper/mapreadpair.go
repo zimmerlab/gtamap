@@ -172,10 +172,14 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	startGenomeRv := geneStartRelativeToContig + offsetRv + 1
 
 	// MAPQ
-	mapqFw := 255
-	mapqRv := 255
+	// https://samtools.github.io/hts-specs/SAMv1.pdf
+	// No alignments should be assigned mapping quality 255
+	mapqFw := 254
+	mapqRv := 254
 
 	// CIGAR
+	// https://samtools.github.io/hts-specs/SAMv1.pdf
+	// Adjacent CIGAR operations should be different
 	cigarFw := resFw.GetCigar()
 	cigarRv := resRv.GetCigar()
 
