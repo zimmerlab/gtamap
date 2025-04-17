@@ -691,7 +691,10 @@ func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry) *GenomeIndex {
 
 	for i, entry := range fastaEntries {
 		sequence := entry.Sequence
-		sequenceRevComp := utils.ReverseComplementDnaBytes(sequence)
+		sequenceRevComp, revCompErr := utils.ReverseComplementDnaBytes(sequence)
+		if revCompErr != nil {
+			logrus.Fatal("Error reversing complementing sequence", revCompErr)
+		}
 
 		info := parseFastaHeader(entry.Header)
 		index.SequenceInfo[i] = info

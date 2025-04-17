@@ -176,7 +176,14 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	if !flagFw.IsReverseStrand() {
 		builder.WriteString(string(*readPair.ReadR1.Sequence))
 	} else {
-		builder.WriteString(string(utils.ReverseComplementDnaBytes(*readPair.ReadR1.Sequence)))
+		revCompSeq, revCompSeqErr := utils.ReverseComplementDnaBytes(*readPair.ReadR1.Sequence)
+		if revCompSeqErr != nil {
+			logrus.WithFields(logrus.Fields{
+				"read": readPair.ReadR1.Header,
+			}).Error("Error reversing complementing sequence", revCompSeqErr)
+			return "", false
+		}
+		builder.WriteString(string(revCompSeq))
 	}
 	builder.WriteString("\t")
 	// QUAL
@@ -227,7 +234,14 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	if !flagRv.IsReverseStrand() {
 		builder.WriteString(string(*readPair.ReadR2.Sequence))
 	} else {
-		builder.WriteString(string(utils.ReverseComplementDnaBytes(*readPair.ReadR2.Sequence)))
+		revCompSeq, revCompSeqErr := utils.ReverseComplementDnaBytes(*readPair.ReadR2.Sequence)
+		if revCompSeqErr != nil {
+			logrus.WithFields(logrus.Fields{
+				"read": readPair.ReadR2.Header,
+			}).Error("Error reversing complementing sequence", revCompSeqErr)
+			return "", false
+		}
+		builder.WriteString(string(revCompSeq))
 	}
 	builder.WriteString("\t")
 	// QUAL

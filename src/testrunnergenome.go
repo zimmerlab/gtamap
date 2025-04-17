@@ -79,8 +79,8 @@ func testTas2Read() {
 
 	genomeIndexPath := "/home/sam/Data/gtamap/tas2/tas2r4/index/ENSG00000127364.gtai"
 
-	readsFwPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/003/r1.fastq"
-	readsRvPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/003/r2.fastq"
+	readsFwPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/004/r1.fastq"
+	readsRvPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/004/r2.fastq"
 
 	outputPath := "/home/sam/Data/gtamap/tas2/tas2r4/aligned.sam"
 

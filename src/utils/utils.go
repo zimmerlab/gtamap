@@ -1,6 +1,9 @@
 package utils
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 func Arange(start, end, size int) []int {
 	step := (end - start) / (size - 1)
@@ -47,20 +50,30 @@ var complementMapBytes = map[byte]byte{
 	'T': 'A',
 	'G': 'C',
 	'C': 'G',
+	'N': 'N',
 }
 
-func ReverseComplementDnaBytes(dna []byte) []byte {
-	return ReverseBytes(ComplementDnaBytes(dna))
+func ReverseComplementDnaBytes(dna []byte) ([]byte, error) {
+	complement, err := ComplementDnaBytes(dna)
+	if err != nil {
+		return nil, err
+	}
+	return ReverseBytes(complement), nil
 }
 
-func ComplementDnaBytes(dna []byte) []byte {
+func ComplementDnaBytes(dna []byte) ([]byte, error) {
 	complement := make([]byte, len(dna))
 
 	for i, nucleotide := range dna {
+
+		if _, ok := complementMapBytes[nucleotide]; !ok {
+			return nil, fmt.Errorf("unknown nucleotide: %s", string(nucleotide))
+		}
+
 		complement[i] = complementMapBytes[nucleotide]
 	}
 
-	return complement
+	return complement, nil
 }
 
 func ReverseBytes(s []byte) []byte {
