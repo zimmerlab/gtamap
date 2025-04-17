@@ -320,8 +320,10 @@ func determineLeftNormalizationShiftFw(
 
 		// the amount of bases that the gap must be shifted to be left normalized
 		shift := 0
+		// the maximum amount that the gap can be shifted is until the beginning of the read
+		maxShift := rRead
 
-		for i := 0; i < gapGenome.Length(); i++ {
+		for i := 0; i < maxShift; i++ {
 
 			charRead := (*read.Sequence)[rRead-1-i]
 
@@ -392,8 +394,10 @@ func determineLeftNormalizationShiftRv(
 
 		// the amount of bases that the gap must be shifted to be left normalized
 		shift := 0
+		// the maximum amount that the gap can be shifted is until the end of the read
+		maxShift := result.MatchedGenome.Length() - rRead
 
-		for i := 0; i < gapGenome.Length(); i++ {
+		for i := 0; i < maxShift; i++ {
 
 			charRead := (*read.Sequence)[rRead+i]
 
