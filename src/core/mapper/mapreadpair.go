@@ -135,24 +135,23 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	geneStartRelativeToContig := int(genomeIndex.GetSequenceInfo(resFw.SequenceIndex).StartGenomic)
 	geneEndRelativeToContig := int(genomeIndex.GetSequenceInfo(resRv.SequenceIndex).EndGenomic)
 
-	var builder strings.Builder
-
 	// QNAME
 	// use only the string before any whitespace as the header
 	headerFw := strings.Split(readPair.ReadR1.Header, " ")[0]
-	builder.WriteString(headerFw)
-	builder.WriteString("\t")
+	headerRv := strings.Split(readPair.ReadR2.Header, " ")[0]
+
 	// FLAG
-	builder.WriteString(strconv.Itoa(flagFw.Value))
-	builder.WriteString("\t")
+	flagFwStr := strconv.Itoa(flagFw.Value)
+	flagRvStr := strconv.Itoa(flagRv.Value)
+
 	// RNAME
-	builder.WriteString(genomeIndex.GetSequenceInfo(resFw.SequenceIndex).Contig)
-	builder.WriteString("\t")
+	rnameFw := genomeIndex.GetSequenceInfo(resFw.SequenceIndex).Contig
+	rnameRv := genomeIndex.GetSequenceInfo(resRv.SequenceIndex).Contig
+
 	// POS
 	// the offset is the start of the first region in the matched genome which corresponds to the first
 	// mapped position of the read
 	offsetFw := resFw.MatchedGenome.GetFirstRegion().Start
-
 	// if the read is mapped to the reverse strand, we need to calculate the offset because the target sequence
 	// was reverse complemented. therefore the start position in 5'-3' direction of the original sequence is the
 	// end position of the reverse complemented sequence
@@ -160,31 +159,40 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 		geneLength := geneEndRelativeToContig - geneStartRelativeToContig
 		offsetFw = geneLength - resFw.MatchedGenome.GetLastRegion().End
 	}
-
-	startGenomeFw := geneStartRelativeToContig + offsetFw
-
 	// +1 because the sam format is 1-based
-	builder.WriteString(strconv.Itoa(startGenomeFw + 1))
-	builder.WriteString("\t")
+	startGenomeFw := geneStartRelativeToContig + offsetFw + 1
+
+	offsetRv := resRv.MatchedGenome.GetFirstRegion().Start
+	if flagRv.IsReverseStrand() {
+		geneLength := geneEndRelativeToContig - geneStartRelativeToContig
+		offsetRv = geneLength - resRv.MatchedGenome.GetLastRegion().End
+	}
+	// +1 because the sam format is 1-based
+	startGenomeRv := geneStartRelativeToContig + offsetRv + 1
+
 	// MAPQ
-	builder.WriteString(strconv.Itoa(255))
-	builder.WriteString("\t")
+	mapqFw := 255
+	mapqRv := 255
+
 	// CIGAR
-	builder.WriteString(resFw.GetCigar())
-	builder.WriteString("\t")
+	cigarFw := resFw.GetCigar()
+	cigarRv := resRv.GetCigar()
+
 	// RNEXT
-	builder.WriteString("*")
-	builder.WriteString("\t")
+	rnextFw := rnameRv
+	rnextRv := rnameFw
+
 	// PNEXT
-	builder.WriteString(strconv.Itoa(0))
-	builder.WriteString("\t")
+	pnextFw := startGenomeRv
+	pnextRv := startGenomeFw
+
 	// TLEN
-	builder.WriteString(strconv.Itoa(0))
-	builder.WriteString("\t")
+	tlenFw := (startGenomeRv - startGenomeFw) + len(*readPair.ReadR2.Sequence)
+	tlenRv := -1 * tlenFw
+
 	// SEQ
-	if !flagFw.IsReverseStrand() {
-		builder.WriteString(string(*readPair.ReadR1.Sequence))
-	} else {
+	seqFw := string(*readPair.ReadR1.Sequence)
+	if flagFw.IsReverseStrand() {
 		revCompSeq, revCompSeqErr := utils.ReverseComplementDnaBytes(*readPair.ReadR1.Sequence)
 		if revCompSeqErr != nil {
 			logrus.WithFields(logrus.Fields{
@@ -192,61 +200,11 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 			}).Error("Error reversing complementing sequence", revCompSeqErr)
 			return "", false
 		}
-		builder.WriteString(string(revCompSeq))
+		seqFw = string(revCompSeq)
 	}
-	builder.WriteString("\t")
-	// QUAL
-	if !flagFw.IsReverseStrand() {
-		builder.WriteString(string(*readPair.ReadR1.Quality))
-	} else {
-		builder.WriteString(string(utils.ReverseBytes(*readPair.ReadR1.Quality)))
-	}
-	builder.WriteString("\n")
 
-	// R2 READ
-
-	// QNAME
-	headerRv := strings.Split(readPair.ReadR2.Header, " ")[0]
-	builder.WriteString(headerRv)
-	builder.WriteString("\t")
-	// FLAG
-	builder.WriteString(strconv.Itoa(flagRv.Value))
-	builder.WriteString("\t")
-	// RNAME
-	builder.WriteString(genomeIndex.GetSequenceInfo(resRv.SequenceIndex).Contig)
-	builder.WriteString("\t")
-	// POS
-	offsetRv := resRv.MatchedGenome.GetFirstRegion().Start
-
+	seqRv := string(*readPair.ReadR2.Sequence)
 	if flagRv.IsReverseStrand() {
-		geneLength := geneEndRelativeToContig - geneStartRelativeToContig
-		offsetRv = geneLength - resRv.MatchedGenome.GetLastRegion().End
-	}
-
-	startGenomeRv := geneStartRelativeToContig + offsetRv
-
-	// +1 because the sam format is 1-based
-	builder.WriteString(strconv.Itoa(startGenomeRv + 1))
-	builder.WriteString("\t")
-	// MAPQ
-	builder.WriteString(strconv.Itoa(255))
-	builder.WriteString("\t")
-	// CIGAR
-	builder.WriteString(resRv.GetCigar())
-	builder.WriteString("\t")
-	// RNEXT
-	builder.WriteString("*")
-	builder.WriteString("\t")
-	// PNEXT
-	builder.WriteString(strconv.Itoa(0))
-	builder.WriteString("\t")
-	// TLEN
-	builder.WriteString(strconv.Itoa(0))
-	builder.WriteString("\t")
-	// SEQ
-	if !flagRv.IsReverseStrand() {
-		builder.WriteString(string(*readPair.ReadR2.Sequence))
-	} else {
 		revCompSeq, revCompSeqErr := utils.ReverseComplementDnaBytes(*readPair.ReadR2.Sequence)
 		if revCompSeqErr != nil {
 			logrus.WithFields(logrus.Fields{
@@ -254,15 +212,92 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 			}).Error("Error reversing complementing sequence", revCompSeqErr)
 			return "", false
 		}
-		builder.WriteString(string(revCompSeq))
+		seqRv = string(revCompSeq)
 	}
+
+	// QUAL
+	qualFw := string(*readPair.ReadR1.Quality)
+	if flagFw.IsReverseStrand() {
+		qualFw = string(utils.ReverseBytes(*readPair.ReadR1.Quality))
+	}
+
+	qualRv := string(*readPair.ReadR2.Quality)
+	if flagRv.IsReverseStrand() {
+		qualRv = string(utils.ReverseBytes(*readPair.ReadR2.Quality))
+	}
+
+	// ATTRIBUTES
+
+	var builder strings.Builder
+
+	// QNAME
+	builder.WriteString(headerFw)
+	builder.WriteString("\t")
+	// FLAG
+	builder.WriteString(flagFwStr)
+	builder.WriteString("\t")
+	// RNAME
+	builder.WriteString(rnameFw)
+	builder.WriteString("\t")
+	// POS
+	builder.WriteString(strconv.Itoa(startGenomeFw))
+	builder.WriteString("\t")
+	// MAPQ
+	builder.WriteString(strconv.Itoa(mapqFw))
+	builder.WriteString("\t")
+	// CIGAR
+	builder.WriteString(cigarFw)
+	builder.WriteString("\t")
+	// RNEXT
+	builder.WriteString(rnextFw)
+	builder.WriteString("\t")
+	// PNEXT
+	builder.WriteString(strconv.Itoa(pnextFw))
+	builder.WriteString("\t")
+	// TLEN
+	builder.WriteString(strconv.Itoa(tlenFw))
+	builder.WriteString("\t")
+	// SEQ
+	builder.WriteString(seqFw)
 	builder.WriteString("\t")
 	// QUAL
-	if !flagRv.IsReverseStrand() {
-		builder.WriteString(string(*readPair.ReadR2.Quality))
-	} else {
-		builder.WriteString(string(utils.ReverseBytes(*readPair.ReadR2.Quality)))
-	}
+	builder.WriteString(qualFw)
+	builder.WriteString("\n")
+
+	// R2 READ
+
+	// QNAME
+	builder.WriteString(headerRv)
+	builder.WriteString("\t")
+	// FLAG
+	builder.WriteString(flagRvStr)
+	builder.WriteString("\t")
+	// RNAME
+	builder.WriteString(rnameRv)
+	builder.WriteString("\t")
+	// POS
+	builder.WriteString(strconv.Itoa(startGenomeRv))
+	builder.WriteString("\t")
+	// MAPQ
+	builder.WriteString(strconv.Itoa(mapqRv))
+	builder.WriteString("\t")
+	// CIGAR
+	builder.WriteString(cigarRv)
+	builder.WriteString("\t")
+	// RNEXT
+	builder.WriteString(rnextRv)
+	builder.WriteString("\t")
+	// PNEXT
+	builder.WriteString(strconv.Itoa(pnextRv))
+	builder.WriteString("\t")
+	// TLEN
+	builder.WriteString(strconv.Itoa(tlenRv))
+	builder.WriteString("\t")
+	// SEQ
+	builder.WriteString(seqRv)
+	builder.WriteString("\t")
+	// QUAL
+	builder.WriteString(qualRv)
 	builder.WriteString("\n")
 
 	return builder.String(), true
