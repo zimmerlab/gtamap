@@ -56,6 +56,7 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]mapperutils.Re
 
 	// list has size of number of sequences in index
 	// each element represents the maximum number of kmers that matched exactly on the same diagonal
+	// TODO: change to a hashmap or use info from index
 	maxDiagonalHitsPerSequence := make([]int, genomeIndex.KeywordTree.NumSequences)
 
 	for seqIndex, sequenceMatches := range globalMatches.MatchesPerSequence {

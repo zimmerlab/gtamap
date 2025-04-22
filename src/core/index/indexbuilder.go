@@ -23,6 +23,14 @@ func ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath string, fastaPath string
 		"numGenes":       len(geneIds),
 	}).Info("Extracting gene sequence")
 
+	// check if output directory exists
+	if _, err := os.Stat(outputPath); os.IsNotExist(err) {
+		err := os.MkdirAll(outputPath, os.ModePerm)
+		if err != nil {
+			logrus.Fatal("Error creating output directory", err)
+		}
+	}
+
 	geneInfo := gtf.ReadGenesFromGtfUsingPath(gtfPath, geneIds)
 
 	fastaIndex := fasta.ReadFastaIndexUsingPath(fastaIndexPath)

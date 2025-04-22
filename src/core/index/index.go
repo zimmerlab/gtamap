@@ -622,8 +622,9 @@ func (i GenomeIndex) GetSequenceInfos() []sam.SequenceInfo {
 
 	for seqIndex, seqInfo := range i.SequenceInfo {
 		infos[seqIndex] = sam.SequenceInfo{
-			Name:   seqInfo.Contig,
-			Length: int(seqInfo.EndGenomic - seqInfo.StartGenomic),
+			Name: seqInfo.Contig,
+			//Length: int(seqInfo.EndGenomic - seqInfo.StartGenomic),
+			Length: int(seqInfo.EndGenomic),
 		}
 	}
 
