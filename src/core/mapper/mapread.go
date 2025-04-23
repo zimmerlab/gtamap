@@ -190,11 +190,19 @@ sequenceLoop:
 
 				// determine the number of mismatches between the read and genome
 				// TODO: maybe this can be discarded when we do not need to know the mismatches
-				for i := gapRead.Start; i < gapRead.End; i++ {
+				// regions are one based
+
+				// FIX: The genome pos has to be calculated using its own index (gapGenome.Start + geneSeqPos - 1)
+				// I also had to add -1 to the coords since the indices used in gapRead.Start and Stop are one based
+				// while indexing the *read.Sequence[i] is 0 based.
+				// I manually checked this part and now the correct positions are compared
+				geneSeqPos := 0
+				for i := gapRead.Start - 1; i < gapRead.End-1; i++ {
 
 					readByte := (*read.Sequence)[i]
-					gIndex := diagonalGenome.GetFirstRegion().Start + i
+					gIndex := gapGenome.Start + geneSeqPos - 1
 					genomeByte := (*genomeIndex.Sequences[seqIndex])[gIndex]
+					geneSeqPos++
 
 					if readByte != genomeByte {
 						mismatches = append(mismatches, i)
