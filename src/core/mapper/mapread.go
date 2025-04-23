@@ -222,10 +222,10 @@ sequenceLoop:
 
 			// add digonal to result (diagonal rv should have length 1 after gap filling)
 			result.MatchedRead.AddRegionNonOverlappingPanic(diagonalRead.GetFirstRegion().Start,
-				diagonalRead.GetFirstRegion().End)
+				diagonalRead.GetLastRegion().End)
 
 			result.MatchedGenome.AddRegionNonOverlappingPanic(diagonalGenome.GetFirstRegion().Start,
-				diagonalGenome.GetFirstRegion().End)
+				diagonalGenome.GetLastRegion().End)
 
 			result.MismatchesRead = append(result.MismatchesRead, mismatches...)
 
