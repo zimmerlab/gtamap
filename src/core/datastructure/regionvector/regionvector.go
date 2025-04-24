@@ -20,6 +20,10 @@ type RegionVector struct {
 	Regions []*Region
 }
 
+func (r *Region) String() string {
+	return fmt.Sprintf("[%d, %d]", r.Start, r.End)
+}
+
 func NewRegionVector() *RegionVector {
 	return &RegionVector{
 		Regions: make([]*Region, 0),
@@ -80,7 +84,7 @@ func (rv *RegionVector) AddRegionObjNonOverlapping(region *Region) error {
 	if region.Start > region.End {
 		return fmt.Errorf("region start is greater than end")
 	}
-	
+
 	// just add the region if the vector is empty
 	if len(rv.Regions) == 0 {
 		rv.Regions = append(rv.Regions, region)

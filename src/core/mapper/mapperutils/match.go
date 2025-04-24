@@ -1,6 +1,7 @@
 package mapperutils
 
 import (
+	"fmt"
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/sirupsen/logrus"
@@ -16,6 +17,10 @@ type Match struct {
 	ToRead        int // the end position of the match in the read
 	StartGenome   int // the start position of the match in the genome (diagonal)
 	Used          bool
+}
+
+func (m *Match) String() string {
+	return fmt.Sprintf("[%d, %d, %d, %d]", m.FromRead, m.ToRead, m.FromGenome, m.ToGenome)
 }
 
 type GlobalMatchResult struct {
