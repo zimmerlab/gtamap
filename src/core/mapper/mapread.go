@@ -144,6 +144,13 @@ sequenceLoop:
 				break
 			}
 
+			if !diagonalHandler.IsValidExtension(sequenceMatches.MatchesPerDiagonal[bestDiagonal], result) {
+				// if the extension is not valid, remove from diags
+				// but dont consume the kmers, since they could be placed at an other spot maybe
+				delete(diagonalHandler.Diagonals, bestDiagonal)
+				continue
+			}
+
 			diagonalRead := regionvector.NewRegionVector()
 			diagonalGenome := regionvector.NewRegionVector()
 
@@ -152,7 +159,6 @@ sequenceLoop:
 				if match.Used {
 					continue
 				}
-
 				diagonalRead.AddRegionNonOverlappingPanic(match.FromRead, match.ToRead)
 				diagonalGenome.AddRegionNonOverlappingPanic(match.FromGenome, match.ToGenome)
 			}
@@ -210,6 +216,7 @@ sequenceLoop:
 				}
 
 				diagonalGenome.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.End)
+
 				// also update used status in kmers that were not part of the best diag (but existed as geps inside the best diag)
 				// this way, these kmers cant be used in other diagonals
 				diagonalHandler.ConsumeKmer(gapRead.Start, gapRead.End, gapGenome.Start, gapGenome.End)
