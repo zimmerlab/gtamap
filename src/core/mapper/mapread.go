@@ -144,6 +144,13 @@ sequenceLoop:
 				break
 			}
 
+			if !diagonalHandler.IsValidExtension(sequenceMatches.MatchesPerDiagonal[bestDiagonal], result) {
+				// if the extension is not valid, remove from diags
+				// but dont consume the kmers, since they could be placed at an other spot maybe
+				delete(diagonalHandler.Diagonals, bestDiagonal)
+				continue
+			}
+
 			diagonalRead := regionvector.NewRegionVector()
 			diagonalGenome := regionvector.NewRegionVector()
 
@@ -152,7 +159,6 @@ sequenceLoop:
 				if match.Used {
 					continue
 				}
-
 				diagonalRead.AddRegionNonOverlappingPanic(match.FromRead, match.ToRead)
 				diagonalGenome.AddRegionNonOverlappingPanic(match.FromGenome, match.ToGenome)
 			}
@@ -188,14 +194,6 @@ sequenceLoop:
 				// fill the gap in the read by adding the gap as region
 				diagonalRead.AddRegionNonOverlappingPanic(gapRead.Start, gapRead.End)
 
-				// determine the number of mismatches between the read and genome
-				// TODO: maybe this can be discarded when we do not need to know the mismatches
-				// regions are one based
-
-				// FIX: The genome pos has to be calculated using its own index (gapGenome.Start + geneSeqPos - 1)
-				// I also had to add -1 to the coords since the indices used in gapRead.Start and Stop are one based
-				// while indexing the *read.Sequence[i] is 0 based.
-				// I manually checked this part and now the correct positions are compared
 				geneSeqPos := 0
 				for i := gapRead.Start - 1; i < gapRead.End-1; i++ {
 
@@ -218,6 +216,10 @@ sequenceLoop:
 				}
 
 				diagonalGenome.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.End)
+
+				// also update used status in kmers that were not part of the best diag (but existed as geps inside the best diag)
+				// this way, these kmers cant be used in other diagonals
+				diagonalHandler.ConsumeKmer(gapRead.Start, gapRead.End, gapGenome.Start, gapGenome.End)
 			}
 
 			if foundGap {

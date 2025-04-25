@@ -52,6 +52,56 @@ func (dh *DiagonalHandler) ConsumeDiagonal(diagonal int) {
 	delete(dh.Diagonals, diagonal)
 }
 
+func (dh *DiagonalHandler) ConsumeKmer(kmerStart int, kmerStop int, kmerStartGenome int, kmerStopGenome int) {
+
+	logrus.WithFields(logrus.Fields{
+		"kmerStart": kmerStart,
+		"kmerStop":  kmerStop,
+	}).Debug("consuming kmer after gap filling")
+
+	dh.ConsumeRegionRead(kmerStart, kmerStop)
+	dh.ConsumeRegionGenome(kmerStartGenome, kmerStopGenome)
+}
+
+func (dh *DiagonalHandler) IsValidExtension(possibleExtension []*Match, result ReadMatchResult) bool {
+	if len(result.MatchedRead.Regions) == 0 {
+		return true
+	}
+
+	// get first and last match from diagonal
+	firstMatch := possibleExtension[0]
+	lastMatch := possibleExtension[len(possibleExtension)-1]
+
+	if firstMatch.FromRead >= result.MatchedRead.GetLastRegion().End {
+		// right ext
+		// the genomic coords of te ext must be grater that the right most genomic coords of the
+		// result
+		if firstMatch.FromGenome >= result.MatchedGenome.GetLastRegion().End {
+			// valid
+			return true
+		}
+		// invalid ext
+		return false
+	}
+
+	if lastMatch.ToRead <= result.MatchedRead.GetFirstRegion().Start {
+		// left ext
+		// the genomic coords of te ext must be smaller that the left most genomic coords of the
+		if firstMatch.ToGenome <= result.MatchedGenome.GetFirstRegion().Start {
+			// valid ext
+			return true
+		}
+		// invalid ext
+		return false
+	}
+
+	// TODO: In theory, a mid extension would also be possible but I think that would be
+	// extremely rare, since in order for that to happen, there already need to be two
+	// diags aligned in the result and then it is unlikely to squeese in the last couple of bases
+	// in between those two aligned block. It would be a really short exon, which is unlikely
+	return true
+}
+
 func (dh *DiagonalHandler) ConsumeRegionRead(startRead int, endRead int) {
 
 	logrus.WithFields(logrus.Fields{
