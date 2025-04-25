@@ -295,7 +295,9 @@ sequenceLoop:
 						bestSplit := determineBestSplit(genomeIndex, read, seqIndex, gapRead, gapGenome)
 
 						if bestSplit == -1 {
-							logrus.Fatal("no best split found!")
+							logrus.WithFields(logrus.Fields{
+								"qname": read.Header,
+							}).Fatal("no best split found")
 						}
 
 						logrus.WithFields(logrus.Fields{
@@ -494,7 +496,8 @@ func determineBestSplit(
 	}).Debug("determined mismatches")
 
 	// the minimum number of mismatches
-	minErrors := lErrors[gapRead.Length()] + rErrors[gapRead.Length()]
+	// the +2 is based on the maximum penalty returned by scoreSpliceSites()
+	minErrors := lErrors[gapRead.Length()] + rErrors[gapRead.Length()] + 2
 	// the position of the split with the minimum number of mismatches
 	minSplit := -1
 
@@ -525,11 +528,11 @@ func determineBestSplit(
 
 		numMismatches += spliceSitePenalty
 
-		//logrus.WithFields(logrus.Fields{
-		//	"split":               i,
-		//	"splice site penalty": spliceSitePenalty,
-		//	"numMismatches":       numMismatches,
-		//}).Debug("possible split")
+		logrus.WithFields(logrus.Fields{
+			"split":               i,
+			"splice site penalty": spliceSitePenalty,
+			"numMismatches":       numMismatches,
+		}).Debug("possible split")
 
 		if numMismatches < minErrors {
 			minErrors = numMismatches
