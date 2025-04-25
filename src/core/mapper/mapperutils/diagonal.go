@@ -52,6 +52,17 @@ func (dh *DiagonalHandler) ConsumeDiagonal(diagonal int) {
 	delete(dh.Diagonals, diagonal)
 }
 
+func (dh *DiagonalHandler) ConsumeKmer(kmerStart int, kmerStop int, kmerStartGenome int, kmerStopGenome int) {
+
+	logrus.WithFields(logrus.Fields{
+		"kmerStart": kmerStart,
+		"kmerStop":  kmerStop,
+	}).Debug("consuming kmer after gap filling")
+
+	dh.ConsumeRegionRead(kmerStart, kmerStop)
+	dh.ConsumeRegionGenome(kmerStartGenome, kmerStopGenome)
+}
+
 func (dh *DiagonalHandler) ConsumeRegionRead(startRead int, endRead int) {
 
 	logrus.WithFields(logrus.Fields{

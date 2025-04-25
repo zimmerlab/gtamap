@@ -210,6 +210,9 @@ sequenceLoop:
 				}
 
 				diagonalGenome.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.End)
+				// also update used status in kmers that were not part of the best diag (but existed as geps inside the best diag)
+				// this way, these kmers cant be used in other diagonals
+				diagonalHandler.ConsumeKmer(gapRead.Start, gapRead.End, gapGenome.Start, gapGenome.End)
 			}
 
 			if foundGap {
