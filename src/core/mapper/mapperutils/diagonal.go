@@ -95,10 +95,31 @@ func (dh *DiagonalHandler) IsValidExtension(possibleExtension []*Match, result R
 		return false
 	}
 
-	// TODO: In theory, a mid extension would also be possible but I think that would be
-	// extremely rare, since in order for that to happen, there already need to be two
-	// diags aligned in the result and then it is unlikely to squeese in the last couple of bases
-	// in between those two aligned block. It would be a really short exon, which is unlikely
+	// if there are two or more regions already mapped in result
+	// we need to check if the extension is placed in between
+	if len(result.MatchedRead.Regions) > 1 {
+		for i := 0; i < len(result.MatchedRead.Regions)-1; i++ {
+			readGapStart := result.MatchedRead.Regions[i].End + 1
+			readGapStop := result.MatchedRead.Regions[i+1].Start - 1
+			geneGapStart := result.MatchedGenome.Regions[i].End + 1
+			geneGapStop := result.MatchedGenome.Regions[i+1].Start - 1
+
+			// do the read coordinates of the possible extension fit in between
+			// the already used kmers?
+			if firstMatch.FromRead >= readGapStart && lastMatch.ToRead <= readGapStop {
+				// if yes, then the gene coords need to also be in between the already consumed
+				// gene coords
+				if firstMatch.FromGenome >= geneGapStart && lastMatch.ToGenome <= geneGapStop {
+					// we dont expect this to happen.
+					return true
+				}
+			}
+			// but this happens a lot where an extension would be a mid extension and we
+			// most of the time don't want this (since it is not possible)
+			return false
+
+		}
+	}
 	return true
 }
 
