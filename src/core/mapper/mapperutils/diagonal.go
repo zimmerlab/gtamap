@@ -21,10 +21,18 @@ func NewDiagonalHandlerWithData(m map[int][]*Match) *DiagonalHandler {
 	}
 }
 
-func (dh *DiagonalHandler) GetBestDiagonal() (int, int) {
-	indexMax := -1
+// GetBestDiagonal returns the diagonal with the most unused matches.
+// It returns the position of the diagonal in the genome and the number of unused matches if a diagonal is found.
+// If not, then it returns -1, -1 and false.
+func (dh *DiagonalHandler) GetBestDiagonal() (int, int, bool) {
+
+	indexMax := 0
 	maxMatches := 0
+	found := false
+
 	for key, matches := range dh.Diagonals {
+
+		// number of exact kmer matches in this diagonal that were not used by any other match yet
 		countUnused := 0
 		for _, match := range matches {
 			if match.Used {
@@ -32,12 +40,15 @@ func (dh *DiagonalHandler) GetBestDiagonal() (int, int) {
 			}
 			countUnused++
 		}
+
 		if countUnused > maxMatches {
 			indexMax = key
 			maxMatches = countUnused
+			found = true
 		}
 	}
-	return indexMax, maxMatches
+
+	return indexMax, maxMatches, found
 }
 
 func (dh *DiagonalHandler) ConsumeDiagonal(diagonal int) {

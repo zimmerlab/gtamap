@@ -146,10 +146,22 @@ sequenceLoop:
 
 			logrus.Debug("searching for next best diagonal")
 
-			bestDiagonal, bestDiagonalLength := diagonalHandler.GetBestDiagonal()
+			bestDiagonal, bestDiagonalLength, foundDiagonal := diagonalHandler.GetBestDiagonal()
 
-			if bestDiagonal < 0 {
+			// exit the loop if no diagonal is found to handle the unmatched regions and fill the match
+			if !foundDiagonal {
 				logrus.Debug("no suitable diagonal found")
+				break
+			}
+
+			// if the diagonal is negative or larger than the genome length, this could be a sign of clipping
+			// because the match exceeds the target sequence as it is in the index
+			if bestDiagonal < 0 {
+				logrus.Debug("genome index out of bounds left side (clipping?)")
+				break
+			}
+			if bestDiagonal+len(*read.Sequence) > len(*genomeIndex.Sequences[seqIndex]) {
+				logrus.Debug("genome index out of bounds right side (clipping?)")
 				break
 			}
 
@@ -160,7 +172,7 @@ sequenceLoop:
 			}).Debug("considering diagonal")
 
 			isDiagonalValid := diagonalHandler.IsValidExtension(sequenceMatches.MatchesPerDiagonal[bestDiagonal], result, read)
-			
+
 			if !isDiagonalValid {
 
 				logrus.Debug("diagonal is not valid")
@@ -269,6 +281,12 @@ sequenceLoop:
 			"read":   result.MatchedRead,
 			"genome": result.MatchedGenome,
 		}).Debug("done processing diagonals")
+
+		// if no diagonal was valid, skip this read
+		if result.MatchedRead.Length() == 0 {
+			logrus.Debug("no diagonal was valid")
+			continue sequenceLoop
+		}
 
 		if result.MatchedRead.Length() == len(*read.Sequence) {
 			logrus.Debug("read fully matched")
