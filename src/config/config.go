@@ -2,7 +2,7 @@ package config
 
 var env string = "development"
 
-const toolVersion string = "0.1"
+const toolVersion string = "0.2"
 
 var kmerLength uint8 = 10
 

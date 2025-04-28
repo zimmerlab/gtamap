@@ -20,7 +20,7 @@ func printBanner() {
 	logrus.Info("| | __  | ||  _  | | |\\/| ||  _  ||  __/")
 	logrus.Info("| |_\\ \\ | || | | | | |  | || | | || |")
 	logrus.Info(" \\____/ \\_/\\_| |_/ \\_|  |_/\\_| |_/\\_|")
-	logrus.Info("GTAMap v" + config.ToolVersion() + " (S. Klein, 2025)")
+	logrus.Info("GTAMap v" + config.ToolVersion() + " (S. Klein, M. Weyrich, 2025)")
 	logrus.Info("Fast and memory efficient spliced read mapping to a single gene reference.")
 	logrus.Info("")
 }

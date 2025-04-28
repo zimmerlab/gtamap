@@ -1,6 +1,7 @@
 package mapperutils
 
 import (
+	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/sirupsen/logrus"
 )
 
@@ -63,63 +64,71 @@ func (dh *DiagonalHandler) ConsumeKmer(kmerStart int, kmerStop int, kmerStartGen
 	dh.ConsumeRegionGenome(kmerStartGenome, kmerStopGenome)
 }
 
-func (dh *DiagonalHandler) IsValidExtension(possibleExtension []*Match, result ReadMatchResult) bool {
+// IsValidExtension checks if the diagonal is a valid extension of the already mapped regions and return true if it is.
+// A diagonal is not valid if its start and end positions are not consistent with the already mapped regions.
+// The diagonal must be between the already mapped regions in the read and genome.
+// Kmer matches that are already used are ignored for this check.
+//
+// An example of a valid extension is:
+// Already mapped regions: [0, 10], [20, 30] to genome [1000, 1010], [1020, 1030]
+// New diagonal: [10, 20] to genome [1010, 1020]
+// An example of an invalid extension is:
+// Already mapped regions: [0, 10], [20, 30] to genome [1000, 1010], [1020, 1030]
+// New diagonal: [10, 20] to genome [900, 910]
+func (dh *DiagonalHandler) IsValidExtension(possibleExtension []*Match, result ReadMatchResult, read *fastq.Read) bool {
+
+	// if there is nothing matched in the read, then any extension is valid
 	if len(result.MatchedRead.Regions) == 0 {
 		return true
 	}
 
-	// get first and last match from diagonal
-	firstMatch := possibleExtension[0]
-	lastMatch := possibleExtension[len(possibleExtension)-1]
+	// the min and max positions of the new diagonal in both the read and the genome
+	minRead := -1
+	maxRead := -1
+	minGenome := -1
+	maxGenome := -1
 
-	if firstMatch.FromRead >= result.MatchedRead.GetLastRegion().End {
-		// right ext
-		// the genomic coords of te ext must be grater that the right most genomic coords of the
-		// result
-		if firstMatch.FromGenome >= result.MatchedGenome.GetLastRegion().End {
-			// valid
-			return true
+	// only use regions that are not used yet
+	for _, match := range possibleExtension {
+		if match.Used {
+			logrus.WithFields(logrus.Fields{
+				"match": match.String(),
+				"read":  read.Header,
+			}).Debug("tried to use a diagonal containing a kmer that was already used")
+			continue
 		}
-		// invalid ext
-		return false
+
+		if minRead == -1 || match.FromRead < minRead {
+			minRead = match.FromRead
+		}
+		if maxRead == -1 || match.ToRead > maxRead {
+			maxRead = match.ToRead
+		}
+		if minGenome == -1 || match.FromGenome < minGenome {
+			minGenome = match.FromGenome
+		}
+		if maxGenome == -1 || match.ToGenome > maxGenome {
+			maxGenome = match.ToGenome
+		}
 	}
 
-	if lastMatch.ToRead <= result.MatchedRead.GetFirstRegion().Start {
-		// left ext
-		// the genomic coords of te ext must be smaller that the left most genomic coords of the
-		if firstMatch.ToGenome <= result.MatchedGenome.GetFirstRegion().Start {
-			// valid ext
-			return true
-		}
-		// invalid ext
-		return false
-	}
-
-	// if there are two or more regions already mapped in result
-	// we need to check if the extension is placed in between
-	if len(result.MatchedRead.Regions) > 1 {
-		for i := 0; i < len(result.MatchedRead.Regions)-1; i++ {
-			readGapStart := result.MatchedRead.Regions[i].End + 1
-			readGapStop := result.MatchedRead.Regions[i+1].Start - 1
-			geneGapStart := result.MatchedGenome.Regions[i].End + 1
-			geneGapStop := result.MatchedGenome.Regions[i+1].Start - 1
-
-			// do the read coordinates of the possible extension fit in between
-			// the already used kmers?
-			if firstMatch.FromRead >= readGapStart && lastMatch.ToRead <= readGapStop {
-				// if yes, then the gene coords need to also be in between the already consumed
-				// gene coords
-				if firstMatch.FromGenome >= geneGapStart && lastMatch.ToGenome <= geneGapStop {
-					// we dont expect this to happen.
-					return true
-				}
+	// check if the diagonal position within the genome is still consistent with the already mapped regions
+	for i, resultMatch := range result.MatchedRead.Regions {
+		if resultMatch.End <= minRead {
+			// the existing match is before the new match in the read
+			// then its diagonal must be before the new diagonal
+			if minGenome < result.MatchedGenome.Regions[i].End {
+				return false
 			}
-			// but this happens a lot where an extension would be a mid extension and we
-			// most of the time don't want this (since it is not possible)
-			return false
-
+		} else if resultMatch.Start >= maxRead {
+			// the existing match is after the new match in the read
+			// then its diagonal must be after the new diagonal
+			if maxGenome > result.MatchedGenome.Regions[i].Start {
+				return false
+			}
 		}
 	}
+
 	return true
 }
 
