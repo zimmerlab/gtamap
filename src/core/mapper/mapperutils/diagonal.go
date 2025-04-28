@@ -1,6 +1,7 @@
 package mapperutils
 
 import (
+	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/sirupsen/logrus"
 )
 
@@ -63,42 +64,59 @@ func (dh *DiagonalHandler) ConsumeKmer(kmerStart int, kmerStop int, kmerStartGen
 	dh.ConsumeRegionGenome(kmerStartGenome, kmerStopGenome)
 }
 
-func (dh *DiagonalHandler) IsValidExtension(possibleExtension []*Match, result ReadMatchResult) bool {
+// IsValidExtension checks if the diagonal is a valid extension of the already mapped regions and return true if it is.
+// A diagonal is not valid if its start and end positions are not consistent with the already mapped regions.
+// The diagonal must be between the already mapped regions in the read and genome.
+// An error is thrown in the given diagonal contains a kmer that was already used.
+//
+// An example of a valid extension is:
+// Already mapped regions: [0, 10], [20, 30] to genome [1000, 1010], [1020, 1030]
+// New diagonal: [10, 20] to genome [1010, 1020]
+// An example of an invalid extension is:
+// Already mapped regions: [0, 10], [20, 30] to genome [1000, 1010], [1020, 1030]
+// New diagonal: [10, 20] to genome [900, 910]
+func (dh *DiagonalHandler) IsValidExtension(possibleExtension []*Match, result ReadMatchResult, read *fastq.Read) bool {
+
+	// if there is nothing matched in the read, then any extension is valid
 	if len(result.MatchedRead.Regions) == 0 {
 		return true
 	}
 
-	// get first and last match from diagonal
-	firstMatch := possibleExtension[0]
-	lastMatch := possibleExtension[len(possibleExtension)-1]
-
-	if firstMatch.FromRead >= result.MatchedRead.GetLastRegion().End {
-		// right ext
-		// the genomic coords of te ext must be grater that the right most genomic coords of the
-		// result
-		if firstMatch.FromGenome >= result.MatchedGenome.GetLastRegion().End {
-			// valid
-			return true
+	// TODO: validate this
+	// if the diagonal contains a kmer match that was already used, then the entire diagonal is invalid
+	for _, match := range possibleExtension {
+		if match.Used {
+			logrus.WithFields(logrus.Fields{
+				"match": match.String(),
+				"read":  read.Header,
+			}).Fatal("tried to use a diagonal containing a kmer that was already used")
 		}
-		// invalid ext
-		return false
 	}
 
-	if lastMatch.ToRead <= result.MatchedRead.GetFirstRegion().Start {
-		// left ext
-		// the genomic coords of te ext must be smaller that the left most genomic coords of the
-		if firstMatch.ToGenome <= result.MatchedGenome.GetFirstRegion().Start {
-			// valid ext
-			return true
+	// check if the diagonal position within the genome is still consistent with the already mapped regions
+
+	// the min and max positions of the new diagonal in both the read and the genome
+	minRead := possibleExtension[0].FromRead
+	maxRead := possibleExtension[len(possibleExtension)-1].ToRead
+	minGenome := possibleExtension[0].FromGenome
+	maxGenome := possibleExtension[len(possibleExtension)-1].ToGenome
+
+	for i, resultMatch := range result.MatchedRead.Regions {
+		if resultMatch.End < minRead {
+			// the existing match is before the new match in the read
+			// then its diagonal must be before the new diagonal
+			if minGenome < result.MatchedGenome.Regions[i].End {
+				return false
+			}
+		} else if resultMatch.Start > maxRead {
+			// the existing match is after the new match in the read
+			// then its diagonal must be after the new diagonal
+			if maxGenome > result.MatchedGenome.Regions[i].Start {
+				return false
+			}
 		}
-		// invalid ext
-		return false
 	}
 
-	// TODO: In theory, a mid extension would also be possible but I think that would be
-	// extremely rare, since in order for that to happen, there already need to be two
-	// diags aligned in the result and then it is unlikely to squeese in the last couple of bases
-	// in between those two aligned block. It would be a really short exon, which is unlikely
 	return true
 }
 

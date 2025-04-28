@@ -144,7 +144,12 @@ sequenceLoop:
 				break
 			}
 
-			if !diagonalHandler.IsValidExtension(sequenceMatches.MatchesPerDiagonal[bestDiagonal], result) {
+			if !diagonalHandler.IsValidExtension(sequenceMatches.MatchesPerDiagonal[bestDiagonal], result, read) {
+
+				logrus.WithFields(logrus.Fields{
+					"posGenome": bestDiagonal,
+				}).Debug("diagonal is not valid")
+				
 				// if the extension is not valid, remove from diags
 				// but dont consume the kmers, since they could be placed at an other spot maybe
 				delete(diagonalHandler.Diagonals, bestDiagonal)
