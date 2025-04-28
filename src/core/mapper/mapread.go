@@ -148,7 +148,7 @@ sequenceLoop:
 
 			bestDiagonal, bestDiagonalLength := diagonalHandler.GetBestDiagonal()
 
-			if bestDiagonal == -1 {
+			if bestDiagonal < 0 {
 				logrus.Debug("no suitable diagonal found")
 				break
 			}
