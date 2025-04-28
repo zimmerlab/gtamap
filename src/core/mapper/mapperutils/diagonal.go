@@ -67,7 +67,7 @@ func (dh *DiagonalHandler) ConsumeKmer(kmerStart int, kmerStop int, kmerStartGen
 // IsValidExtension checks if the diagonal is a valid extension of the already mapped regions and return true if it is.
 // A diagonal is not valid if its start and end positions are not consistent with the already mapped regions.
 // The diagonal must be between the already mapped regions in the read and genome.
-// An error is thrown in the given diagonal contains a kmer that was already used.
+// Kmer matches that are already used are ignored for this check.
 //
 // An example of a valid extension is:
 // Already mapped regions: [0, 10], [20, 30] to genome [1000, 1010], [1020, 1030]
@@ -94,7 +94,7 @@ func (dh *DiagonalHandler) IsValidExtension(possibleExtension []*Match, result R
 			logrus.WithFields(logrus.Fields{
 				"match": match.String(),
 				"read":  read.Header,
-			}).Warn("tried to use a diagonal containing a kmer that was already used")
+			}).Debug("tried to use a diagonal containing a kmer that was already used")
 			continue
 		}
 

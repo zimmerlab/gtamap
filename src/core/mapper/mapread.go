@@ -306,7 +306,7 @@ sequenceLoop:
 							logrus.WithFields(logrus.Fields{
 								"gapRead":   gapRead,
 								"gapGenome": gapGenome,
-							}).Warn("gap read is larger than gap genome")
+							}).Debug("gap read is larger than gap genome")
 
 							continue sequenceLoop
 						}
