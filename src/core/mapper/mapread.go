@@ -133,6 +133,15 @@ sequenceLoop:
 
 		diagonalHandler := mapperutils.NewDiagonalHandlerWithData(sequenceMatches.MatchesPerDiagonal)
 
+		logrus.Debug("Handler initialized with the following diagonals")
+		for k, v := range diagonalHandler.Diagonals {
+			logrus.WithFields(logrus.Fields{
+				"posGenome": k,
+				"matches":   v,
+				"length":    len(v),
+			}).Debug("diagonal")
+		}
+
 		for result.MatchedRead.Length() < len(*read.Sequence) {
 
 			logrus.Debug("searching for next best diagonal")
@@ -144,12 +153,25 @@ sequenceLoop:
 				break
 			}
 
-			if !diagonalHandler.IsValidExtension(sequenceMatches.MatchesPerDiagonal[bestDiagonal], result) {
+			logrus.WithFields(logrus.Fields{
+				"posGenome": bestDiagonal,
+				"length":    bestDiagonalLength,
+				"matches":   sequenceMatches.MatchesPerDiagonal[bestDiagonal],
+			}).Debug("considering diagonal")
+
+			isDiagonalValid := diagonalHandler.IsValidExtension(sequenceMatches.MatchesPerDiagonal[bestDiagonal], result, read)
+			
+			if !isDiagonalValid {
+
+				logrus.Debug("diagonal is not valid")
+
 				// if the extension is not valid, remove from diags
-				// but dont consume the kmers, since they could be placed at an other spot maybe
+				// but do not consume the kmers, since they could be placed at an other spot maybe
 				delete(diagonalHandler.Diagonals, bestDiagonal)
 				continue
 			}
+
+			logrus.Debug("diagonal is valid")
 
 			diagonalRead := regionvector.NewRegionVector()
 			diagonalGenome := regionvector.NewRegionVector()
@@ -278,7 +300,7 @@ sequenceLoop:
 							"gapGenome": gapGenome,
 						}).Debug("found gap to be handled")
 
-						// TODO: handle this
+						// TODO: handle insertions
 						// when the gap in the read is larger than the gap in the genome
 						// there is maybe an insertion in the read
 						// currently the assumption is that this is a non-mapping read
@@ -287,7 +309,6 @@ sequenceLoop:
 								"gapRead":   gapRead,
 								"gapGenome": gapGenome,
 							}).Debug("gap read is larger than gap genome")
-							logrus.Debug("probably insertion in query genome")
 
 							continue sequenceLoop
 						}
