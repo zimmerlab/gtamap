@@ -82,25 +82,37 @@ func (dh *DiagonalHandler) IsValidExtension(possibleExtension []*Match, result R
 		return true
 	}
 
-	// TODO: validate this
-	// if the diagonal contains a kmer match that was already used, then the entire diagonal is invalid
+	// the min and max positions of the new diagonal in both the read and the genome
+	minRead := -1
+	maxRead := -1
+	minGenome := -1
+	maxGenome := -1
+
+	// only use regions that are not used yet
 	for _, match := range possibleExtension {
 		if match.Used {
 			logrus.WithFields(logrus.Fields{
 				"match": match.String(),
 				"read":  read.Header,
-			}).Fatal("tried to use a diagonal containing a kmer that was already used")
+			}).Warn("tried to use a diagonal containing a kmer that was already used")
+			continue
+		}
+
+		if minRead == -1 || match.FromRead < minRead {
+			minRead = match.FromRead
+		}
+		if maxRead == -1 || match.ToRead > maxRead {
+			maxRead = match.ToRead
+		}
+		if minGenome == -1 || match.FromGenome < minGenome {
+			minGenome = match.FromGenome
+		}
+		if maxGenome == -1 || match.ToGenome > maxGenome {
+			maxGenome = match.ToGenome
 		}
 	}
 
 	// check if the diagonal position within the genome is still consistent with the already mapped regions
-
-	// the min and max positions of the new diagonal in both the read and the genome
-	minRead := possibleExtension[0].FromRead
-	maxRead := possibleExtension[len(possibleExtension)-1].ToRead
-	minGenome := possibleExtension[0].FromGenome
-	maxGenome := possibleExtension[len(possibleExtension)-1].ToGenome
-
 	for i, resultMatch := range result.MatchedRead.Regions {
 		if resultMatch.End < minRead {
 			// the existing match is before the new match in the read
