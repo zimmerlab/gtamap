@@ -159,7 +159,9 @@ sequenceLoop:
 				"matches":   sequenceMatches.MatchesPerDiagonal[bestDiagonal],
 			}).Debug("considering diagonal")
 
-			if !diagonalHandler.IsValidExtension(sequenceMatches.MatchesPerDiagonal[bestDiagonal], result, read) {
+			isDiagonalValid := diagonalHandler.IsValidExtension(sequenceMatches.MatchesPerDiagonal[bestDiagonal], result, read)
+			
+			if !isDiagonalValid {
 
 				logrus.Debug("diagonal is not valid")
 

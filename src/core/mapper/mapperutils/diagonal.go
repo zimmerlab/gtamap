@@ -114,13 +114,13 @@ func (dh *DiagonalHandler) IsValidExtension(possibleExtension []*Match, result R
 
 	// check if the diagonal position within the genome is still consistent with the already mapped regions
 	for i, resultMatch := range result.MatchedRead.Regions {
-		if resultMatch.End < minRead {
+		if resultMatch.End <= minRead {
 			// the existing match is before the new match in the read
 			// then its diagonal must be before the new diagonal
 			if minGenome < result.MatchedGenome.Regions[i].End {
 				return false
 			}
-		} else if resultMatch.Start > maxRead {
+		} else if resultMatch.Start >= maxRead {
 			// the existing match is after the new match in the read
 			// then its diagonal must be after the new diagonal
 			if maxGenome > result.MatchedGenome.Regions[i].Start {

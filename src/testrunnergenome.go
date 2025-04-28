@@ -82,10 +82,10 @@ func testTas2Read() {
 	//readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.tas2r4.fastq"
 	//readsRvPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_2.tas2r4.fastq"
 
-	readsFwPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/008/r1.fastq"
-	readsRvPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/008/r2.fastq"
+	readsFwPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/011/r1.fastq"
+	readsRvPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/011/r2.fastq"
 
-	outputPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/008/aligned.sam"
+	outputPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/011/aligned.sam"
 
 	genomeIndex := index.ReadGenomeIndexByPath(genomeIndexPath)
 	reader := fastq.InitFromPaths(&readsFwPath, &readsRvPath)
