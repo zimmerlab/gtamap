@@ -57,7 +57,7 @@ func main() {
 		Required: true,
 		Help:     "Nucleotide sequences (FASTA) file.",
 	})
-	var outputFileIndex *os.File = cmdIndex.File("", "output", os.O_WRONLY|os.O_CREATE, 0600, &argparse.Options{
+	var outputFileIndex *os.File = cmdIndex.File("", "output", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600, &argparse.Options{
 		Required: true,
 		Help:     "Output file (.gtai).",
 	})
@@ -80,7 +80,7 @@ func main() {
 		Required: false,
 		Help:     "FASTQ file containing the reverse reads.",
 	})
-	var outputFileMap *os.File = cmdMap.File("", "output", os.O_WRONLY|os.O_CREATE, 0600, &argparse.Options{
+	var outputFileMap *os.File = cmdMap.File("", "output", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600, &argparse.Options{
 		Required: true,
 		Help:     "Output file (.gtai).",
 	})
