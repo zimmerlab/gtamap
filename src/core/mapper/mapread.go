@@ -391,6 +391,14 @@ sequenceLoop:
 						// to be added to the right side of the gap
 						if bestSplit < gapRead.Length() {
 
+							logrus.WithFields(logrus.Fields{
+								"gapReadEnd":    gapRead.End,
+								"bestSplit":     bestSplit,
+								"gapReadLength": gapRead.Length(),
+								"left":          gapRead.End - (gapRead.Length() - bestSplit),
+								"right":         gapRead.End,
+							}).Debug("debug split right")
+
 							// add the split to the result
 							result.MatchedRead.AddRegionNonOverlappingPanic(gapRead.End-(gapRead.Length()-bestSplit), gapRead.End)
 							result.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.End-(gapRead.Length()-bestSplit), gapGenome.End)
@@ -400,7 +408,7 @@ sequenceLoop:
 							genomeByte := (*genomeIndex.Sequences[seqIndex])[gapGenome.End-(gapRead.Length()-bestSplit) : gapGenome.End]
 
 							// add the mismatches to the result
-							for i := 0; i < bestSplit; i++ {
+							for i := 0; i < gapRead.Length()-bestSplit; i++ {
 								// add the mismatche to the result
 								if readByte[i] != genomeByte[i] {
 									result.MismatchesRead = append(result.MismatchesRead, gapRead.End-(bestSplit-i))
