@@ -14,13 +14,10 @@ import (
 )
 
 func printBanner() {
-	logrus.Info(" _____ _____ ___   ___  ___  ___  ______")
-	logrus.Info("|  __ \\_   _/ _ \\  |  \\/  | / _ \\ | ___ \\")
-	logrus.Info("| |  \\/ | |/ /_\\ \\ | .  . |/ /_\\ \\| |_/ /")
-	logrus.Info("| | __  | ||  _  | | |\\/| ||  _  ||  __/")
-	logrus.Info("| |_\\ \\ | || | | | | |  | || | | || |")
-	logrus.Info(" \\____/ \\_/\\_| |_/ \\_|  |_/\\_| |_/\\_|")
-	logrus.Info("GTAMap v" + config.ToolVersion() + " (S. Klein, M. Weyrich, 2025)")
+	logrus.Info("┌─┐┌┬┐┌─┐┌┬┐┌─┐┌─┐")
+	logrus.Info("│ ┬ │ ├─┤│││├─┤├─┘")
+	logrus.Info("└─┘ ┴ ┴ ┴┴ ┴┴ ┴┴")
+	logrus.Info("gtamap v" + config.ToolVersion() + " (S. Klein, M. Weyrich, 2025)")
 	logrus.Info("Fast and memory efficient spliced read mapping to a single gene reference.")
 	logrus.Info("")
 }
