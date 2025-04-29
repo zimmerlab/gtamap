@@ -355,3 +355,15 @@ func (rv *RegionVector) GetRegionIndexContainingPosRelative(relPos int) (int, er
 
 	return -1, fmt.Errorf("relative position not found in any region")
 }
+
+// Overlaps checks if the region vector overlaps with the given region.
+func (rv *RegionVector) Overlaps(region *Region) bool {
+
+	for _, r := range rv.Regions {
+		if r.Start < region.End && r.End > region.Start {
+			return true
+		}
+	}
+
+	return false
+}

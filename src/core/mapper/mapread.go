@@ -201,7 +201,10 @@ sequenceLoop:
 			// find gaps in diagonal and fill them (matches and mismatches)
 			mismatches := make([]int, 0)
 
-			foundGap := diagonalRead.HasGaps()
+			//foundGap := diagonalRead.HasGaps()
+
+			// TODO: implement the gap finding for both read and genome gaps in the diagonal
+			diagonalGaps := computeGapsInDiagonal(diagonalRead, &result)
 
 			// resolve gaps on the same diagonal
 			// gaps can occur because of mismatches in the read and genome which prevent exact kmer matching
@@ -648,4 +651,29 @@ func determineBestSplit(
 	}
 
 	return minSplit
+}
+
+// Gaps are dis-continuous regions in the diagonal which do not contain any region already mapped.
+func computeGapsInDiagonal(diagonal *regionvector.RegionVector, result *mapperutils.ReadMatchResult) *regionvector.RegionVector {
+
+	gaps := regionvector.NewRegionVector()
+
+	for i, region := range diagonal.Regions {
+		if i == 0 {
+			continue
+		}
+
+		// found a gap in the diagonal
+		if region.Start > diagonal.Regions[i-1].End {
+			// check if there is no region already mapped in between
+			if result.MatchedRead.Overlaps(region) {
+				continue
+			}
+
+			// add the gap to the gaps vector
+			gaps.AddRegionNonOverlappingPanic(region.Start, region.End)
+		}
+	}
+
+	return gaps
 }
