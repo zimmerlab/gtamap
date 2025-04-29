@@ -30,6 +30,8 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	writer.Write(samHeader.String())
 
 	numWorkers := runtime.NumCPU()
+	// TODO: REMOVE DEBUG
+	os.Create("output.txt")
 
 	if *numThreads > 0 {
 		numWorkers = *numThreads
