@@ -44,6 +44,14 @@ func ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath string, fastaPath string
 	}
 	defer fastaFile.Close()
 
+	outFilePath := filepath.Join(outputPath, "sequences.fa")
+	outFile, errOpen := os.Create(outFilePath)
+	defer outFile.Close()
+
+	if errOpen != nil {
+		logrus.Fatal("Error creating output file (.fai)", errOpen)
+	}
+
 	for _, gene := range geneInfo {
 
 		logrus.WithFields(logrus.Fields{
@@ -52,12 +60,6 @@ func ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath string, fastaPath string
 
 		seq := dataloader.ExtractSequenceAsStringFromFasta(fastaFile, fastaIndex, gene.Contig,
 			gene.StartGenomic, gene.EndGenomic)
-
-		outFilePath := filepath.Join(outputPath, gene.GeneId+".fa")
-		outFile, errOpen := os.Create(outFilePath)
-		if errOpen != nil {
-			logrus.Fatal("Error creating output file (.fai)", errOpen)
-		}
 
 		strand := "+"
 		if !gene.IsForwardStrand {
@@ -71,9 +73,5 @@ func ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath string, fastaPath string
 			logrus.Fatal("Error writing to output file", errWrite)
 		}
 
-		err := outFile.Close()
-		if err != nil {
-			return
-		}
 	}
 }
