@@ -186,6 +186,7 @@ sequenceLoop:
 				if match.Used {
 					continue
 				}
+				// add the match to the diagonal
 				diagonalRead.AddRegionNonOverlappingPanic(match.FromRead, match.ToRead)
 				diagonalGenome.AddRegionNonOverlappingPanic(match.FromGenome, match.ToGenome)
 			}
@@ -201,20 +202,17 @@ sequenceLoop:
 			// find gaps in diagonal and fill them (matches and mismatches)
 			mismatches := make([]int, 0)
 
-			//foundGap := diagonalRead.HasGaps()
-
-			// TODO: implement the gap finding for both read and genome gaps in the diagonal
-			diagonalGaps := computeGapsInDiagonal(diagonalRead, &result)
+			gapsRead, gapsGenome := mapperutils.ComputeGapsInDiagonal(diagonalRead, diagonalGenome, &result)
 
 			// resolve gaps on the same diagonal
 			// gaps can occur because of mismatches in the read and genome which prevent exact kmer matching
 			// this is done by filling the gaps in the read and genome and counting the mismatches
 			// the regionvectors of read and genome should have the same length as they are coupled
 			// because they are part of the same diagonal (no indels, otherwise not on the same diagonal)
-			for diagonalRead.HasGaps() {
+			for i := 0; i < len(gapsRead.Regions); i++ {
 
-				gapRead := diagonalRead.GetFirstGap()
-				gapGenome := diagonalGenome.GetFirstGap()
+				gapRead := gapsRead.Regions[i]
+				gapGenome := gapsGenome.Regions[i]
 
 				logrus.WithFields(logrus.Fields{
 					"read":   gapRead,
@@ -224,6 +222,7 @@ sequenceLoop:
 				// fill the gap in the read by adding the gap as region
 				diagonalRead.AddRegionNonOverlappingPanic(gapRead.Start, gapRead.End)
 
+				// count mismatches when filling the gap and skip the match if there are too many
 				geneSeqPos := 0
 				for i := gapRead.Start - 1; i < gapRead.End-1; i++ {
 
@@ -232,21 +231,25 @@ sequenceLoop:
 					genomeByte := (*genomeIndex.Sequences[seqIndex])[gIndex]
 					geneSeqPos++
 
-					if readByte != genomeByte {
-						mismatches = append(mismatches, i)
+					// skip matches
+					if readByte == genomeByte {
+						continue
+					}
 
-						// skip this match result if there are too many mismatches
-						if exceedsMismatchConstraint(read, result) {
+					// add the mismatche to the result
+					result.MismatchesRead = append(result.MismatchesRead, i)
 
-							logrus.WithFields(logrus.Fields{
-								"mismatchPercentage":    float64(len(mismatches)) * 100 / float64(len(*read.Sequence)),
-								"maxMismatchPercentage": config.MaxMismatchPercentage(),
-								"mismatches":            mismatches,
-								"numMismatches":         len(mismatches),
-							}).Debug("too many mismatches in diagonal filling -> skip sequence")
+					// skip this match result if there are too many mismatches
+					if exceedsMismatchConstraint(read, result) {
 
-							continue sequenceLoop
-						}
+						logrus.WithFields(logrus.Fields{
+							"mismatchPercentage":    float64(len(mismatches)) * 100 / float64(len(*read.Sequence)),
+							"maxMismatchPercentage": config.MaxMismatchPercentage(),
+							"mismatches":            mismatches,
+							"numMismatches":         len(mismatches),
+						}).Debug("too many mismatches in diagonal filling -> skip sequence")
+
+						continue sequenceLoop
 					}
 				}
 
@@ -257,7 +260,7 @@ sequenceLoop:
 				diagonalHandler.ConsumeKmer(gapRead.Start, gapRead.End, gapGenome.Start, gapGenome.End)
 			}
 
-			if foundGap {
+			if len(gapsRead.Regions) > 0 {
 				logrus.WithFields(logrus.Fields{
 					"read":       diagonalRead,
 					"genome":     diagonalGenome,
@@ -265,14 +268,19 @@ sequenceLoop:
 				}).Debug("filled gap")
 			}
 
-			// add digonal to result (diagonal rv should have length 1 after gap filling)
-			result.MatchedRead.AddRegionNonOverlappingPanic(diagonalRead.GetFirstRegion().Start,
-				diagonalRead.GetLastRegion().End)
+			// add all matches in diagonal to the result
+			for i := 0; i < len(diagonalRead.Regions); i++ {
+				regionRead := diagonalRead.Regions[i]
+				regionGenome := diagonalGenome.Regions[i]
 
-			result.MatchedGenome.AddRegionNonOverlappingPanic(diagonalGenome.GetFirstRegion().Start,
-				diagonalGenome.GetLastRegion().End)
+				logrus.WithFields(logrus.Fields{
+					"read":   regionRead,
+					"genome": regionGenome,
+				}).Debug("adding diagonal match to result")
 
-			result.MismatchesRead = append(result.MismatchesRead, mismatches...)
+				result.MatchedRead.AddRegionNonOverlappingPanic(regionRead.Start, regionRead.End)
+				result.MatchedGenome.AddRegionNonOverlappingPanic(regionGenome.Start, regionGenome.End)
+			}
 
 			// remove diagonal from handler
 			diagonalHandler.ConsumeDiagonal(bestDiagonal)
@@ -651,29 +659,4 @@ func determineBestSplit(
 	}
 
 	return minSplit
-}
-
-// Gaps are dis-continuous regions in the diagonal which do not contain any region already mapped.
-func computeGapsInDiagonal(diagonal *regionvector.RegionVector, result *mapperutils.ReadMatchResult) *regionvector.RegionVector {
-
-	gaps := regionvector.NewRegionVector()
-
-	for i, region := range diagonal.Regions {
-		if i == 0 {
-			continue
-		}
-
-		// found a gap in the diagonal
-		if region.Start > diagonal.Regions[i-1].End {
-			// check if there is no region already mapped in between
-			if result.MatchedRead.Overlaps(region) {
-				continue
-			}
-
-			// add the gap to the gaps vector
-			gaps.AddRegionNonOverlappingPanic(region.Start, region.End)
-		}
-	}
-
-	return gaps
 }
