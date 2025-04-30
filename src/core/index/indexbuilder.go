@@ -63,7 +63,15 @@ func ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath string, fastaPath string
 		}
 	} else {
 		// create shared fasta file
-		outFilePath := filepath.Join(outputPath, "sequences.fa")
+		outFilePath := ""
+		if len(geneInfo) > 1 {
+			// if several gene ids are in geneInfo, name shared .fa file genes.fa
+			outFilePath = filepath.Join(outputPath, "genes.fa")
+		} else {
+			// if there's only one element in geneInfo and --splitgenes was not set,
+			// use the gene id as file name
+			outFilePath = filepath.Join(outputPath, geneInfo[0].GeneId+".fa")
+		}
 		outFile, errOpen := os.Create(outFilePath)
 		if errOpen != nil {
 			logrus.Fatal("Error creating shared output file (.fa)", errOpen)
