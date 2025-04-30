@@ -35,6 +35,9 @@ func main() {
 		Required: true,
 		Help:     "Genome annotation (GTF) file (currently only non-compressed).",
 	})
+	var separateExtraction *bool = cmdIndexPre.Flag("", "splitgenes", &argparse.Options{
+		Help: "Extract gene sequences into separate fasta files, if more than one gene id is specified in --geneids",
+	})
 	var outputDirIndexPre *string = cmdIndexPre.String("", "output", &argparse.Options{
 		Required: true,
 		Help:     "Output directory for extracted gene sequences.",
@@ -120,7 +123,7 @@ func main() {
 		}
 
 		index.ExtractGeneSequenceFromGtfAndFastaForIndex(*gtfFileIndexPre, *fastaFileIndexPre,
-			*outputDirIndexPre, geneIds)
+			*outputDirIndexPre, geneIds, *separateExtraction)
 
 		logrus.Info("Done")
 
