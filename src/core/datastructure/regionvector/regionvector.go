@@ -356,14 +356,34 @@ func (rv *RegionVector) GetRegionIndexContainingPosRelative(relPos int) (int, er
 	return -1, fmt.Errorf("relative position not found in any region")
 }
 
-// Overlaps checks if the region vector overlaps with the given region.
-func (rv *RegionVector) Overlaps(region *Region) bool {
+// OverlapsByRegion checks if the region vector overlaps with the given region.
+func (rv *RegionVector) OverlapsByRegion(region *Region) bool {
+	return rv.Overlaps(region.Start, region.End)
+}
 
+// Overlaps checks if the region vector overlaps with the given start and end positions.
+func (rv *RegionVector) Overlaps(start int, end int) bool {
 	for _, r := range rv.Regions {
-		if r.Start < region.End && r.End > region.Start {
+		if r.Start < end && r.End > start {
 			return true
 		}
 	}
-
 	return false
+}
+
+// Equals checks if the region vector is equal to another region vector.
+// Both regions vectors are taken as is and are not sorted by this function.
+// Even if the regions are the same but in different order, the function will return false.
+func (rv *RegionVector) Equals(other *RegionVector) bool {
+	if len(rv.Regions) != len(other.Regions) {
+		return false
+	}
+
+	for i := 0; i < len(rv.Regions); i++ {
+		if rv.Regions[i].Start != other.Regions[i].Start || rv.Regions[i].End != other.Regions[i].End {
+			return false
+		}
+	}
+
+	return true
 }
