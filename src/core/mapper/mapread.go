@@ -199,9 +199,6 @@ sequenceLoop:
 				"gaps":       len(diagonalRead.Regions) - 1,
 			}).Debug("found best diagonal")
 
-			// find gaps in diagonal and fill them (matches and mismatches)
-			mismatches := make([]int, 0)
-
 			gapsRead, gapsGenome := mapperutils.ComputeGapsInDiagonal(diagonalRead, diagonalGenome, &result)
 
 			// resolve gaps on the same diagonal
@@ -243,10 +240,10 @@ sequenceLoop:
 					if exceedsMismatchConstraint(read, result) {
 
 						logrus.WithFields(logrus.Fields{
-							"mismatchPercentage":    float64(len(mismatches)) * 100 / float64(len(*read.Sequence)),
+							"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
 							"maxMismatchPercentage": config.MaxMismatchPercentage(),
-							"mismatches":            mismatches,
-							"numMismatches":         len(mismatches),
+							"mismatches":            result.MismatchesRead,
+							"numMismatches":         len(result.MismatchesRead),
 						}).Debug("too many mismatches in diagonal filling -> skip sequence")
 
 						continue sequenceLoop
@@ -264,7 +261,7 @@ sequenceLoop:
 				logrus.WithFields(logrus.Fields{
 					"read":       diagonalRead,
 					"genome":     diagonalGenome,
-					"mismatches": mismatches,
+					"mismatches": result.MismatchesRead,
 				}).Debug("filled gap")
 			}
 
@@ -478,13 +475,19 @@ sequenceLoop:
 
 				genomeSequence := (*genomeIndex.Sequences[seqIndex])[startGenome : startGenome+len(readSequence)]
 
+				numMismatches := 0
+
 				// trying to extend the read to the left
 				for i := 0; i < extensionLength; i++ {
 
-					// add the mismatches to the result
-					if readSequence[i] != genomeSequence[i] {
-						result.MismatchesRead = append(result.MismatchesRead, startRead+i)
+					// skip matches
+					if readSequence[i] == genomeSequence[i] {
+						continue
 					}
+
+					// add the mismatches to the result
+					result.MismatchesRead = append(result.MismatchesRead, startRead+i)
+					numMismatches++
 
 					// skip this match result if there are too many mismatches
 					if exceedsMismatchConstraint(read, result) {
@@ -498,9 +501,23 @@ sequenceLoop:
 					}
 				}
 
+				logrus.WithFields(logrus.Fields{
+					"startRead":     startRead,
+					"endRead":       endRead,
+					"startGenome":   startGenome,
+					"endGenome":     startGenome + extensionLength,
+					"numMismatches": numMismatches,
+				}).Debug("extended match to left (linear)")
+
 				result.MatchedRead.AddRegionNonOverlappingPanic(startRead, endRead)
 				result.MatchedGenome.AddRegionNonOverlappingPanic(startGenome, startGenome+extensionLength)
 			}
+
+			logrus.WithFields(logrus.Fields{
+				"read":       result.MatchedRead,
+				"genome":     result.MatchedGenome,
+				"mismatches": result.MismatchesRead,
+			}).Debug("match after left extension")
 
 			// there are unmatched positions in the back of the read
 			if result.MatchedRead.GetLastRegion().End < len(*read.Sequence) {
