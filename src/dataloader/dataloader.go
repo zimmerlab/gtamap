@@ -130,6 +130,11 @@ func ReadFasta(fastaFile *os.File) ([]*FastaEntry, error) {
 
 	entries := make([]*FastaEntry, 0)
 
+	// default buffer of 64KB is too small for long fasta seqs
+	const maxCapacity = 10 * 1024 * 1024 // 10 MB
+	buf := make([]byte, maxCapacity)
+	scanner.Buffer(buf, maxCapacity)
+
 	var header string
 	var sequence []byte
 
