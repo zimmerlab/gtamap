@@ -161,7 +161,11 @@ func main() {
 
 		writer := datawriter.InitFromFile(outputFileMap)
 
-		mapper.MapAll(genomeIndex, reader, writer, numThreads)
+		filterFile, _ := os.Create(outputFileMap.Name() + ".filter")
+		filterWriter := datawriter.InitFromFile(filterFile)
+		filterFile.WriteString("readIds")
+
+		mapper.MapAll(genomeIndex, reader, writer, numThreads, filterWriter)
 
 	} else {
 		fmt.Println(parser.Usage("no valid command supplied"))

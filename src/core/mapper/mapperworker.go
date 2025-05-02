@@ -14,7 +14,8 @@ func MapperWorker(workerId int, genomeIndex *index.GenomeIndex,
 	secondPassChan *mapperutils.SecondPassChannel,
 	outputChan chan<- string,
 	progressChan chan<- bool,
-	timerChan chan<- *timer.Timer) {
+	timerChan chan<- *timer.Timer,
+	filterChan chan<- string) {
 
 	defer wg.Done()
 
@@ -29,7 +30,7 @@ func MapperWorker(workerId int, genomeIndex *index.GenomeIndex,
 			"task":     task.ID,
 		}).Debug("Processing task")
 
-		result, isMappable := MapReadPair(task.ReadPair, genomeIndex, secondPassChan, timerChan)
+		result, isMappable := MapReadPair(task.ReadPair, genomeIndex, secondPassChan, timerChan, filterChan)
 
 		if isMappable {
 			outputChan <- result

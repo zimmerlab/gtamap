@@ -15,7 +15,7 @@ import (
 
 func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	secondPassChan *mapperutils.SecondPassChannel,
-	timerChannel chan<- *timer.Timer) (string, bool) {
+	timerChannel chan<- *timer.Timer, filterChannel chan<- string) (string, bool) {
 
 	keepFw := Filter(readPair.ReadR1.Sequence, genomeIndex)
 	keepRw := Filter(readPair.ReadR2.Sequence, genomeIndex)
@@ -28,6 +28,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	if !keepFw || !keepRw {
 		return "", false
 	}
+	filterChannel <- readPair.ReadR1.Header
 
 	resultFw, isMappableFw := MapRead(readPair.ReadR1, genomeIndex)
 	resultRv, isMappableRv := MapRead(readPair.ReadR2, genomeIndex)

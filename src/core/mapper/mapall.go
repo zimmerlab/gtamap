@@ -15,7 +15,7 @@ import (
 )
 
 func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawriter.Writer,
-	numThreads *int) {
+	numThreads *int, filterWriter *datawriter.Writer) {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
@@ -67,6 +67,12 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	timerChan := make(chan *timer.Timer)
 	// contains information about the progress of the mapping
 	progressChan := make(chan bool)
+	// contains read ids which survived filtering
+	filterChan := make(chan string)
+
+	var waitgroupFilter sync.WaitGroup
+	waitgroupFilter.Add(1)
+	go FilterWorker(filterChan, &waitgroupFilter, filterWriter)
 
 	var waitgroupProgress sync.WaitGroup
 	waitgroupProgress.Add(1)
@@ -87,7 +93,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	// start the mapping worker goroutine pool
 	for i := 0; i < numWorkers; i++ {
 		wgFirstPass.Add(1)
-		go MapperWorker(i, genomeIndex, &wgFirstPass, taskChan, secondPassChan, outputChan, progressChan, timerChan)
+		go MapperWorker(i, genomeIndex, &wgFirstPass, taskChan, secondPassChan, outputChan, progressChan, timerChan, filterChan)
 	}
 
 	wgSecondPass.Add(1)
