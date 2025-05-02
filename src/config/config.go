@@ -85,3 +85,5 @@ func OutputIncludeDetailedCigar() bool {
 func ProperPairLevel() uint8 {
 	return properPairLevel
 }
+
+var FilterThreshold = 8

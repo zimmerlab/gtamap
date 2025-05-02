@@ -95,11 +95,21 @@ func main() {
 		Default:  -1,
 	})
 
+	// TODO: remove
+	var filterThreshold *int = cmdMap.Int("", "filter", &argparse.Options{
+		Required: false,
+		Help:     "Filter Threshold (default: 8)",
+		Default:  8,
+	})
+
 	err := parser.Parse(os.Args)
 	if err != nil {
 		fmt.Print(parser.Usage(err))
 		return
 	}
+
+	// TODO: remove
+	config.FilterThreshold = *filterThreshold
 
 	logrus.SetFormatter(&logrus.TextFormatter{
 		FullTimestamp: true,

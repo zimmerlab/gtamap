@@ -53,5 +53,5 @@ func Filter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
 	//fmt.Println("numMatchingFw: ", numMatchingFw)
 	//fmt.Println("numMatchingRw: ", numMatchingRw)
 
-	return numMatching >= 8
+	return numMatching >= config.FilterThreshold
 }
