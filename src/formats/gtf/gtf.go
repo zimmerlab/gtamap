@@ -60,6 +60,7 @@ func ReadGenesFromGtfUsingPath(filePath string, geneIds map[string]struct{}) []*
 
 	file, err := os.Open(filePath)
 	if err != nil {
+		panic("Could not read gtf file. Make sure it exists!")
 		return nil
 	}
 	defer file.Close()
