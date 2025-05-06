@@ -259,6 +259,10 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 		qualRv = string(utils.ReverseBytes(*readPair.ReadR2.Quality))
 	}
 
+	// SEQ SPECIFIC INFO (which seq does the read map to)
+	seqInfoFw := fmt.Sprintf("SI:i:%d", resultFw[0].SequenceIndex)
+	seqInfoRv := fmt.Sprintf("SI:i:%d", resultRv[0].SequenceIndex)
+
 	// ATTRIBUTES
 
 	var builder strings.Builder
@@ -295,6 +299,9 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	builder.WriteString("\t")
 	// QUAL
 	builder.WriteString(qualFw)
+	builder.WriteString("\t")
+	// SID
+	builder.WriteString(seqInfoFw)
 	builder.WriteString("\n")
 
 	// R2 READ
@@ -331,6 +338,9 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	builder.WriteString("\t")
 	// QUAL
 	builder.WriteString(qualRv)
+	builder.WriteString("\t")
+	// SID
+	builder.WriteString(seqInfoRv)
 	builder.WriteString("\n")
 
 	return builder.String(), true
