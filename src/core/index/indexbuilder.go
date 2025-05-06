@@ -11,7 +11,7 @@ import (
 )
 
 func ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath string, fastaPath string, outputPath string,
-	geneIds map[string]struct{}) {
+	geneIds map[string]struct{}, separateExtraction bool) {
 
 	fastaIndexPath := fastaPath + ".fai"
 
@@ -44,36 +44,67 @@ func ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath string, fastaPath string
 	}
 	defer fastaFile.Close()
 
-	for _, gene := range geneInfo {
+	if separateExtraction {
+		// write each gene to separate fa file
+		for _, gene := range geneInfo {
+			outFilePath := filepath.Join(outputPath, gene.GeneId+".fa")
+			outFile, errOpen := os.Create(outFilePath)
 
-		logrus.WithFields(logrus.Fields{
-			"geneId": gene.GeneId,
-		}).Info("Extracting sequence information")
+			if errOpen != nil {
+				logrus.Fatal("Error creating separate output file (.fa)", errOpen)
+			}
 
-		seq := dataloader.ExtractSequenceAsStringFromFasta(fastaFile, fastaIndex, gene.Contig,
-			gene.StartGenomic, gene.EndGenomic)
+			logrus.WithFields(logrus.Fields{
+				"separated fasta": outputPath,
+			}).Info("Creating a separate fasta file")
 
-		outFilePath := filepath.Join(outputPath, gene.GeneId+".fa")
+			writeToFasta(gene, outFile, fastaFile, fastaIndex)
+			outFile.Close()
+		}
+	} else {
+		// create shared fasta file
+		outFilePath := ""
+		if len(geneInfo) > 1 {
+			// if several gene ids are in geneInfo, name shared .fa file genes.fa
+			outFilePath = filepath.Join(outputPath, "genes.fa")
+		} else {
+			// if there's only one element in geneInfo and --splitgenes was not set,
+			// use the gene id as file name
+			outFilePath = filepath.Join(outputPath, geneInfo[0].GeneId+".fa")
+		}
 		outFile, errOpen := os.Create(outFilePath)
 		if errOpen != nil {
-			logrus.Fatal("Error creating output file (.fai)", errOpen)
+			logrus.Fatal("Error creating shared output file (.fa)", errOpen)
 		}
 
-		strand := "+"
-		if !gene.IsForwardStrand {
-			strand = "-"
-		}
+		logrus.WithFields(logrus.Fields{
+			"shared fasta": outputPath,
+		}).Info("Creating a shared fasta file")
 
-		_, errWrite := outFile.WriteString(fmt.Sprintf(">%s\t%s\t%s\t%d\t%d\n%s\n",
-			gene.GeneId, gene.Contig, strand, gene.StartGenomic, gene.EndGenomic, seq))
-
-		if errWrite != nil {
-			logrus.Fatal("Error writing to output file", errWrite)
+		for _, gene := range geneInfo {
+			writeToFasta(gene, outFile, fastaFile, fastaIndex)
 		}
+		outFile.Close()
+	}
+}
 
-		err := outFile.Close()
-		if err != nil {
-			return
-		}
+func writeToFasta(gene *gtf.GeneBasic, outFile *os.File, fastaFile *os.File, fastaIndex *fasta.Index) {
+	logrus.WithFields(logrus.Fields{
+		"geneId": gene.GeneId,
+	}).Info("Extracting sequence information")
+
+	seq := dataloader.ExtractSequenceAsStringFromFasta(fastaFile, fastaIndex, gene.Contig,
+		gene.StartGenomic, gene.EndGenomic)
+
+	strand := "+"
+	if !gene.IsForwardStrand {
+		strand = "-"
+	}
+
+	_, errWrite := outFile.WriteString(fmt.Sprintf(">%s\t%s\t%s\t%d\t%d\n%s\n",
+		gene.GeneId, gene.Contig, strand, gene.StartGenomic, gene.EndGenomic, seq))
+
+	if errWrite != nil {
+		logrus.Fatal("Error writing to output file", errWrite)
 	}
 }
