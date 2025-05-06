@@ -85,3 +85,6 @@ func OutputIncludeDetailedCigar() bool {
 func ProperPairLevel() uint8 {
 	return properPairLevel
 }
+
+// TODO: TESTING REMOVE
+var OutSAMFile string

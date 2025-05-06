@@ -4,6 +4,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/secondpass"
 	"github.com/KleinSamuel/gtamap/src/core/timer"
 	"github.com/KleinSamuel/gtamap/src/datawriter"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
@@ -98,19 +99,20 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 
 	logrus.Info("Done with first pass mapping")
 
+	close(outputChan)
+
+	writer.Close()
+
 	secondPassChan.Close()
 
+	secondpass.InferIntrons(config.OutSAMFile)
 	go SecondPassWorker(secondPassChan, &wgSecondPass)
 
 	wgSecondPass.Wait()
-
-	close(outputChan)
 	close(timerChan)
 
 	waitgroupWriter.Wait()
 	waitGroupTimer.Wait()
-
-	writer.Close()
 
 	totalDuration := time.Since(timerStartTotal)
 

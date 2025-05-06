@@ -148,6 +148,8 @@ func main() {
 
 		writer := datawriter.InitFromFile(outputFileMap)
 
+		config.OutSAMFile = outputFileMap.Name()
+
 		mapper.MapAll(genomeIndex, reader, writer, numThreads)
 
 	} else {
