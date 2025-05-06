@@ -1,7 +1,16 @@
 package main
 
+// WARN: This Branch contains useful functions for extracting gene specific intron coordinates using the
+// already mapped reads.
+// For now this branch will serve as a storage of this feature.
+// We might be able to adapt this later.
+// SO DO NOT DELETE THIS BRANCH
+
 import (
 	"fmt"
+	"os"
+	"strings"
+
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper"
@@ -9,8 +18,6 @@ import (
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/akamensky/argparse"
 	"github.com/sirupsen/logrus"
-	"os"
-	"strings"
 )
 
 func printBanner() {
@@ -23,7 +30,6 @@ func printBanner() {
 }
 
 func main() {
-
 	parser := argparse.NewParser("gtamap", "Gene-centric spliced read mapping")
 
 	var cmdIndexPre *argparse.Command = parser.NewCommand("index-pre", "Extract gene sequences from genome.")
@@ -50,11 +56,11 @@ func main() {
 	})
 
 	var cmdIndex *argparse.Command = parser.NewCommand("index", "Build the GTAMap index (.gtai).")
-	var fastaFile *os.File = cmdIndex.File("", "fasta", os.O_RDONLY, 0600, &argparse.Options{
+	var fastaFile *os.File = cmdIndex.File("", "fasta", os.O_RDONLY, 0o600, &argparse.Options{
 		Required: true,
 		Help:     "Nucleotide sequences (FASTA) file.",
 	})
-	var outputFileIndex *os.File = cmdIndex.File("", "output", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600, &argparse.Options{
+	var outputFileIndex *os.File = cmdIndex.File("", "output", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600, &argparse.Options{
 		Required: true,
 		Help:     "Output file (.gtai).",
 	})
@@ -65,19 +71,19 @@ func main() {
 	})
 
 	var cmdMap *argparse.Command = parser.NewCommand("map", "Map reads to the GTAMap index.")
-	var indexFile *os.File = cmdMap.File("", "index", os.O_RDONLY, 0600, &argparse.Options{
+	var indexFile *os.File = cmdMap.File("", "index", os.O_RDONLY, 0o600, &argparse.Options{
 		Required: true,
 		Help:     "GTAMap index (.gtai) file",
 	})
-	var fastqFwFile *os.File = cmdMap.File("", "r1", os.O_RDONLY, 0600, &argparse.Options{
+	var fastqFwFile *os.File = cmdMap.File("", "r1", os.O_RDONLY, 0o600, &argparse.Options{
 		Required: true,
 		Help:     "FASTQ file containing the forward reads.",
 	})
-	var fastqRwFile *os.File = cmdMap.File("", "r2", os.O_RDONLY, 0600, &argparse.Options{
+	var fastqRwFile *os.File = cmdMap.File("", "r2", os.O_RDONLY, 0o600, &argparse.Options{
 		Required: false,
 		Help:     "FASTQ file containing the reverse reads.",
 	})
-	var outputFileMap *os.File = cmdMap.File("", "output", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600, &argparse.Options{
+	var outputFileMap *os.File = cmdMap.File("", "output", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600, &argparse.Options{
 		Required: true,
 		Help:     "Output file (.gtai).",
 	})
