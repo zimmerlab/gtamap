@@ -100,6 +100,45 @@ func main() {
 		Default:  -1,
 	})
 
+	var cmdParalogePre *argparse.Command = parser.NewCommand("paraloge", "Extract known paraloge genes from ENSEMBL Database and prepare paraloge.csv for main target index extension.")
+	var geneIdsParalogePre *string = cmdParalogePre.String("", "geneids", &argparse.Options{
+		Required: false,
+		Help:     "Query Gene IDs for extracting paraloge genes from DB (comma-separated).",
+	})
+	var indexDirParalogePre *string = cmdParalogePre.String("", "indexdir", &argparse.Options{
+		Required: false,
+		Help:     "Target directory for .gai index files of paraloge genes.",
+		Default:  "index",
+	})
+	var fastaDirParalogePre *string = cmdParalogePre.String("", "fastadir", &argparse.Options{
+		Required: false,
+		Help:     "Target directory for .fa files of paraloge genes.",
+		Default:  "fasta_in",
+	})
+	var speciesParalogePre *string = cmdParalogePre.String("", "species", &argparse.Options{
+		Required: false,
+		Help:     "Corresponding species of target genes. Species name needs to exist in https://www.ensembl.org/index.html",
+		Default:  "human",
+	})
+	var fastaFileParalogePre *string = cmdParalogePre.String("", "fasta", &argparse.Options{
+		Required: true,
+		Help:     "Nucleotide sequences (FASTA) file (currently only non-compressed). Note: A corresponding .fai file needs to be in the same dir as the genome.fa file.",
+	})
+	var gtfFileParalogePre *string = cmdParalogePre.String("", "gtf", &argparse.Options{
+		Required: true,
+		Help:     "Genome annotation (GTF) file (currently only non-compressed).",
+	})
+	var paralogeMetaOutParalogePre *string = cmdParalogePre.String("", "meta", &argparse.Options{
+		Required: false,
+		Help:     "Genome annotation (GTF) file (currently only non-compressed).",
+		Default:  "paraloges.csv",
+	})
+	var logLevelParalogePre *string = cmdParalogePre.Selector("", "loglevel", []string{"ERROR", "INFO", "DEBUG"}, &argparse.Options{
+		Required: false,
+		Help:     "Log output level.",
+		Default:  "INFO",
+	})
+
 	err := parser.Parse(os.Args)
 	if err != nil {
 		fmt.Print(parser.Usage(err))
@@ -164,6 +203,67 @@ func main() {
 		writer := datawriter.InitFromFile(outputFileMap)
 
 		mapper.MapAll(genomeIndex, reader, writer, numThreads)
+
+	} else if cmdParalogePre.Happened() {
+		level, _ := logrus.ParseLevel(*logLevelParalogePre)
+		logrus.SetLevel(level)
+
+		printBanner()
+		logrus.Info("Scanning DB for paraloges of specified target IDs.")
+
+		// parsing gene ids
+		targetGeneIds := make([]string, 0)
+		if *geneIdsParalogePre != "" {
+			genes := strings.Split(*geneIdsParalogePre, ",")
+			for _, gene := range genes {
+				targetGeneIds = append(targetGeneIds, gene)
+			}
+		}
+		// I. get paraloge seqs per target gene
+		targetParaloges := extraction.GetParaloges(targetGeneIds, *speciesParalogePre)
+
+		// II. extract all target genes into separate .fa files in '--fastadir'
+		for target, paraloges := range targetParaloges {
+			logrus.Infof("Extracting sequences for paraloges of %s", target)
+			index.ExtractGeneSequenceFromGtfAndFastaForIndex(*gtfFileParalogePre, *fastaFileParalogePre,
+				*fastaDirParalogePre, paraloges, true)
+		}
+
+		// III. read in all seqs in '--fastadir' and serialize index into '--indexdir' for each paraloge seq
+		indexPaths := make(map[string][]string)
+		for target, paraloges := range targetParaloges {
+			for paraloge, _ := range paraloges {
+				err := os.MkdirAll(*indexDirParalogePre, 0755)
+				if err != nil {
+					logrus.Fatalf("Something went wrong creating dir %s: %s", *indexDirParalogePre, err)
+				}
+
+				// create and format index file
+				paralogeIndexName := fmt.Sprintf("%s.gtai", paraloge)
+				logrus.Infof("Creating index for paraloge %s of target region %s in: %s ", paraloge, target, paralogeIndexName)
+				paralogeIndexPath := filepath.Join(*indexDirParalogePre, paralogeIndexName)
+				paralogeIndexFile, err := os.Create(paralogeIndexPath)
+				if err != nil {
+					logrus.Fatalf("Error creating paraloge index file: %s: %s", paralogeIndexPath, err)
+				}
+				indexPaths[target] = append(indexPaths[target], paralogeIndexPath)
+
+				// open fa file
+				paralogeFastaName := fmt.Sprintf("%s.fa", paraloge)
+				paralogeFastaPath := filepath.Join(*fastaDirParalogePre, paralogeFastaName)
+				paralogeFastaFile, err := os.Open(paralogeFastaPath)
+				if err != nil {
+					fmt.Println(err)
+					logrus.Fatalf("Error reading paraloge fa file: %s", paralogeFastaPath)
+				}
+
+				index.BuildAndSerializeGenomeIndex(paralogeFastaFile, paralogeIndexFile)
+			}
+		}
+
+		// IV. write paraloges.csv
+		metaOut := fmt.Sprintf("%s.csv", *paralogeMetaOutParalogePre)
+		extraction.WriteParalogesPre(metaOut, indexPaths)
 
 	} else {
 		fmt.Println(parser.Usage("no valid command supplied"))
