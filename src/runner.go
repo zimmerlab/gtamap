@@ -84,6 +84,10 @@ func main() {
 		Required: true,
 		Help:     "Output file (.gtai).",
 	})
+	var paralogeFileMap *os.File = cmdMap.File("", "paraloges", os.O_RDONLY, 0600, &argparse.Options{
+		Required: false,
+		Help:     "Paraloge region meta file for target regions.",
+	})
 	var logLevelMap *string = cmdMap.Selector("", "loglevel", []string{"ERROR", "INFO", "DEBUG"}, &argparse.Options{
 		Required: false,
 		Help:     "log output level",
@@ -146,6 +150,7 @@ func main() {
 		logrus.Info("Mapping reads to given index")
 
 		genomeIndex := index.ReadGenomeIndexByFile(indexFile)
+		genomeIndex.LoadParaloges(paralogeFileMap)
 
 		reader := fastq.InitFromFiles(fastqFwFile, fastqRwFile)
 
