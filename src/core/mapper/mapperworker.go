@@ -2,6 +2,7 @@ package mapper
 
 import (
 	"github.com/KleinSamuel/gtamap/src/core/index"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/mappedreadpair"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/core/timer"
 	"github.com/sirupsen/logrus"
@@ -12,7 +13,7 @@ func MapperWorker(workerId int, genomeIndex *index.GenomeIndex,
 	wg *sync.WaitGroup,
 	taskChan <-chan MappingTask,
 	secondPassChan *mapperutils.FourthPassChannel,
-	outputChan chan<- string,
+	resultChan chan<- *mappedreadpair.ReadPairMatchResult,
 	progressChan chan<- bool,
 	timerChan chan<- *timer.Timer) {
 
@@ -29,10 +30,12 @@ func MapperWorker(workerId int, genomeIndex *index.GenomeIndex,
 			"task":     task.ID,
 		}).Debug("Processing task")
 
-		result, isMappable := MapReadPair(task.ReadPair, genomeIndex, secondPassChan, timerChan)
+		mappingReadPairs, isMappable := MapReadPair(task.ReadPair, genomeIndex, secondPassChan, timerChan)
 
 		if isMappable {
-			outputChan <- result
+			for _, maps := range mappingReadPairs {
+				resultChan <- &maps
+			}
 		}
 
 		progressChan <- true

@@ -3,6 +3,7 @@ package mapper
 import (
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/index"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/mappedreadpair"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/core/timer"
 	"github.com/KleinSamuel/gtamap/src/datawriter"
@@ -63,6 +64,8 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	fourthPassChan := mapperutils.NewFourthPassChannel()
 	// contains the string results of the mapping
 	outputChan := make(chan string)
+	// contains the results of the mapping
+	resultChan := make(chan *mappedreadpair.ReadPairMatchResult)
 	// contains information about the duration of each step
 	timerChan := make(chan *timer.Timer)
 	// contains information about the progress of the mapping
@@ -76,6 +79,10 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	waitgroupWriter.Add(1)
 	go OutputWorker(outputChan, &waitgroupWriter, writer)
 
+	var waitgroupMappings sync.WaitGroup
+	waitgroupMappings.Add(1)
+	go PostMappingWorker(resultChan, &waitgroupMappings, outputChan)
+
 	var waitGroupTimer sync.WaitGroup
 	waitGroupTimer.Add(1)
 	go TimerWorker(timerChan, &waitGroupTimer)
@@ -87,7 +94,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	// start the mapping worker goroutine pool
 	for i := 0; i < numWorkers; i++ {
 		wgFirstPass.Add(1)
-		go MapperWorker(i, genomeIndex, &wgFirstPass, taskChan, fourthPassChan, outputChan, progressChan, timerChan)
+		go MapperWorker(i, genomeIndex, &wgFirstPass, taskChan, fourthPassChan, resultChan, progressChan, timerChan)
 	}
 
 	wgFourthPass.Add(1)
@@ -104,6 +111,8 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 
 	wgFourthPass.Wait()
 
+	close(resultChan)
+	waitgroupMappings.Wait()
 	close(outputChan)
 	close(timerChan)
 

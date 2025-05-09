@@ -2,6 +2,7 @@ package mapper
 
 import (
 	"github.com/KleinSamuel/gtamap/src/core/index"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/mappedreadpair"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/core/timer"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
@@ -15,7 +16,7 @@ import (
 
 func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	fourthPassChan *mapperutils.FourthPassChannel,
-	timerChannel chan<- *timer.Timer) (string, bool) {
+	timerChannel chan<- *timer.Timer) ([]mappedreadpair.ReadPairMatchResult, bool) {
 
 	keepFw := Filter(readPair.ReadR1.Sequence, genomeIndex)
 	keepRw := Filter(readPair.ReadR2.Sequence, genomeIndex)
@@ -26,7 +27,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	}).Debug("Filter results")
 
 	if !keepFw || !keepRw {
-		return "", false
+		return nil, false
 	}
 
 	resultFw, isMappableFw := MapRead(readPair.ReadR1, genomeIndex)
@@ -47,7 +48,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 			"num resultsFw": len(resultFw),
 			"num resultsRv": len(resultRv),
 		}).Debug("readpair not mappable")
-		return "", false
+		return nil, false
 	}
 
 	needFourthPass := false
@@ -71,7 +72,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 			ResultFw: &resultFw,
 			ResultRv: &resultRv,
 		})
-		return "", false
+		return nil, false
 	}
 
 	if len(resultFw) > 1 || len(resultRv) > 1 {
@@ -112,17 +113,24 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 		//
 		//return builder.String(), true
 
-		return "", false
+		return nil, false
 	}
 
 	// multimapping was handled before so length is always 1
-	resFw := resultFw[0]
-	resRv := resultRv[0]
+	//postprocessReadMatch(genomeIndex, readPair.ReadR1, &resFw)
+	//postprocessReadMatch(genomeIndex, readPair.ReadR2, &resRv)
 
-	postprocessReadMatch(genomeIndex, readPair.ReadR1, &resFw)
-	postprocessReadMatch(genomeIndex, readPair.ReadR2, &resRv)
-
-	return FormatMappedReadPairToSAM(resFw, resRv, readPair, genomeIndex)
+	//return FormatMappedReadPairToSAM(resFw, resRv, readPair, genomeIndex)
+	mappedReadPairs := make([]mappedreadpair.ReadPairMatchResult, 0)
+	for i, _ := range resultFw {
+		mappedReadPairs = append(mappedReadPairs, mappedreadpair.ReadPairMatchResult{
+			ReadPair: readPair,
+			Fw:       &resultFw[i],
+			Rv:       &resultRv[i],
+			Index:    genomeIndex,
+		})
+	}
+	return mappedReadPairs, true
 }
 
 func FormatMappedReadPairToSAM(resFw mapperutils.ReadMatchResult, resRv mapperutils.ReadMatchResult, readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex) (string, bool) {
