@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/KleinSamuel/gtamap/src/config"
+	"github.com/KleinSamuel/gtamap/src/core/extraction"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper"
 	"github.com/KleinSamuel/gtamap/src/datawriter"
@@ -10,6 +11,7 @@ import (
 	"github.com/akamensky/argparse"
 	"github.com/sirupsen/logrus"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
