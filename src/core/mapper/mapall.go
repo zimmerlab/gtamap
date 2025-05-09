@@ -60,7 +60,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	// contains the read pairs that need to be mapped
 	taskChan := make(chan MappingTask, numWorkers*bufferSizeMultiplier)
 	// contains all read pairs that could not be mapped in the first pass
-	secondPassChan := mapperutils.NewSecondPassChannel()
+	fourthPassChan := mapperutils.NewFourthPassChannel()
 	// contains the string results of the mapping
 	outputChan := make(chan string)
 	// contains information about the duration of each step
@@ -82,15 +82,15 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 
 	// wait group that keeps track of the mapping goroutines that are still running
 	var wgFirstPass sync.WaitGroup
-	var wgSecondPass sync.WaitGroup
+	var wgFourthPass sync.WaitGroup
 
 	// start the mapping worker goroutine pool
 	for i := 0; i < numWorkers; i++ {
 		wgFirstPass.Add(1)
-		go MapperWorker(i, genomeIndex, &wgFirstPass, taskChan, secondPassChan, outputChan, progressChan, timerChan)
+		go MapperWorker(i, genomeIndex, &wgFirstPass, taskChan, fourthPassChan, outputChan, progressChan, timerChan)
 	}
 
-	wgSecondPass.Add(1)
+	wgFourthPass.Add(1)
 
 	go MappingTaskProducer(reader, taskChan, maxTasks, specificQname)
 
@@ -98,11 +98,11 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 
 	logrus.Info("Done with first pass mapping")
 
-	secondPassChan.Close()
+	fourthPassChan.Close()
 
-	go SecondPassWorker(secondPassChan, &wgSecondPass)
+	go FourthPassWorker(fourthPassChan, &wgFourthPass)
 
-	wgSecondPass.Wait()
+	wgFourthPass.Wait()
 
 	close(outputChan)
 	close(timerChan)

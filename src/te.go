@@ -11,7 +11,7 @@ func main() {
 	fmt.Println("hello")
 
 	taskChan := make(chan int)
-	secondPassChan := mapperutils.NewSecondPassChannel()
+	secondPassChan := mapperutils.NewFourthPassChannel()
 
 	go Producer(taskChan)
 
@@ -52,7 +52,7 @@ func Producer(taskChan chan<- int) {
 	fmt.Println("done producing")
 }
 
-func ConsumerFirst(id int, taskChan <-chan int, secondPassChan *mapperutils.SecondPassChannel,
+func ConsumerFirst(id int, taskChan <-chan int, secondPassChan *mapperutils.FourthPassChannel,
 	wg *sync.WaitGroup) {
 
 	defer wg.Done()
@@ -61,7 +61,7 @@ func ConsumerFirst(id int, taskChan <-chan int, secondPassChan *mapperutils.Seco
 		fmt.Println("task: ", task)
 
 		if task%2 == 0 {
-			secondPassChan.Send(&mapperutils.SecondPassTask{
+			secondPassChan.Send(&mapperutils.FourthPassTask{
 				ReadPair: nil,
 				ResultFw: nil,
 				ResultRv: nil,
@@ -72,7 +72,7 @@ func ConsumerFirst(id int, taskChan <-chan int, secondPassChan *mapperutils.Seco
 	fmt.Println("producer done", id)
 }
 
-func ConsumerSecond(secondPassChan *mapperutils.SecondPassChannel, wg *sync.WaitGroup) {
+func ConsumerSecond(secondPassChan *mapperutils.FourthPassChannel, wg *sync.WaitGroup) {
 	fmt.Println("ConsumerSecond")
 
 	defer wg.Done()

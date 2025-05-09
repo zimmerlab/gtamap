@@ -128,7 +128,7 @@ sequenceLoop:
 			MatchedRead:    regionvector.NewRegionVector(),
 			MatchedGenome:  regionvector.NewRegionVector(),
 			MismatchesRead: make([]int, 0),
-			SecondPass:     false,
+			FourthPass:     false,
 		}
 
 		diagonalHandler := mapperutils.NewDiagonalHandlerWithData(sequenceMatches.MatchesPerDiagonal)
@@ -418,7 +418,7 @@ sequenceLoop:
 
 				// add to second pass if there are too many mismatches
 				if numMismatches > 5 {
-					result.SecondPass = true
+					result.FourthPass = true
 					results = append(results, result)
 					continue sequenceLoop
 				}
@@ -476,7 +476,7 @@ sequenceLoop:
 
 				// add to second pass if there are too many mismatches
 				if numMismatches > 5 {
-					result.SecondPass = true
+					result.FourthPass = true
 					results = append(results, result)
 					continue sequenceLoop
 				}

@@ -11,7 +11,7 @@ import (
 func MapperWorker(workerId int, genomeIndex *index.GenomeIndex,
 	wg *sync.WaitGroup,
 	taskChan <-chan MappingTask,
-	secondPassChan *mapperutils.SecondPassChannel,
+	secondPassChan *mapperutils.FourthPassChannel,
 	outputChan chan<- string,
 	progressChan chan<- bool,
 	timerChan chan<- *timer.Timer) {

@@ -14,7 +14,7 @@ import (
 )
 
 func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
-	secondPassChan *mapperutils.SecondPassChannel,
+	fourthPassChan *mapperutils.FourthPassChannel,
 	timerChannel chan<- *timer.Timer) (string, bool) {
 
 	keepFw := Filter(readPair.ReadR1.Sequence, genomeIndex)
@@ -50,23 +50,23 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 		return "", false
 	}
 
-	needSecondPass := false
+	needFourthPass := false
 
 	for i, resFw := range resultFw {
-		if resFw.SecondPass {
-			logrus.Debug("Second pass required for forward read: ", i)
-			needSecondPass = true
+		if resFw.FourthPass {
+			logrus.Debug("Fourth pass required for forward read: ", i)
+			needFourthPass = true
 		}
 	}
 	for i, resRv := range resultRv {
-		if resRv.SecondPass {
-			logrus.Debug("Second pass required for reverse read: ", i)
-			needSecondPass = true
+		if resRv.FourthPass {
+			logrus.Debug("Fourth pass required for reverse read: ", i)
+			needFourthPass = true
 		}
 	}
 
-	if needSecondPass {
-		secondPassChan.Send(&mapperutils.SecondPassTask{
+	if needFourthPass {
+		fourthPassChan.Send(&mapperutils.FourthPassTask{
 			ReadPair: readPair,
 			ResultFw: &resultFw,
 			ResultRv: &resultRv,

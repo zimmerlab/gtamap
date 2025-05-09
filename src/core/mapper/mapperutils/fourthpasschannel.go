@@ -5,25 +5,25 @@ import (
 	"sync"
 )
 
-type SecondPassTask struct {
+type FourthPassTask struct {
 	ReadPair *fastq.ReadPair
 	ResultFw *[]ReadMatchResult
 	ResultRv *[]ReadMatchResult
 }
 
-type SecondPassChannel struct {
-	in     chan *SecondPassTask
-	out    chan *SecondPassTask
-	buffer []*SecondPassTask
+type FourthPassChannel struct {
+	in     chan *FourthPassTask
+	out    chan *FourthPassTask
+	buffer []*FourthPassTask
 	mu     sync.Mutex
 	closed bool
 }
 
-func NewSecondPassChannel() *SecondPassChannel {
-	channel := &SecondPassChannel{
-		in:     make(chan *SecondPassTask),
-		out:    make(chan *SecondPassTask),
-		buffer: make([]*SecondPassTask, 0),
+func NewFourthPassChannel() *FourthPassChannel {
+	channel := &FourthPassChannel{
+		in:     make(chan *FourthPassTask),
+		out:    make(chan *FourthPassTask),
+		buffer: make([]*FourthPassTask, 0),
 	}
 
 	go channel.process()
@@ -31,10 +31,10 @@ func NewSecondPassChannel() *SecondPassChannel {
 	return channel
 }
 
-func (s *SecondPassChannel) process() {
+func (s *FourthPassChannel) process() {
 	var (
-		outCh chan<- *SecondPassTask
-		next  *SecondPassTask
+		outCh chan<- *FourthPassTask
+		next  *FourthPassTask
 	)
 
 	for {
@@ -80,15 +80,15 @@ func (s *SecondPassChannel) process() {
 	}
 }
 
-func (s *SecondPassChannel) Send(task *SecondPassTask) {
+func (s *FourthPassChannel) Send(task *FourthPassTask) {
 	s.in <- task
 }
 
-func (s *SecondPassChannel) Receive() (*SecondPassTask, bool) {
+func (s *FourthPassChannel) Receive() (*FourthPassTask, bool) {
 	item, ok := <-s.out
 	return item, ok
 }
 
-func (s *SecondPassChannel) Close() {
+func (s *FourthPassChannel) Close() {
 	close(s.in)
 }

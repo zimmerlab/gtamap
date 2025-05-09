@@ -36,7 +36,7 @@ type ReadMatchResult struct {
 	MatchedRead    *regionvector.RegionVector // region vector containing the matched positions in the read
 	MatchedGenome  *regionvector.RegionVector // region vector containing the matched positions in the genome
 	MismatchesRead []int                      // the positions of the mismatches in the read
-	SecondPass     bool                       // true if this result must undergo a second pass
+	FourthPass     bool                       // true if this result must undergo a forth pass
 }
 
 func (m ReadMatchResult) GetCigar() string {
