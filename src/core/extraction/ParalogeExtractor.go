@@ -76,10 +76,10 @@ func GetParaloges(targetGeneIds []string, species string) map[string]map[string]
 	return paralogeSeqs
 }
 
-func WriteParalogesPre(filename string, targetMap map[string][]string) error {
-	file, err := os.Create(filename) // or os.OpenFile for appending
+func WriteParalogesPre(filename string, targetMap map[string][]string) {
+	file, err := os.Create(filename)
 	if err != nil {
-		return err
+		logrus.Fatalf("Error creating: %s : %s", filename, err)
 	}
 	defer file.Close()
 
@@ -90,21 +90,24 @@ func WriteParalogesPre(filename string, targetMap map[string][]string) error {
 		for _, paraloge := range paraloges {
 			absPath, err := filepath.Abs(paraloge)
 			if err != nil {
-				fmt.Println("Error:", err)
+				logrus.Fatalf("Could not get abs path of %s: %s", paraloge, err)
 			}
 			if isFirstLine {
 				_, err := writer.WriteString(target + "," + absPath)
 				if err != nil {
-					return err
+					logrus.Fatalf("Could not write to %s: %s", file.Name(), err)
 				}
 				isFirstLine = false
 			} else {
 				_, err := writer.WriteString("\n" + target + "," + absPath)
 				if err != nil {
-					return err
+					logrus.Fatalf("Could not write to %s: %s", file.Name(), err)
 				}
 			}
 		}
 	}
-	return writer.Flush()
+	err = writer.Flush()
+	if err != nil {
+		logrus.Fatalf("Could not flush writer: %s", err)
+	}
 }
