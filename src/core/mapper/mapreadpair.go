@@ -122,10 +122,10 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	postprocessReadMatch(genomeIndex, readPair.ReadR1, &resFw)
 	postprocessReadMatch(genomeIndex, readPair.ReadR2, &resRv)
 
-	return FormatResultToSAM(resFw, resRv, readPair, genomeIndex)
+	return FormatMappedReadPairToSAM(resFw, resRv, readPair, genomeIndex)
 }
 
-func FormatResultToSAM(resFw mapperutils.ReadMatchResult, resRv mapperutils.ReadMatchResult, readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex) (string, bool) {
+func FormatMappedReadPairToSAM(resFw mapperutils.ReadMatchResult, resRv mapperutils.ReadMatchResult, readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex) (string, bool) {
 
 	flagFw := sam.Flag{}
 	flagRv := sam.Flag{}
