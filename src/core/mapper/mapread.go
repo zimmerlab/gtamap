@@ -416,7 +416,7 @@ sequenceLoop:
 					}
 				}
 
-				// add to second pass if there are too many mismatches
+				// add to fourth pass if there are too many mismatches
 				if numMismatches > 5 {
 					result.FourthPass = true
 					results = append(results, result)
@@ -474,7 +474,7 @@ sequenceLoop:
 					}
 				}
 
-				// add to second pass if there are too many mismatches
+				// add to fourth pass if there are too many mismatches
 				if numMismatches > 5 {
 					result.FourthPass = true
 					results = append(results, result)
@@ -543,7 +543,7 @@ func determineBestSplit(
 	// TODO: keep track of the actual mismatch positions
 	// TODO: if no suitable split is found then:
 	// - maybe there is another exon in between if enough bases missing from read
-	// - maybe keep the readpair for second pass
+	// - maybe keep the readpair for fourth pass
 	for i := 0; i <= gapRead.Length(); i++ {
 
 		lPos := i
