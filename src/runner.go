@@ -132,8 +132,8 @@ func main() {
 	})
 	var paralogMetaOutParalogPre *string = cmdParalogPre.String("", "meta", &argparse.Options{
 		Required: false,
-		Help:     "Genome annotation (GTF) file (currently only non-compressed).",
-		Default:  "paralogs.csv",
+		Help:     "Prefix of paralog csv file.",
+		Default:  "paralogs",
 	})
 	var logLevelParalogPre *string = cmdParalogPre.Selector("", "loglevel", []string{"ERROR", "INFO", "DEBUG"}, &argparse.Options{
 		Required: false,
