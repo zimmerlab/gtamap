@@ -3,6 +3,13 @@ package index
 import (
 	"bufio"
 	"encoding/gob"
+	"log"
+	"math"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/genemodel"
@@ -14,12 +21,6 @@ import (
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
 	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
-	"log"
-	"math"
-	"os"
-	"strconv"
-	"strings"
-	"time"
 )
 
 type GtaIndex struct {
@@ -57,8 +58,8 @@ func (i GtaIndex) GetSequenceByIndex(sequenceIndex int) *string {
 // TranslateRwTransPosToFwTransPos translates a relative position revTransPos within a reverse
 // transcript to a relative position within the forward transcript for the transcript at index transcriptIndex.
 func (i GtaIndex) TranslateRwTransPosToFwTransPos(transcriptIndex uint32,
-	revTransPos uint32) uint32 {
-
+	revTransPos uint32,
+) uint32 {
 	transcript := i.Transcripts[transcriptIndex]
 
 	if revTransPos >= uint32(transcript.SequenceLength) {
@@ -73,8 +74,8 @@ func (i GtaIndex) TranslateRwTransPosToFwTransPos(transcriptIndex uint32,
 // position on the gene.
 // TODO: untested function
 func (i GtaIndex) TranslateRelativeTranscriptPositionToRelativeGenePosition(transcriptIndex uint32,
-	relativeTranscriptPosition uint32) uint32 {
-
+	relativeTranscriptPosition uint32,
+) uint32 {
 	transcript := i.Transcripts[transcriptIndex]
 
 	if relativeTranscriptPosition < 0 {
@@ -119,10 +120,9 @@ func (i GtaIndex) TranslateRelativeTranscriptPositionToRelativeGenePosition(tran
 // within the exon.
 // TODO: untested function
 func (i GtaIndex) TransIntervalToGenomicIntervals(tranIndex uint32, startTransPos int, endTransPos int) []uint32 {
-
 	transcript := i.Transcripts[tranIndex]
 
-	//intervals := make([]*core.Interval, 0)
+	// intervals := make([]*core.Interval, 0)
 	intervals := make([]uint32, 0)
 
 	for _, exon := range transcript.Exons {
@@ -203,7 +203,6 @@ func (i GtaIndex) FindEquivalenceClassByGenomicLocation(genomicLocation uint32) 
 // While the given interval spans across the current equivalence class, the next equivalence class is retrieved.
 // TODO: not tested
 func (i GtaIndex) GetCoveredEquivalenceClassIds(sequenceIndex int, startRelative int, endRelative int) []uint32 {
-
 	ecIds := make([]uint32, 0)
 
 	transcriptIndex := i.SequenceIndexToTranscriptIndex(uint32(sequenceIndex))
@@ -245,7 +244,6 @@ func (i GtaIndex) GetCoveredEquivalenceClassIds(sequenceIndex int, startRelative
 // keyword.
 // TODO: not tested
 func (i GtaIndex) AddSequenceToKeywordTree(sequence *string, sequenceIndex uint32) {
-
 	for kStart := 0; kStart < len(*sequence)-int(i.KeywordTree.KeywordLength); kStart++ {
 
 		kEnd := kStart + int(i.KeywordTree.KeywordLength)
@@ -260,12 +258,11 @@ func (i GtaIndex) AddSequenceToKeywordTree(sequence *string, sequenceIndex uint3
 			EquivalenceClassIds: ecIds,
 		})
 
-		//break
+		// break
 	}
 }
 
 func (i GtaIndex) EquivalenceClassIdsMatch(ecIds1 []uint32, ecIds2 []uint32) bool {
-
 	if len(ecIds1) != len(ecIds2) {
 		return false
 	}
@@ -280,7 +277,6 @@ func (i GtaIndex) EquivalenceClassIdsMatch(ecIds1 []uint32, ecIds2 []uint32) boo
 }
 
 func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os.File) {
-
 	timerStart := time.Now()
 
 	timerReadReference := time.Now()
@@ -298,7 +294,7 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 	}
 	durationReadReference += time.Since(timerReadReference)
 
-	var gtaIndex = GtaIndex{
+	gtaIndex := GtaIndex{
 		Gene:         nil,
 		Transcripts:  nil,
 		SuffixTree:   nil,
@@ -307,7 +303,7 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 
 	// read the reference files (gtf + fasta) and generate the annotation
 	timerReadReference = time.Now()
-	var annotation = dataloader.GenerateInputForIndex(gtfFile, fastaFile, fastaIndexFile)
+	annotation := dataloader.GenerateInputForIndex(gtfFile, fastaFile, fastaIndexFile)
 	durationReadReference += time.Since(timerReadReference)
 
 	gtaIndex.Gene = &genemodel.Gene{
@@ -364,7 +360,7 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 		}
 	}
 
-	//gtaIndex.SuffixTree = datastructure.CreateTree()
+	// gtaIndex.SuffixTree = datastructure.CreateTree()
 
 	gtaIndex.KeywordTree = keywordtree.NewKeywordTree(config.KmerLength())
 
@@ -396,13 +392,13 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 		//durationBuildTree += time.Since(timerBuildTree)
 		//gtaIndex.NumSequences++
 
-		//break
+		// break
 	}
 
 	// suffix links are only required for tree construction but not for the search
-	//timerBuildTree = time.Now()
-	//gtaIndex.SuffixTree.RemoveAllSuffixLinks()
-	//durationBuildTree += time.Since(timerBuildTree)
+	// timerBuildTree = time.Now()
+	// gtaIndex.SuffixTree.RemoveAllSuffixLinks()
+	// durationBuildTree += time.Since(timerBuildTree)
 
 	//posPerSeq := make(map[int][]int)
 	//
@@ -472,7 +468,6 @@ func SerializeFromPath(gtaIndex *GtaIndex, filePath string) {
 }
 
 func SerializeFromFile(gtaIndex *GtaIndex, outputFile *os.File) {
-
 	timerStart := time.Now()
 
 	enc := gob.NewEncoder(outputFile)
@@ -488,7 +483,6 @@ func SerializeFromFile(gtaIndex *GtaIndex, outputFile *os.File) {
 }
 
 func SerializeFromFileTest(tree *keywordtree.KeywordTree, outputFile *os.File) {
-
 	timerStart := time.Now()
 
 	enc := gob.NewEncoder(outputFile)
@@ -515,7 +509,6 @@ func DezerializeFromPath(indexFilePath string) *GtaIndex {
 }
 
 func DezerializeFromFile(indexFile *os.File) *GtaIndex {
-
 	timerStart := time.Now()
 
 	// create a decoder and deserialize the person struct from the file
@@ -585,22 +578,22 @@ func (i *GenomeIndex) LoadParalogs(paralogFile *os.File) {
 			logrus.Fatal("Error parsing paralog file. Wrong format!")
 		}
 		targetRegion := contentParts[0]
-		pathToParalogeIndex := contentParts[1]
-		paralogIndex := ReadGenomeIndexByPath(pathToParalogeIndex)
-		i.AddParalogeRegionIndex(targetRegion, paralogIndex)
+		pathToParalogIndex := contentParts[1]
+		paralogIndex := ReadGenomeIndexByPath(pathToParalogIndex)
+		i.AddParalogRegionIndex(targetRegion, paralogIndex)
 	}
 }
 
-func (i *GenomeIndex) AddParalogeRegionIndex(seqId string, index *GenomeIndex) {
+func (i *GenomeIndex) AddParalogRegionIndex(seqId string, index *GenomeIndex) {
 	_, exists := i.ParalogRegions[seqId]
 	if !exists {
 		i.ParalogRegions[seqId] = index
 	} else {
-		i.ParalogRegions[seqId].ExtendParalogeRegionIndex(seqId, index)
+		i.ParalogRegions[seqId].ExtendParalogRegionIndex(seqId, index)
 	}
 }
 
-func (i *GenomeIndex) ExtendParalogeRegionIndex(targetGene string, indexExtension *GenomeIndex) {
+func (i *GenomeIndex) ExtendParalogRegionIndex(targetGene string, indexExtension *GenomeIndex) {
 	// since the indices we add to our main index i are mainly paralog indices with only
 	// one sequence, we panic if there are more than 1 sequenceHeader in indexExtension.
 	// indexExtension should look like this
@@ -684,7 +677,6 @@ func (i *GenomeIndex) GetKeywordFromMapSmall(keyword [5]byte) []*keywordtreebyte
 }
 
 func (i *GenomeIndex) AddSequenceToKeywordTree(sequence *[]byte, sequenceIndex uint8) {
-
 	for kStart := 0; kStart <= len(*sequence)-int(i.KeywordTree.KeywordLength); kStart++ {
 
 		kEnd := kStart + int(i.KeywordTree.KeywordLength)
@@ -703,7 +695,6 @@ func (i *GenomeIndex) AddSequenceToKeywordTree(sequence *[]byte, sequenceIndex u
 }
 
 func (i *GenomeIndex) AddSequenceToMapSmall(sequence *[]byte, sequenceIndex uint8) {
-
 	for kStart := 0; kStart <= len(*sequence)-5; kStart++ {
 
 		kEnd := kStart + 5
@@ -720,7 +711,7 @@ func (i *GenomeIndex) GetSequenceInfos() []sam.SequenceInfo {
 	for seqIndex, seqInfo := range i.SequenceInfo {
 		infos[seqIndex] = sam.SequenceInfo{
 			Name: seqInfo.Contig,
-			//Length: int(seqInfo.EndGenomic - seqInfo.StartGenomic),
+			// Length: int(seqInfo.EndGenomic - seqInfo.StartGenomic),
 			Length: int(seqInfo.EndGenomic),
 		}
 	}
@@ -777,8 +768,7 @@ func (i *GenomeIndex) GetSequenceContig(sequenceIndex int) string {
 }
 
 func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry) *GenomeIndex {
-
-	var index = GenomeIndex{
+	index := GenomeIndex{
 		SequenceHeaders: make([]string, len(fastaEntries)),
 		SequenceInfo:    make([]*gtf.GeneBasic, len(fastaEntries)),
 		Sequences:       make([]*[]byte, len(fastaEntries)*2),
@@ -814,7 +804,6 @@ func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry) *GenomeIndex {
 }
 
 func parseFastaHeader(header string) *gtf.GeneBasic {
-
 	headerParts := strings.Split(header, "\t")
 
 	if len(headerParts) < 4 {
@@ -845,7 +834,6 @@ func parseFastaHeader(header string) *gtf.GeneBasic {
 }
 
 func WriteGenomeIndex(genomeIndex *GenomeIndex, outputFile *os.File) {
-
 	timerStart := time.Now()
 
 	enc := gob.NewEncoder(outputFile)
@@ -872,7 +860,6 @@ func ReadGenomeIndexByPath(indexFilePath string) *GenomeIndex {
 }
 
 func ReadGenomeIndexByFile(indexFile *os.File) *GenomeIndex {
-
 	timerStart := time.Now()
 
 	// create a decoder and deserialize the person struct from the file
@@ -892,9 +879,7 @@ func ReadGenomeIndexByFile(indexFile *os.File) *GenomeIndex {
 }
 
 func BuildAndSerializeGenomeIndex(fastaFile *os.File, outputFile *os.File) {
-
 	fastaEntries, err := dataloader.ReadFasta(fastaFile)
-
 	if err != nil {
 		logrus.Fatal("Error extracting sequence from fasta file", err)
 	}

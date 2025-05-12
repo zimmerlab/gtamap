@@ -4,11 +4,12 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+
+	"github.com/sirupsen/logrus"
 )
 
 type HomologyResponse struct {
@@ -76,7 +77,7 @@ func GetParaloges(targetGeneIds []string, species string) map[string]map[string]
 	return paralogSeqs
 }
 
-func WriteParalogesPre(filename string, targetMap map[string][]string) {
+func WriteParalogsPre(filename string, targetMap map[string][]string) {
 	file, err := os.Create(filename)
 	if err != nil {
 		logrus.Fatalf("Error creating: %s : %s", filename, err)
