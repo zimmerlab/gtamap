@@ -25,7 +25,7 @@ type HomologyResponse struct {
 	} `json:"data"`
 }
 
-type ParalogeSeq struct {
+type ParalogSeq struct {
 	ID      string
 	Species string
 	Perc    float64
@@ -62,18 +62,18 @@ func queryTargetId(geneid string, species string) map[string]struct{} {
 			paralogSeqs[hom.Target.ID] = struct{}{}
 		}
 	}
-	// I am not using pointer here since the amount of paraloges will not be too high
+	// I am not using pointer here since the amount of paralogs will not be too high
 	return paralogSeqs
 }
 
 func GetParaloges(targetGeneIds []string, species string) map[string]map[string]struct{} {
-	paralogeSeqs := make(map[string]map[string]struct{})
-	// receive paraloge genes per target gene
+	paralogSeqs := make(map[string]map[string]struct{})
+	// receive paralog genes per target gene
 	for _, targetGene := range targetGeneIds {
-		paralogeGenes := queryTargetId(targetGene, species)
-		paralogeSeqs[targetGene] = paralogeGenes
+		paralogGenes := queryTargetId(targetGene, species)
+		paralogSeqs[targetGene] = paralogGenes
 	}
-	return paralogeSeqs
+	return paralogSeqs
 }
 
 func WriteParalogesPre(filename string, targetMap map[string][]string) {
@@ -86,11 +86,11 @@ func WriteParalogesPre(filename string, targetMap map[string][]string) {
 	writer := bufio.NewWriter(file)
 
 	isFirstLine := true
-	for target, paraloges := range targetMap {
-		for _, paraloge := range paraloges {
-			absPath, err := filepath.Abs(paraloge)
+	for target, paralogs := range targetMap {
+		for _, paralog := range paralogs {
+			absPath, err := filepath.Abs(paralog)
 			if err != nil {
-				logrus.Fatalf("Could not get abs path of %s: %s", paraloge, err)
+				logrus.Fatalf("Could not get abs path of %s: %s", paralog, err)
 			}
 			if isFirstLine {
 				_, err := writer.WriteString(target + "," + absPath)
