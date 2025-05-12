@@ -570,7 +570,7 @@ func (i *GenomeIndex) AddKeywordToMap(keyword [10]byte, sequenceIndex uint8, pos
 	})
 }
 
-func (i *GenomeIndex) LoadParaloges(paralogFile *os.File) {
+func (i *GenomeIndex) LoadParalogs(paralogFile *os.File) {
 	// init map to store paralog regions per target sequence
 	// let's say we have target sequence X and Y
 	// then i.ParalogeRegions will have X and Y as key and store

@@ -197,7 +197,7 @@ func main() {
 			if err != nil {
 				panic("Error reading provided paralog file. Make sure it exists")
 			}
-			genomeIndex.LoadParaloges(paralogFileMap)
+			genomeIndex.LoadParalogs(paralogFileMap)
 		}
 
 		reader := fastq.InitFromFiles(fastqFwFile, fastqRwFile)
