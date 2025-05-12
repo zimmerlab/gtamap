@@ -557,7 +557,7 @@ type GenomeIndex struct {
 	KeywordTree     *keywordtreebyte.KeywordTree // the keyword tree containing all kmers of both genome sequences
 	KeywordMap      map[[10]byte][]*keywordtreebyte.Position
 	KeywordMapSmall map[[5]byte][]*keywordtreebyte.Position
-	ParalogeRegions map[string]*GenomeIndex // additional index per target region of paraloge regions
+	ParalogeRegions map[string]*GenomeIndex // additional index per target region of paralog regions
 }
 
 func (i *GenomeIndex) AddKeywordToMap(keyword [10]byte, sequenceIndex uint8, position uint32) {
@@ -570,24 +570,24 @@ func (i *GenomeIndex) AddKeywordToMap(keyword [10]byte, sequenceIndex uint8, pos
 	})
 }
 
-func (i *GenomeIndex) LoadParaloges(paralogeFile *os.File) {
-	// init map to store paraloge regions per target sequence
+func (i *GenomeIndex) LoadParaloges(paralogFile *os.File) {
+	// init map to store paralog regions per target sequence
 	// let's say we have target sequence X and Y
 	// then i.ParalogeRegions will have X and Y as key and store
-	// one paralogeIndex per target seq
-	// i.ParalogeRegions[X] -> *genomeIndex (which will contain all kmers of paraloge seqs of X in one map)
+	// one paralogIndex per target seq
+	// i.ParalogeRegions[X] -> *genomeIndex (which will contain all kmers of paralog seqs of X in one map)
 	i.ParalogeRegions = make(map[string]*GenomeIndex)
-	scanner := bufio.NewScanner(paralogeFile)
+	scanner := bufio.NewScanner(paralogFile)
 	for scanner.Scan() {
 		line := scanner.Text()
 		contentParts := strings.Split(line, ",")
 		if len(contentParts) != 2 {
-			logrus.Fatal("Error parsing paraloge file. Wrong format!")
+			logrus.Fatal("Error parsing paralog file. Wrong format!")
 		}
 		targetRegion := contentParts[0]
 		pathToParalogeIndex := contentParts[1]
-		paralogeIndex := ReadGenomeIndexByPath(pathToParalogeIndex)
-		i.AddParalogeRegionIndex(targetRegion, paralogeIndex)
+		paralogIndex := ReadGenomeIndexByPath(pathToParalogeIndex)
+		i.AddParalogeRegionIndex(targetRegion, paralogIndex)
 	}
 }
 
@@ -601,7 +601,7 @@ func (i *GenomeIndex) AddParalogeRegionIndex(seqId string, index *GenomeIndex) {
 }
 
 func (i *GenomeIndex) ExtendParalogeRegionIndex(targetGene string, indexExtension *GenomeIndex) {
-	// since the indices we add to our main index i are mainly paraloge indices with only
+	// since the indices we add to our main index i are mainly paralog indices with only
 	// one sequence, we panic if there are more than 1 sequenceHeader in indexExtension.
 	// indexExtension should look like this
 	// Sequences -> fw rv
@@ -609,7 +609,7 @@ func (i *GenomeIndex) ExtendParalogeRegionIndex(targetGene string, indexExtensio
 	// SequenceInfo -> one *gtf.GeneBasic
 	// Keyword(Map/Tree)(Small) -> one each
 	if len(indexExtension.SequenceHeaders) > 1 {
-		logrus.Fatal("Error extending main index with paraloge region: paraloge region index extension contains more than one sequence: ", indexExtension.SequenceHeaders)
+		logrus.Fatal("Error extending main index with paralog region: paralog region index extension contains more than one sequence: ", indexExtension.SequenceHeaders)
 	}
 	// append seq header
 	i.SequenceHeaders = append(i.SequenceHeaders, indexExtension.SequenceHeaders[0])
@@ -660,9 +660,9 @@ func (i *GenomeIndex) ExtendParalogeRegionIndex(targetGene string, indexExtensio
 
 	// log
 	logrus.WithFields(logrus.Fields{
-		"Added paraloge region":                            indexExtension.SequenceInfo[0].GeneId,
-		"to the paraloge index belonging to target region": targetGene,
-	}).Info("Extended paraloge index of main index")
+		"Added paralog region":                            indexExtension.SequenceInfo[0].GeneId,
+		"to the paralog index belonging to target region": targetGene,
+	}).Info("Extended paralog index of main index")
 }
 
 func (i *GenomeIndex) AddKeywordToMapSmall(keyword [5]byte, sequenceIndex uint8, position uint32) {
