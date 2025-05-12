@@ -557,7 +557,7 @@ type GenomeIndex struct {
 	KeywordTree     *keywordtreebyte.KeywordTree // the keyword tree containing all kmers of both genome sequences
 	KeywordMap      map[[10]byte][]*keywordtreebyte.Position
 	KeywordMapSmall map[[5]byte][]*keywordtreebyte.Position
-	ParalogeRegions map[string]*GenomeIndex // additional index per target region of paralog regions
+	ParalogRegions  map[string]*GenomeIndex // additional index per target region of paralog regions
 }
 
 func (i *GenomeIndex) AddKeywordToMap(keyword [10]byte, sequenceIndex uint8, position uint32) {
@@ -573,10 +573,10 @@ func (i *GenomeIndex) AddKeywordToMap(keyword [10]byte, sequenceIndex uint8, pos
 func (i *GenomeIndex) LoadParalogs(paralogFile *os.File) {
 	// init map to store paralog regions per target sequence
 	// let's say we have target sequence X and Y
-	// then i.ParalogeRegions will have X and Y as key and store
+	// then i.ParalogRegions will have X and Y as key and store
 	// one paralogIndex per target seq
-	// i.ParalogeRegions[X] -> *genomeIndex (which will contain all kmers of paralog seqs of X in one map)
-	i.ParalogeRegions = make(map[string]*GenomeIndex)
+	// i.ParalogRegions[X] -> *genomeIndex (which will contain all kmers of paralog seqs of X in one map)
+	i.ParalogRegions = make(map[string]*GenomeIndex)
 	scanner := bufio.NewScanner(paralogFile)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -592,11 +592,11 @@ func (i *GenomeIndex) LoadParalogs(paralogFile *os.File) {
 }
 
 func (i *GenomeIndex) AddParalogeRegionIndex(seqId string, index *GenomeIndex) {
-	_, exists := i.ParalogeRegions[seqId]
+	_, exists := i.ParalogRegions[seqId]
 	if !exists {
-		i.ParalogeRegions[seqId] = index
+		i.ParalogRegions[seqId] = index
 	} else {
-		i.ParalogeRegions[seqId].ExtendParalogeRegionIndex(seqId, index)
+		i.ParalogRegions[seqId].ExtendParalogeRegionIndex(seqId, index)
 	}
 }
 
