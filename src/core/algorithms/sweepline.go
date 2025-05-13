@@ -43,8 +43,8 @@ func FindHighCoverageRegions(intervals [][2]int) [][2]int {
 	}
 
 	// TODO: add multiplyer as param
-	threshold := totalCoverage / len(coverageSlice) * 2
-	//threshold := 70
+	//threshold := totalCoverage / len(coverageSlice) * 2
+	threshold := 70
 	for _, e := range events {
 		coverage += e.Delta
 		if coverage >= threshold && regionStart == nil {
