@@ -1,6 +1,7 @@
 package index
 
 import (
+	"bufio"
 	"encoding/gob"
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
@@ -556,9 +557,10 @@ type GenomeIndex struct {
 	KeywordTree     *keywordtreebyte.KeywordTree // the keyword tree containing all kmers of both genome sequences
 	KeywordMap      map[[10]byte][]*keywordtreebyte.Position
 	KeywordMapSmall map[[5]byte][]*keywordtreebyte.Position
+	ParalogRegions  map[string]*GenomeIndex // additional index per target region of paralog regions
 }
 
-func (i GenomeIndex) AddKeywordToMap(keyword [10]byte, sequenceIndex uint8, position uint32) {
+func (i *GenomeIndex) AddKeywordToMap(keyword [10]byte, sequenceIndex uint8, position uint32) {
 	if _, ok := i.KeywordMap[keyword]; !ok {
 		i.KeywordMap[keyword] = make([]*keywordtreebyte.Position, 0)
 	}
@@ -568,7 +570,104 @@ func (i GenomeIndex) AddKeywordToMap(keyword [10]byte, sequenceIndex uint8, posi
 	})
 }
 
-func (i GenomeIndex) AddKeywordToMapSmall(keyword [5]byte, sequenceIndex uint8, position uint32) {
+func (i *GenomeIndex) LoadParalogs(paralogFile *os.File) {
+	// init map to store paralog regions per target sequence
+	// let's say we have target sequence X and Y
+	// then i.ParalogRegions will have X and Y as key and store
+	// one paralogIndex per target seq
+	// i.ParalogRegions[X] -> *genomeIndex (which will contain all kmers of paralog seqs of X in one map)
+	i.ParalogRegions = make(map[string]*GenomeIndex)
+	scanner := bufio.NewScanner(paralogFile)
+	for scanner.Scan() {
+		line := scanner.Text()
+		contentParts := strings.Split(line, ",")
+		if len(contentParts) != 2 {
+			logrus.Fatal("Error parsing paralog file. Wrong format!")
+		}
+		targetRegion := contentParts[0]
+		pathToParalogIndex := contentParts[1]
+		paralogIndex := ReadGenomeIndexByPath(pathToParalogIndex)
+		i.AddParalogRegionIndex(targetRegion, paralogIndex)
+	}
+}
+
+func (i *GenomeIndex) AddParalogRegionIndex(seqId string, index *GenomeIndex) {
+	_, exists := i.ParalogRegions[seqId]
+	if !exists {
+		i.ParalogRegions[seqId] = index
+	} else {
+		i.ParalogRegions[seqId].ExtendParalogRegionIndex(seqId, index)
+	}
+}
+
+func (i *GenomeIndex) ExtendParalogRegionIndex(targetGene string, indexExtension *GenomeIndex) {
+	// since the indices we add to our main index i are mainly paralog indices with only
+	// one sequence, we panic if there are more than 1 sequenceHeader in indexExtension.
+	// indexExtension should look like this
+	// Sequences -> fw rv
+	// SequenceHeaders -> one id
+	// SequenceInfo -> one *gtf.GeneBasic
+	// Keyword(Map/Tree)(Small) -> one each
+	if len(indexExtension.SequenceHeaders) > 1 {
+		logrus.Fatal("Error extending main index with paralog region: paralog region index extension contains more than one sequence: ", indexExtension.SequenceHeaders)
+	}
+	// append seq header
+	i.SequenceHeaders = append(i.SequenceHeaders, indexExtension.SequenceHeaders[0])
+
+	// append fw and rv seq
+	for _, sequence := range indexExtension.Sequences {
+		i.Sequences = append(i.Sequences, sequence)
+	}
+
+	// append gtf.GeneBasic info
+	i.SequenceInfo = append(i.SequenceInfo, indexExtension.SequenceInfo[0])
+
+	// append Maps; here we need to make sure that the pos.SequenceIndex matches the
+	// current extension. Since the extension is only allowed to hold one
+	// sequence, the pos.SequenceIndex is in {0, 1}. By adding an offset based on how many
+	// seqs we already added, the kmer positions reference the correct sequenceIndex
+	// if we add a seq to an index which holds only one seq:
+	// 0, 1 -> 2, 3
+	// if we then add another seq
+	// 0, 1 -> 4, 5
+
+	// how many sequences does the subindex currently hold (after adding the new seqId)
+	numSequences := uint8(len(i.SequenceHeaders))
+	for kmer, positions := range indexExtension.KeywordMap {
+		for _, pos := range positions {
+			var offset uint8
+			if pos.SequenceIndex == 0 {
+				offset = (numSequences - 1) * 2
+			} else {
+				offset = (numSequences-1)*2 + 1
+			}
+			i.AddKeywordToMap(kmer, pos.SequenceIndex+offset, pos.Position)
+		}
+	}
+
+	// do the same for the small keyword map
+	for kmer, positions := range indexExtension.KeywordMapSmall {
+		for _, pos := range positions {
+			var offset uint8
+			if pos.SequenceIndex == 0 {
+				offset = (numSequences - 1) * 2
+			} else {
+				offset = (numSequences-1)*2 + 1
+			}
+			i.AddKeywordToMapSmall(kmer, pos.SequenceIndex+offset, pos.Position)
+		}
+	}
+
+	// since we are currently not using the keywordTree, skip it
+
+	// log
+	logrus.WithFields(logrus.Fields{
+		"Added paralog region":                            indexExtension.SequenceInfo[0].GeneId,
+		"to the paralog index belonging to target region": targetGene,
+	}).Info("Extended paralog index of main index")
+}
+
+func (i *GenomeIndex) AddKeywordToMapSmall(keyword [5]byte, sequenceIndex uint8, position uint32) {
 	if _, ok := i.KeywordMapSmall[keyword]; !ok {
 		i.KeywordMapSmall[keyword] = make([]*keywordtreebyte.Position, 0)
 	}
@@ -578,16 +677,15 @@ func (i GenomeIndex) AddKeywordToMapSmall(keyword [5]byte, sequenceIndex uint8, 
 	})
 }
 
-func (i GenomeIndex) GetKeywordFromMap(keyword [10]byte) []*keywordtreebyte.Position {
+func (i *GenomeIndex) GetKeywordFromMap(keyword [10]byte) []*keywordtreebyte.Position {
 	return i.KeywordMap[keyword]
 }
 
-func (i GenomeIndex) GetKeywordFromMapSmall(keyword [5]byte) []*keywordtreebyte.Position {
+func (i *GenomeIndex) GetKeywordFromMapSmall(keyword [5]byte) []*keywordtreebyte.Position {
 	return i.KeywordMapSmall[keyword]
 }
 
-func (i GenomeIndex) AddSequenceToKeywordTree(sequence *[]byte, sequenceIndex uint8) {
-
+func (i *GenomeIndex) AddSequenceToKeywordTree(sequence *[]byte, sequenceIndex uint8) {
 	for kStart := 0; kStart <= len(*sequence)-int(i.KeywordTree.KeywordLength); kStart++ {
 
 		kEnd := kStart + int(i.KeywordTree.KeywordLength)
@@ -605,8 +703,7 @@ func (i GenomeIndex) AddSequenceToKeywordTree(sequence *[]byte, sequenceIndex ui
 	}
 }
 
-func (i GenomeIndex) AddSequenceToMapSmall(sequence *[]byte, sequenceIndex uint8) {
-
+func (i *GenomeIndex) AddSequenceToMapSmall(sequence *[]byte, sequenceIndex uint8) {
 	for kStart := 0; kStart <= len(*sequence)-5; kStart++ {
 
 		kEnd := kStart + 5
@@ -617,13 +714,13 @@ func (i GenomeIndex) AddSequenceToMapSmall(sequence *[]byte, sequenceIndex uint8
 	}
 }
 
-func (i GenomeIndex) GetSequenceInfos() []sam.SequenceInfo {
+func (i *GenomeIndex) GetSequenceInfos() []sam.SequenceInfo {
 	infos := make([]sam.SequenceInfo, len(i.SequenceInfo))
 
 	for seqIndex, seqInfo := range i.SequenceInfo {
 		infos[seqIndex] = sam.SequenceInfo{
 			Name: seqInfo.Contig,
-			//Length: int(seqInfo.EndGenomic - seqInfo.StartGenomic),
+			// Length: int(seqInfo.EndGenomic - seqInfo.StartGenomic),
 			Length: int(seqInfo.EndGenomic),
 		}
 	}
@@ -633,12 +730,12 @@ func (i GenomeIndex) GetSequenceInfos() []sam.SequenceInfo {
 
 // IsSequenceForward checks if the sequence at the given index is forward or reverse complemented.
 // Returns true if the given sequence index refers to a 5->3 forward sequence.
-func (i GenomeIndex) IsSequenceForward(sequenceIndex int) bool {
+func (i *GenomeIndex) IsSequenceForward(sequenceIndex int) bool {
 	return sequenceIndex%2 == 0
 }
 
 // GetRevCompIndex returns the index of the reverse complement sequence for the given sequence index.
-func (i GenomeIndex) GetRevCompIndex(sequenceIndex int) int {
+func (i *GenomeIndex) GetRevCompIndex(sequenceIndex int) int {
 	if i.IsSequenceForward(sequenceIndex) {
 		return sequenceIndex + 1
 	} else {
@@ -647,7 +744,7 @@ func (i GenomeIndex) GetRevCompIndex(sequenceIndex int) int {
 }
 
 // GetForwardSequence returns the forward sequence for the given sequence index.
-func (i GenomeIndex) GetForwardSequence(sequenceIndex int) *[]byte {
+func (i *GenomeIndex) GetForwardSequence(sequenceIndex int) *[]byte {
 	if i.IsSequenceForward(sequenceIndex) {
 		return i.Sequences[sequenceIndex]
 	} else {
@@ -655,7 +752,7 @@ func (i GenomeIndex) GetForwardSequence(sequenceIndex int) *[]byte {
 	}
 }
 
-func (i GenomeIndex) GetSequenceHeader(sequenceIndex int) string {
+func (i *GenomeIndex) GetSequenceHeader(sequenceIndex int) string {
 	if i.IsSequenceForward(sequenceIndex) {
 		return i.SequenceHeaders[sequenceIndex]
 	} else {
@@ -663,7 +760,7 @@ func (i GenomeIndex) GetSequenceHeader(sequenceIndex int) string {
 	}
 }
 
-func (i GenomeIndex) GetSequenceInfo(sequenceIndex int) *gtf.GeneBasic {
+func (i *GenomeIndex) GetSequenceInfo(sequenceIndex int) *gtf.GeneBasic {
 	if i.IsSequenceForward(sequenceIndex) {
 		return i.SequenceInfo[sequenceIndex]
 	} else {
@@ -671,7 +768,7 @@ func (i GenomeIndex) GetSequenceInfo(sequenceIndex int) *gtf.GeneBasic {
 	}
 }
 
-func (i GenomeIndex) GetSequenceContig(sequenceIndex int) string {
+func (i *GenomeIndex) GetSequenceContig(sequenceIndex int) string {
 	if i.IsSequenceForward(sequenceIndex) {
 		return i.SequenceInfo[sequenceIndex].Contig
 	} else {
@@ -680,8 +777,7 @@ func (i GenomeIndex) GetSequenceContig(sequenceIndex int) string {
 }
 
 func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry) *GenomeIndex {
-
-	var index = GenomeIndex{
+	index := GenomeIndex{
 		SequenceHeaders: make([]string, len(fastaEntries)),
 		SequenceInfo:    make([]*gtf.GeneBasic, len(fastaEntries)),
 		Sequences:       make([]*[]byte, len(fastaEntries)*2),
@@ -717,7 +813,6 @@ func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry) *GenomeIndex {
 }
 
 func parseFastaHeader(header string) *gtf.GeneBasic {
-
 	headerParts := strings.Split(header, "\t")
 
 	if len(headerParts) < 4 {
@@ -748,7 +843,6 @@ func parseFastaHeader(header string) *gtf.GeneBasic {
 }
 
 func WriteGenomeIndex(genomeIndex *GenomeIndex, outputFile *os.File) {
-
 	timerStart := time.Now()
 
 	enc := gob.NewEncoder(outputFile)
@@ -775,7 +869,6 @@ func ReadGenomeIndexByPath(indexFilePath string) *GenomeIndex {
 }
 
 func ReadGenomeIndexByFile(indexFile *os.File) *GenomeIndex {
-
 	timerStart := time.Now()
 
 	// create a decoder and deserialize the person struct from the file
@@ -795,9 +888,7 @@ func ReadGenomeIndexByFile(indexFile *os.File) *GenomeIndex {
 }
 
 func BuildAndSerializeGenomeIndex(fastaFile *os.File, outputFile *os.File) {
-
 	fastaEntries, err := dataloader.ReadFasta(fastaFile)
-
 	if err != nil {
 		logrus.Fatal("Error extracting sequence from fasta file", err)
 	}

@@ -96,6 +96,11 @@ func main() {
 		Help:     "Number of threads to use (default: all)",
 		Default:  -1,
 	})
+	var paralogFilePathMap *string = cmdMap.String("", "paralogs", &argparse.Options{
+		Required: false,
+		Help:     "Paralog region meta file for target regions.",
+		Default:  "",
+	})
 
 	// paralog mode
 	var cmdParalogPre *argparse.Command = parser.NewCommand("paralog", "Extract known paralog genes from ENSEMBL Database and prepare paralog.csv for main target index extension.")
@@ -192,6 +197,14 @@ func main() {
 		reader := fastq.InitFromFiles(fastqFwFile, fastqRwFile)
 
 		writer := datawriter.InitFromFile(outputFileMap)
+
+		if *paralogFilePathMap != "" {
+			paralogFileMap, err := os.Open(*paralogFilePathMap)
+			if err != nil {
+				panic("Error reading provided paralog file. Make sure it exists")
+			}
+			genomeIndex.LoadParalogs(paralogFileMap)
+		}
 
 		mapper.MapAll(genomeIndex, reader, writer, numThreads)
 
