@@ -3,6 +3,7 @@ package index
 import (
 	"bufio"
 	"encoding/gob"
+	"fmt"
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/genemodel"
@@ -14,9 +15,11 @@ import (
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
 	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
+	"io/fs"
 	"log"
 	"math"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -907,4 +910,129 @@ func BuildAndSerializeGenomeIndex(fastaFile *os.File, outputFile *os.File) {
 	genomeIndex := BuildGenomeIndex(fastaEntries)
 
 	WriteGenomeIndex(genomeIndex, outputFile)
+}
+
+func OptimizeFastaExtraction(targetParalogs map[string]map[string]struct{}, fastaDirParalogPre *string) map[string]map[string]struct{} {
+	paralogsToExtractSeq := make(map[string]map[string]struct{}, 0)
+	foundFiles := 0
+	existingFaFiles := make(map[string]struct{}, 0)
+
+	for target, paralogs := range targetParalogs {
+		logrus.Infof("Found %s paralog region(s) of target region '%s' in DB.", strconv.Itoa(len(paralogs)), target)
+	}
+
+	err := filepath.WalkDir(*fastaDirParalogPre, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			faFileName := strings.Split(d.Name(), ".fa")[0]
+			var target string
+			for t, paralogs := range targetParalogs {
+				_, exists := paralogs[faFileName]
+				if exists {
+					target = t
+				}
+			}
+			logrus.Infof("Found paralog region '%s' of target region '%s' in --fastaout '%s'. No sequence extraction necessary.", faFileName, target, *fastaDirParalogPre)
+			existingFaFiles[faFileName] = struct{}{}
+			foundFiles++
+		}
+		return nil
+	})
+
+	if err != nil {
+		logrus.Fatalf("Error reading %s directory to check for pre-computed fa seqs: %s", *fastaDirParalogPre, err)
+	}
+
+	// if no file exists in --fastaout then all seqs need to be extracted
+	if foundFiles == 0 {
+		logrus.Infof("All paralog fasta sequences of all target regions need to be extracted.")
+	}
+
+	for target, paralogs := range targetParalogs {
+		paralogsToExtractSeq[target] = make(map[string]struct{})
+		for paralog, _ := range paralogs {
+			_, exists := existingFaFiles[paralog]
+			if !exists {
+				logrus.Infof("Will have to extract paralog region '%s' of target region '%s' since .fa non-existent in --fastaout '%s'.", paralog, target, *fastaDirParalogPre)
+				paralogsToExtractSeq[target][paralog] = struct{}{}
+			}
+		}
+	}
+	return paralogsToExtractSeq
+}
+
+func OptimizeIndexSerialisation(targetParalogs map[string]map[string]struct{}, indexDirParalogPre *string) map[string]map[string]struct{} {
+	foundIndices := 0
+	paralogsToSerialize := make(map[string]map[string]struct{})
+	existingIndices := make(map[string]struct{}, 0)
+	err := filepath.WalkDir(*indexDirParalogPre, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !d.IsDir() {
+			gtaiName := strings.Split(d.Name(), ".gtai")[0]
+			var target string
+			for t, paralogs := range targetParalogs {
+				_, exists := paralogs[gtaiName]
+				if exists {
+					target = t
+				}
+			}
+			logrus.Infof("Found serialized index '%s'.gai of target region '%s' in --indexout '%s'.", gtaiName, target, *indexDirParalogPre)
+			existingIndices[gtaiName] = struct{}{}
+			foundIndices++
+		}
+		return nil
+	})
+
+	if err != nil {
+		logrus.Fatalf("Error reading %s directory to check for already existing indices: %s", *indexDirParalogPre, err)
+	}
+
+	// if no file exists in --fastaout then all seqs need to be extracted
+	if foundIndices == 0 {
+		logrus.Infof("All paralog sequences of all target regions need to be serialized to index.")
+	}
+
+	for target, paralogs := range targetParalogs {
+		paralogsToSerialize[target] = make(map[string]struct{})
+		for paralog, _ := range paralogs {
+			_, exists := existingIndices[paralog]
+			if !exists {
+				logrus.Infof("Will have to serialize paralog region '%s' of target region '%s' since .gtai non-existent in --indexout '%s'.", paralog, target, *indexDirParalogPre)
+				paralogsToSerialize[target][paralog] = struct{}{}
+			}
+		}
+	}
+	return paralogsToSerialize
+}
+
+func BuildAndSerializeAll(paralogsToSerialize map[string]map[string]struct{}, indexDirParalogPre *string, fastaDirParalogPre *string) {
+
+	for target, paralogs := range paralogsToSerialize {
+		for paralog := range paralogs {
+			// create and format index file
+			paralogIndexName := fmt.Sprintf("%s.gtai", paralog)
+			logrus.Infof("Creating index for paralog %s of target region %s in: %s ", paralog, target, paralogIndexName)
+			paralogIndexPath := filepath.Join(*indexDirParalogPre, paralogIndexName)
+			paralogIndexFile, err := os.Create(paralogIndexPath)
+			if err != nil {
+				logrus.Fatalf("Error creating paralog index file: %s: %s", paralogIndexPath, err)
+			}
+
+			// open fa file
+			paralogFastaName := fmt.Sprintf("%s.fa", paralog)
+			paralogFastaPath := filepath.Join(*fastaDirParalogPre, paralogFastaName)
+			paralogFastaFile, err := os.Open(paralogFastaPath)
+			if err != nil {
+				fmt.Println(err)
+				logrus.Fatalf("Error reading paralog fa file: %s", paralogFastaPath)
+			}
+
+			BuildAndSerializeGenomeIndex(paralogFastaFile, paralogIndexFile)
+		}
+	}
 }

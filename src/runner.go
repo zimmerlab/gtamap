@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/KleinSamuel/gtamap/src/config"
@@ -59,9 +59,9 @@ func main() {
 		Required: true,
 		Help:     "Nucleotide sequences (FASTA) file.",
 	})
-	var outputFileIndex *os.File = cmdIndex.File("", "output", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600, &argparse.Options{
+	var outputFileName *string = cmdIndex.String("", "output", &argparse.Options{
 		Required: true,
-		Help:     "Output file (.gtai).",
+		Help:     "Output file (file extension: .gtai).",
 	})
 	var logLevelIndex *string = cmdIndex.Selector("", "loglevel", []string{"ERROR", "INFO", "DEBUG"}, &argparse.Options{
 		Required: false,
@@ -84,7 +84,7 @@ func main() {
 	})
 	var outputFileMap *os.File = cmdMap.File("", "output", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600, &argparse.Options{
 		Required: true,
-		Help:     "Output file (.gtai).",
+		Help:     "Output file (file extension: .gtai).",
 	})
 	var logLevelMap *string = cmdMap.Selector("", "loglevel", []string{"ERROR", "INFO", "DEBUG"}, &argparse.Options{
 		Required: false,
@@ -182,6 +182,16 @@ func main() {
 		printBanner()
 		logrus.Info("Building GTAMap index (.gtai)")
 
+		// ensure suffix .gtai
+		if !strings.HasSuffix(*outputFileName, ".gtai") {
+			*outputFileName += ".gtai"
+		}
+
+		outputFileIndex, err := os.OpenFile(*outputFileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+		if err != nil {
+			logrus.Fatalf("Could not open output sam file: %v", err)
+		}
+
 		index.BuildAndSerializeGenomeIndex(fastaFile, outputFileIndex)
 
 	} else if cmdMap.Happened() {
@@ -215,7 +225,18 @@ func main() {
 		printBanner()
 		logrus.Info("Scanning DB for paralogs of specified target IDs.")
 
-		// parsing gene ids
+		// make output dirs if non existent
+		err := os.MkdirAll(*indexDirParalogPre, 0o755)
+		if err != nil {
+			logrus.Fatalf("Something went wrong creating dir %s: %s", *indexDirParalogPre, err)
+		}
+
+		err = os.MkdirAll(*fastaDirParalogPre, 0o755)
+		if err != nil {
+			logrus.Fatalf("Something went wrong creating dir %s: %s", *indexDirParalogPre, err)
+		}
+
+		// parsing gene ids from cmd parser arg
 		targetGeneIds := make([]string, 0)
 		if *geneIdsParalogPre != "" {
 			genes := strings.Split(*geneIdsParalogPre, ",")
@@ -223,51 +244,36 @@ func main() {
 				targetGeneIds = append(targetGeneIds, gene)
 			}
 		}
-		// I. get paralog seqs per target gene
+
+		// I. get paralog seqs per target gene (a map where each target region has a set of paralog ids)
 		targetParalogs := extraction.GetParaloges(targetGeneIds, *speciesParalogPre)
 
-		// II. extract all target genes into separate .fa files in '--fastadir'
-		for target, paralogs := range targetParalogs {
-			logrus.Infof("Extracting sequences for paralogs of %s", target)
-			index.ExtractGeneSequenceFromGtfAndFastaForIndex(*gtfFileParalogPre, *fastaFileParalogPre,
-				*fastaDirParalogPre, paralogs, true)
-		}
+		// II. check if some of the gene ids are already present in --fastadir
+		paralogsToExtractSeq := index.OptimizeFastaExtraction(targetParalogs, fastaDirParalogPre)
 
-		// III. read in all seqs in '--fastadir' and serialize index into '--indexdir' for each paralog seq
-		indexPaths := make(map[string][]string)
-		for target, paralogs := range targetParalogs {
-			for paralog := range paralogs {
-				err := os.MkdirAll(*indexDirParalogPre, 0o755)
-				if err != nil {
-					logrus.Fatalf("Something went wrong creating dir %s: %s", *indexDirParalogPre, err)
-				}
-
-				// create and format index file
-				paralogIndexName := fmt.Sprintf("%s.gtai", paralog)
-				logrus.Infof("Creating index for paralog %s of target region %s in: %s ", paralog, target, paralogIndexName)
-				paralogIndexPath := filepath.Join(*indexDirParalogPre, paralogIndexName)
-				paralogIndexFile, err := os.Create(paralogIndexPath)
-				if err != nil {
-					logrus.Fatalf("Error creating paralog index file: %s: %s", paralogIndexPath, err)
-				}
-				indexPaths[target] = append(indexPaths[target], paralogIndexPath)
-
-				// open fa file
-				paralogFastaName := fmt.Sprintf("%s.fa", paralog)
-				paralogFastaPath := filepath.Join(*fastaDirParalogPre, paralogFastaName)
-				paralogFastaFile, err := os.Open(paralogFastaPath)
-				if err != nil {
-					fmt.Println(err)
-					logrus.Fatalf("Error reading paralog fa file: %s", paralogFastaPath)
-				}
-
-				index.BuildAndSerializeGenomeIndex(paralogFastaFile, paralogIndexFile)
+		// III. extract all identified non-existent paralogs into separate .fa files in '--fastadir'
+		for target, paralogs := range paralogsToExtractSeq {
+			if len(paralogs) > 0 {
+				logrus.Infof("Extracting %s paralog sequences of target region '%s' into '%s'", strconv.Itoa(len(paralogs)), target, *fastaDirParalogPre)
+				index.ExtractGeneSequenceFromGtfAndFastaForIndex(*gtfFileParalogPre, *fastaFileParalogPre,
+					*fastaDirParalogPre, paralogs, true)
+				logrus.Infof("Finished extracting %s paralog sequences of target region '%s' into '%s'", strconv.Itoa(len(paralogs)), target, *fastaDirParalogPre)
 			}
 		}
 
-		// IV. write paralogs.csv
+		// IV. get only ids where index non-existent in --indexdir
+		paralogsToSerialize := index.OptimizeIndexSerialisation(targetParalogs, indexDirParalogPre)
+
+		// V. read in all seqs in '--fastadir' and serialize index into '--indexdir' for each paralog seq
+		index.BuildAndSerializeAll(paralogsToSerialize, indexDirParalogPre, fastaDirParalogPre)
+
+		// VI. gather abs paths to indices into map[target][]paralogIndexPaths
+		indexPaths := extraction.GetAbsPathsPerTarget(targetParalogs, indexDirParalogPre)
+
+		// VI. write paralogs.csv
 		metaOut := fmt.Sprintf("%s.csv", *paralogMetaOutParalogPre)
 		extraction.WriteParalogsPre(metaOut, indexPaths)
+		logrus.Infof("Wrote target to paralog mapping to destination file: %s", metaOut)
 
 	} else {
 		fmt.Println(parser.Usage("no valid command supplied"))

@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 )
@@ -111,4 +113,31 @@ func WriteParalogsPre(filename string, targetMap map[string][]string) {
 	if err != nil {
 		logrus.Fatalf("Could not flush writer: %s", err)
 	}
+}
+
+func GetAbsPathsPerTarget(targetParalogs map[string]map[string]struct{}, indexDirParalogPre *string) map[string][]string {
+	indexPaths := make(map[string][]string)
+	err := filepath.WalkDir(*indexDirParalogPre, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !d.IsDir() {
+			gtaiName := strings.Split(d.Name(), ".gtai")[0]
+			for t, paralogs := range targetParalogs {
+				_, exists := paralogs[gtaiName]
+				if exists {
+					paralogIndexPath := filepath.Join(*indexDirParalogPre, d.Name())
+					indexPaths[t] = append(indexPaths[t], paralogIndexPath)
+				}
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		logrus.Fatalf("Error reading %s directory to get abs paths for paralog.csv meta file: %s", *indexDirParalogPre, err)
+	}
+
+	return indexPaths
 }
