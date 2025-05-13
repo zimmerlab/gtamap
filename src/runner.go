@@ -2,6 +2,14 @@ package main
 
 import (
 	"fmt"
+	"github.com/KleinSamuel/gtamap/src/core/datastructure/graph"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/mappedreadpair"
+	"github.com/KleinSamuel/gtamap/src/formats/sam"
+	"os"
+	"path/filepath"
+	"runtime/pprof"
+	"strings"
+
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/extraction"
 	"github.com/KleinSamuel/gtamap/src/core/index"
@@ -10,9 +18,6 @@ import (
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/akamensky/argparse"
 	"github.com/sirupsen/logrus"
-	"os"
-	"path/filepath"
-	"strings"
 )
 
 func printBanner() {
@@ -25,6 +30,15 @@ func printBanner() {
 }
 
 func main() {
+	ff, errr := os.Create("cpu.pprof")
+	if errr != nil {
+		panic(errr)
+	}
+	defer ff.Close()
+	if err := pprof.StartCPUProfile(ff); err != nil {
+		panic(err)
+	}
+	defer pprof.StopCPUProfile()
 
 	parser := argparse.NewParser("gtamap", "Gene-centric spliced read mapping")
 
@@ -205,6 +219,135 @@ func main() {
 		writer := datawriter.InitFromFile(outputFileMap)
 
 		mapper.MapAll(genomeIndex, reader, writer, numThreads)
+
+		// Testing
+		// parsing sam file into readpairmappings
+		testSAM, _ := os.Open("/home/malte/projects/bachelor_arbeit/data/real_reads/multimapping.sam")
+		samIndex := sam.CreateSAMIndex(testSAM)
+		readPairsMulti := make([]*mappedreadpair.ReadPairMatchResult, 0)
+
+		og := graph.OverlapGraph{
+			Nodes:     make(map[int]*graph.Node),
+			Index:     genomeIndex,
+			NodeCount: 0,
+		}
+
+		c := 0
+		for _, entry := range samIndex {
+			fw, seqFw, qseqFw, qnamefw, _ := sam.ParseSparseSAMEntry(testSAM, entry.First)
+			rv, seqRv, qseqRv, qnamerv, _ := sam.ParseSparseSAMEntry(testSAM, entry.Second)
+			rp := fastq.ReadPair{
+				ReadR1: &fastq.Read{
+					Header:   qnamefw,
+					Sequence: &seqFw,
+					Quality:  &qseqFw,
+				},
+				ReadR2: &fastq.Read{
+					Header:   qnamerv,
+					Sequence: &seqRv,
+					Quality:  &qseqRv,
+				},
+			}
+
+			rpMapping := &mappedreadpair.ReadPairMatchResult{
+				ReadPair: &rp,
+				Fw:       fw,
+				Rv:       rv,
+				Index:    genomeIndex,
+			}
+			if c%2 == 0 {
+				og.InsertNode(rpMapping)
+			}
+			c++
+			readPairsMulti = append(readPairsMulti, rpMapping)
+		}
+
+		wStart := 141779927
+		wStop := 141780198
+		// convert global coords to gene coords
+		geneStart := int(genomeIndex.SequenceInfo[0].StartGenomic)
+		wStartGene := wStart - geneStart
+		wStopGene := wStop - geneStart
+		// now go through window and store regions per pos
+		readPosSlice := make([][]*graph.NodeRegion, wStop-wStart+1)
+		for i := wStart; i < wStop; i++ {
+			correctedPos := i - wStart
+			for nodeId, node := range og.Nodes {
+				for _, region := range node.ReadPairMatch.Fw.MatchedGenome.Regions {
+					if region.Start <= i && region.End > i {
+						offset := i - region.Start
+						readBase := (*node.ReadPairMatch.ReadPair.ReadR1.Sequence)[offset]
+						readPosSlice[correctedPos] = append(readPosSlice[correctedPos],
+							&graph.NodeRegion{
+								FromReadPair: node.ReadPairMatch,
+								NodeId:       nodeId,
+								FromFw:       true,
+								BaseAtI:      readBase,
+							})
+						break
+					}
+				}
+				for _, region := range node.ReadPairMatch.Rv.MatchedGenome.Regions {
+					if region.Start <= i && region.End > i {
+						offset := i - region.Start
+						//fmt.Println("------------------------")
+						//fmt.Println((*node.ReadPairMatch.ReadPair.ReadR1.Sequence))
+						//fmt.Println((*node.ReadPairMatch.Fw.MatchedGenome))
+						//fmt.Println(offset)
+						readBase := (*node.ReadPairMatch.ReadPair.ReadR1.Sequence)[offset]
+						//fmt.Printf("readBase at %s: %s (%s)\n", strconv.Itoa(offset), string(readBase), readBase)
+						readPosSlice[correctedPos] = append(readPosSlice[correctedPos],
+							&graph.NodeRegion{
+								FromReadPair: node.ReadPairMatch,
+								NodeId:       nodeId,
+								FromFw:       false,
+								BaseAtI:      readBase,
+							})
+						break
+					}
+				}
+			}
+		}
+		fmt.Println()
+		// now we need to iterate through the window again but this time update the node edges
+		for i := wStartGene; i < wStopGene; i++ {
+			clusterPos := make(map[byte][]int)
+			refBase := (*genomeIndex.Sequences[0])[i]
+			clusterPos[refBase] = append(clusterPos[refBase], -1)
+
+			clusterPosRev := make(map[byte][]int)
+			refBaseRev := (*genomeIndex.Sequences[1])[i]
+			clusterPosRev[refBaseRev] = append(clusterPosRev[refBaseRev], -1)
+
+			// populate maps
+			for _, nodeRegion := range readPosSlice[i-wStartGene] {
+				if nodeRegion.FromFw {
+					clusterPos[nodeRegion.BaseAtI] = append(clusterPos[nodeRegion.BaseAtI], nodeRegion.NodeId)
+				} else {
+					clusterPosRev[nodeRegion.BaseAtI] = append(clusterPosRev[nodeRegion.BaseAtI], nodeRegion.NodeId)
+				}
+			}
+
+			// update clusterPos
+			for _, clusteredBaseNodes := range clusterPos {
+				if clusteredBaseNodes[0] == -1 {
+					//graph.UpdateCluster(&og, clusteredBaseNodes, 1)
+				} else {
+					graph.UpdateCluster(&og, clusteredBaseNodes, 1)
+				}
+			}
+
+			// update clusterPosRev
+			for _, clusteredBaseNodes := range clusterPosRev {
+				if clusteredBaseNodes[0] == -1 {
+					//graph.UpdateCluster(&og, clusteredBaseNodes, 1)
+				} else {
+					graph.UpdateCluster(&og, clusteredBaseNodes, 1)
+				}
+			}
+			fmt.Printf("%s/%s\n", i, wStopGene)
+		}
+		fmt.Println()
 
 	} else if cmdParalogPre.Happened() {
 		level, _ := logrus.ParseLevel(*logLevelParalogPre)
