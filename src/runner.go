@@ -30,6 +30,11 @@ func printBanner() {
 }
 
 func main() {
+	// WARN: THIS BRANCH SHOULD NEVER BE MERGED!!!
+	// This branch was created for prototyping the map -paralogs and paralog feature.
+	// Additionally I restructured the program s.t. we can accumulate mappings before writing them to the SAM out file.
+	// I also experimented with sweepline for coverage and an overlap graph for clustering.
+	// Keeping this branch for prototypes!
 	ff, errr := os.Create("cpu.pprof")
 	if errr != nil {
 		panic(errr)
