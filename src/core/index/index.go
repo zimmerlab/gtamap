@@ -617,12 +617,14 @@ func (i *GenomeIndex) ExtendParalogRegionIndex(targetGene string, indexExtension
 
 	// append Maps; here we need to make sure that the pos.SequenceIndex matches the
 	// current extension. Since the extension is only allowed to hold one
-	// sequence, the pos.SequenceIndex is in {0, 1}. By adding an offset based on how many seqs we already added,
-	// the kmer positions reference the correct sequenceIndex
+	// sequence, the pos.SequenceIndex is in {0, 1}. By adding an offset based on how many
+	// seqs we already added, the kmer positions reference the correct sequenceIndex
 	// if we add a seq to an index which holds only one seq:
 	// 0, 1 -> 2, 3
 	// if we then add another seq
 	// 0, 1 -> 4, 5
+
+	// how many sequences does the subindex currently hold (after adding the new seqId)
 	numSequences := uint8(len(i.SequenceHeaders))
 	for kmer, positions := range indexExtension.KeywordMap {
 		for _, pos := range positions {
