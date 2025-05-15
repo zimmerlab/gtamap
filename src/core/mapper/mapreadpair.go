@@ -6,13 +6,13 @@ import (
 	"strings"
 
 	"github.com/KleinSamuel/gtamap/src/core/mapper/unmappedpass"
+	"github.com/KleinSamuel/gtamap/src/utils"
 
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/core/timer"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
-	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
 )
 
@@ -133,15 +133,15 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	resFw := resultFw[0]
 	resRv := resultRv[0]
 
-	//postprocessReadMatch(genomeIndex, readPair.ReadR1, resFw)
-	//postprocessReadMatch(genomeIndex, readPair.ReadR2, resRv)
+	// postprocessReadMatch(genomeIndex, readPair.ReadR1, resFw)
+	// postprocessReadMatch(genomeIndex, readPair.ReadR2, resRv)
 
 	return readPairResultToSamString(genomeIndex, readPair, resFw, resRv)
 }
 
 func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.ReadPair,
-	resFw *mapperutils.ReadMatchResult, resRv *mapperutils.ReadMatchResult) (string, bool) {
-
+	resFw *mapperutils.ReadMatchResult, resRv *mapperutils.ReadMatchResult,
+) (string, bool) {
 	return FormatMappedReadPairToSAM(resFw, resRv, readPair, genomeIndex)
 }
 
@@ -451,7 +451,7 @@ func FormatMappedReadPairToSAM(resFw mapperutils.ReadMatchResult, resRv mapperut
 			}).Error("Error getting CIGAR string", errCigarFw)
 
 			// TODO: handle error
-			//return "", false
+			// return "", false
 			cigarFw = "*"
 		}
 	}
@@ -467,7 +467,7 @@ func FormatMappedReadPairToSAM(resFw mapperutils.ReadMatchResult, resRv mapperut
 			}).Error("Error getting CIGAR string", errCigarRv)
 
 			// TODO: handle error
-			//return "", false
+			// return "", false
 			cigarRv = "*"
 		}
 	}
