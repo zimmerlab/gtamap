@@ -5,10 +5,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/KleinSamuel/gtamap/src/core/mapper/unmappedpass"
-
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/index"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/postmappingpass"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/unmappedpass"
 	"github.com/KleinSamuel/gtamap/src/core/timer"
 	"github.com/KleinSamuel/gtamap/src/datawriter"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
@@ -66,6 +66,8 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	unmappedChan := unmappedpass.NewUnmappedChannel()
 	// contains the string results of the mapping
 	outputChan := make(chan string)
+	// contains the results of the first pass
+	resultChan := make(chan *postmappingpass.ReadPairMatchResults)
 	// contains information about the duration of each step
 	timerChan := make(chan *timer.Timer)
 	// contains information about the progress of the mapping
@@ -79,21 +81,25 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	waitgroupWriter.Add(1)
 	go OutputWorker(outputChan, &waitgroupWriter, writer)
 
+	var waitgroupMappings sync.WaitGroup
+	waitgroupMappings.Add(1)
+	go postmappingpass.PostMappingWorker(resultChan, &waitgroupMappings, outputChan)
+
 	var waitGroupTimer sync.WaitGroup
 	waitGroupTimer.Add(1)
 	go TimerWorker(timerChan, &waitGroupTimer)
 
 	// wait group that keeps track of the mapping goroutines that are still running
 	var wgFirstPass sync.WaitGroup
-	var wgUnmapped sync.WaitGroup
+	var wgFourthPass sync.WaitGroup
 
 	// start the mapping worker goroutine pool
 	for i := 0; i < numWorkers; i++ {
 		wgFirstPass.Add(1)
-		go MapperWorker(i, genomeIndex, &wgFirstPass, taskChan, unmappedChan, outputChan, progressChan, timerChan)
+		go MapperWorker(i, genomeIndex, &wgFirstPass, taskChan, unmappedChan, resultChan, progressChan, timerChan)
 	}
 
-	wgUnmapped.Add(1)
+	wgFourthPass.Add(1)
 
 	go MappingTaskProducer(reader, taskChan, maxTasks, specificQname)
 
@@ -103,10 +109,12 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 
 	unmappedChan.Close()
 
-	go unmappedpass.UnmappedWorker(unmappedChan, &wgUnmapped)
+	go unmappedpass.UnmappedWorker(unmappedChan, &wgFourthPass)
 
-	wgUnmapped.Wait()
+	wgFourthPass.Wait()
 
+	close(resultChan)
+	waitgroupMappings.Wait()
 	close(outputChan)
 	close(timerChan)
 

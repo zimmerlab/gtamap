@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/KleinSamuel/gtamap/src/core/mapper/postmappingpass"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/unmappedpass"
 	"github.com/KleinSamuel/gtamap/src/utils"
 
@@ -19,7 +20,7 @@ import (
 func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	unmappedChan *unmappedpass.UnmappedChannel,
 	timerChannel chan<- *timer.Timer,
-) (string, bool) {
+) (*postmappingpass.ReadPairMatchResults, bool) {
 	keepFw := Filter(readPair.ReadR1.Sequence, genomeIndex)
 	keepRw := Filter(readPair.ReadR2.Sequence, genomeIndex)
 
@@ -29,7 +30,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	}).Debug("Filter results")
 
 	if !keepFw || !keepRw {
-		return "", false
+		return nil, false
 	}
 
 	resultFw, isMappableFw := MapRead(readPair.ReadR1, genomeIndex)
@@ -50,7 +51,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 			"num resultsFw": len(resultFw),
 			"num resultsRv": len(resultRv),
 		}).Debug("readpair not mappable")
-		return "", false
+		return nil, false
 	}
 
 	needRemap := false
@@ -74,7 +75,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 			ResultFw: resultFw,
 			ResultRv: resultRv,
 		})
-		return "", false
+		return nil, false
 	}
 
 	// postprocess every potential match
@@ -332,7 +333,7 @@ func determineLeftNormalizationShiftRv(
 	}
 }
 
-func FormatMappedReadPairToSAM(resFw mapperutils.ReadMatchResult, resRv mapperutils.ReadMatchResult, readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex) (string, bool) {
+func FormatMappedReadPairToSAM(resFw *mapperutils.ReadMatchResult, resRv *mapperutils.ReadMatchResult, readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex) (string, bool) {
 	flagFw := sam.Flag{}
 	flagRv := sam.Flag{}
 

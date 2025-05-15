@@ -1,8 +1,10 @@
 package mapper
 
 import (
-	"github.com/KleinSamuel/gtamap/src/core/mapper/unmappedpass"
 	"sync"
+
+	"github.com/KleinSamuel/gtamap/src/core/mapper/postmappingpass"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/unmappedpass"
 
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/timer"
@@ -13,7 +15,7 @@ func MapperWorker(workerId int, genomeIndex *index.GenomeIndex,
 	wg *sync.WaitGroup,
 	taskChan <-chan MappingTask,
 	unmappedChan *unmappedpass.UnmappedChannel,
-	outputChan chan<- string,
+	resultChan chan<- *postmappingpass.ReadPairMatchResults,
 	progressChan chan<- bool,
 	timerChan chan<- *timer.Timer,
 ) {
@@ -30,10 +32,10 @@ func MapperWorker(workerId int, genomeIndex *index.GenomeIndex,
 			"task":     task.ID,
 		}).Debug("Processing task")
 
-		result, isMappable := MapReadPair(task.ReadPair, genomeIndex, unmappedChan, timerChan)
+		readPairMappings, isMappable := MapReadPair(task.ReadPair, genomeIndex, unmappedChan, timerChan)
 
 		if isMappable {
-			outputChan <- result
+			resultChan <- readPairMappings
 		}
 
 		progressChan <- true
