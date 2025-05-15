@@ -82,9 +82,10 @@ func main() {
 		Required: false,
 		Help:     "FASTQ file containing the reverse reads.",
 	})
-	var outputFileMap *os.File = cmdMap.File("", "output", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600, &argparse.Options{
+	var outputFileMap *string = cmdMap.String("", "output", &argparse.Options{
 		Required: true,
-		Help:     "Output file (file extension: .gtai).",
+		Help:     "Output SAM file (file extension: .sam).",
+		Default:  "",
 	})
 	var logLevelMap *string = cmdMap.Selector("", "loglevel", []string{"ERROR", "INFO", "DEBUG"}, &argparse.Options{
 		Required: false,
@@ -206,7 +207,7 @@ func main() {
 
 		reader := fastq.InitFromFiles(fastqFwFile, fastqRwFile)
 
-		writer := datawriter.InitFromFile(outputFileMap)
+		writer := datawriter.InitFromPath(*outputFileMap)
 
 		if *paralogFilePathMap != "" {
 			paralogFileMap, err := os.Open(*paralogFilePathMap)
