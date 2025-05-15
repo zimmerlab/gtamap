@@ -308,7 +308,7 @@ func main() {
 		}
 
 		// I. get paralog seqs per target gene (a map where each target region has a set of paralog ids)
-		targetParalogs := extraction.GetParaloges(targetGeneIds, *speciesParalogPre)
+		targetParalogs := extraction.GetParalogs(targetGeneIds, *speciesParalogPre)
 
 		// II. check if some of the gene ids are already present in --fastadir
 		paralogsToExtractSeq := index.OptimizeFastaExtraction(targetParalogs, fastaDirParalogPre)
