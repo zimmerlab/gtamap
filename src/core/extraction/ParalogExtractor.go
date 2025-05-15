@@ -39,22 +39,22 @@ func queryTargetId(geneid string, species string) map[string]struct{} {
 
 	resp, err := http.Get(url)
 	if err != nil {
-		logrus.Fatal("Failed to make request: %v", err)
+		logrus.Fatalf("Failed to make request: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		logrus.Fatal("API request failed with status: %s", resp.Status)
+		logrus.Fatalf("API request failed with status: %s", resp.Status)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		logrus.Fatal("Failed to read response body: %v", err)
+		logrus.Fatalf("Failed to read response body: %v", err)
 	}
 
 	var result HomologyResponse
 	if err := json.Unmarshal(body, &result); err != nil {
-		logrus.Fatal("Failed to parse JSON: %v", err)
+		logrus.Fatalf("Failed to parse JSON: %v", err)
 	}
 
 	paralogSeqs := make(map[string]struct{})
