@@ -69,7 +69,7 @@ func queryTargetId(geneid string, species string) map[string]struct{} {
 	return paralogSeqs
 }
 
-func GetParaloges(targetGeneIds []string, species string) map[string]map[string]struct{} {
+func GetParalogs(targetGeneIds []string, species string) map[string]map[string]struct{} {
 	paralogSeqs := make(map[string]map[string]struct{})
 	// receive paralog genes per target gene
 	for _, targetGene := range targetGeneIds {
@@ -134,7 +134,6 @@ func GetAbsPathsPerTarget(targetParalogs map[string]map[string]struct{}, indexDi
 		}
 		return nil
 	})
-
 	if err != nil {
 		logrus.Fatalf("Error reading %s directory to get abs paths for paralog.csv meta file: %s", *indexDirParalogPre, err)
 	}
