@@ -12,7 +12,7 @@ type Writer struct {
 }
 
 func InitFromPath(outputFilePath string) *Writer {
-	err := os.MkdirAll(filepath.Dir(*&outputFilePath), os.ModePerm)
+	err := os.MkdirAll(filepath.Dir(outputFilePath), os.ModePerm)
 	if err != nil {
 		logrus.Fatalf("Error creating output SAM directory: %s", err)
 	}
