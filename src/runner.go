@@ -54,6 +54,25 @@ func main() {
 		Default:  "INFO",
 	})
 
+	var cmdIndexPreRegion *argparse.Command = parser.NewCommand("index-pre-region", "Extract a specific sequence from genome.")
+	var fastaFileIndexPreRegion *string = cmdIndexPreRegion.String("", "fasta", &argparse.Options{
+		Required: true,
+		Help:     "Nucleotide sequences (FASTA) file (currently only non-compressed).",
+	})
+	var outputDirIndexPreRegion *string = cmdIndexPreRegion.String("", "output", &argparse.Options{
+		Required: true,
+		Help:     "Output directory for extracted gene sequences.",
+	})
+	var regionIndexPreRegion *string = cmdIndexPreRegion.String("", "region", &argparse.Options{
+		Required: true,
+		Help:     "Region to extract (e.g. 1:1000-2000).",
+	})
+	var logLevelIndexPreRegion *string = cmdIndexPreRegion.Selector("", "loglevel", []string{"ERROR", "INFO", "DEBUG"}, &argparse.Options{
+		Required: false,
+		Help:     "Log output level.",
+		Default:  "INFO",
+	})
+
 	var cmdIndex *argparse.Command = parser.NewCommand("index", "Build the GTAMap index (.gtai).")
 	var fastaFile *os.File = cmdIndex.File("", "fasta", os.O_RDONLY, 0o600, &argparse.Options{
 		Required: true,
@@ -172,6 +191,38 @@ func main() {
 
 		index.ExtractGeneSequenceFromGtfAndFastaForIndex(*gtfFileIndexPre, *fastaFileIndexPre,
 			*outputDirIndexPre, geneIds, *separateExtraction)
+
+		logrus.Info("Done")
+
+	} else if cmdIndexPreRegion.Happened() {
+
+		level, _ := logrus.ParseLevel(*logLevelIndexPreRegion)
+		logrus.SetLevel(level)
+
+		printBanner()
+		logrus.Info("Extracting region sequence from genome")
+
+		// parsing region
+		region := strings.Split(*regionIndexPreRegion, ":")
+		if len(region) != 2 {
+			logrus.Fatal("Invalid region format. Expected format: <chromosome>:<start>-<end>")
+		}
+		chromosome := region[0]
+		startEnd := strings.Split(region[1], "-")
+		if len(startEnd) != 2 {
+			logrus.Fatal("Invalid region format. Expected format: <chromosome>:<start>-<end>")
+		}
+		start, err := strconv.Atoi(startEnd[0])
+		if err != nil || start < 0 {
+			logrus.Fatal("Invalid start position. Expected a positive integer.")
+		}
+		end, err := strconv.Atoi(startEnd[1])
+		if err != nil || end <= start {
+			logrus.Fatal("Invalid end position. Expected an integer greater than start position.")
+		}
+
+		index.ExtractSequenceFromFastaForIndex(*fastaFileIndexPreRegion, chromosome, start, end,
+			*outputDirIndexPreRegion)
 
 		logrus.Info("Done")
 
