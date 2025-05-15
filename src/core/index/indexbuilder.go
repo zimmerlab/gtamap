@@ -62,16 +62,18 @@ func ExtractSequenceFromFastaForIndex(fastaPath string, chromosome string, start
 }
 
 func ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath string, fastaPath string, outputPath string,
-	geneIds map[string]struct{}, separateExtraction bool) {
+	geneIds map[string]struct{}, upstreamBases int, downstreamBases int, separateExtraction bool) {
 
 	fastaIndexPath := fastaPath + ".fai"
 
 	logrus.WithFields(logrus.Fields{
-		"gtfPath":        gtfPath,
-		"fastaPath":      fastaPath,
-		"fastaIndexPath": fastaIndexPath,
-		"outputPath":     outputPath,
-		"numGenes":       len(geneIds),
+		"gtfPath":         gtfPath,
+		"fastaPath":       fastaPath,
+		"fastaIndexPath":  fastaIndexPath,
+		"outputPath":      outputPath,
+		"numGenes":        len(geneIds),
+		"upstreamBases":   upstreamBases,
+		"downstreamBases": downstreamBases,
 	}).Info("Extracting gene sequence")
 
 	// check if output directory exists
@@ -98,9 +100,9 @@ func ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath string, fastaPath string
 	if separateExtraction {
 		// write each gene to separate fa file
 		for _, gene := range geneInfo {
+
 			outFilePath := filepath.Join(outputPath, gene.GeneId+".fa")
 			outFile, errOpen := os.Create(outFilePath)
-
 			if errOpen != nil {
 				logrus.Fatal("Error creating separate output file (.fa)", errOpen)
 			}
@@ -109,7 +111,25 @@ func ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath string, fastaPath string
 				"separated fasta": outputPath,
 			}).Info("Creating a separate fasta file")
 
-			writeToFasta(gene, outFile, fastaFile, fastaIndex)
+			geneStart := int(gene.StartGenomic) - upstreamBases
+			if geneStart < 0 {
+				geneStart = 0
+
+				logrus.WithFields(logrus.Fields{
+					"geneId":   gene.GeneId,
+					"start":    gene.StartGenomic,
+					"upstream": upstreamBases,
+				}).Warn("Genomic region is negative, setting to 0")
+			}
+
+			geneEnd := int(gene.EndGenomic) + downstreamBases
+
+			seq := dataloader.ExtractSequenceAsStringFromFasta(fastaFile, fastaIndex, gene.Contig,
+				uint32(geneStart), uint32(geneEnd))
+
+			AppendSequenceToFastaFile(gene.GeneId, gene.Contig, gene.IsForwardStrand, geneStart, geneEnd,
+				[]byte(seq), 60, outFile)
+
 			outFile.Close()
 		}
 	} else {
@@ -133,7 +153,25 @@ func ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath string, fastaPath string
 		}).Info("Creating a shared fasta file")
 
 		for _, gene := range geneInfo {
-			writeToFasta(gene, outFile, fastaFile, fastaIndex)
+
+			geneStart := int(gene.StartGenomic) - upstreamBases
+			if geneStart < 0 {
+				geneStart = 0
+				
+				logrus.WithFields(logrus.Fields{
+					"geneId":   gene.GeneId,
+					"start":    gene.StartGenomic,
+					"upstream": upstreamBases,
+				}).Warn("Genomic region is negative, setting to 0")
+			}
+
+			geneEnd := int(gene.EndGenomic) + downstreamBases
+
+			seq := dataloader.ExtractSequenceAsStringFromFasta(fastaFile, fastaIndex, gene.Contig,
+				uint32(geneStart), uint32(geneEnd))
+
+			AppendSequenceToFastaFile(gene.GeneId, gene.Contig, gene.IsForwardStrand, geneStart, geneEnd,
+				[]byte(seq), 60, outFile)
 		}
 		outFile.Close()
 	}

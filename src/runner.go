@@ -48,6 +48,16 @@ func main() {
 		Required: false,
 		Help:     "Gene IDs to extract (comma-separated).",
 	})
+	var upstreamIndexPre *int = cmdIndexPre.Int("", "upstream", &argparse.Options{
+		Required: false,
+		Help:     "Number of bases to add upstream of the gene start position.",
+		Default:  0,
+	})
+	var downstreamIndexPre *int = cmdIndexPre.Int("", "downstream", &argparse.Options{
+		Required: false,
+		Help:     "Number of bases to add downstream of the gene end position.",
+		Default:  0,
+	})
 	var logLevelIndexPre *string = cmdIndexPre.Selector("", "loglevel", []string{"ERROR", "INFO", "DEBUG"}, &argparse.Options{
 		Required: false,
 		Help:     "Log output level.",
@@ -190,7 +200,7 @@ func main() {
 		}
 
 		index.ExtractGeneSequenceFromGtfAndFastaForIndex(*gtfFileIndexPre, *fastaFileIndexPre,
-			*outputDirIndexPre, geneIds, *separateExtraction)
+			*outputDirIndexPre, geneIds, *upstreamIndexPre, *downstreamIndexPre, *separateExtraction)
 
 		logrus.Info("Done")
 
@@ -308,7 +318,7 @@ func main() {
 			if len(paralogs) > 0 {
 				logrus.Infof("Extracting %s paralog sequences of target region '%s' into '%s'", strconv.Itoa(len(paralogs)), target, *fastaDirParalogPre)
 				index.ExtractGeneSequenceFromGtfAndFastaForIndex(*gtfFileParalogPre, *fastaFileParalogPre,
-					*fastaDirParalogPre, paralogs, true)
+					*fastaDirParalogPre, paralogs, 0, 0, true)
 				logrus.Infof("Finished extracting %s paralog sequences of target region '%s' into '%s'", strconv.Itoa(len(paralogs)), target, *fastaDirParalogPre)
 			}
 		}
