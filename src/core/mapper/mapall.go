@@ -5,9 +5,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/KleinSamuel/gtamap/src/core/mapper/unmappedpass"
+
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/index"
-	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/core/timer"
 	"github.com/KleinSamuel/gtamap/src/datawriter"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
@@ -62,7 +63,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	// contains the read pairs that need to be mapped
 	taskChan := make(chan MappingTask, numWorkers*bufferSizeMultiplier)
 	// contains all read pairs that could not be mapped in the first pass
-	unmappedChan := mapperutils.NewUnmappedChannel()
+	unmappedChan := unmappedpass.NewUnmappedChannel()
 	// contains the string results of the mapping
 	outputChan := make(chan string)
 	// contains information about the duration of each step
@@ -102,7 +103,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 
 	unmappedChan.Close()
 
-	go unmappedWorker(unmappedChan, &wgUnmapped)
+	go unmappedpass.UnmappedWorker(unmappedChan, &wgUnmapped)
 
 	wgUnmapped.Wait()
 

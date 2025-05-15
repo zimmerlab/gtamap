@@ -1,6 +1,7 @@
 package mapper
 
 import (
+	"github.com/KleinSamuel/gtamap/src/core/mapper/unmappedpass"
 	"math"
 	"strconv"
 	"strings"
@@ -15,7 +16,7 @@ import (
 )
 
 func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
-	unmappedChan *mapperutils.UnmappedChannel,
+	unmappedChan *unmappedpass.UnmappedChannel,
 	timerChannel chan<- *timer.Timer,
 ) (string, bool) {
 	keepFw := Filter(readPair.ReadR1.Sequence, genomeIndex)
@@ -67,7 +68,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	}
 
 	if needRemap {
-		unmappedChan.Send(&mapperutils.UnmappedTask{
+		unmappedChan.Send(&unmappedpass.UnmappedTask{
 			ReadPair: readPair,
 			ResultFw: resultFw,
 			ResultRv: resultRv,

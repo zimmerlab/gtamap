@@ -1,10 +1,10 @@
 package mapper
 
 import (
+	"github.com/KleinSamuel/gtamap/src/core/mapper/unmappedpass"
 	"sync"
 
 	"github.com/KleinSamuel/gtamap/src/core/index"
-	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/core/timer"
 	"github.com/sirupsen/logrus"
 )
@@ -12,7 +12,7 @@ import (
 func MapperWorker(workerId int, genomeIndex *index.GenomeIndex,
 	wg *sync.WaitGroup,
 	taskChan <-chan MappingTask,
-	unmappedChan *mapperutils.UnmappedChannel,
+	unmappedChan *unmappedpass.UnmappedChannel,
 	outputChan chan<- string,
 	progressChan chan<- bool,
 	timerChan chan<- *timer.Timer,

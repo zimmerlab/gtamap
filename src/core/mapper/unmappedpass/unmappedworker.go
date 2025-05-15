@@ -1,13 +1,11 @@
-package mapper
+package unmappedpass
 
 import (
 	"fmt"
 	"sync"
-
-	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 )
 
-func unmappedWorker(unmappedChan *mapperutils.UnmappedChannel, wgUnmapped *sync.WaitGroup) {
+func UnmappedWorker(unmappedChan *UnmappedChannel, wgUnmapped *sync.WaitGroup) {
 	defer wgUnmapped.Done()
 
 	for {

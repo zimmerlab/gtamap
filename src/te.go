@@ -2,16 +2,15 @@ package main
 
 import (
 	"fmt"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/unmappedpass"
 	"sync"
-
-	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 )
 
 func main() {
 	fmt.Println("hello")
 
 	taskChan := make(chan int)
-	unmappedChan := mapperutils.NewUnmappedChannel()
+	unmappedChan := unmappedpass.NewUnmappedChannel()
 
 	go Producer(taskChan)
 
@@ -52,7 +51,7 @@ func Producer(taskChan chan<- int) {
 	fmt.Println("done producing")
 }
 
-func ConsumerFirst(id int, taskChan <-chan int, unmappedChan *mapperutils.UnmappedChannel,
+func ConsumerFirst(id int, taskChan <-chan int, unmappedChan *unmappedpass.UnmappedChannel,
 	wg *sync.WaitGroup,
 ) {
 	defer wg.Done()
@@ -61,7 +60,7 @@ func ConsumerFirst(id int, taskChan <-chan int, unmappedChan *mapperutils.Unmapp
 		fmt.Println("task: ", task)
 
 		if task%2 == 0 {
-			unmappedChan.Send(&mapperutils.UnmappedTask{
+			unmappedChan.Send(&unmappedpass.UnmappedTask{
 				ReadPair: nil,
 				ResultFw: nil,
 				ResultRv: nil,
@@ -72,7 +71,7 @@ func ConsumerFirst(id int, taskChan <-chan int, unmappedChan *mapperutils.Unmapp
 	fmt.Println("producer done", id)
 }
 
-func ConsumerSecond(unmappedChan *mapperutils.UnmappedChannel, wg *sync.WaitGroup) {
+func ConsumerSecond(unmappedChan *unmappedpass.UnmappedChannel, wg *sync.WaitGroup) {
 	fmt.Println("ConsumerSecond")
 
 	defer wg.Done()
