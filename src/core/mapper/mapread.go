@@ -17,7 +17,7 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]mapperutils.Re
 	}).Debug("Mapping read")
 
 	globalMatches := mapperutils.GlobalMatchResult{
-		MatchesPerSequence: make([]*mapperutils.SequenceMatchResult, genomeIndex.NumSequences()),
+		MatchesPerSequence: make([]*mapperutils.SequenceMatchResult, genomeIndex.NumSequences()*2),
 	}
 
 	// TODO: purposely hardcoded the kmer length to 10 because the fixed size array requires manual
@@ -33,7 +33,7 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]mapperutils.Re
 
 		matches := genomeIndex.FindKeywordMatchesInMap(&kmer, i)
 
-		if matches == nil {
+		if matches == nil || len(matches) == 0 {
 			continue
 		}
 
@@ -62,7 +62,7 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]mapperutils.Re
 
 	// list has size of number of sequences in index
 	// each element represents the maximum number of kmers that matched exactly on the same diagonal
-	maxDiagonalHitsPerSequence := make([]int, genomeIndex.NumSequences())
+	maxDiagonalHitsPerSequence := make([]int, genomeIndex.NumSequences()*2)
 
 	for seqIndex, sequenceMatches := range globalMatches.MatchesPerSequence {
 
