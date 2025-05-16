@@ -10,6 +10,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/keywordtree"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/keywordtreebyte"
 	"github.com/KleinSamuel/gtamap/src/core/interval"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
 	"github.com/KleinSamuel/gtamap/src/formats/gtf"
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
@@ -684,6 +685,26 @@ func (i *GenomeIndex) GetKeywordFromMap(keyword [10]byte) []*keywordtreebyte.Pos
 	return i.KeywordMap[keyword]
 }
 
+func (i *GenomeIndex) FindKeywordMatchesInMap(keyword *[10]byte, posInRead int) []*mapperutils.Match {
+
+	positions := i.KeywordMap[*keyword]
+
+	matches := make([]*mapperutils.Match, len(positions))
+
+	for i, pos := range positions {
+		matches[i] = &mapperutils.Match{
+			SequenceIndex: int(pos.SequenceIndex),
+			FromGenome:    int(pos.Position),
+			ToGenome:      int(pos.Position + 10),
+			FromRead:      posInRead,
+			ToRead:        posInRead + 10,
+			StartGenome:   int(pos.Position) - posInRead,
+		}
+	}
+
+	return matches
+}
+
 func (i *GenomeIndex) GetKeywordFromMapSmall(keyword [5]byte) []*keywordtreebyte.Position {
 	return i.KeywordMapSmall[keyword]
 }
@@ -777,6 +798,10 @@ func (i *GenomeIndex) GetSequenceContig(sequenceIndex int) string {
 	} else {
 		return i.SequenceInfo[sequenceIndex-1].Contig
 	}
+}
+
+func (i *GenomeIndex) NumSequences() int {
+	return len(i.SequenceHeaders)
 }
 
 func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry) *GenomeIndex {
