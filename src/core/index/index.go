@@ -645,7 +645,7 @@ func (i *GenomeIndex) ExtendParalogRegionIndex(targetGene string, indexExtension
 			} else {
 				offset = (numSequences-1)*2 + 1
 			}
-			i.AddKeywordToMap(kmer, pos.SequenceIndex+offset, pos.Position)
+			i.AddKeywordToMap(kmer, offset, pos.Position)
 		}
 	}
 
@@ -658,17 +658,35 @@ func (i *GenomeIndex) ExtendParalogRegionIndex(targetGene string, indexExtension
 			} else {
 				offset = (numSequences-1)*2 + 1
 			}
-			i.AddKeywordToMapSmall(kmer, pos.SequenceIndex+offset, pos.Position)
+			i.AddKeywordToMapSmall(kmer, offset, pos.Position)
 		}
 	}
 
-	// since we are currently not using the keywordTree, skip it
+	// also do for keyword tree
+	for kmer, positions := range indexExtension.KeywordMap {
+		node := i.KeywordTree.AddKeyword(kmer[:])
+
+		for _, pos := range positions {
+			var offset uint8
+			if pos.SequenceIndex == 0 {
+				offset = (numSequences - 1) * 2
+			} else {
+				offset = (numSequences-1)*2 + 1
+			}
+			node.Positions = append(node.Positions, keywordtreebyte.Position{
+				SequenceIndex: offset,
+				Position:      uint32(pos.Position),
+			})
+		}
+	}
 
 	// log
 	logrus.WithFields(logrus.Fields{
 		"Added paralog region":                            indexExtension.SequenceInfo[0].GeneId,
 		"to the paralog index belonging to target region": targetGene,
 	}).Info("Extended paralog index of main index")
+
+	i.KeywordTree.NumSequences = i.KeywordTree.NumSequences + uint8(len(indexExtension.Sequences))
 }
 
 func (i *GenomeIndex) AddKeywordToMapSmall(keyword [5]byte, sequenceIndex uint8, position uint32) {
