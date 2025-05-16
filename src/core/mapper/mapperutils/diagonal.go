@@ -3,6 +3,7 @@ package mapperutils
 import (
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/sirupsen/logrus"
+	"sort"
 )
 
 type DiagonalHandler struct {
@@ -18,6 +19,28 @@ func NewDiagonalHandler() *DiagonalHandler {
 func NewDiagonalHandlerWithData(m map[int][]*Match) *DiagonalHandler {
 	return &DiagonalHandler{
 		Diagonals: m,
+	}
+}
+
+func NewDiagonalHandlerWithDataCopy(m map[int][]*Match) *DiagonalHandler {
+
+	mapCopy := make(map[int][]*Match, len(m))
+
+	for key, matches := range m {
+		mapCopy[key] = make([]*Match, len(matches))
+		for i, match := range matches {
+			mapCopy[key][i] = &Match{
+				FromRead:   match.FromRead,
+				ToRead:     match.ToRead,
+				FromGenome: match.FromGenome,
+				ToGenome:   match.ToGenome,
+				Used:       match.Used,
+			}
+		}
+	}
+
+	return &DiagonalHandler{
+		Diagonals: mapCopy,
 	}
 }
 
@@ -49,6 +72,22 @@ func (dh *DiagonalHandler) GetBestDiagonal() (int, int, bool) {
 	}
 
 	return indexMax, maxMatches, found
+}
+
+func (dh *DiagonalHandler) GetAvailableDiagonals() []int {
+
+	// get sorted list of dh.Diagonals keys
+	diagonalKeys := make([]int, 0, len(dh.Diagonals))
+	for key := range dh.Diagonals {
+		diagonalKeys = append(diagonalKeys, key)
+	}
+
+	// sort the keys in ascending order
+	sort.Slice(diagonalKeys, func(i, j int) bool {
+		return diagonalKeys[i] < diagonalKeys[j]
+	})
+
+	return diagonalKeys
 }
 
 func (dh *DiagonalHandler) ConsumeDiagonal(diagonal int) {
@@ -190,4 +229,8 @@ func (dh *DiagonalHandler) ConsumeRegionGenome(startGenome int, endGenome int) {
 			}
 		}
 	}
+}
+
+func (dh *DiagonalHandler) Copy() *DiagonalHandler {
+	return NewDiagonalHandlerWithDataCopy(dh.Diagonals)
 }
