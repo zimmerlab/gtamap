@@ -3,7 +3,6 @@ package mapper
 import (
 	"sync"
 
-	"github.com/KleinSamuel/gtamap/src/core/mapper/postmappingpass"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/unmappedpass"
 
 	"github.com/KleinSamuel/gtamap/src/core/index"
@@ -15,7 +14,7 @@ func MapperWorker(workerId int, genomeIndex *index.GenomeIndex,
 	wg *sync.WaitGroup,
 	taskChan <-chan MappingTask,
 	unmappedChan *unmappedpass.UnmappedChannel,
-	resultChan chan<- *postmappingpass.ReadPairMatchResults,
+	resultChan chan<- *ReadPairMatchResults,
 	progressChan chan<- bool,
 	timerChan chan<- *timer.Timer,
 ) {

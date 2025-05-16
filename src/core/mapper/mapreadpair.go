@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/KleinSamuel/gtamap/src/core/mapper/postmappingpass"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/unmappedpass"
 	"github.com/KleinSamuel/gtamap/src/utils"
 
@@ -20,7 +19,7 @@ import (
 func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	unmappedChan *unmappedpass.UnmappedChannel,
 	timerChannel chan<- *timer.Timer,
-) (*postmappingpass.ReadPairMatchResults, bool) {
+) (*ReadPairMatchResults, bool) {
 	keepFw := Filter(readPair.ReadR1.Sequence, genomeIndex)
 	keepRw := Filter(readPair.ReadR2.Sequence, genomeIndex)
 
@@ -37,12 +36,12 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	resultRv, isMappableRv := MapRead(readPair.ReadR2, genomeIndex)
 
 	// TODO: REMOVE DEBUG
-	//if isMappableFw {
-	//	debugout.GenerateAlignmentView(genomeIndex, resultFw[0], readPair.ReadR1)
-	//}
-	//if isMappableRv {
-	//	debugout.GenerateAlignmentView(genomeIndex, resultRv[0], readPair.ReadR2)
-	//}
+	// if isMappableFw {
+	// 	debugout.GenerateAlignmentView(genomeIndex, resultFw[0], readPair.ReadR1)
+	// }
+	// if isMappableRv {
+	// 	debugout.GenerateAlignmentView(genomeIndex, resultRv[0], readPair.ReadR2)
+	// }
 
 	if !isMappableFw || !isMappableRv || len(resultFw) == 0 || len(resultRv) == 0 {
 		logrus.WithFields(logrus.Fields{
@@ -137,13 +136,12 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	// postprocessReadMatch(genomeIndex, readPair.ReadR1, resFw)
 	// postprocessReadMatch(genomeIndex, readPair.ReadR2, resRv)
 
-	return readPairResultToSamString(genomeIndex, readPair, resFw, resRv)
-}
-
-func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.ReadPair,
-	resFw *mapperutils.ReadMatchResult, resRv *mapperutils.ReadMatchResult,
-) (string, bool) {
-	return FormatMappedReadPairToSAM(resFw, resRv, readPair, genomeIndex)
+	return &ReadPairMatchResults{
+		ReadPair: readPair,
+		Fw:       resultFw,
+		Rv:       resultRv,
+		Index:    genomeIndex,
+	}, true
 }
 
 func postprocessReadMatch(genomeIndex *index.GenomeIndex, read *fastq.Read, result *mapperutils.ReadMatchResult) {

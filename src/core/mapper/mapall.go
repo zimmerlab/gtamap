@@ -7,7 +7,6 @@ import (
 
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/index"
-	"github.com/KleinSamuel/gtamap/src/core/mapper/postmappingpass"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/unmappedpass"
 	"github.com/KleinSamuel/gtamap/src/core/timer"
 	"github.com/KleinSamuel/gtamap/src/datawriter"
@@ -67,7 +66,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	// contains the string results of the mapping
 	outputChan := make(chan string)
 	// contains the results of the first pass
-	resultChan := make(chan *postmappingpass.ReadPairMatchResults)
+	resultChan := make(chan *ReadPairMatchResults)
 	// contains information about the duration of each step
 	timerChan := make(chan *timer.Timer)
 	// contains information about the progress of the mapping
@@ -83,7 +82,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 
 	var waitgroupMappings sync.WaitGroup
 	waitgroupMappings.Add(1)
-	go postmappingpass.PostMappingWorker(resultChan, &waitgroupMappings, outputChan)
+	go PostMappingWorker(resultChan, &waitgroupMappings, outputChan)
 
 	var waitGroupTimer sync.WaitGroup
 	waitGroupTimer.Add(1)
