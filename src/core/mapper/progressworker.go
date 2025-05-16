@@ -30,8 +30,8 @@ func ProgressWorker(progressChan <-chan bool, wg *sync.WaitGroup) {
 
 			logrus.WithFields(logrus.Fields{
 				"done":          strconv.Itoa(millionTasks) + "M",
-				"delta total":   formatDuration(elapsed),
-				"delta last 1M": formatDuration(elapsedSinceLast),
+				"delta total":   FormatDuration(elapsed),
+				"delta last 1M": FormatDuration(elapsedSinceLast),
 				"rate":          fmt.Sprintf("%.2fM per minute", rate),
 			}).Info("Progress update")
 		}

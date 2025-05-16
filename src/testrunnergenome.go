@@ -72,7 +72,8 @@ func extractGeneSequenceFromGtfAndFastaForIndex() {
 	//fastaIndexPath := "/home/sam/Data/gtamap/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai"
 	outputPath := "/home/sam/Data/gtamap/"
 
-	index.ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath, fastaPath, outputPath, geneIds)
+	index.ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath, fastaPath, outputPath, geneIds,
+		0, 0, false)
 }
 
 func testTas2Read() {
