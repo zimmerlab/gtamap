@@ -63,7 +63,7 @@ func scoreSpliceSites(donorFirstBase byte, donorSecondBase byte, acceptorFirstBa
 	return 2
 }
 
-func formatDuration(d time.Duration) string {
+func FormatDuration(d time.Duration) string {
 	if d.Hours() < 1 {
 		if d.Minutes() < 1 {
 			if d.Seconds() < 1 {
@@ -72,9 +72,9 @@ func formatDuration(d time.Duration) string {
 				return fmt.Sprintf("%ds", int(d.Seconds()))
 			}
 		} else {
-			return fmt.Sprintf("%dm %ds", int(d.Minutes()), int(d.Seconds()))
+			return fmt.Sprintf("%dm %ds", int(d.Minutes()), int(d.Seconds())%60)
 		}
 	} else {
-		return fmt.Sprintf("%dh %dm %ds", int(d.Hours()), int(d.Minutes()), int(d.Seconds()))
+		return fmt.Sprintf("%dh %dm %ds", int(d.Hours()), int(d.Minutes())%60, int(d.Seconds())%60)
 	}
 }

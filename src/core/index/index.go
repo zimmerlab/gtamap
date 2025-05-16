@@ -10,6 +10,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/keywordtree"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/keywordtreebyte"
 	"github.com/KleinSamuel/gtamap/src/core/interval"
+	"github.com/KleinSamuel/gtamap/src/core/mapper"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
 	"github.com/KleinSamuel/gtamap/src/formats/gtf"
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
@@ -458,9 +459,9 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 	SerializeFromFile(&gtaIndex, outputFile)
 
 	logrus.WithFields(logrus.Fields{
-		"build": durationBuildTree.String(),
-		"read":  durationReadReference.String(),
-		"total": time.Since(timerStart).String(),
+		"build": mapper.FormatDuration(durationBuildTree),
+		"read":  mapper.FormatDuration(durationReadReference),
+		"total": mapper.FormatDuration(time.Since(timerStart)),
 	}).Info("Successfully built and serialized the GTAMap index")
 }
 
@@ -485,7 +486,7 @@ func SerializeFromFile(gtaIndex *GtaIndex, outputFile *os.File) {
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"duration": time.Since(timerStart),
+		"duration": mapper.FormatDuration(time.Since(timerStart)),
 		"output":   outputFile.Name(),
 	}).Info("Serialized index")
 }
@@ -501,7 +502,7 @@ func SerializeFromFileTest(tree *keywordtree.KeywordTree, outputFile *os.File) {
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"duration": time.Since(timerStart),
+		"duration": mapper.FormatDuration(time.Since(timerStart)),
 		"output":   outputFile.Name(),
 	}).Info("Serialized index")
 }
@@ -531,7 +532,7 @@ func DezerializeFromFile(indexFile *os.File) *GtaIndex {
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"duration": time.Since(timerStart),
+		"duration": mapper.FormatDuration(time.Since(timerStart)),
 	}).Info("Deserialized index")
 
 	logrus.WithFields(logrus.Fields{

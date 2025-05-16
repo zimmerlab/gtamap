@@ -7,7 +7,7 @@ const toolVersion string = "0.2"
 var kmerLength uint8 = 10
 
 // the maximum percentage of mismatches allowed in a read (50 = 50% percent mismatches allowed)
-var maxMismatchPercentage uint8 = 10
+var maxMismatchPercentage uint8 = 5
 
 // the minimum length of an intron (in base pairs)
 // used to decide whether a gap is a deletion (if below this length) or an intron
