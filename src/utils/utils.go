@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 func Arange(start, end, size int) []int {
@@ -81,4 +82,20 @@ func ReverseBytes(s []byte) []byte {
 		s[i], s[j] = s[j], s[i]
 	}
 	return s
+}
+
+func FormatDuration(d time.Duration) string {
+	if d.Hours() < 1 {
+		if d.Minutes() < 1 {
+			if d.Seconds() < 1 {
+				return fmt.Sprintf("%dms", int(d.Milliseconds()))
+			} else {
+				return fmt.Sprintf("%ds", int(d.Seconds()))
+			}
+		} else {
+			return fmt.Sprintf("%dm %ds", int(d.Minutes()), int(d.Seconds())%60)
+		}
+	} else {
+		return fmt.Sprintf("%dh %dm %ds", int(d.Hours()), int(d.Minutes())%60, int(d.Seconds())%60)
+	}
 }

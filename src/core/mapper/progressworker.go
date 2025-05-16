@@ -2,6 +2,7 @@ package mapper
 
 import (
 	"fmt"
+	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
 	"strconv"
 	"sync"
@@ -30,8 +31,8 @@ func ProgressWorker(progressChan <-chan bool, wg *sync.WaitGroup) {
 
 			logrus.WithFields(logrus.Fields{
 				"done":          strconv.Itoa(millionTasks) + "M",
-				"delta total":   FormatDuration(elapsed),
-				"delta last 1M": FormatDuration(elapsedSinceLast),
+				"delta total":   utils.FormatDuration(elapsed),
+				"delta last 1M": utils.FormatDuration(elapsedSinceLast),
 				"rate":          fmt.Sprintf("%.2fM per minute", rate),
 			}).Info("Progress update")
 		}
