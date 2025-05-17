@@ -79,7 +79,7 @@ func extractGeneSequenceFromGtfAndFastaForIndex() {
 func testSpecificRead() {
 
 	//genomeIndexPath := "/home/sam/Data/gtamap/tas2/tas2r4/index/ENSG00000127364.gtai"
-	genomeIndexPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/019/ENSG00000141480.grch38.gtai"
+	genomeIndexPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/019/ENSG00000141480.gtai"
 
 	//readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.tas2r4.fastq"
 	//readsRvPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_2.tas2r4.fastq"

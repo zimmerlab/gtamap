@@ -301,25 +301,22 @@ func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperu
 			// add the mismatche to the result
 			result.MismatchesRead = append(result.MismatchesRead, i)
 
+			// TODO: ignore the mismatch constraint inside a single diagonal for now
 			// skip this match result if there are too many mismatches
-			if exceedsMismatchConstraint(read, *result) {
-
-				logrus.WithFields(logrus.Fields{
-					"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
-					"maxMismatchPercentage": config.MaxMismatchPercentage(),
-					"mismatches":            result.MismatchesRead,
-					"numMismatches":         len(result.MismatchesRead),
-				}).Debug("too many mismatches in diagonal filling")
-
-				return
-			}
+			//if exceedsMismatchConstraint(read, *result) {
+			//
+			//	logrus.WithFields(logrus.Fields{
+			//		"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
+			//		"maxMismatchPercentage": config.MaxMismatchPercentage(),
+			//		"mismatches":            result.MismatchesRead,
+			//		"numMismatches":         len(result.MismatchesRead),
+			//	}).Debug("too many mismatches in diagonal filling")
+			//
+			//	return
+			//}
 		}
 
 		diagonalGenome.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.End)
-
-		// also update used status in kmers that were not part of the best diag (but existed as geps inside the best diag)
-		// this way, these kmers cant be used in other diagonals
-		//dh.ConsumeKmer(gapRead.Start, gapRead.End, gapGenome.Start, gapGenome.End)
 	}
 
 	if len(gapsRead.Regions) > 0 {
@@ -344,20 +341,13 @@ func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperu
 		result.MatchedGenome.AddRegionNonOverlappingPanic(regionGenome.Start, regionGenome.End)
 	}
 
-	fmt.Println("diagonals after gap filling")
-	for _, d := range dh.Diagonals {
-		fmt.Println(d)
-		//fmt.Println(dh.Diagonals[d])
-	}
-
-	// remove all used regions from the diagonal handler
+	// mark all used regions
 	for i := 0; i < len(diagonalRead.Regions); i++ {
 		dh.ConsumeKmer(diagonalRead.Regions[i].Start, diagonalRead.Regions[i].End,
 			diagonalGenome.Regions[i].Start, diagonalGenome.Regions[i].End)
 	}
 
-	// remove diagonal from handler
-	//dh.ConsumeDiagonal(diagonal)
+	// remove used matches and empty diagonals
 	dh.RemovedConsumedRegionsAndDiagonals()
 
 	// remove invalid diagonals based on the currently applied diagonal

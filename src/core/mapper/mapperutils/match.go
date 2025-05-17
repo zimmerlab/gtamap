@@ -49,7 +49,7 @@ func (m ReadMatchResult) Copy() *ReadMatchResult {
 	}
 }
 
-func (m ReadMatchResult) GetCigar() string {
+func (m ReadMatchResult) GetCigar() (string, error) {
 	var builder strings.Builder
 
 	isForwardStrand := m.SequenceIndex == 0
@@ -79,7 +79,9 @@ func (m ReadMatchResult) GetCigar() string {
 				logrus.WithFields(logrus.Fields{
 					"read":   m.MatchedRead,
 					"genome": m.MatchedGenome,
-				}).Fatal("Gap in genome and read at the same time")
+				}).Warn("Gap in genome and read at the same time")
+
+				return "", fmt.Errorf("gap in genome and read at the same time")
 			}
 
 			if !gapInGenome && !gapInRead {
@@ -141,7 +143,9 @@ func (m ReadMatchResult) GetCigar() string {
 				logrus.WithFields(logrus.Fields{
 					"read":   m.MatchedRead,
 					"genome": m.MatchedGenome,
-				}).Fatal("Gap in genome and read at the same time")
+				}).Warn("Gap in genome and read at the same time")
+
+				return "", fmt.Errorf("gap in genome and read at the same time")
 			}
 
 			if !gapInGenome && !gapInRead {
@@ -179,5 +183,5 @@ func (m ReadMatchResult) GetCigar() string {
 		}
 	}
 
-	return builder.String()
+	return builder.String(), nil
 }
