@@ -387,3 +387,14 @@ func (rv *RegionVector) Equals(other *RegionVector) bool {
 
 	return true
 }
+
+func (rv *RegionVector) Copy() *RegionVector {
+	newRV := NewRegionVector()
+	for _, r := range rv.Regions {
+		newRV.Regions = append(newRV.Regions, &Region{
+			Start: r.Start,
+			End:   r.End,
+		})
+	}
+	return newRV
+}

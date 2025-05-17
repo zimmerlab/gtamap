@@ -8,11 +8,11 @@ import (
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/sirupsen/logrus"
-	"path/filepath"
 )
 
 func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]mapperutils.ReadMatchResult, bool) {
 
+	logrus.Debug("")
 	logrus.WithFields(logrus.Fields{
 		"read":   read.Header,
 		"length": len(*read.Sequence),
@@ -99,6 +99,11 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]mapperutils.Re
 			continue
 		}
 
+		logrus.Debug("")
+		logrus.WithFields(logrus.Fields{
+			"seqIndex": seqIndex,
+		}).Debug("Considering sequence")
+
 		sequenceMatches := globalMatches.MatchesPerSequence[seqIndex]
 
 		if sequenceMatches == nil {
@@ -106,15 +111,20 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]mapperutils.Re
 			continue
 		}
 
-		diagonalHandler := mapperutils.NewDiagonalHandlerWithDataCopy(sequenceMatches.MatchesPerDiagonal)
+		dh := mapperutils.NewDiagonalHandlerWithDataCopy(sequenceMatches.MatchesPerDiagonal)
 
-		mapReadToSequence(read, genomeIndex, diagonalHandler)
+		tmpResults := mapReadToSequence(seqIndex, read, genomeIndex, dh)
 
-		var result mapperutils.ReadMatchResult
+		logrus.Debug("results:")
+		for _, result := range tmpResults {
+			fmt.Println(result)
+		}
 
-		logrus.WithFields(logrus.Fields{
-			"seqIndex": seqIndex,
-		}).Debug("using sequence to compute best match")
+		//var result mapperutils.ReadMatchResult
+
+		//logrus.WithFields(logrus.Fields{
+		//	"seqIndex": seqIndex,
+		//}).Debug("using sequence to compute best match")
 
 		// 1. find the best diagonal (most matches)
 		// 2. find gaps in diagonal (unmatched regions via regionvector)
@@ -127,7 +137,8 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]mapperutils.Re
 		// - there are unmatched positions in the front or back of the read
 		//   (extend but if not possible then search for another diagonal with shorter kmer)
 
-		results = append(results, result)
+		//results = append(results, result)
+		results = append(results, tmpResults...)
 	}
 
 	if len(results) == 0 {
@@ -138,34 +149,98 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]mapperutils.Re
 }
 
 func extendReadMatch(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperutils.DiagonalHandler,
-	result *mapperutils.ReadMatchResult, results *[]mapperutils.ReadMatchResult) {
+	seqIndex int, result *mapperutils.ReadMatchResult, results *[]mapperutils.ReadMatchResult) {
 
-	for _, diagonal := range dh.GetAvailableDiagonals() {
+	logrus.Debug("")
+	logrus.WithFields(logrus.Fields{
+		"seqIndex": seqIndex,
+		"result":   result,
+	}).Debug("extending read match")
 
-		fmt.Println(diagonal, dh.Diagonals[diagonal])
+	diagonalsBefore := dh.GetAvailableDiagonals()
 
-	}
-}
+	fmt.Println("diagonals before applying", diagonalsBefore)
 
-func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dhOriginal *mapperutils.DiagonalHandler,
-	diagonal int, result *mapperutils.ReadMatchResult) {
+	diagonal, score, found := dh.GetBestDiagonal()
 
-	dh := dhOriginal.Copy()
+	if !found {
+		logrus.Debug("no suitable diagonal found")
 
-	isDiagonalValid := dh.IsValidExtension(dh.Diagonals[diagonal], *result, read)
-
-	if !isDiagonalValid {
-
-		logrus.Warn("diagonal is not valid")
-
-		// if the extension is not valid, remove from diags
-		// but do not consume the kmers, since they could be placed at an other spot maybe
-		delete(dh.Diagonals, diagonal)
-
+		*results = append(*results, *result)
 		return
 	}
 
-	logrus.Debug("diagonal is valid")
+	logrus.WithFields(logrus.Fields{
+		"diagonal": diagonal,
+		"score":    score,
+	}).Debug("searching for next best diagonal")
+
+	//if score < 2 {
+	//	logrus.Debug("no more diagonals with enough matches")
+	//	break
+	//}
+
+	dhNew := mapperutils.NewDiagonalHandlerWithDataCopy(dh.Diagonals)
+	resultNew := result.Copy()
+
+	//isDiagonalValid := dhNew.IsValidExtension(dhNew.Diagonals[diagonal], *resultNew, read)
+	//
+	//if !isDiagonalValid {
+	//	logrus.Debug("diagonal is not valid")
+	//
+	//	*results = append(*results, *result)
+	//	return
+	//}
+
+	applyDiagonal(read, genomeIndex, dhNew, seqIndex, diagonal, resultNew)
+
+	// keep on extending the currently best diagonal
+	extendReadMatch(read, genomeIndex, dhNew, seqIndex, resultNew, results)
+
+	diagonalsAfter := dhNew.GetAvailableDiagonals()
+
+	fmt.Println("diagonals after applying", diagonalsAfter)
+
+	excluded := findExcludedDiagonal(diagonalsBefore, diagonalsAfter, diagonal)
+
+	fmt.Println("excluded diagonals", excluded)
+
+	if len(excluded) > 0 {
+
+		logrus.WithFields(logrus.Fields{
+			"excluded": excluded,
+			"diagonal": diagonal,
+		}).Debug("exclude the best diagonal from the next search")
+
+		dh.RemoveDiagonal(diagonal)
+
+		extendReadMatch(read, genomeIndex, dh, seqIndex, result, results)
+	}
+}
+
+func findExcludedDiagonal(before []int, after []int, removed int) []int {
+
+	afterSet := make(map[int]struct{})
+	for _, a := range after {
+		afterSet[a] = struct{}{}
+	}
+
+	excluded := make([]int, 0)
+
+	for _, b := range before {
+		if b == removed {
+			continue
+		}
+		if _, ok := afterSet[b]; !ok {
+			excluded = append(excluded, b)
+		}
+	}
+
+	return excluded
+}
+
+func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperutils.DiagonalHandler,
+	seqIndex int, diagonal int, result *mapperutils.ReadMatchResult) {
 
 	diagonalRead := regionvector.NewRegionVector()
 	diagonalGenome := regionvector.NewRegionVector()
@@ -173,6 +248,7 @@ func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dhOriginal 
 	for _, match := range dh.Diagonals[diagonal] {
 		// the region can not be part of another diagonal that is already used
 		if match.Used {
+			logrus.Warn("match.Used should not be happening anymore")
 			continue
 		}
 		// add the match to the diagonal
@@ -185,8 +261,8 @@ func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dhOriginal 
 		"numMatches": len(dh.Diagonals[diagonal]),
 		"read":       diagonalRead,
 		"genome":     diagonalGenome,
-		"gaps":       len(diagonalRead.Regions) - 1,
-	}).Debug("found best diagonal")
+		//"gaps":       len(diagonalRead.Regions) - 1,
+	}).Debug("applying diagonal")
 
 	gapsRead, gapsGenome := mapperutils.ComputeGapsInDiagonal(diagonalRead, diagonalGenome, result)
 
@@ -233,7 +309,7 @@ func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dhOriginal 
 					"maxMismatchPercentage": config.MaxMismatchPercentage(),
 					"mismatches":            result.MismatchesRead,
 					"numMismatches":         len(result.MismatchesRead),
-				}).Debug("too many mismatches in diagonal filling -> skip sequence")
+				}).Debug("too many mismatches in diagonal filling")
 
 				return
 			}
@@ -243,7 +319,7 @@ func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dhOriginal 
 
 		// also update used status in kmers that were not part of the best diag (but existed as geps inside the best diag)
 		// this way, these kmers cant be used in other diagonals
-		dh.ConsumeKmer(gapRead.Start, gapRead.End, gapGenome.Start, gapGenome.End)
+		//dh.ConsumeKmer(gapRead.Start, gapRead.End, gapGenome.Start, gapGenome.End)
 	}
 
 	if len(gapsRead.Regions) > 0 {
@@ -268,17 +344,41 @@ func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dhOriginal 
 		result.MatchedGenome.AddRegionNonOverlappingPanic(regionGenome.Start, regionGenome.End)
 	}
 
-	// remove diagonal from handler
-	diagonalHandler.ConsumeDiagonal(bestDiagonal)
+	fmt.Println("diagonals after gap filling")
+	for _, d := range dh.Diagonals {
+		fmt.Println(d)
+		//fmt.Println(dh.Diagonals[d])
+	}
 
+	// remove all used regions from the diagonal handler
+	for i := 0; i < len(diagonalRead.Regions); i++ {
+		dh.ConsumeKmer(diagonalRead.Regions[i].Start, diagonalRead.Regions[i].End,
+			diagonalGenome.Regions[i].Start, diagonalGenome.Regions[i].End)
+	}
+
+	// remove diagonal from handler
+	//dh.ConsumeDiagonal(diagonal)
+	dh.RemovedConsumedRegionsAndDiagonals()
+
+	// remove invalid diagonals based on the currently applied diagonal
+	dh.RemoveInvalidDiagonals(result, read)
 }
 
-func mapReadToSequence(read *fastq.Read, genomeIndex *index.GenomeIndex, diagonalHandler *mapperutils.DiagonalHandler) {
+func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.GenomeIndex,
+	diagonalHandler *mapperutils.DiagonalHandler) []mapperutils.ReadMatchResult {
 
 	// list of read match results
-	result := make([]mapperutils.ReadMatchResult, 0)
+	results := make([]mapperutils.ReadMatchResult, 0)
 
-	extendReadMatch(read, genomeIndex, diagonalHandler, nil, &result)
+	result := &mapperutils.ReadMatchResult{
+		SequenceIndex:  seqIndex,
+		MatchedRead:    regionvector.NewRegionVector(),
+		MatchedGenome:  regionvector.NewRegionVector(),
+		MismatchesRead: make([]int, 0),
+		SecondPass:     false,
+	}
+
+	extendReadMatch(read, genomeIndex, diagonalHandler, seqIndex, result, &results)
 
 	//result := mapperutils.ReadMatchResult{
 	//	SequenceIndex:  seqIndex,
@@ -737,6 +837,7 @@ func mapReadToSequence(read *fastq.Read, genomeIndex *index.GenomeIndex, diagona
 	//	}
 	//}
 
+	return results
 }
 
 // exceedsMismatchConstraint checks if the number of mismatches exceeds the maximum allowed percentage

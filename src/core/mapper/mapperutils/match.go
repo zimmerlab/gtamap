@@ -20,7 +20,7 @@ type Match struct {
 }
 
 func (m *Match) String() string {
-	return fmt.Sprintf("[%d, %d, %d, %d]", m.FromRead, m.ToRead, m.FromGenome, m.ToGenome)
+	return fmt.Sprintf("[%d, %d, %d, %d, %t]", m.FromRead, m.ToRead, m.FromGenome, m.ToGenome, m.Used)
 }
 
 type GlobalMatchResult struct {
@@ -37,6 +37,16 @@ type ReadMatchResult struct {
 	MatchedGenome  *regionvector.RegionVector // region vector containing the matched positions in the genome
 	MismatchesRead []int                      // the positions of the mismatches in the read
 	SecondPass     bool                       // true if this result must undergo a second pass
+}
+
+func (m ReadMatchResult) Copy() *ReadMatchResult {
+	return &ReadMatchResult{
+		SequenceIndex:  m.SequenceIndex,
+		MatchedRead:    m.MatchedRead.Copy(),
+		MatchedGenome:  m.MatchedGenome.Copy(),
+		MismatchesRead: append([]int{}, m.MismatchesRead...),
+		SecondPass:     m.SecondPass,
+	}
 }
 
 func (m ReadMatchResult) GetCigar() string {
