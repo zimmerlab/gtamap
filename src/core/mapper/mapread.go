@@ -117,7 +117,10 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]mapperutils.Re
 
 		logrus.Debug("results:")
 		for _, result := range tmpResults {
-			fmt.Println(result)
+
+			length := result.MatchedRead.Length()
+
+			fmt.Println(result, length)
 		}
 
 		//var result mapperutils.ReadMatchResult
@@ -161,6 +164,32 @@ func extendReadMatch(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mappe
 
 	fmt.Println("diagonals before applying", diagonalsBefore)
 
+	// check if enough kmers can be matched
+
+	// contains the merged region vector of mappable read positions from all remaining diagonals
+	rvRemaining := regionvector.NewRegionVector()
+
+	for _, d := range diagonalsBefore {
+		for _, match := range dh.Diagonals[d] {
+			rvRemaining.AddRegionAndMerge(match.FromRead, match.ToRead)
+		}
+	}
+
+	fmt.Println("remaining regions", rvRemaining)
+
+	rvUncovered := result.MatchedRead.UncoveredRegionsBySelfAndOther(rvRemaining, 0, len(*read.Sequence))
+
+	fmt.Println("uncovered regions", rvUncovered)
+
+	fmt.Println("uncovered length", rvUncovered.Length())
+
+	if rvUncovered.Length() >= int(float32(len(*read.Sequence))*0.5) {
+		logrus.WithFields(logrus.Fields{
+			"uncoveredLength": rvUncovered.Length(),
+		}).Debug("uncovered regions are too large")
+		return
+	}
+
 	diagonal, score, found := dh.GetBestDiagonal()
 
 	if !found {
@@ -173,7 +202,7 @@ func extendReadMatch(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mappe
 	logrus.WithFields(logrus.Fields{
 		"diagonal": diagonal,
 		"score":    score,
-	}).Debug("searching for next best diagonal")
+	}).Debug("found next best diagonal")
 
 	//if score < 2 {
 	//	logrus.Debug("no more diagonals with enough matches")
@@ -205,17 +234,42 @@ func extendReadMatch(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mappe
 
 	fmt.Println("excluded diagonals", excluded)
 
-	if len(excluded) > 0 {
+	// there is at least one diagonal that was excluded
+	wasExcluded := len(excluded) > 0
 
+	if wasExcluded {
 		logrus.WithFields(logrus.Fields{
 			"excluded": excluded,
-			"diagonal": diagonal,
-		}).Debug("exclude the best diagonal from the next search")
-
-		dh.RemoveDiagonal(diagonal)
-
-		extendReadMatch(read, genomeIndex, dh, seqIndex, result, results)
+		}).Debug("excluded diagonals were found")
+	} else {
+		logrus.Debug("no diagonals were excluded")
 	}
+
+	// the current diagonal contains less than x kmers
+	belowScoreThreshold := score <= 1
+
+	logrus.WithFields(logrus.Fields{
+		"belowScoreThreshold": belowScoreThreshold,
+		"score":               score,
+	}).Debug("current diagonal score")
+
+	// no condition is met that requires a branching to explore other matches
+	if !wasExcluded && !belowScoreThreshold {
+		// the currently applied diagonal did not exclude any other diagonals
+		return
+	}
+
+	// the currently applied diagonal excluded other diagonals
+	// remove the currently applied diagonal (without applying) from the diagonal handler
+	// and branch to explore other potential mappings
+
+	logrus.WithFields(logrus.Fields{
+		"diagonal": diagonal,
+	}).Debug("exclude the current diagonal from the next search")
+
+	dh.RemoveDiagonal(diagonal)
+
+	extendReadMatch(read, genomeIndex, dh, seqIndex, result, results)
 }
 
 func findExcludedDiagonal(before []int, after []int, removed int) []int {

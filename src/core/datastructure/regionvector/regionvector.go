@@ -481,7 +481,7 @@ func (rv *RegionVector) RemoveRegion(start int, end int) {
 	rv.Regions = regions
 }
 
-func (rv *RegionVector) FindUncoveredRegions(rvCovered *RegionVector, min int, max int) *RegionVector {
+func (rv *RegionVector) UncoveredRegionsBySelf(min int, max int) *RegionVector {
 
 	rvUncovered := NewRegionVector()
 
@@ -489,8 +489,22 @@ func (rv *RegionVector) FindUncoveredRegions(rvCovered *RegionVector, min int, m
 	rvUncovered.AddRegion(min, max)
 
 	// remove the covered regions from the region vector itself
+	for _, r := range rv.Regions {
+		rvUncovered.RemoveRegion(r.Start, r.End)
+	}
+
+	return rvUncovered
+}
+
+func (rv *RegionVector) UncoveredRegionsBySelfAndOther(rvCovered *RegionVector, min int, max int) *RegionVector {
+
+	// the uncovered regions by the region vector itself
+	rvUncovered := rv.UncoveredRegionsBySelf(min, max)
 
 	// remove the covered regions from the given region vector
+	for _, r := range rvCovered.Regions {
+		rvUncovered.RemoveRegion(r.Start, r.End)
+	}
 
 	return rvUncovered
 }

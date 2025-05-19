@@ -32,20 +32,28 @@ type SequenceMatchResult struct {
 }
 
 type ReadMatchResult struct {
-	SequenceIndex  int                        // the index of the sequence in the genome
-	MatchedRead    *regionvector.RegionVector // region vector containing the matched positions in the read
-	MatchedGenome  *regionvector.RegionVector // region vector containing the matched positions in the genome
-	MismatchesRead []int                      // the positions of the mismatches in the read
-	SecondPass     bool                       // true if this result must undergo a second pass
+	SequenceIndex   int                        // the index of the sequence in the genome
+	MatchedRead     *regionvector.RegionVector // region vector containing the matched positions in the read
+	MatchedGenome   *regionvector.RegionVector // region vector containing the matched positions in the genome
+	MismatchesRead  []int                      // the positions of the mismatches in the read
+	SecondPass      bool                       // true if this result must undergo a second pass
+	diagonalHandler *DiagonalHandler
 }
 
 func (m ReadMatchResult) Copy() *ReadMatchResult {
+
+	var dhCopy *DiagonalHandler
+	if m.diagonalHandler != nil {
+		dhCopy = m.diagonalHandler.Copy()
+	}
+
 	return &ReadMatchResult{
-		SequenceIndex:  m.SequenceIndex,
-		MatchedRead:    m.MatchedRead.Copy(),
-		MatchedGenome:  m.MatchedGenome.Copy(),
-		MismatchesRead: append([]int{}, m.MismatchesRead...),
-		SecondPass:     m.SecondPass,
+		SequenceIndex:   m.SequenceIndex,
+		MatchedRead:     m.MatchedRead.Copy(),
+		MatchedGenome:   m.MatchedGenome.Copy(),
+		MismatchesRead:  append([]int{}, m.MismatchesRead...),
+		SecondPass:      m.SecondPass,
+		diagonalHandler: dhCopy,
 	}
 }
 
