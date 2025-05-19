@@ -37,6 +37,7 @@ type ReadMatchResult struct {
 	MatchedGenome   *regionvector.RegionVector // region vector containing the matched positions in the genome
 	MismatchesRead  []int                      // the positions of the mismatches in the read
 	SecondPass      bool                       // true if this result must undergo a second pass
+	Unmappable      bool
 	diagonalHandler *DiagonalHandler
 }
 

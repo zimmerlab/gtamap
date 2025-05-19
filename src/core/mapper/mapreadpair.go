@@ -68,8 +68,8 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	if needSecondPass {
 		secondPassChan.Send(&mapperutils.SecondPassTask{
 			ReadPair: readPair,
-			ResultFw: &resultFw,
-			ResultRv: &resultRv,
+			ResultFw: resultFw,
+			ResultRv: resultRv,
 		})
 		return "", false
 	}
@@ -87,7 +87,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 		var builder strings.Builder
 
 		for _, resFw := range resultFw {
-			s, isOk := readPairResultToSamString(genomeIndex, readPair, &resFw, nil)
+			s, isOk := readPairResultToSamString(genomeIndex, readPair, resFw, nil)
 			if !isOk {
 				continue
 			}
@@ -95,7 +95,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 		}
 
 		for _, resRv := range resultRv {
-			s, isOk := readPairResultToSamString(genomeIndex, readPair, nil, &resRv)
+			s, isOk := readPairResultToSamString(genomeIndex, readPair, nil, resRv)
 			if !isOk {
 				continue
 			}
@@ -109,10 +109,10 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	resFw := resultFw[0]
 	resRv := resultRv[0]
 
-	postprocessReadMatch(genomeIndex, readPair.ReadR1, &resFw)
-	postprocessReadMatch(genomeIndex, readPair.ReadR2, &resRv)
+	postprocessReadMatch(genomeIndex, readPair.ReadR1, resFw)
+	postprocessReadMatch(genomeIndex, readPair.ReadR2, resRv)
 
-	return readPairResultToSamString(genomeIndex, readPair, &resFw, &resRv)
+	return readPairResultToSamString(genomeIndex, readPair, resFw, resRv)
 }
 
 func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.ReadPair,
