@@ -74,6 +74,14 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 		return "", false
 	}
 
+	// postprocess every potential match
+	for _, resFw := range resultFw {
+		postprocessReadMatch(genomeIndex, readPair.ReadR1, resFw)
+	}
+	for _, resRv := range resultRv {
+		postprocessReadMatch(genomeIndex, readPair.ReadR2, resRv)
+	}
+
 	if len(resultFw) > 1 || len(resultRv) > 1 {
 		// TODO: handle multimapping reads
 
@@ -122,8 +130,8 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	resFw := resultFw[0]
 	resRv := resultRv[0]
 
-	postprocessReadMatch(genomeIndex, readPair.ReadR1, resFw)
-	postprocessReadMatch(genomeIndex, readPair.ReadR2, resRv)
+	//postprocessReadMatch(genomeIndex, readPair.ReadR1, resFw)
+	//postprocessReadMatch(genomeIndex, readPair.ReadR2, resRv)
 
 	return readPairResultToSamString(genomeIndex, readPair, resFw, resRv)
 }

@@ -1,7 +1,6 @@
 package mapper
 
 import (
-	"fmt"
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/core/index"
@@ -29,9 +28,6 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]*mapperutils.R
 	for i := 0; i <= len(*read.Sequence)-10; i += 10 {
 
 		kmer := [10]byte((*read.Sequence)[i : i+10])
-
-		// TODO: replace by hashmap
-		//matches := genomeIndex.KeywordTree.FindKeyword(&kmer, i)
 
 		matches := genomeIndex.FindKeywordMatchesInMap(&kmer, i)
 
@@ -157,8 +153,6 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 
 	diagonalsBefore := dh.GetAvailableDiagonals()
 
-	fmt.Println("diagonals before applying", diagonalsBefore)
-
 	// check if enough kmers can be matched
 
 	// contains the merged region vector of mappable read positions from all remaining diagonals
@@ -170,13 +164,7 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 		}
 	}
 
-	fmt.Println("remaining regions", rvRemaining)
-
 	rvUncovered := result.MatchedRead.UncoveredRegionsBySelfAndOther(rvRemaining, 0, len(*read.Sequence))
-
-	fmt.Println("uncovered regions", rvUncovered)
-
-	fmt.Println("uncovered length", rvUncovered.Length())
 
 	if rvUncovered.Length() >= int(float32(len(*read.Sequence))*0.5) {
 		logrus.WithFields(logrus.Fields{
@@ -189,12 +177,9 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 
 	if !found {
 		logrus.Debug("no suitable diagonal found")
-
 		logrus.Debug("adding partial result to results")
 
 		*results = append(*results, result)
-
-		fmt.Println("len results", len(*results))
 
 		return
 	}
@@ -218,12 +203,7 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 	applyPossibleDiagonals(read, genomeIndex, dhNew, resultNew, results)
 
 	diagonalsAfter := dhNew.GetAvailableDiagonals()
-
-	fmt.Println("diagonals after applying", diagonalsAfter)
-
 	excluded := findExcludedDiagonal(diagonalsBefore, diagonalsAfter, diagonal)
-
-	fmt.Println("excluded diagonals", excluded)
 
 	// there is at least one diagonal that was excluded
 	wasExcluded := len(excluded) > 0
@@ -713,19 +693,9 @@ func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.Genome
 
 	applyPossibleDiagonals(read, genomeIndex, diagonalHandler, result, &results)
 
-	fmt.Println("LOL")
-
-	fmt.Println("len results", len(results))
-
 	finalResults := make([]*mapperutils.ReadMatchResult, 0)
 
 	for _, result := range results {
-
-		fmt.Println("")
-		fmt.Println("extending partial result")
-		fmt.Println(result.MatchedRead)
-		fmt.Println(result.MatchedGenome)
-		fmt.Println(result.MismatchesRead)
 
 		extendDiagonals(read, genomeIndex, result)
 

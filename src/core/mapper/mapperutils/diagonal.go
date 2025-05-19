@@ -1,7 +1,6 @@
 package mapperutils
 
 import (
-	"fmt"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/sirupsen/logrus"
 	"sort"
@@ -184,16 +183,6 @@ func (dh *DiagonalHandler) RemoveInvalidDiagonals(result *ReadMatchResult, read 
 
 	// remove diagonals that are not valid anymore
 	for diagonal, matches := range dh.Diagonals {
-
-		fmt.Println("diagonal", diagonal)
-
-		for _, match := range matches {
-			fmt.Println(match.FromRead, "-", match.ToRead)
-			fmt.Println(match.FromGenome, "-", match.ToGenome)
-			fmt.Println("used", match.Used)
-			fmt.Println("-")
-		}
-
 		if !dh.IsValidExtension(matches, *result, read) {
 			keysToDelete = append(keysToDelete, diagonal)
 		}
