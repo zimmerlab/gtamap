@@ -880,7 +880,7 @@ func WriteGenomeIndex(genomeIndex *GenomeIndex, outputFile *os.File) {
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"duration": time.Since(timerStart),
+		"duration": utils.FormatDuration(time.Since(timerStart)),
 		"output":   outputFile.Name(),
 	}).Info("Serialized index")
 }
@@ -909,7 +909,7 @@ func ReadGenomeIndexByFile(indexFile *os.File) *GenomeIndex {
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"duration": time.Since(timerStart),
+		"duration": utils.FormatDuration(time.Since(timerStart)),
 	}).Info("Deserialized index")
 
 	return &genomeIndex

@@ -11,6 +11,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/KleinSamuel/gtamap/src/formats/gtf"
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
+	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
 	"os"
 	"runtime"
@@ -264,8 +265,8 @@ func testMapping() {
 	totalDuration := time.Since(timerStartTotal)
 
 	logrus.WithFields(logrus.Fields{
-		"duration": totalDuration,
-		"io":       reader.Duration,
+		"duration": utils.FormatDuration(totalDuration),
+		"io":       utils.FormatDuration(*reader.Duration),
 	}).Info("Finished mapping")
 }
 

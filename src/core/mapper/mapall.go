@@ -8,6 +8,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/datawriter"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
+	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
 	"runtime"
 	"sync"
@@ -115,7 +116,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	totalDuration := time.Since(timerStartTotal)
 
 	logrus.WithFields(logrus.Fields{
-		"duration": totalDuration,
-		"io":       reader.Duration,
+		"duration": utils.FormatDuration(totalDuration),
+		"io":       utils.FormatDuration(*reader.Duration),
 	}).Info("Finished mapping")
 }
