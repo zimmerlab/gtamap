@@ -115,14 +115,6 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]*mapperutils.R
 
 		tmpResults := mapReadToSequence(seqIndex, read, genomeIndex, dh)
 
-		logrus.Debug("results:")
-		for _, result := range tmpResults {
-
-			length := result.MatchedRead.Length()
-
-			fmt.Println(result, length)
-		}
-
 		//var result mapperutils.ReadMatchResult
 
 		//logrus.WithFields(logrus.Fields{

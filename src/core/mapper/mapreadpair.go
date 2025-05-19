@@ -86,21 +86,34 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 
 		var builder strings.Builder
 
-		for _, resFw := range resultFw {
-			s, isOk := readPairResultToSamString(genomeIndex, readPair, resFw, nil)
-			if !isOk {
-				continue
+		// TODO: handle this appropriately
+		// combine every first of pair read with every second of pair read
+
+		for i := 0; i < len(resultFw); i++ {
+			for j := 0; j < len(resultRv); j++ {
+				s, isOk := readPairResultToSamString(genomeIndex, readPair, resultFw[i], resultRv[j])
+				if !isOk {
+					continue
+				}
+				builder.WriteString(s)
 			}
-			builder.WriteString(s)
 		}
 
-		for _, resRv := range resultRv {
-			s, isOk := readPairResultToSamString(genomeIndex, readPair, nil, resRv)
-			if !isOk {
-				continue
-			}
-			builder.WriteString(s)
-		}
+		//for _, resFw := range resultFw {
+		//	s, isOk := readPairResultToSamString(genomeIndex, readPair, resFw, nil)
+		//	if !isOk {
+		//		continue
+		//	}
+		//	builder.WriteString(s)
+		//}
+		//
+		//for _, resRv := range resultRv {
+		//	s, isOk := readPairResultToSamString(genomeIndex, readPair, nil, resRv)
+		//	if !isOk {
+		//		continue
+		//	}
+		//	builder.WriteString(s)
+		//}
 
 		return builder.String(), true
 	}
