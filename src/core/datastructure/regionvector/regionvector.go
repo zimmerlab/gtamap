@@ -112,6 +112,13 @@ func (rv *RegionVector) AddRegionObjNonOverlapping(region *Region) error {
 	return nil
 }
 
+// AddRegion adds a region to the region vector.
+// The resulting region vector may contain overlapping regions and is not sorted.
+// The given region will be appended to the existing regions without any checks.
+func (rv *RegionVector) AddRegion(start int, end int) {
+	rv.Regions = append(rv.Regions, &Region{Start: start, End: end})
+}
+
 // AddRegionAndMerge adds a region to the region vector and merges it with any overlapping regions.
 // The regions are sorted in ascending order based on their start position.
 func (rv *RegionVector) AddRegionAndMerge(start int, end int) {
@@ -375,6 +382,9 @@ func (rv *RegionVector) Overlaps(start int, end int) bool {
 // Both regions vectors are taken as is and are not sorted by this function.
 // Even if the regions are the same but in different order, the function will return false.
 func (rv *RegionVector) Equals(other *RegionVector) bool {
+	if len(rv.Regions) == 0 && len(other.Regions) == 0 {
+		return true
+	}
 	if len(rv.Regions) != len(other.Regions) {
 		return false
 	}
@@ -386,4 +396,115 @@ func (rv *RegionVector) Equals(other *RegionVector) bool {
 	}
 
 	return true
+}
+
+func (rv *RegionVector) Copy() *RegionVector {
+	newRV := NewRegionVector()
+	for _, r := range rv.Regions {
+		newRV.Regions = append(newRV.Regions, &Region{
+			Start: r.Start,
+			End:   r.End,
+		})
+	}
+	return newRV
+}
+
+// RemoveRegion removes a region from the region vector.
+// The existing regions will be updated such that any position within the given region is not contained in
+// any region anymore.
+// The region vector must be sorted and non-overlapping.
+// Example:
+// If the region vector contains the regions [0, 10], [10, 20], [20, 30] and the given region is [5, 25]
+// The resulting region vector will contain the regions [0, 5], [25, 30].
+// If the region vector contains the regions [0, 30] and the given region is [5, 25],
+// The resulting region vector will contain the regions [0, 5], [25, 30].
+func (rv *RegionVector) RemoveRegion(start int, end int) {
+
+	if len(rv.Regions) == 0 {
+		// the region vector is empty
+		return
+	}
+
+	if end <= start {
+		// the region to remove is empty
+		return
+	}
+
+	if end <= rv.Regions[0].Start {
+		// the region to remove is before the first region
+		return
+	}
+	if start >= rv.Regions[len(rv.Regions)-1].End {
+		// the region to remove is after the last region
+		return
+	}
+	if start <= rv.Regions[0].Start && end >= rv.Regions[len(rv.Regions)-1].End {
+		// the region to remove contains all regions
+		rv.Regions = make([]*Region, 0)
+		return
+	}
+
+	regions := make([]*Region, 0)
+
+	for _, r := range rv.Regions {
+		if r.End <= start {
+			// the region is before the region to remove
+			regions = append(regions, &Region{r.Start, r.End})
+			continue
+		}
+		if r.Start >= end {
+			// the region is after the region to remove
+			regions = append(regions, &Region{r.Start, r.End})
+			continue
+		}
+		if r.Start >= start && r.End <= end {
+			// the region is completely contained in the region to remove
+			continue
+		}
+		if r.Start < start && r.End > end {
+			// the region to remove is contained within the current region
+			// r.Start == start && r.End == end should be handled in the previous case
+			regions = append(regions, &Region{r.Start, start})
+			regions = append(regions, &Region{end, r.End})
+			continue
+		}
+		if r.Start >= start && r.End > end {
+			regions = append(regions, &Region{end, r.End})
+			continue
+		}
+		if r.Start < start && r.End <= end {
+			regions = append(regions, &Region{r.Start, start})
+			continue
+		}
+	}
+
+	rv.Regions = regions
+}
+
+func (rv *RegionVector) UncoveredRegionsBySelf(min int, max int) *RegionVector {
+
+	rvUncovered := NewRegionVector()
+
+	// the total region for which the uncovered regions should be computed
+	rvUncovered.AddRegion(min, max)
+
+	// remove the covered regions from the region vector itself
+	for _, r := range rv.Regions {
+		rvUncovered.RemoveRegion(r.Start, r.End)
+	}
+
+	return rvUncovered
+}
+
+func (rv *RegionVector) UncoveredRegionsBySelfAndOther(rvCovered *RegionVector, min int, max int) *RegionVector {
+
+	// the uncovered regions by the region vector itself
+	rvUncovered := rv.UncoveredRegionsBySelf(min, max)
+
+	// remove the covered regions from the given region vector
+	for _, r := range rvCovered.Regions {
+		rvUncovered.RemoveRegion(r.Start, r.End)
+	}
+
+	return rvUncovered
 }

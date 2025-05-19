@@ -9,8 +9,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]mapperutils.ReadMatchResult, bool) {
+func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]*mapperutils.ReadMatchResult, bool) {
 
+	logrus.Debug("")
 	logrus.WithFields(logrus.Fields{
 		"read":   read.Header,
 		"length": len(*read.Sequence),
@@ -27,9 +28,6 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]mapperutils.Re
 	for i := 0; i <= len(*read.Sequence)-10; i += 10 {
 
 		kmer := [10]byte((*read.Sequence)[i : i+10])
-
-		// TODO: replace by hashmap
-		//matches := genomeIndex.KeywordTree.FindKeyword(&kmer, i)
 
 		matches := genomeIndex.FindKeywordMatchesInMap(&kmer, i)
 
@@ -86,9 +84,9 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]mapperutils.Re
 		"sortedByIndex":              seqIndexSorted,
 	}).Debug("Potential sequences")
 
-	results := make([]mapperutils.ReadMatchResult, 0)
+	results := make([]*mapperutils.ReadMatchResult, 0)
 
-sequenceLoop:
+	//sequenceLoop:
 	for _, seqIndex := range seqIndexSorted {
 
 		if seqIndex == -1 {
@@ -97,6 +95,11 @@ sequenceLoop:
 			continue
 		}
 
+		logrus.Debug("")
+		logrus.WithFields(logrus.Fields{
+			"seqIndex": seqIndex,
+		}).Debug("Considering sequence")
+
 		sequenceMatches := globalMatches.MatchesPerSequence[seqIndex]
 
 		if sequenceMatches == nil {
@@ -104,9 +107,15 @@ sequenceLoop:
 			continue
 		}
 
-		logrus.WithFields(logrus.Fields{
-			"seqIndex": seqIndex,
-		}).Debug("using sequence to compute best match")
+		dh := mapperutils.NewDiagonalHandlerWithDataCopy(sequenceMatches.MatchesPerDiagonal)
+
+		tmpResults := mapReadToSequence(seqIndex, read, genomeIndex, dh)
+
+		//var result mapperutils.ReadMatchResult
+
+		//logrus.WithFields(logrus.Fields{
+		//	"seqIndex": seqIndex,
+		//}).Debug("using sequence to compute best match")
 
 		// 1. find the best diagonal (most matches)
 		// 2. find gaps in diagonal (unmatched regions via regionvector)
@@ -119,463 +128,8 @@ sequenceLoop:
 		// - there are unmatched positions in the front or back of the read
 		//   (extend but if not possible then search for another diagonal with shorter kmer)
 
-		result := mapperutils.ReadMatchResult{
-			SequenceIndex:  seqIndex,
-			MatchedRead:    regionvector.NewRegionVector(),
-			MatchedGenome:  regionvector.NewRegionVector(),
-			MismatchesRead: make([]int, 0),
-			SecondPass:     false,
-		}
-
-		diagonalHandler := mapperutils.NewDiagonalHandlerWithData(sequenceMatches.MatchesPerDiagonal)
-
-		logrus.Debug("Handler initialized with the following diagonals")
-		for k, v := range diagonalHandler.Diagonals {
-			logrus.WithFields(logrus.Fields{
-				"posGenome": k,
-				"matches":   v,
-				"length":    len(v),
-			}).Debug("diagonal")
-		}
-
-		for result.MatchedRead.Length() < len(*read.Sequence) {
-
-			logrus.Debug("searching for next best diagonal")
-
-			bestDiagonal, bestDiagonalLength, foundDiagonal := diagonalHandler.GetBestDiagonal()
-
-			// exit the loop if no diagonal is found to handle the unmatched regions and fill the match
-			if !foundDiagonal {
-				logrus.Debug("no suitable diagonal found")
-				break
-			}
-
-			// if the diagonal is negative or larger than the genome length, this could be a sign of clipping
-			// because the match exceeds the target sequence as it is in the index
-			if bestDiagonal < 0 {
-				logrus.Debug("genome index out of bounds left side (clipping?)")
-				break
-			}
-			if bestDiagonal+len(*read.Sequence) > len(*genomeIndex.Sequences[seqIndex]) {
-				logrus.Debug("genome index out of bounds right side (clipping?)")
-				break
-			}
-
-			logrus.WithFields(logrus.Fields{
-				"posGenome": bestDiagonal,
-				"length":    bestDiagonalLength,
-				"matches":   sequenceMatches.MatchesPerDiagonal[bestDiagonal],
-			}).Debug("considering diagonal")
-
-			isDiagonalValid := diagonalHandler.IsValidExtension(sequenceMatches.MatchesPerDiagonal[bestDiagonal], result, read)
-
-			if !isDiagonalValid {
-
-				logrus.Debug("diagonal is not valid")
-
-				// if the extension is not valid, remove from diags
-				// but do not consume the kmers, since they could be placed at an other spot maybe
-				delete(diagonalHandler.Diagonals, bestDiagonal)
-				continue
-			}
-
-			logrus.Debug("diagonal is valid")
-
-			diagonalRead := regionvector.NewRegionVector()
-			diagonalGenome := regionvector.NewRegionVector()
-
-			for _, match := range sequenceMatches.MatchesPerDiagonal[bestDiagonal] {
-				// the region can not be part of another diagonal that is already used
-				if match.Used {
-					continue
-				}
-				// add the match to the diagonal
-				diagonalRead.AddRegionNonOverlappingPanic(match.FromRead, match.ToRead)
-				diagonalGenome.AddRegionNonOverlappingPanic(match.FromGenome, match.ToGenome)
-			}
-
-			logrus.WithFields(logrus.Fields{
-				"posGenome":  bestDiagonal,
-				"numMatches": bestDiagonalLength,
-				"read":       diagonalRead,
-				"genome":     diagonalGenome,
-				"gaps":       len(diagonalRead.Regions) - 1,
-			}).Debug("found best diagonal")
-
-			gapsRead, gapsGenome := mapperutils.ComputeGapsInDiagonal(diagonalRead, diagonalGenome, &result)
-
-			// resolve gaps on the same diagonal
-			// gaps can occur because of mismatches in the read and genome which prevent exact kmer matching
-			// this is done by filling the gaps in the read and genome and counting the mismatches
-			// the regionvectors of read and genome should have the same length as they are coupled
-			// because they are part of the same diagonal (no indels, otherwise not on the same diagonal)
-			for i := 0; i < len(gapsRead.Regions); i++ {
-
-				gapRead := gapsRead.Regions[i]
-				gapGenome := gapsGenome.Regions[i]
-
-				logrus.WithFields(logrus.Fields{
-					"read":   gapRead,
-					"genome": gapGenome,
-				}).Debug("found gap")
-
-				// fill the gap in the read by adding the gap as region
-				diagonalRead.AddRegionNonOverlappingPanic(gapRead.Start, gapRead.End)
-
-				// count mismatches when filling the gap and skip the match if there are too many
-				geneSeqPos := 0
-				for i := gapRead.Start - 1; i < gapRead.End-1; i++ {
-
-					readByte := (*read.Sequence)[i]
-					gIndex := gapGenome.Start + geneSeqPos - 1
-					genomeByte := (*genomeIndex.Sequences[seqIndex])[gIndex]
-					geneSeqPos++
-
-					// skip matches
-					if readByte == genomeByte {
-						continue
-					}
-
-					// add the mismatche to the result
-					result.MismatchesRead = append(result.MismatchesRead, i)
-
-					// skip this match result if there are too many mismatches
-					if exceedsMismatchConstraint(read, result) {
-
-						logrus.WithFields(logrus.Fields{
-							"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
-							"maxMismatchPercentage": config.MaxMismatchPercentage(),
-							"mismatches":            result.MismatchesRead,
-							"numMismatches":         len(result.MismatchesRead),
-						}).Debug("too many mismatches in diagonal filling -> skip sequence")
-
-						continue sequenceLoop
-					}
-				}
-
-				diagonalGenome.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.End)
-
-				// also update used status in kmers that were not part of the best diag (but existed as geps inside the best diag)
-				// this way, these kmers cant be used in other diagonals
-				diagonalHandler.ConsumeKmer(gapRead.Start, gapRead.End, gapGenome.Start, gapGenome.End)
-			}
-
-			if len(gapsRead.Regions) > 0 {
-				logrus.WithFields(logrus.Fields{
-					"read":       diagonalRead,
-					"genome":     diagonalGenome,
-					"mismatches": result.MismatchesRead,
-				}).Debug("filled gap")
-			}
-
-			// add all matches in diagonal to the result
-			for i := 0; i < len(diagonalRead.Regions); i++ {
-				regionRead := diagonalRead.Regions[i]
-				regionGenome := diagonalGenome.Regions[i]
-
-				logrus.WithFields(logrus.Fields{
-					"read":   regionRead,
-					"genome": regionGenome,
-				}).Debug("adding diagonal match to result")
-
-				result.MatchedRead.AddRegionNonOverlappingPanic(regionRead.Start, regionRead.End)
-				result.MatchedGenome.AddRegionNonOverlappingPanic(regionGenome.Start, regionGenome.End)
-			}
-
-			// remove diagonal from handler
-			diagonalHandler.ConsumeDiagonal(bestDiagonal)
-		}
-
-		logrus.WithFields(logrus.Fields{
-			"read":   result.MatchedRead,
-			"genome": result.MatchedGenome,
-		}).Debug("done processing diagonals")
-
-		// if no diagonal was valid, skip this read
-		if result.MatchedRead.Length() == 0 {
-			logrus.Debug("no diagonal was valid")
-			continue sequenceLoop
-		}
-
-		if result.MatchedRead.Length() == len(*read.Sequence) {
-			logrus.Debug("read fully matched")
-		} else {
-
-			// there are gaps (unmatched regions) in the read (between matched regions / diagonals)
-			if result.MatchedRead.HasGaps() {
-
-				logrus.Debug("unmatched regions within read")
-
-				// used to keep track of the read position for the next gap
-				readGapPos := 0
-				// returns the index of the first region after which a gap occurs (-1 if no gap)
-				indexRegionBeforeGap := result.MatchedRead.GetGapIndexAfterPos(readGapPos)
-
-				// loop through all gaps in the read (-1 means there is no more gap)
-				for indexRegionBeforeGap > -1 {
-
-					gapRead := result.MatchedRead.GetGapAfterRegionIndex(indexRegionBeforeGap)
-					gapGenome := result.MatchedGenome.GetGapAfterRegionIndex(indexRegionBeforeGap)
-
-					if gapGenome == nil {
-						logrus.WithFields(logrus.Fields{
-							"read":    result.MatchedRead,
-							"genome":  result.MatchedGenome,
-							"gapRead": gapRead,
-						}).Debug("insertion found")
-					} else {
-
-						logrus.WithFields(logrus.Fields{
-							"gapRead":   gapRead,
-							"gapGenome": gapGenome,
-						}).Debug("found gap to be handled")
-
-						// TODO: handle insertions
-						// when the gap in the read is larger than the gap in the genome
-						// there is maybe an insertion in the read
-						// currently the assumption is that this is a non-mapping read
-						if gapRead.Length() > gapGenome.Length() {
-							logrus.WithFields(logrus.Fields{
-								"gapRead":   gapRead,
-								"gapGenome": gapGenome,
-							}).Debug("gap read is larger than gap genome")
-
-							continue sequenceLoop
-						}
-
-						bestSplit := determineBestSplit(genomeIndex, read, seqIndex, gapRead, gapGenome)
-
-						if bestSplit == -1 {
-							// this should not happen because a split should be found every time
-							// even if the split has a bad score (many mismatches, no splice sites, etc)
-							logrus.WithFields(logrus.Fields{
-								"qname": read.Header,
-							}).Fatal("no best split found")
-						}
-
-						logrus.WithFields(logrus.Fields{
-							"split": bestSplit,
-						}).Debug("best split found")
-
-						logrus.WithFields(logrus.Fields{
-							"read":   result.MatchedRead,
-							"genome": result.MatchedGenome,
-						}).Debug("regions before")
-
-						// when bestSplit is 0 then there is nothing to be added to the left side of the gap
-						if bestSplit > 0 {
-
-							// add the split to the result
-							result.MatchedRead.AddRegionNonOverlappingPanic(gapRead.Start, gapRead.Start+bestSplit)
-							result.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.Start+bestSplit)
-
-							// the read and genome sequences from the start of the gap to the best split (left)
-							readByte := (*read.Sequence)[gapRead.Start : gapRead.Start+bestSplit]
-							genomeByte := (*genomeIndex.Sequences[seqIndex])[gapGenome.Start : gapGenome.Start+bestSplit]
-
-							// add the mismatches to the result
-							for i := 0; i < bestSplit; i++ {
-								// add the mismatche to the result
-								if readByte[i] != genomeByte[i] {
-									result.MismatchesRead = append(result.MismatchesRead, gapRead.Start+i)
-
-									// skip this match result if there are too many mismatches
-									if exceedsMismatchConstraint(read, result) {
-										logrus.WithFields(logrus.Fields{
-											"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
-											"maxMismatchPercentage": config.MaxMismatchPercentage(),
-											"mismatches":            result.MismatchesRead,
-											"numMismatches":         len(result.MismatchesRead),
-										}).Debug("too many mismatches in middle extension (left) -> skip sequence")
-										continue sequenceLoop
-									}
-								}
-							}
-						}
-
-						logrus.WithFields(logrus.Fields{
-							"read":   result.MatchedRead,
-							"genome": result.MatchedGenome,
-						}).Debug("regions after left")
-
-						// when bestSplit is equal to the length of the gap then there is nothing
-						// to be added to the right side of the gap
-						if bestSplit < gapRead.Length() {
-
-							logrus.WithFields(logrus.Fields{
-								"gapReadEnd":    gapRead.End,
-								"bestSplit":     bestSplit,
-								"gapReadLength": gapRead.Length(),
-								"left":          gapRead.End - (gapRead.Length() - bestSplit),
-								"right":         gapRead.End,
-							}).Debug("debug split right")
-
-							// add the split to the result
-							result.MatchedRead.AddRegionNonOverlappingPanic(gapRead.End-(gapRead.Length()-bestSplit), gapRead.End)
-							result.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.End-(gapRead.Length()-bestSplit), gapGenome.End)
-
-							// the read and genome sequences from the best split to the end of the gap (right)
-							readByte := (*read.Sequence)[gapRead.End-(gapRead.Length()-bestSplit) : gapRead.End]
-							genomeByte := (*genomeIndex.Sequences[seqIndex])[gapGenome.End-(gapRead.Length()-bestSplit) : gapGenome.End]
-
-							// add the mismatches to the result
-							for i := 0; i < gapRead.Length()-bestSplit; i++ {
-								// add the mismatche to the result
-								if readByte[i] != genomeByte[i] {
-									result.MismatchesRead = append(result.MismatchesRead, gapRead.End-(bestSplit-i))
-
-									// skip this match result if there are too many mismatches
-									if exceedsMismatchConstraint(read, result) {
-										logrus.WithFields(logrus.Fields{
-											"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
-											"maxMismatchPercentage": config.MaxMismatchPercentage(),
-											"mismatches":            result.MismatchesRead,
-											"numMismatches":         len(result.MismatchesRead),
-										}).Debug("too many mismatches in middle extension (right) -> skip sequence")
-										continue sequenceLoop
-									}
-								}
-							}
-						}
-
-						logrus.WithFields(logrus.Fields{
-							"read":   result.MatchedRead,
-							"genome": result.MatchedGenome,
-						}).Debug("regions after right")
-					}
-
-					// determine the next gap (-1 if there is none)
-					readGapPos = gapRead.End + 1
-					indexRegionBeforeGap = result.MatchedRead.GetGapIndexAfterPos(readGapPos)
-				}
-			}
-
-			// there are unmatched positions in front of the read
-			if result.MatchedRead.GetFirstRegion().Start > 0 {
-
-				startRead := 0
-				endRead := result.MatchedRead.GetFirstRegion().Start
-				extensionLength := endRead - startRead
-
-				startGenome := result.MatchedGenome.GetFirstRegion().Start - extensionLength
-
-				readSequence := (*read.Sequence)[startRead:endRead]
-
-				logrus.WithFields(logrus.Fields{
-					"startRead":   startRead,
-					"endRead":     endRead,
-					"startGenome": startGenome,
-					"endGenome":   startGenome + len(readSequence),
-				}).Debug("unmatched positions in front of read")
-
-				// TODO: this could be a use case for clipping
-				// when a read maps to the target sequence but would go out of bounds
-				// it could still be a valid mapping but it needs to be clipped
-				if startGenome < 0 {
-					logrus.Debug("genome index out of bounds")
-					continue sequenceLoop
-				}
-
-				genomeSequence := (*genomeIndex.Sequences[seqIndex])[startGenome : startGenome+len(readSequence)]
-
-				numMismatches := 0
-
-				// trying to extend the read to the left
-				for i := 0; i < extensionLength; i++ {
-
-					// skip matches
-					if readSequence[i] == genomeSequence[i] {
-						continue
-					}
-
-					// add the mismatches to the result
-					result.MismatchesRead = append(result.MismatchesRead, startRead+i)
-					numMismatches++
-
-					// skip this match result if there are too many mismatches
-					if exceedsMismatchConstraint(read, result) {
-						logrus.WithFields(logrus.Fields{
-							"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
-							"maxMismatchPercentage": config.MaxMismatchPercentage(),
-							"mismatches":            result.MismatchesRead,
-							"numMismatches":         len(result.MismatchesRead),
-						}).Debug("too many mismatches in left extension -> skip sequence")
-						continue sequenceLoop
-					}
-				}
-
-				logrus.WithFields(logrus.Fields{
-					"startRead":     startRead,
-					"endRead":       endRead,
-					"startGenome":   startGenome,
-					"endGenome":     startGenome + extensionLength,
-					"numMismatches": numMismatches,
-				}).Debug("extended match to left (linear)")
-
-				result.MatchedRead.AddRegionNonOverlappingPanic(startRead, endRead)
-				result.MatchedGenome.AddRegionNonOverlappingPanic(startGenome, startGenome+extensionLength)
-			}
-
-			logrus.WithFields(logrus.Fields{
-				"read":       result.MatchedRead,
-				"genome":     result.MatchedGenome,
-				"mismatches": result.MismatchesRead,
-			}).Debug("match after left extension")
-
-			// there are unmatched positions in the back of the read
-			if result.MatchedRead.GetLastRegion().End < len(*read.Sequence) {
-
-				startRead := result.MatchedRead.GetLastRegion().End
-				endRead := len(*read.Sequence)
-				extensionLength := endRead - startRead
-
-				startGenome := result.MatchedGenome.GetLastRegion().End
-
-				readSequence := (*read.Sequence)[startRead:endRead]
-
-				logrus.WithFields(logrus.Fields{
-					"startRead":   startRead,
-					"endRead":     endRead,
-					"startGenome": startGenome,
-					"endGenome":   startGenome + len(readSequence),
-				}).Debug("unmatched positions in back of read")
-
-				// TODO: this could be a use case for clipping
-				// when a read maps to the target sequence but would go out of bounds
-				// it could still be a valid mapping but it needs to be clipped
-				if startGenome+len(readSequence) > len(*genomeIndex.Sequences[seqIndex]) {
-					logrus.Debug("genome index out of bounds")
-					continue sequenceLoop
-				}
-
-				genomeSequence := (*genomeIndex.Sequences[seqIndex])[startGenome : startGenome+len(readSequence)]
-
-				// trying to extend the read to the right
-				for i := 0; i < extensionLength; i++ {
-
-					// add the mismatches to the result
-					if readSequence[i] != genomeSequence[i] {
-						result.MismatchesRead = append(result.MismatchesRead, startRead+i)
-					}
-
-					// skip this match result if there are too many mismatches
-					if exceedsMismatchConstraint(read, result) {
-						logrus.WithFields(logrus.Fields{
-							"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
-							"maxMismatchPercentage": config.MaxMismatchPercentage(),
-							"mismatches":            result.MismatchesRead,
-							"numMismatches":         len(result.MismatchesRead),
-						}).Debug("too many mismatches in right extension -> skip sequence")
-						continue sequenceLoop
-					}
-				}
-
-				result.MatchedRead.AddRegionNonOverlappingPanic(startRead, endRead)
-				result.MatchedGenome.AddRegionNonOverlappingPanic(startGenome, startGenome+extensionLength)
-			}
-		}
-
-		results = append(results, result)
+		//results = append(results, result)
+		results = append(results, tmpResults...)
 	}
 
 	if len(results) == 0 {
@@ -585,11 +139,581 @@ sequenceLoop:
 	return results, true
 }
 
+func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperutils.DiagonalHandler,
+	result *mapperutils.ReadMatchResult, results *[]*mapperutils.ReadMatchResult) {
+
+	logrus.Debug("")
+	logrus.WithFields(logrus.Fields{
+		"seqIndex":      result.SequenceIndex,
+		"matchedRead":   result.MatchedRead,
+		"matchedGenome": result.MatchedGenome,
+		"mismatches":    result.MismatchesRead,
+		"length":        result.MatchedRead.Length(),
+	}).Debug("extending read match")
+
+	diagonalsBefore := dh.GetAvailableDiagonals()
+
+	// check if enough kmers can be matched
+
+	// contains the merged region vector of mappable read positions from all remaining diagonals
+	rvRemaining := regionvector.NewRegionVector()
+
+	for _, d := range diagonalsBefore {
+		for _, match := range dh.Diagonals[d] {
+			rvRemaining.AddRegionAndMerge(match.FromRead, match.ToRead)
+		}
+	}
+
+	rvUncovered := result.MatchedRead.UncoveredRegionsBySelfAndOther(rvRemaining, 0, len(*read.Sequence))
+
+	if rvUncovered.Length() >= int(float32(len(*read.Sequence))*0.5) {
+		logrus.WithFields(logrus.Fields{
+			"uncoveredLength": rvUncovered.Length(),
+		}).Debug("uncovered regions are too large")
+		return
+	}
+
+	diagonal, score, found := dh.GetBestDiagonal()
+
+	if !found {
+		logrus.Debug("no suitable diagonal found")
+		logrus.Debug("adding partial result to results")
+
+		*results = append(*results, result)
+
+		return
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"diagonal": diagonal,
+		"score":    score,
+	}).Debug("found next best diagonal")
+
+	//if score < 2 {
+	//	logrus.Debug("no more diagonals with enough matches")
+	//	break
+	//}
+
+	dhNew := mapperutils.NewDiagonalHandlerWithDataCopy(dh.Diagonals)
+	resultNew := result.Copy()
+
+	applyDiagonal(read, genomeIndex, dhNew, diagonal, resultNew)
+
+	// keep on extending the currently best diagonal
+	applyPossibleDiagonals(read, genomeIndex, dhNew, resultNew, results)
+
+	diagonalsAfter := dhNew.GetAvailableDiagonals()
+	excluded := findExcludedDiagonal(diagonalsBefore, diagonalsAfter, diagonal)
+
+	// there is at least one diagonal that was excluded
+	wasExcluded := len(excluded) > 0
+
+	if wasExcluded {
+		logrus.WithFields(logrus.Fields{
+			"excluded": excluded,
+		}).Debug("excluded diagonals were found")
+	} else {
+		logrus.Debug("no diagonals were excluded")
+	}
+
+	// the current diagonal contains less than x kmers
+	belowScoreThreshold := score <= 1
+
+	logrus.WithFields(logrus.Fields{
+		"belowScoreThreshold": belowScoreThreshold,
+		"score":               score,
+	}).Debug("current diagonal score")
+
+	// no condition is met that requires a branching to explore other matches
+	if !wasExcluded && !belowScoreThreshold {
+		// the currently applied diagonal did not exclude any other diagonals
+		return
+	}
+
+	// the currently applied diagonal excluded other diagonals
+	// remove the currently applied diagonal (without applying) from the diagonal handler
+	// and branch to explore other potential mappings
+
+	logrus.WithFields(logrus.Fields{
+		"diagonal": diagonal,
+	}).Debug("exclude the current diagonal from the next search")
+
+	dh.RemoveDiagonal(diagonal)
+
+	applyPossibleDiagonals(read, genomeIndex, dh, result, results)
+}
+
+func findExcludedDiagonal(before []int, after []int, removed int) []int {
+
+	afterSet := make(map[int]struct{})
+	for _, a := range after {
+		afterSet[a] = struct{}{}
+	}
+
+	excluded := make([]int, 0)
+
+	for _, b := range before {
+		if b == removed {
+			continue
+		}
+		if _, ok := afterSet[b]; !ok {
+			excluded = append(excluded, b)
+		}
+	}
+
+	return excluded
+}
+
+func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperutils.DiagonalHandler,
+	diagonal int, result *mapperutils.ReadMatchResult) {
+
+	diagonalRead := regionvector.NewRegionVector()
+	diagonalGenome := regionvector.NewRegionVector()
+
+	for _, match := range dh.Diagonals[diagonal] {
+		// the region can not be part of another diagonal that is already used
+		if match.Used {
+			logrus.Warn("match.Used should not be happening anymore")
+			continue
+		}
+		// add the match to the diagonal
+		diagonalRead.AddRegionNonOverlappingPanic(match.FromRead, match.ToRead)
+		diagonalGenome.AddRegionNonOverlappingPanic(match.FromGenome, match.ToGenome)
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"posGenome":  diagonal,
+		"numMatches": len(dh.Diagonals[diagonal]),
+		"read":       diagonalRead,
+		"genome":     diagonalGenome,
+		//"gaps":       len(diagonalRead.Regions) - 1,
+	}).Debug("applying diagonal")
+
+	gapsRead, gapsGenome := mapperutils.ComputeGapsInDiagonal(diagonalRead, diagonalGenome, result)
+
+	// resolve gaps on the same diagonal
+	// gaps can occur because of mismatches in the read and genome which prevent exact kmer matching
+	// this is done by filling the gaps in the read and genome and counting the mismatches
+	// the regionvectors of read and genome should have the same length as they are coupled
+	// because they are part of the same diagonal (no indels, otherwise not on the same diagonal)
+	for i := 0; i < len(gapsRead.Regions); i++ {
+
+		gapRead := gapsRead.Regions[i]
+		gapGenome := gapsGenome.Regions[i]
+
+		logrus.WithFields(logrus.Fields{
+			"read":   gapRead,
+			"genome": gapGenome,
+		}).Debug("found gap")
+
+		// fill the gap in the read by adding the gap as region
+		diagonalRead.AddRegionNonOverlappingPanic(gapRead.Start, gapRead.End)
+
+		// count mismatches when filling the gap and skip the match if there are too many
+		geneSeqPos := 0
+		for i := gapRead.Start - 1; i < gapRead.End-1; i++ {
+
+			readByte := (*read.Sequence)[i]
+			gIndex := gapGenome.Start + geneSeqPos - 1
+			genomeByte := (*genomeIndex.Sequences[result.SequenceIndex])[gIndex]
+			geneSeqPos++
+
+			// skip matches
+			if readByte == genomeByte {
+				continue
+			}
+
+			// add the mismatche to the result
+			result.MismatchesRead = append(result.MismatchesRead, i)
+
+			// TODO: ignore the mismatch constraint inside a single diagonal for now
+			// skip this match result if there are too many mismatches
+			//if exceedsMismatchConstraint(read, *result) {
+			//
+			//	logrus.WithFields(logrus.Fields{
+			//		"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
+			//		"maxMismatchPercentage": config.MaxMismatchPercentage(),
+			//		"mismatches":            result.MismatchesRead,
+			//		"numMismatches":         len(result.MismatchesRead),
+			//	}).Debug("too many mismatches in diagonal filling")
+			//
+			//	return
+			//}
+		}
+
+		diagonalGenome.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.End)
+	}
+
+	if len(gapsRead.Regions) > 0 {
+		logrus.WithFields(logrus.Fields{
+			"read":       diagonalRead,
+			"genome":     diagonalGenome,
+			"mismatches": result.MismatchesRead,
+		}).Debug("filled gap")
+	}
+
+	// add all matches in diagonal to the result
+	for i := 0; i < len(diagonalRead.Regions); i++ {
+		regionRead := diagonalRead.Regions[i]
+		regionGenome := diagonalGenome.Regions[i]
+
+		logrus.WithFields(logrus.Fields{
+			"read":   regionRead,
+			"genome": regionGenome,
+		}).Debug("adding diagonal match to result")
+
+		result.MatchedRead.AddRegionNonOverlappingPanic(regionRead.Start, regionRead.End)
+		result.MatchedGenome.AddRegionNonOverlappingPanic(regionGenome.Start, regionGenome.End)
+	}
+
+	// mark all used regions
+	for i := 0; i < len(diagonalRead.Regions); i++ {
+		dh.ConsumeKmer(diagonalRead.Regions[i].Start, diagonalRead.Regions[i].End,
+			diagonalGenome.Regions[i].Start, diagonalGenome.Regions[i].End)
+	}
+
+	// remove used matches and empty diagonals
+	dh.RemovedConsumedRegionsAndDiagonals()
+
+	// remove invalid diagonals based on the currently applied diagonal
+	dh.RemoveInvalidDiagonals(result, read)
+}
+
+func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *mapperutils.ReadMatchResult) {
+
+	if result.MatchedRead.Length() == len(*read.Sequence) {
+
+		logrus.Debug("read fully matched")
+
+	} else {
+
+		// there are gaps (unmatched regions) in the read (between matched regions / diagonals)
+		if result.MatchedRead.HasGaps() {
+
+			logrus.Debug("unmatched regions within read")
+
+			// used to keep track of the read position for the next gap
+			readGapPos := 0
+			// returns the index of the first region after which a gap occurs (-1 if no gap)
+			indexRegionBeforeGap := result.MatchedRead.GetGapIndexAfterPos(readGapPos)
+
+			// loop through all gaps in the read (-1 means there is no more gap)
+			for indexRegionBeforeGap > -1 {
+
+				gapRead := result.MatchedRead.GetGapAfterRegionIndex(indexRegionBeforeGap)
+				gapGenome := result.MatchedGenome.GetGapAfterRegionIndex(indexRegionBeforeGap)
+
+				if gapGenome == nil {
+					logrus.WithFields(logrus.Fields{
+						"read":    result.MatchedRead,
+						"genome":  result.MatchedGenome,
+						"gapRead": gapRead,
+					}).Debug("insertion found")
+				} else {
+
+					logrus.WithFields(logrus.Fields{
+						"gapRead":   gapRead,
+						"gapGenome": gapGenome,
+					}).Debug("found gap to be handled")
+
+					// TODO: handle insertions
+					// when the gap in the read is larger than the gap in the genome
+					// there is maybe an insertion in the read
+					// currently the assumption is that this is a non-mapping read
+					if gapRead.Length() > gapGenome.Length() {
+						logrus.WithFields(logrus.Fields{
+							"gapRead":   gapRead,
+							"gapGenome": gapGenome,
+						}).Debug("gap read is larger than gap genome")
+
+						result.Unmappable = true
+						return
+					}
+
+					bestSplit := determineBestSplit(genomeIndex, read, result.SequenceIndex, gapRead, gapGenome)
+
+					if bestSplit == -1 {
+						// this should not happen because a split should be found every time
+						// even if the split has a bad score (many mismatches, no splice sites, etc)
+						logrus.WithFields(logrus.Fields{
+							"qname": read.Header,
+						}).Fatal("no best split found")
+					}
+
+					logrus.WithFields(logrus.Fields{
+						"split": bestSplit,
+					}).Debug("best split found")
+
+					logrus.WithFields(logrus.Fields{
+						"read":   result.MatchedRead,
+						"genome": result.MatchedGenome,
+					}).Debug("regions before")
+
+					// when bestSplit is 0 then there is nothing to be added to the left side of the gap
+					if bestSplit > 0 {
+
+						// add the split to the result
+						result.MatchedRead.AddRegionNonOverlappingPanic(gapRead.Start, gapRead.Start+bestSplit)
+						result.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.Start+bestSplit)
+
+						// the read and genome sequences from the start of the gap to the best split (left)
+						readByte := (*read.Sequence)[gapRead.Start : gapRead.Start+bestSplit]
+						genomeByte := (*genomeIndex.Sequences[result.SequenceIndex])[gapGenome.Start : gapGenome.Start+bestSplit]
+
+						// add the mismatches to the result
+						for i := 0; i < bestSplit; i++ {
+							// add the mismatche to the result
+							if readByte[i] != genomeByte[i] {
+								result.MismatchesRead = append(result.MismatchesRead, gapRead.Start+i)
+
+								// skip this match result if there are too many mismatches
+								if exceedsMismatchConstraint(read, result) {
+									logrus.WithFields(logrus.Fields{
+										"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
+										"maxMismatchPercentage": config.MaxMismatchPercentage(),
+										"mismatches":            result.MismatchesRead,
+										"numMismatches":         len(result.MismatchesRead),
+									}).Debug("too many mismatches in middle extension (left) -> skip sequence")
+									//continue sequenceLoop
+
+									result.Unmappable = true
+									return
+								}
+							}
+						}
+					}
+
+					logrus.WithFields(logrus.Fields{
+						"read":   result.MatchedRead,
+						"genome": result.MatchedGenome,
+					}).Debug("regions after left")
+
+					// when bestSplit is equal to the length of the gap then there is nothing
+					// to be added to the right side of the gap
+					if bestSplit < gapRead.Length() {
+
+						logrus.WithFields(logrus.Fields{
+							"gapReadEnd":    gapRead.End,
+							"bestSplit":     bestSplit,
+							"gapReadLength": gapRead.Length(),
+							"left":          gapRead.End - (gapRead.Length() - bestSplit),
+							"right":         gapRead.End,
+						}).Debug("debug split right")
+
+						// add the split to the result
+						result.MatchedRead.AddRegionNonOverlappingPanic(gapRead.End-(gapRead.Length()-bestSplit), gapRead.End)
+						result.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.End-(gapRead.Length()-bestSplit), gapGenome.End)
+
+						// the read and genome sequences from the best split to the end of the gap (right)
+						readByte := (*read.Sequence)[gapRead.End-(gapRead.Length()-bestSplit) : gapRead.End]
+						genomeByte := (*genomeIndex.Sequences[result.SequenceIndex])[gapGenome.End-(gapRead.Length()-bestSplit) : gapGenome.End]
+
+						// add the mismatches to the result
+						for i := 0; i < gapRead.Length()-bestSplit; i++ {
+							// add the mismatche to the result
+							if readByte[i] != genomeByte[i] {
+								result.MismatchesRead = append(result.MismatchesRead, gapRead.End-(bestSplit-i))
+
+								// skip this match result if there are too many mismatches
+								if exceedsMismatchConstraint(read, result) {
+									logrus.WithFields(logrus.Fields{
+										"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
+										"maxMismatchPercentage": config.MaxMismatchPercentage(),
+										"mismatches":            result.MismatchesRead,
+										"numMismatches":         len(result.MismatchesRead),
+									}).Debug("too many mismatches in middle extension (right) -> skip sequence")
+
+									result.Unmappable = true
+									return
+								}
+							}
+						}
+					}
+
+					logrus.WithFields(logrus.Fields{
+						"read":   result.MatchedRead,
+						"genome": result.MatchedGenome,
+					}).Debug("regions after right")
+				}
+
+				// determine the next gap (-1 if there is none)
+				readGapPos = gapRead.End + 1
+				indexRegionBeforeGap = result.MatchedRead.GetGapIndexAfterPos(readGapPos)
+			}
+		}
+
+		// there are unmatched positions in front of the read
+		if result.MatchedRead.GetFirstRegion().Start > 0 {
+
+			startRead := 0
+			endRead := result.MatchedRead.GetFirstRegion().Start
+			extensionLength := endRead - startRead
+
+			startGenome := result.MatchedGenome.GetFirstRegion().Start - extensionLength
+
+			readSequence := (*read.Sequence)[startRead:endRead]
+
+			logrus.WithFields(logrus.Fields{
+				"startRead":   startRead,
+				"endRead":     endRead,
+				"startGenome": startGenome,
+				"endGenome":   startGenome + len(readSequence),
+			}).Debug("unmatched positions in front of read")
+
+			// TODO: this could be a use case for clipping
+			// when a read maps to the target sequence but would go out of bounds
+			// it could still be a valid mapping but it needs to be clipped
+			if startGenome < 0 {
+				logrus.Debug("genome index out of bounds")
+
+				result.Unmappable = true
+				return
+			}
+
+			genomeSequence := (*genomeIndex.Sequences[result.SequenceIndex])[startGenome : startGenome+len(readSequence)]
+
+			numMismatches := 0
+
+			// trying to extend the read to the left
+			for i := 0; i < extensionLength; i++ {
+
+				// skip matches
+				if readSequence[i] == genomeSequence[i] {
+					continue
+				}
+
+				// add the mismatches to the result
+				result.MismatchesRead = append(result.MismatchesRead, startRead+i)
+				numMismatches++
+
+				// skip this match result if there are too many mismatches
+				if exceedsMismatchConstraint(read, result) {
+					logrus.WithFields(logrus.Fields{
+						"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
+						"maxMismatchPercentage": config.MaxMismatchPercentage(),
+						"mismatches":            result.MismatchesRead,
+						"numMismatches":         len(result.MismatchesRead),
+					}).Debug("too many mismatches in left extension -> skip sequence")
+
+					result.Unmappable = true
+					return
+				}
+			}
+
+			logrus.WithFields(logrus.Fields{
+				"startRead":     startRead,
+				"endRead":       endRead,
+				"startGenome":   startGenome,
+				"endGenome":     startGenome + extensionLength,
+				"numMismatches": numMismatches,
+			}).Debug("extended match to left (linear)")
+
+			result.MatchedRead.AddRegionNonOverlappingPanic(startRead, endRead)
+			result.MatchedGenome.AddRegionNonOverlappingPanic(startGenome, startGenome+extensionLength)
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"read":       result.MatchedRead,
+			"genome":     result.MatchedGenome,
+			"mismatches": result.MismatchesRead,
+		}).Debug("match after left extension")
+
+		// there are unmatched positions in the back of the read
+		if result.MatchedRead.GetLastRegion().End < len(*read.Sequence) {
+
+			startRead := result.MatchedRead.GetLastRegion().End
+			endRead := len(*read.Sequence)
+			extensionLength := endRead - startRead
+
+			startGenome := result.MatchedGenome.GetLastRegion().End
+
+			readSequence := (*read.Sequence)[startRead:endRead]
+
+			logrus.WithFields(logrus.Fields{
+				"startRead":   startRead,
+				"endRead":     endRead,
+				"startGenome": startGenome,
+				"endGenome":   startGenome + len(readSequence),
+			}).Debug("unmatched positions in back of read")
+
+			// TODO: this could be a use case for clipping
+			// when a read maps to the target sequence but would go out of bounds
+			// it could still be a valid mapping but it needs to be clipped
+			if startGenome+len(readSequence) > len(*genomeIndex.Sequences[result.SequenceIndex]) {
+				logrus.Debug("genome index out of bounds")
+
+				result.Unmappable = true
+				return
+			}
+
+			genomeSequence := (*genomeIndex.Sequences[result.SequenceIndex])[startGenome : startGenome+len(readSequence)]
+
+			// trying to extend the read to the right
+			for i := 0; i < extensionLength; i++ {
+
+				// add the mismatches to the result
+				if readSequence[i] != genomeSequence[i] {
+					result.MismatchesRead = append(result.MismatchesRead, startRead+i)
+				}
+
+				// skip this match result if there are too many mismatches
+				if exceedsMismatchConstraint(read, result) {
+					logrus.WithFields(logrus.Fields{
+						"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
+						"maxMismatchPercentage": config.MaxMismatchPercentage(),
+						"mismatches":            result.MismatchesRead,
+						"numMismatches":         len(result.MismatchesRead),
+					}).Debug("too many mismatches in right extension -> skip sequence")
+					//continue sequenceLoop
+
+					result.Unmappable = true
+					return
+				}
+			}
+
+			result.MatchedRead.AddRegionNonOverlappingPanic(startRead, endRead)
+			result.MatchedGenome.AddRegionNonOverlappingPanic(startGenome, startGenome+extensionLength)
+		}
+	}
+}
+
+func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.GenomeIndex,
+	diagonalHandler *mapperutils.DiagonalHandler) []*mapperutils.ReadMatchResult {
+
+	// list of read match results
+	results := make([]*mapperutils.ReadMatchResult, 0)
+
+	result := &mapperutils.ReadMatchResult{
+		SequenceIndex:  seqIndex,
+		MatchedRead:    regionvector.NewRegionVector(),
+		MatchedGenome:  regionvector.NewRegionVector(),
+		MismatchesRead: make([]int, 0),
+		SecondPass:     false,
+	}
+
+	applyPossibleDiagonals(read, genomeIndex, diagonalHandler, result, &results)
+
+	finalResults := make([]*mapperutils.ReadMatchResult, 0)
+
+	for _, result := range results {
+
+		extendDiagonals(read, genomeIndex, result)
+
+		if result.Unmappable {
+			continue
+		}
+
+		finalResults = append(finalResults, result)
+	}
+
+	return finalResults
+}
+
 // exceedsMismatchConstraint checks if the number of mismatches exceeds the maximum allowed percentage
 // as configured in the config. This value is an integer between 0 and 100 which represents the percentage
 // of allowed mismatches in the read.
 // The function returns true if the number of mismatches exceeds the allowed percentage.
-func exceedsMismatchConstraint(read *fastq.Read, result mapperutils.ReadMatchResult) bool {
+func exceedsMismatchConstraint(read *fastq.Read, result *mapperutils.ReadMatchResult) bool {
 	// the percentage of the mismatches accumulated in the given result relative to the read length
 	mismatchPercentage := uint8(float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)))
 	return mismatchPercentage > config.MaxMismatchPercentage()

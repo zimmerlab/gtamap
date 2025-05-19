@@ -79,13 +79,14 @@ func extractGeneSequenceFromGtfAndFastaForIndex() {
 func testSpecificRead() {
 
 	//genomeIndexPath := "/home/sam/Data/gtamap/tas2/tas2r4/index/ENSG00000127364.gtai"
-	genomeIndexPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/019/ENSG00000141480.gtai"
+	//genomeIndexPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/019/ENSG00000141480.gtai"
+	genomeIndexPath := "/home/sam/Data/gtamap/rz/g1k_v37_decoy/ENSG00000141480.gtai"
 
 	//readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.tas2r4.fastq"
 	//readsRvPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_2.tas2r4.fastq"
 
-	readsFwPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/019/r1.fastq"
-	readsRvPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/019/r2.fastq"
+	readsFwPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/019/DP800004065TRL1C029R0201052655.r1.fastq"
+	readsRvPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/019/DP800004065TRL1C029R0201052655.r2.fastq"
 
 	outputPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/019/aligned.sam"
 

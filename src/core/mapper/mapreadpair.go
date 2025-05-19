@@ -68,81 +68,118 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	if needSecondPass {
 		secondPassChan.Send(&mapperutils.SecondPassTask{
 			ReadPair: readPair,
-			ResultFw: &resultFw,
-			ResultRv: &resultRv,
+			ResultFw: resultFw,
+			ResultRv: resultRv,
 		})
 		return "", false
+	}
+
+	// postprocess every potential match
+	for _, resFw := range resultFw {
+		postprocessReadMatch(genomeIndex, readPair.ReadR1, resFw)
+	}
+	for _, resRv := range resultRv {
+		postprocessReadMatch(genomeIndex, readPair.ReadR2, resRv)
 	}
 
 	if len(resultFw) > 1 || len(resultRv) > 1 {
 		// TODO: handle multimapping reads
 
-		logrus.WithFields(logrus.Fields{
-			"numResultsFw": len(resultFw),
-			"numResultsRv": len(resultRv),
-			"readFw":       readPair.ReadR1.Header,
-			"readRv":       readPair.ReadR2.Header,
-		}).Warn("multimapping reads not handled yet")
+		//logrus.WithFields(logrus.Fields{
+		//	"numResultsFw": len(resultFw),
+		//	"numResultsRv": len(resultRv),
+		//	"readFw":       readPair.ReadR1.Header,
+		//	"readRv":       readPair.ReadR2.Header,
+		//}).Warn("multimapping reads not handled yet")
 
-		//var builder strings.Builder
-		//
-		//builder.WriteString(readPair.ReadR1.Header)
-		//builder.WriteString("_fw\tMULTIMAPPING\t")
-		//for i, resFw := range resultFw {
-		//	builder.WriteString(strconv.Itoa(i))
-		//	builder.WriteString(":\t")
-		//	builder.WriteString(resFw.GetCigar())
-		//	builder.WriteString("\t")
-		//	builder.WriteString(strconv.Itoa(resFw.MatchedRead.Length()))
-		//	builder.WriteString("\t")
-		//}
-		//builder.WriteString("\n")
-		//
-		//builder.WriteString(readPair.ReadR2.Header)
-		//builder.WriteString("_rw\tMULTIMAPPING\t")
-		//for i, resRv := range resultRv {
-		//	builder.WriteString(strconv.Itoa(i))
-		//	builder.WriteString(":\t")
-		//	builder.WriteString(resRv.GetCigar())
-		//	builder.WriteString("\t")
-		//	builder.WriteString(strconv.Itoa(resRv.MatchedRead.Length()))
-		//	builder.WriteString("\t")
-		//}
-		//builder.WriteString("\n")
-		//
-		//return builder.String(), true
+		var builder strings.Builder
 
-		return "", false
+		// TODO: handle this appropriately
+		// combine every first of pair read with every second of pair read
+
+		for i := 0; i < len(resultFw); i++ {
+			for j := 0; j < len(resultRv); j++ {
+				s, isOk := readPairResultToSamString(genomeIndex, readPair, resultFw[i], resultRv[j])
+				if !isOk {
+					continue
+				}
+				builder.WriteString(s)
+			}
+		}
+
+		//for _, resFw := range resultFw {
+		//	s, isOk := readPairResultToSamString(genomeIndex, readPair, resFw, nil)
+		//	if !isOk {
+		//		continue
+		//	}
+		//	builder.WriteString(s)
+		//}
+		//
+		//for _, resRv := range resultRv {
+		//	s, isOk := readPairResultToSamString(genomeIndex, readPair, nil, resRv)
+		//	if !isOk {
+		//		continue
+		//	}
+		//	builder.WriteString(s)
+		//}
+
+		return builder.String(), true
 	}
 
 	// multimapping was handled before so length is always 1
 	resFw := resultFw[0]
 	resRv := resultRv[0]
 
-	postprocessReadMatch(genomeIndex, readPair.ReadR1, &resFw)
-	postprocessReadMatch(genomeIndex, readPair.ReadR2, &resRv)
+	//postprocessReadMatch(genomeIndex, readPair.ReadR1, resFw)
+	//postprocessReadMatch(genomeIndex, readPair.ReadR2, resRv)
+
+	return readPairResultToSamString(genomeIndex, readPair, resFw, resRv)
+}
+
+func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.ReadPair,
+	resFw *mapperutils.ReadMatchResult, resRv *mapperutils.ReadMatchResult) (string, bool) {
 
 	flagFw := sam.Flag{}
 	flagRv := sam.Flag{}
 
 	flagFw.SetPaired()
-	flagFw.SetProperlyPaired()
 	flagFw.SetFirstInPair()
-	if !genomeIndex.IsSequenceForward(resFw.SequenceIndex) {
-		flagFw.SetReverseStrand()
-		flagRv.SetMateReverseStrand()
+	if resFw != nil && resRv != nil {
+		flagFw.SetProperlyPaired()
+	}
+	if resFw != nil {
+		if !genomeIndex.IsSequenceForward(resFw.SequenceIndex) {
+			flagFw.SetReverseStrand()
+			flagRv.SetMateReverseStrand()
+		}
+	} else {
+		flagFw.SetUnmapped()
+		flagRv.SetMateUnmapped()
 	}
 
 	flagRv.SetPaired()
-	flagRv.SetProperlyPaired()
 	flagRv.SetSecondInPair()
-	if !genomeIndex.IsSequenceForward(resRv.SequenceIndex) {
-		flagRv.SetReverseStrand()
-		flagFw.SetMateReverseStrand()
+	if resFw != nil && resRv != nil {
+		flagRv.SetProperlyPaired()
+	}
+	if resRv != nil {
+		if !genomeIndex.IsSequenceForward(resRv.SequenceIndex) {
+			flagRv.SetReverseStrand()
+			flagFw.SetMateReverseStrand()
+		}
+	} else {
+		flagRv.SetUnmapped()
+		flagFw.SetMateUnmapped()
 	}
 
-	geneStartRelativeToContig := int(genomeIndex.GetSequenceInfo(resFw.SequenceIndex).StartGenomic)
-	geneEndRelativeToContig := int(genomeIndex.GetSequenceInfo(resRv.SequenceIndex).EndGenomic)
+	geneStartRelativeToContig := -1
+	if resFw != nil {
+		geneStartRelativeToContig = int(genomeIndex.GetSequenceInfo(resFw.SequenceIndex).StartGenomic)
+	}
+	geneEndRelativeToContig := -1
+	if resRv != nil {
+		geneEndRelativeToContig = int(genomeIndex.GetSequenceInfo(resRv.SequenceIndex).EndGenomic)
+	}
 
 	// QNAME
 	// use only the string before any whitespace as the header
@@ -154,46 +191,96 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	flagRvStr := strconv.Itoa(flagRv.Value)
 
 	// RNAME
-	rnameFw := genomeIndex.GetSequenceInfo(resFw.SequenceIndex).Contig
-	rnameRv := genomeIndex.GetSequenceInfo(resRv.SequenceIndex).Contig
+	// the name of the reference sequence (contig) to which the read is aligned
+	// it is supposed that both pairs must map to the same contig
+	rname := ""
+	if resFw != nil {
+		rname = genomeIndex.GetSequenceInfo(resFw.SequenceIndex).Contig
+	}
+	if resRv != nil {
+		rname = genomeIndex.GetSequenceInfo(resRv.SequenceIndex).Contig
+	}
 
 	// POS
 	// the offset is the start of the first region in the matched genome which corresponds to the first
 	// mapped position of the read
-	offsetFw := resFw.MatchedGenome.GetFirstRegion().Start
-	// if the read is mapped to the reverse strand, we need to calculate the offset because the target sequence
-	// was reverse complemented. therefore the start position in 5'-3' direction of the original sequence is the
-	// end position of the reverse complemented sequence
-	if flagFw.IsReverseStrand() {
-		geneLength := geneEndRelativeToContig - geneStartRelativeToContig
-		offsetFw = geneLength - resFw.MatchedGenome.GetLastRegion().End
+	startGenomeFw := 0
+	if resFw != nil {
+		offsetFw := resFw.MatchedGenome.GetFirstRegion().Start
+		// if the read is mapped to the reverse strand, we need to calculate the offset because the target sequence
+		// was reverse complemented. therefore the start position in 5'-3' direction of the original sequence is the
+		// end position of the reverse complemented sequence
+		if flagFw.IsReverseStrand() {
+			geneLength := geneEndRelativeToContig - geneStartRelativeToContig
+			offsetFw = geneLength - resFw.MatchedGenome.GetLastRegion().End
+		}
+		// +1 because the sam format is 1-based
+		startGenomeFw = geneStartRelativeToContig + offsetFw + 1
 	}
-	// +1 because the sam format is 1-based
-	startGenomeFw := geneStartRelativeToContig + offsetFw + 1
 
-	offsetRv := resRv.MatchedGenome.GetFirstRegion().Start
-	if flagRv.IsReverseStrand() {
-		geneLength := geneEndRelativeToContig - geneStartRelativeToContig
-		offsetRv = geneLength - resRv.MatchedGenome.GetLastRegion().End
+	startGenomeRv := 0
+	if resRv != nil {
+		offsetRv := resRv.MatchedGenome.GetFirstRegion().Start
+		if flagRv.IsReverseStrand() {
+			geneLength := geneEndRelativeToContig - geneStartRelativeToContig
+			offsetRv = geneLength - resRv.MatchedGenome.GetLastRegion().End
+		}
+		// +1 because the sam format is 1-based
+		startGenomeRv = geneStartRelativeToContig + offsetRv + 1
 	}
-	// +1 because the sam format is 1-based
-	startGenomeRv := geneStartRelativeToContig + offsetRv + 1
 
 	// MAPQ
 	// https://samtools.github.io/hts-specs/SAMv1.pdf
 	// No alignments should be assigned mapping quality 255
-	mapqFw := 254
-	mapqRv := 254
+	// TODO: implement mapping quality
+	mapqFw := 0
+	if resFw != nil {
+		mapqFw = 254
+	}
+	mapqRv := 0
+	if resRv != nil {
+		mapqRv = 254
+	}
 
 	// CIGAR
 	// https://samtools.github.io/hts-specs/SAMv1.pdf
 	// Adjacent CIGAR operations should be different
-	cigarFw := resFw.GetCigar()
-	cigarRv := resRv.GetCigar()
+	cigarFw := "*"
+	if resFw != nil {
+		var errCigarFw error
+
+		cigarFw, errCigarFw = resFw.GetCigar()
+
+		if errCigarFw != nil {
+			logrus.WithFields(logrus.Fields{
+				"read": readPair.ReadR1.Header,
+			}).Error("Error getting CIGAR string", errCigarFw)
+
+			// TODO: handle error
+			//return "", false
+			cigarFw = "*"
+		}
+	}
+	cigarRv := "*"
+	if resRv != nil {
+		var errCigarRv error
+
+		cigarRv, errCigarRv = resRv.GetCigar()
+
+		if errCigarRv != nil {
+			logrus.WithFields(logrus.Fields{
+				"read": readPair.ReadR2.Header,
+			}).Error("Error getting CIGAR string", errCigarRv)
+
+			// TODO: handle error
+			//return "", false
+			cigarRv = "*"
+		}
+	}
 
 	// RNEXT
-	rnextFw := rnameRv
-	rnextRv := rnameFw
+	rnextFw := rname
+	rnextRv := rname
 
 	// PNEXT
 	pnextFw := startGenomeRv
@@ -213,14 +300,18 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	// The intention of this field is to indicate where the other end of the template has been aligned without
 	// needing to read the remainder of the SAM file. Unfortunately there has been no clear consensus on
 	// the definitions of the template mapped start and end. Thus the exact definitions are implementation-defined.
-	tlen := int(math.Abs(float64(startGenomeFw-startGenomeRv))) + len(*readPair.ReadR1.Sequence)
-	tlenFw := tlen
-	if startGenomeFw > startGenomeRv {
-		tlenFw = -1 * tlen
-	}
-	tlenRv := tlen
-	if startGenomeRv >= startGenomeFw {
-		tlenRv = -1 * tlen
+	tlenFw := 0
+	tlenRv := 0
+	if resFw != nil && resRv != nil {
+		tlen := int(math.Abs(float64(startGenomeFw-startGenomeRv))) + len(*readPair.ReadR1.Sequence)
+		tlenFw = tlen
+		if startGenomeFw > startGenomeRv {
+			tlenFw = -1 * tlen
+		}
+		tlenRv = tlen
+		if startGenomeRv >= startGenomeFw {
+			tlenRv = -1 * tlen
+		}
 	}
 
 	// SEQ
@@ -270,7 +361,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	builder.WriteString(flagFwStr)
 	builder.WriteString("\t")
 	// RNAME
-	builder.WriteString(rnameFw)
+	builder.WriteString(rname)
 	builder.WriteString("\t")
 	// POS
 	builder.WriteString(strconv.Itoa(startGenomeFw))
@@ -306,7 +397,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	builder.WriteString(flagRvStr)
 	builder.WriteString("\t")
 	// RNAME
-	builder.WriteString(rnameRv)
+	builder.WriteString(rname)
 	builder.WriteString("\t")
 	// POS
 	builder.WriteString(strconv.Itoa(startGenomeRv))

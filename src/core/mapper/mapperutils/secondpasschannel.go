@@ -7,8 +7,8 @@ import (
 
 type SecondPassTask struct {
 	ReadPair *fastq.ReadPair
-	ResultFw *[]ReadMatchResult
-	ResultRv *[]ReadMatchResult
+	ResultFw []*ReadMatchResult
+	ResultRv []*ReadMatchResult
 }
 
 type SecondPassChannel struct {
