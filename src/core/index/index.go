@@ -4,6 +4,15 @@ import (
 	"bufio"
 	"encoding/gob"
 	"fmt"
+	"io/fs"
+	"log"
+	"math"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/genemodel"
@@ -16,14 +25,6 @@ import (
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
 	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
-	"io/fs"
-	"log"
-	"math"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"time"
 )
 
 type GtaIndex struct {
@@ -61,8 +62,8 @@ func (i GtaIndex) GetSequenceByIndex(sequenceIndex int) *string {
 // TranslateRwTransPosToFwTransPos translates a relative position revTransPos within a reverse
 // transcript to a relative position within the forward transcript for the transcript at index transcriptIndex.
 func (i GtaIndex) TranslateRwTransPosToFwTransPos(transcriptIndex uint32,
-	revTransPos uint32) uint32 {
-
+	revTransPos uint32,
+) uint32 {
 	transcript := i.Transcripts[transcriptIndex]
 
 	if revTransPos >= uint32(transcript.SequenceLength) {
@@ -77,8 +78,8 @@ func (i GtaIndex) TranslateRwTransPosToFwTransPos(transcriptIndex uint32,
 // position on the gene.
 // TODO: untested function
 func (i GtaIndex) TranslateRelativeTranscriptPositionToRelativeGenePosition(transcriptIndex uint32,
-	relativeTranscriptPosition uint32) uint32 {
-
+	relativeTranscriptPosition uint32,
+) uint32 {
 	transcript := i.Transcripts[transcriptIndex]
 
 	if relativeTranscriptPosition < 0 {
@@ -123,10 +124,9 @@ func (i GtaIndex) TranslateRelativeTranscriptPositionToRelativeGenePosition(tran
 // within the exon.
 // TODO: untested function
 func (i GtaIndex) TransIntervalToGenomicIntervals(tranIndex uint32, startTransPos int, endTransPos int) []uint32 {
-
 	transcript := i.Transcripts[tranIndex]
 
-	//intervals := make([]*core.Interval, 0)
+	// intervals := make([]*core.Interval, 0)
 	intervals := make([]uint32, 0)
 
 	for _, exon := range transcript.Exons {
@@ -207,7 +207,6 @@ func (i GtaIndex) FindEquivalenceClassByGenomicLocation(genomicLocation uint32) 
 // While the given interval spans across the current equivalence class, the next equivalence class is retrieved.
 // TODO: not tested
 func (i GtaIndex) GetCoveredEquivalenceClassIds(sequenceIndex int, startRelative int, endRelative int) []uint32 {
-
 	ecIds := make([]uint32, 0)
 
 	transcriptIndex := i.SequenceIndexToTranscriptIndex(uint32(sequenceIndex))
@@ -249,7 +248,6 @@ func (i GtaIndex) GetCoveredEquivalenceClassIds(sequenceIndex int, startRelative
 // keyword.
 // TODO: not tested
 func (i GtaIndex) AddSequenceToKeywordTree(sequence *string, sequenceIndex uint32) {
-
 	for kStart := 0; kStart < len(*sequence)-int(i.KeywordTree.KeywordLength); kStart++ {
 
 		kEnd := kStart + int(i.KeywordTree.KeywordLength)
@@ -264,12 +262,11 @@ func (i GtaIndex) AddSequenceToKeywordTree(sequence *string, sequenceIndex uint3
 			EquivalenceClassIds: ecIds,
 		})
 
-		//break
+		// break
 	}
 }
 
 func (i GtaIndex) EquivalenceClassIdsMatch(ecIds1 []uint32, ecIds2 []uint32) bool {
-
 	if len(ecIds1) != len(ecIds2) {
 		return false
 	}
@@ -284,7 +281,6 @@ func (i GtaIndex) EquivalenceClassIdsMatch(ecIds1 []uint32, ecIds2 []uint32) boo
 }
 
 func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os.File) {
-
 	timerStart := time.Now()
 
 	timerReadReference := time.Now()
@@ -302,7 +298,7 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 	}
 	durationReadReference += time.Since(timerReadReference)
 
-	var gtaIndex = GtaIndex{
+	gtaIndex := GtaIndex{
 		Gene:         nil,
 		Transcripts:  nil,
 		SuffixTree:   nil,
@@ -311,7 +307,7 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 
 	// read the reference files (gtf + fasta) and generate the annotation
 	timerReadReference = time.Now()
-	var annotation = dataloader.GenerateInputForIndex(gtfFile, fastaFile, fastaIndexFile)
+	annotation := dataloader.GenerateInputForIndex(gtfFile, fastaFile, fastaIndexFile)
 	durationReadReference += time.Since(timerReadReference)
 
 	gtaIndex.Gene = &genemodel.Gene{
@@ -368,7 +364,7 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 		}
 	}
 
-	//gtaIndex.SuffixTree = datastructure.CreateTree()
+	// gtaIndex.SuffixTree = datastructure.CreateTree()
 
 	gtaIndex.KeywordTree = keywordtree.NewKeywordTree(config.KmerLength())
 
@@ -400,13 +396,13 @@ func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os
 		//durationBuildTree += time.Since(timerBuildTree)
 		//gtaIndex.NumSequences++
 
-		//break
+		// break
 	}
 
 	// suffix links are only required for tree construction but not for the search
-	//timerBuildTree = time.Now()
-	//gtaIndex.SuffixTree.RemoveAllSuffixLinks()
-	//durationBuildTree += time.Since(timerBuildTree)
+	// timerBuildTree = time.Now()
+	// gtaIndex.SuffixTree.RemoveAllSuffixLinks()
+	// durationBuildTree += time.Since(timerBuildTree)
 
 	//posPerSeq := make(map[int][]int)
 	//
@@ -476,7 +472,6 @@ func SerializeFromPath(gtaIndex *GtaIndex, filePath string) {
 }
 
 func SerializeFromFile(gtaIndex *GtaIndex, outputFile *os.File) {
-
 	timerStart := time.Now()
 
 	enc := gob.NewEncoder(outputFile)
@@ -492,7 +487,6 @@ func SerializeFromFile(gtaIndex *GtaIndex, outputFile *os.File) {
 }
 
 func SerializeFromFileTest(tree *keywordtree.KeywordTree, outputFile *os.File) {
-
 	timerStart := time.Now()
 
 	enc := gob.NewEncoder(outputFile)
@@ -519,7 +513,6 @@ func DezerializeFromPath(indexFilePath string) *GtaIndex {
 }
 
 func DezerializeFromFile(indexFile *os.File) *GtaIndex {
-
 	timerStart := time.Now()
 
 	// create a decoder and deserialize the person struct from the file
@@ -662,31 +655,11 @@ func (i *GenomeIndex) ExtendParalogRegionIndex(targetGene string, indexExtension
 		}
 	}
 
-	// also do for keyword tree
-	for kmer, positions := range indexExtension.KeywordMap {
-		node := i.KeywordTree.AddKeyword(kmer[:])
-
-		for _, pos := range positions {
-			var offset uint8
-			if pos.SequenceIndex == 0 {
-				offset = (numSequences - 1) * 2
-			} else {
-				offset = (numSequences-1)*2 + 1
-			}
-			node.Positions = append(node.Positions, keywordtreebyte.Position{
-				SequenceIndex: offset,
-				Position:      uint32(pos.Position),
-			})
-		}
-	}
-
 	// log
 	logrus.WithFields(logrus.Fields{
 		"Added paralog region":                            indexExtension.SequenceInfo[0].GeneId,
 		"to the paralog index belonging to target region": targetGene,
 	}).Info("Extended paralog index of main index")
-
-	i.KeywordTree.NumSequences = i.KeywordTree.NumSequences + uint8(len(indexExtension.Sequences))
 }
 
 func (i *GenomeIndex) AddKeywordToMapSmall(keyword [5]byte, sequenceIndex uint8, position uint32) {
@@ -704,7 +677,6 @@ func (i *GenomeIndex) GetKeywordFromMap(keyword [10]byte) []*keywordtreebyte.Pos
 }
 
 func (i *GenomeIndex) FindKeywordMatchesInMap(keyword *[10]byte, posInRead int) []*mapperutils.Match {
-
 	positions := i.KeywordMap[*keyword]
 
 	matches := make([]*mapperutils.Match, len(positions))
@@ -738,6 +710,17 @@ func (i *GenomeIndex) AddSequenceToKeywordTree(sequence *[]byte, sequenceIndex u
 			SequenceIndex: sequenceIndex,
 			Position:      uint32(kStart),
 		})
+
+		seqBytes := *(*[10]byte)((*sequence)[kStart:kEnd])
+
+		i.AddKeywordToMap(seqBytes, sequenceIndex, uint32(kStart))
+	}
+}
+
+func (i *GenomeIndex) AddSequenceToMap(sequence *[]byte, sequenceIndex uint8) {
+	for kStart := 0; kStart <= len(*sequence)-int(config.KmerLength()); kStart++ {
+
+		kEnd := kStart + int(config.KmerLength())
 
 		seqBytes := *(*[10]byte)((*sequence)[kStart:kEnd])
 
@@ -827,7 +810,6 @@ func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry) *GenomeIndex {
 		SequenceHeaders: make([]string, len(fastaEntries)),
 		SequenceInfo:    make([]*gtf.GeneBasic, len(fastaEntries)),
 		Sequences:       make([]*[]byte, len(fastaEntries)*2),
-		KeywordTree:     keywordtreebyte.NewKeywordTree(config.KmerLength()),
 		KeywordMap:      make(map[[10]byte][]*keywordtreebyte.Position, int(math.Pow(4, 10))),
 		KeywordMapSmall: make(map[[5]byte][]*keywordtreebyte.Position, int(math.Pow(4, 5))),
 	}
@@ -849,11 +831,9 @@ func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry) *GenomeIndex {
 	}
 
 	for i, seq := range index.Sequences {
-		index.AddSequenceToKeywordTree(seq, uint8(i))
+		index.AddSequenceToMap(seq, uint8(i))
 		index.AddSequenceToMapSmall(seq, uint8(i))
 	}
-
-	index.KeywordTree.NumSequences = uint8(len(index.Sequences))
 
 	return &index
 }
@@ -983,7 +963,6 @@ func OptimizeFastaExtraction(targetParalogs map[string]map[string]struct{}, fast
 		}
 		return nil
 	})
-
 	if err != nil {
 		logrus.Fatalf("Error reading %s directory to check for pre-computed fa seqs: %s", *fastaDirParalogPre, err)
 	}
@@ -995,7 +974,7 @@ func OptimizeFastaExtraction(targetParalogs map[string]map[string]struct{}, fast
 
 	for target, paralogs := range targetParalogs {
 		paralogsToExtractSeq[target] = make(map[string]struct{})
-		for paralog, _ := range paralogs {
+		for paralog := range paralogs {
 			_, exists := existingFaFiles[paralog]
 			if !exists {
 				logrus.Infof("Will have to extract paralog region '%s' of target region '%s' since .fa non-existent in --fastaout '%s'.", paralog, target, *fastaDirParalogPre)
@@ -1030,7 +1009,6 @@ func OptimizeIndexSerialisation(targetParalogs map[string]map[string]struct{}, i
 		}
 		return nil
 	})
-
 	if err != nil {
 		logrus.Fatalf("Error reading %s directory to check for already existing indices: %s", *indexDirParalogPre, err)
 	}
@@ -1042,7 +1020,7 @@ func OptimizeIndexSerialisation(targetParalogs map[string]map[string]struct{}, i
 
 	for target, paralogs := range targetParalogs {
 		paralogsToSerialize[target] = make(map[string]struct{})
-		for paralog, _ := range paralogs {
+		for paralog := range paralogs {
 			_, exists := existingIndices[paralog]
 			if !exists {
 				logrus.Infof("Will have to serialize paralog region '%s' of target region '%s' since .gtai non-existent in --indexout '%s'.", paralog, target, *indexDirParalogPre)
@@ -1054,7 +1032,6 @@ func OptimizeIndexSerialisation(targetParalogs map[string]map[string]struct{}, i
 }
 
 func BuildAndSerializeAll(paralogsToSerialize map[string]map[string]struct{}, indexDirParalogPre *string, fastaDirParalogPre *string) {
-
 	for target, paralogs := range paralogsToSerialize {
 		for paralog := range paralogs {
 			// create and format index file
