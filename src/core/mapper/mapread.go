@@ -10,8 +10,6 @@ import (
 )
 
 func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]*mapperutils.ReadMatchResult, bool) {
-
-	logrus.Debug("")
 	logrus.WithFields(logrus.Fields{
 		"read":   read.Header,
 		"length": len(*read.Sequence),
@@ -48,13 +46,11 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]*mapperutils.R
 
 			// add new diagonal to sequence match
 			if globalMatches.MatchesPerSequence[match.SequenceIndex].MatchesPerDiagonal[match.StartGenome] == nil {
-				globalMatches.MatchesPerSequence[match.SequenceIndex].MatchesPerDiagonal[match.StartGenome] =
-					make([]*mapperutils.Match, 0)
+				globalMatches.MatchesPerSequence[match.SequenceIndex].MatchesPerDiagonal[match.StartGenome] = make([]*mapperutils.Match, 0)
 			}
 
 			// add match to diagonal
-			globalMatches.MatchesPerSequence[match.SequenceIndex].MatchesPerDiagonal[match.StartGenome] =
-				append(globalMatches.MatchesPerSequence[match.SequenceIndex].MatchesPerDiagonal[match.StartGenome], match)
+			globalMatches.MatchesPerSequence[match.SequenceIndex].MatchesPerDiagonal[match.StartGenome] = append(globalMatches.MatchesPerSequence[match.SequenceIndex].MatchesPerDiagonal[match.StartGenome], match)
 		}
 	}
 
@@ -86,7 +82,7 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]*mapperutils.R
 
 	results := make([]*mapperutils.ReadMatchResult, 0)
 
-	//sequenceLoop:
+	// sequenceLoop:
 	for _, seqIndex := range seqIndexSorted {
 
 		if seqIndex == -1 {
@@ -111,7 +107,7 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]*mapperutils.R
 
 		tmpResults := mapReadToSequence(seqIndex, read, genomeIndex, dh)
 
-		//var result mapperutils.ReadMatchResult
+		// var result mapperutils.ReadMatchResult
 
 		//logrus.WithFields(logrus.Fields{
 		//	"seqIndex": seqIndex,
@@ -128,7 +124,7 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]*mapperutils.R
 		// - there are unmatched positions in the front or back of the read
 		//   (extend but if not possible then search for another diagonal with shorter kmer)
 
-		//results = append(results, result)
+		// results = append(results, result)
 		results = append(results, tmpResults...)
 	}
 
@@ -140,8 +136,8 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]*mapperutils.R
 }
 
 func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperutils.DiagonalHandler,
-	result *mapperutils.ReadMatchResult, results *[]*mapperutils.ReadMatchResult) {
-
+	result *mapperutils.ReadMatchResult, results *[]*mapperutils.ReadMatchResult,
+) {
 	logrus.Debug("")
 	logrus.WithFields(logrus.Fields{
 		"seqIndex":      result.SequenceIndex,
@@ -244,7 +240,6 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 }
 
 func findExcludedDiagonal(before []int, after []int, removed int) []int {
-
 	afterSet := make(map[int]struct{})
 	for _, a := range after {
 		afterSet[a] = struct{}{}
@@ -265,8 +260,8 @@ func findExcludedDiagonal(before []int, after []int, removed int) []int {
 }
 
 func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperutils.DiagonalHandler,
-	diagonal int, result *mapperutils.ReadMatchResult) {
-
+	diagonal int, result *mapperutils.ReadMatchResult,
+) {
 	diagonalRead := regionvector.NewRegionVector()
 	diagonalGenome := regionvector.NewRegionVector()
 
@@ -380,11 +375,8 @@ func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperu
 }
 
 func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *mapperutils.ReadMatchResult) {
-
 	if result.MatchedRead.Length() == len(*read.Sequence) {
-
 		logrus.Debug("read fully matched")
-
 	} else {
 
 		// there are gaps (unmatched regions) in the read (between matched regions / diagonals)
@@ -474,7 +466,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 										"mismatches":            result.MismatchesRead,
 										"numMismatches":         len(result.MismatchesRead),
 									}).Debug("too many mismatches in middle extension (left) -> skip sequence")
-									//continue sequenceLoop
+									// continue sequenceLoop
 
 									result.Unmappable = true
 									return
@@ -664,7 +656,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 						"mismatches":            result.MismatchesRead,
 						"numMismatches":         len(result.MismatchesRead),
 					}).Debug("too many mismatches in right extension -> skip sequence")
-					//continue sequenceLoop
+					// continue sequenceLoop
 
 					result.Unmappable = true
 					return
@@ -678,8 +670,8 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 }
 
 func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.GenomeIndex,
-	diagonalHandler *mapperutils.DiagonalHandler) []*mapperutils.ReadMatchResult {
-
+	diagonalHandler *mapperutils.DiagonalHandler,
+) []*mapperutils.ReadMatchResult {
 	// list of read match results
 	results := make([]*mapperutils.ReadMatchResult, 0)
 
@@ -724,8 +716,8 @@ func determineBestSplit(
 	read *fastq.Read,
 	seqIndex int,
 	gapRead *regionvector.Region,
-	gapGenome *regionvector.Region) int {
-
+	gapGenome *regionvector.Region,
+) int {
 	logrus.WithFields(logrus.Fields{
 		"gapRead":   gapRead,
 		"gapGenome": gapGenome,
@@ -766,7 +758,7 @@ func determineBestSplit(
 	// TODO: keep track of the actual mismatch positions
 	// TODO: if no suitable split is found then:
 	// - maybe there is another exon in between if enough bases missing from read
-	// - maybe keep the readpair for second pass
+	// - maybe keep the readpair for unmapped pass
 	for i := 0; i <= gapRead.Length(); i++ {
 
 		lPos := i

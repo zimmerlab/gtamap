@@ -2,16 +2,16 @@ package main
 
 import (
 	"fmt"
-	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"sync"
+
+	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 )
 
 func main() {
-
 	fmt.Println("hello")
 
 	taskChan := make(chan int)
-	secondPassChan := mapperutils.NewSecondPassChannel()
+	unmappedChan := mapperutils.NewUnmappedChannel()
 
 	go Producer(taskChan)
 
@@ -19,23 +19,23 @@ func main() {
 
 	for i := 0; i < 4; i++ {
 		wgFirstPass.Add(1)
-		go ConsumerFirst(i, taskChan, secondPassChan, &wgFirstPass)
+		go ConsumerFirst(i, taskChan, unmappedChan, &wgFirstPass)
 	}
 
-	var wgSecondPass sync.WaitGroup
-	wgSecondPass.Add(1)
+	var wgUnmapped sync.WaitGroup
+	wgUnmapped.Add(1)
 
 	fmt.Println("waiting for first pass")
 
 	wgFirstPass.Wait()
 
-	secondPassChan.Close()
+	unmappedChan.Close()
 
-	go ConsumerSecond(secondPassChan, &wgSecondPass)
+	go ConsumerSecond(unmappedChan, &wgUnmapped)
 
-	fmt.Println("waiting for second pass")
+	fmt.Println("waiting for unmapped pass")
 
-	wgSecondPass.Wait()
+	wgUnmapped.Wait()
 
 	fmt.Println("done all")
 }
@@ -52,16 +52,16 @@ func Producer(taskChan chan<- int) {
 	fmt.Println("done producing")
 }
 
-func ConsumerFirst(id int, taskChan <-chan int, secondPassChan *mapperutils.SecondPassChannel,
-	wg *sync.WaitGroup) {
-
+func ConsumerFirst(id int, taskChan <-chan int, unmappedChan *mapperutils.UnmappedChannel,
+	wg *sync.WaitGroup,
+) {
 	defer wg.Done()
 
 	for task := range taskChan {
 		fmt.Println("task: ", task)
 
 		if task%2 == 0 {
-			secondPassChan.Send(&mapperutils.SecondPassTask{
+			unmappedChan.Send(&mapperutils.UnmappedTask{
 				ReadPair: nil,
 				ResultFw: nil,
 				ResultRv: nil,
@@ -72,18 +72,18 @@ func ConsumerFirst(id int, taskChan <-chan int, secondPassChan *mapperutils.Seco
 	fmt.Println("producer done", id)
 }
 
-func ConsumerSecond(secondPassChan *mapperutils.SecondPassChannel, wg *sync.WaitGroup) {
+func ConsumerSecond(unmappedChan *mapperutils.UnmappedChannel, wg *sync.WaitGroup) {
 	fmt.Println("ConsumerSecond")
 
 	defer wg.Done()
 
 	for {
-		task, ok := secondPassChan.Receive()
+		task, ok := unmappedChan.Receive()
 		if !ok {
 			break
 		}
-		fmt.Println("second pass: ", task)
+		fmt.Println("unmapped pass: ", task)
 	}
 
-	fmt.Println("done second pass")
+	fmt.Println("done unmapped pass")
 }

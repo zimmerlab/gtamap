@@ -1,29 +1,30 @@
 package mapperutils
 
 import (
-	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"sync"
+
+	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 )
 
-type SecondPassTask struct {
+type UnmappedTask struct {
 	ReadPair *fastq.ReadPair
 	ResultFw []*ReadMatchResult
 	ResultRv []*ReadMatchResult
 }
 
-type SecondPassChannel struct {
-	in     chan *SecondPassTask
-	out    chan *SecondPassTask
-	buffer []*SecondPassTask
+type UnmappedChannel struct {
+	in     chan *UnmappedTask
+	out    chan *UnmappedTask
+	buffer []*UnmappedTask
 	mu     sync.Mutex
 	closed bool
 }
 
-func NewSecondPassChannel() *SecondPassChannel {
-	channel := &SecondPassChannel{
-		in:     make(chan *SecondPassTask),
-		out:    make(chan *SecondPassTask),
-		buffer: make([]*SecondPassTask, 0),
+func NewUnmappedChannel() *UnmappedChannel {
+	channel := &UnmappedChannel{
+		in:     make(chan *UnmappedTask),
+		out:    make(chan *UnmappedTask),
+		buffer: make([]*UnmappedTask, 0),
 	}
 
 	go channel.process()
@@ -31,10 +32,10 @@ func NewSecondPassChannel() *SecondPassChannel {
 	return channel
 }
 
-func (s *SecondPassChannel) process() {
+func (s *UnmappedChannel) process() {
 	var (
-		outCh chan<- *SecondPassTask
-		next  *SecondPassTask
+		outCh chan<- *UnmappedTask
+		next  *UnmappedTask
 	)
 
 	for {
@@ -80,15 +81,15 @@ func (s *SecondPassChannel) process() {
 	}
 }
 
-func (s *SecondPassChannel) Send(task *SecondPassTask) {
+func (s *UnmappedChannel) Send(task *UnmappedTask) {
 	s.in <- task
 }
 
-func (s *SecondPassChannel) Receive() (*SecondPassTask, bool) {
+func (s *UnmappedChannel) Receive() (*UnmappedTask, bool) {
 	item, ok := <-s.out
 	return item, ok
 }
 
-func (s *SecondPassChannel) Close() {
+func (s *UnmappedChannel) Close() {
 	close(s.in)
 }

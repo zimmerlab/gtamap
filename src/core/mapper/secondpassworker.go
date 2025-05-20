@@ -2,20 +2,20 @@ package mapper
 
 import (
 	"fmt"
-	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"sync"
+
+	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 )
 
-func SecondPassWorker(secondPassChan *mapperutils.SecondPassChannel, wgSecondPass *sync.WaitGroup) {
-
-	defer wgSecondPass.Done()
+func unmappedWorker(unmappedChan *mapperutils.UnmappedChannel, wgUnmapped *sync.WaitGroup) {
+	defer wgUnmapped.Done()
 
 	for {
-		task, ok := secondPassChan.Receive()
+		task, ok := unmappedChan.Receive()
 		if !ok {
 			break
 		}
 
-		fmt.Println("second pass: ", task.ReadPair.ReadR1.Header)
+		fmt.Println("unmapped pass: ", task.ReadPair.ReadR1.Header)
 	}
 }

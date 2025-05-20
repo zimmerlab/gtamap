@@ -1,21 +1,22 @@
 package mapper
 
 import (
+	"sync"
+
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/core/timer"
 	"github.com/sirupsen/logrus"
-	"sync"
 )
 
 func MapperWorker(workerId int, genomeIndex *index.GenomeIndex,
 	wg *sync.WaitGroup,
 	taskChan <-chan MappingTask,
-	secondPassChan *mapperutils.SecondPassChannel,
+	unmappedChan *mapperutils.UnmappedChannel,
 	outputChan chan<- string,
 	progressChan chan<- bool,
-	timerChan chan<- *timer.Timer) {
-
+	timerChan chan<- *timer.Timer,
+) {
 	defer wg.Done()
 
 	logrus.WithFields(logrus.Fields{
@@ -29,7 +30,7 @@ func MapperWorker(workerId int, genomeIndex *index.GenomeIndex,
 			"task":     task.ID,
 		}).Debug("Processing task")
 
-		result, isMappable := MapReadPair(task.ReadPair, genomeIndex, secondPassChan, timerChan)
+		result, isMappable := MapReadPair(task.ReadPair, genomeIndex, unmappedChan, timerChan)
 
 		if isMappable {
 			outputChan <- result

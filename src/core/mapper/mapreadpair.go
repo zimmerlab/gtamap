@@ -1,6 +1,10 @@
 package mapper
 
 import (
+	"math"
+	"strconv"
+	"strings"
+
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/core/timer"
@@ -8,15 +12,12 @@ import (
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
 	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
-	"math"
-	"strconv"
-	"strings"
 )
 
 func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
-	secondPassChan *mapperutils.SecondPassChannel,
-	timerChannel chan<- *timer.Timer) (string, bool) {
-
+	unmappedChan *mapperutils.UnmappedChannel,
+	timerChannel chan<- *timer.Timer,
+) (string, bool) {
 	keepFw := Filter(readPair.ReadR1.Sequence, genomeIndex)
 	keepRw := Filter(readPair.ReadR2.Sequence, genomeIndex)
 
@@ -50,23 +51,23 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 		return "", false
 	}
 
-	needSecondPass := false
+	needRemap := false
 
 	for i, resFw := range resultFw {
-		if resFw.SecondPass {
-			logrus.Debug("Second pass required for forward read: ", i)
-			needSecondPass = true
+		if resFw.NeedRemap {
+			logrus.Debug("Remap required for forward read: ", i)
+			needRemap = true
 		}
 	}
 	for i, resRv := range resultRv {
-		if resRv.SecondPass {
-			logrus.Debug("Second pass required for reverse read: ", i)
-			needSecondPass = true
+		if resRv.NeedRemap {
+			logrus.Debug("Remap required for reverse read: ", i)
+			needRemap = true
 		}
 	}
 
-	if needSecondPass {
-		secondPassChan.Send(&mapperutils.SecondPassTask{
+	if needRemap {
+		unmappedChan.Send(&mapperutils.UnmappedTask{
 			ReadPair: readPair,
 			ResultFw: resultFw,
 			ResultRv: resultRv,
@@ -436,7 +437,6 @@ func postprocessReadMatch(genomeIndex *index.GenomeIndex, read *fastq.Read, resu
 // be determined, and it is up to the mapper to decide where to place the read.
 // This function shifts the gap to the leftmost position.
 func applyLeftNormalization(genomeIndex *index.GenomeIndex, read *fastq.Read, result *mapperutils.ReadMatchResult) {
-
 	if len(result.MatchedGenome.Regions) < 2 {
 		logrus.WithFields(logrus.Fields{
 			"read":      read.Header,
@@ -474,8 +474,8 @@ func applyLeftNormalization(genomeIndex *index.GenomeIndex, read *fastq.Read, re
 func determineLeftNormalizationShiftFw(
 	genomeIndex *index.GenomeIndex,
 	read *fastq.Read,
-	result *mapperutils.ReadMatchResult) {
-
+	result *mapperutils.ReadMatchResult,
+) {
 	logrus.Debug("determine left normalization for forward seq")
 
 	regionIndexBeforeGap := result.MatchedGenome.GetGapIndexAfterPos(0)
@@ -546,8 +546,8 @@ func determineLeftNormalizationShiftFw(
 func determineLeftNormalizationShiftRv(
 	genomeIndex *index.GenomeIndex,
 	read *fastq.Read,
-	result *mapperutils.ReadMatchResult) {
-
+	result *mapperutils.ReadMatchResult,
+) {
 	logrus.Debug("determine left normalization for reverse seq")
 
 	regionIndexBeforeGap := result.MatchedGenome.GetGapIndexAfterPos(0)
@@ -605,8 +605,8 @@ func determineLeftNormalizationShiftRv(
 		}).Debug("determined shift")
 
 		// shift the mapping in genome to right based on value of shift
-		//result.MatchedGenome.Regions[i].End += shift
-		//result.MatchedGenome.Regions[i+1].Start += shift
+		// result.MatchedGenome.Regions[i].End += shift
+		// result.MatchedGenome.Regions[i+1].Start += shift
 
 		result.MatchedGenome.Regions[regionIndexBeforeGap].End += shift
 		result.MatchedGenome.Regions[regionIndexBeforeGap+1].Start += shift

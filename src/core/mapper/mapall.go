@@ -1,6 +1,10 @@
 package mapper
 
 import (
+	"runtime"
+	"sync"
+	"time"
+
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
@@ -10,14 +14,11 @@ import (
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
 	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
-	"runtime"
-	"sync"
-	"time"
 )
 
 func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawriter.Writer,
-	numThreads *int) {
-
+	numThreads *int,
+) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	timerStartTotal := time.Now()
@@ -32,7 +33,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 
 	numWorkers := runtime.NumCPU()
 	// TODO: REMOVE DEBUG
-	//os.Create("output.txt")
+	// os.Create("output.txt")
 
 	if *numThreads > 0 {
 		numWorkers = *numThreads
@@ -45,13 +46,13 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	maxTasks := 0
 
 	// fw with left normalization required
-	//specificQname := "A00604:202:HLYW3DSXY:3:2114:17020:15562"
+	// specificQname := "A00604:202:HLYW3DSXY:3:2114:17020:15562"
 	// rv with left normalization required
-	//specificQname := "A00604:202:HLYW3DSXY:3:2169:25527:10316"
+	// specificQname := "A00604:202:HLYW3DSXY:3:2169:25527:10316"
 	// adding region where start == end
-	//specificQname := "A00604:202:HLYW3DSXY:3:1103:32217:18991"
+	// specificQname := "A00604:202:HLYW3DSXY:3:1103:32217:18991"
 	// cigar string contains 1D
-	//specificQname := "A00604:202:HLYW3DSXY:3:1157:15121:15468"
+	// specificQname := "A00604:202:HLYW3DSXY:3:1157:15121:15468"
 
 	specificQname := ""
 
@@ -61,7 +62,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	// contains the read pairs that need to be mapped
 	taskChan := make(chan MappingTask, numWorkers*bufferSizeMultiplier)
 	// contains all read pairs that could not be mapped in the first pass
-	secondPassChan := mapperutils.NewSecondPassChannel()
+	unmappedChan := mapperutils.NewUnmappedChannel()
 	// contains the string results of the mapping
 	outputChan := make(chan string)
 	// contains information about the duration of each step
@@ -83,15 +84,15 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 
 	// wait group that keeps track of the mapping goroutines that are still running
 	var wgFirstPass sync.WaitGroup
-	var wgSecondPass sync.WaitGroup
+	var wgUnmapped sync.WaitGroup
 
 	// start the mapping worker goroutine pool
 	for i := 0; i < numWorkers; i++ {
 		wgFirstPass.Add(1)
-		go MapperWorker(i, genomeIndex, &wgFirstPass, taskChan, secondPassChan, outputChan, progressChan, timerChan)
+		go MapperWorker(i, genomeIndex, &wgFirstPass, taskChan, unmappedChan, outputChan, progressChan, timerChan)
 	}
 
-	wgSecondPass.Add(1)
+	wgUnmapped.Add(1)
 
 	go MappingTaskProducer(reader, taskChan, maxTasks, specificQname)
 
@@ -99,11 +100,11 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 
 	logrus.Info("Done with first pass mapping")
 
-	secondPassChan.Close()
+	unmappedChan.Close()
 
-	go SecondPassWorker(secondPassChan, &wgSecondPass)
+	go unmappedWorker(unmappedChan, &wgUnmapped)
 
-	wgSecondPass.Wait()
+	wgUnmapped.Wait()
 
 	close(outputChan)
 	close(timerChan)

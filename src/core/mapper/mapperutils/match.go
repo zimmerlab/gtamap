@@ -2,11 +2,12 @@ package mapperutils
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/sirupsen/logrus"
-	"strconv"
-	"strings"
 )
 
 type Match struct {
@@ -36,13 +37,12 @@ type ReadMatchResult struct {
 	MatchedRead     *regionvector.RegionVector // region vector containing the matched positions in the read
 	MatchedGenome   *regionvector.RegionVector // region vector containing the matched positions in the genome
 	MismatchesRead  []int                      // the positions of the mismatches in the read
-	SecondPass      bool                       // true if this result must undergo a second pass
-	Unmappable      bool
 	diagonalHandler *DiagonalHandler
+	Unmappable      bool
+	NeedRemap       bool // true if this result must undergo a remap
 }
 
 func (m ReadMatchResult) Copy() *ReadMatchResult {
-
 	var dhCopy *DiagonalHandler
 	if m.diagonalHandler != nil {
 		dhCopy = m.diagonalHandler.Copy()
@@ -53,7 +53,7 @@ func (m ReadMatchResult) Copy() *ReadMatchResult {
 		MatchedRead:     m.MatchedRead.Copy(),
 		MatchedGenome:   m.MatchedGenome.Copy(),
 		MismatchesRead:  append([]int{}, m.MismatchesRead...),
-		SecondPass:      m.SecondPass,
+		NeedRemap:       m.NeedRemap,
 		diagonalHandler: dhCopy,
 	}
 }
