@@ -54,24 +54,88 @@ func PostMappingWorker(mappedReadPairChan <-chan *ReadPairMatchResults, wg *sync
 		highCovRegionsfw := getHighCoverageRegons(coverageSliceFw)
 		highCovRegionsrv := getHighCoverageRegons(coverageSliceRv)
 		multimaps := getMultimappingReads(mappedReadPairs, highCovRegionsfw, highCovRegionsrv)
+
 		targetRegionId := mappedReadPairs[0].Index.GetSequenceInfo(seqIndex).GeneId
 		multiMapsPerSeqIndex[targetRegionId] = multimaps
 	}
+
+	paralogReads := make(map[string]struct{})
+
 	for seqIndex, ambiguousReadPairs := range multiMapsPerSeqIndex {
 		for _, ambiguousReadPair := range ambiguousReadPairs {
-			alternativeMappingFw, _ := MapRead(ambiguousReadPair.ReadPair.ReadR1, ambiguousReadPair.Index.ParalogRegions[seqIndex])
-			alternativeMappingRv, _ := MapRead(ambiguousReadPair.ReadPair.ReadR2, ambiguousReadPair.Index.ParalogRegions[seqIndex])
-			fmt.Println(alternativeMappingFw)
-			fmt.Println(alternativeMappingRv)
+			// currMM := len(ambiguousReadPair.Rv[0].MismatchesRead) + len(ambiguousReadPair.Fw[0].MismatchesRead)
 
+			if !(ambiguousReadPair.ReadPair.ReadR1.Header == "A00604:202:HLYW3DSXY:3:2670:22363:10880 2:N:0:AACTCGGA+TCTGGACA") {
+				continue
+			}
+
+			// var lastFw []mapperutils.ReadMatchResult
+			// var lastRv []mapperutils.ReadMatchResult
+
+			for i := 0; i < 10; i++ {
+				// alternativeMappingsFw, isMappableFw := MapRead(ambiguousReadPair.ReadPair.ReadR1, ambiguousReadPair.Index.ParalogRegions[seqIndex])
+				alternativeMappingsRv, _ := MapRead(ambiguousReadPair.ReadPair.ReadR2, ambiguousReadPair.Index.ParalogRegions[seqIndex])
+
+				fmt.Println(alternativeMappingsRv)
+				// if i == 0 {
+				// 	lastFw = alternativeMappingsFw
+				// 	lastRv = alternativeMappingsRv
+				// 	continue
+				// }
+				//
+				// if len(lastFw) != len(alternativeMappingsFw) {
+				// 	fmt.Println("Fw Map differs")
+				// 	fmt.Println(lastFw)
+				// 	fmt.Println(alternativeMappingsFw)
+				// }
+				// if len(lastRv) != len(alternativeMappingsRv) {
+				// 	fmt.Println("Rv Map differs")
+				// 	fmt.Println(lastRv)
+				// 	fmt.Println(alternativeMappingsRv)
+				// }
+				// lastFw = alternativeMappingsFw
+				// lastRv = alternativeMappingsRv
+
+				// if !isMappableFw || !isMappableRv {
+				// 	continue
+				// }
+
+			}
+			fmt.Println("-------------------------------------")
+
+			// here we make use of the fact that we are using paired end reads
+			// this means we only consider a valid mapping as: fw and rv agree on main seq index and are on
+			// diff strands
+			// if ambiguousReadPair.ReadPair.ReadR2.Header == "A00604:202:HLYW3DSXY:3:1275:17381:36855 1:N:0:AACTCGGA+TCTGGACA" {
+			// 	fmt.Println()
+			// }
+			// bestParalogId, _, minMM := getPossibleMapping(alternativeMappingsFw, alternativeMappingsRv, currMM)
+			//
+			// if bestParalogId == -1 {
+			// 	logrus.Debugf("No alternative mapping found for %s with %s mismatches", ambiguousReadPair.ReadPair.ReadR1.Header, strconv.Itoa(currMM))
+			// } else {
+			// 	logrus.Debugf("Alternative mapping found for %s in paralog region %s with %s less mismatches", ambiguousReadPair.ReadPair.ReadR1.Header, bestParalogId, strconv.Itoa(currMM-minMM))
+			// 	paralogReads[ambiguousReadPair.ReadPair.ReadR2.Header] = struct{}{}
+			// 	i++
+			//
+			// 	// fmt.Println(possibleMapping)
+			// 	// fmt.Println(possibleMapping[0].SequenceIndex)
+			// 	// fmt.Println(possibleMapping[1].SequenceIndex)
+			// }
 		}
+		fmt.Println(len(ambiguousReadPairs))
 	}
+	// fmt.Println(i)
 
 	// WRITE TO SAM
 	for _, mappedReadPairs := range resultsPerSeqIndex {
 		for _, mappedReadPair := range mappedReadPairs {
 			fwRes := mappedReadPair.Fw[0]
 			rvRes := mappedReadPair.Rv[0]
+			_, exists := paralogReads[mappedReadPair.ReadPair.ReadR2.Header]
+			if exists {
+				continue
+			}
 			output, isMapping := FormatMappedReadPairToSAM(fwRes, rvRes, mappedReadPair.ReadPair, mappedReadPair.Index)
 			if isMapping {
 				outputChan <- output
@@ -445,4 +509,54 @@ func getTotalCoverage(coverageFw, coverageRv []int) []int {
 		totalCoverage[i] = coverageFw[i] + coverageRv[len(coverageFw)-1-i]
 	}
 	return totalCoverage
+}
+
+func getPossibleMapping(alternativeMappingsFw []mapperutils.ReadMatchResult, alternativeMappingsRv []mapperutils.ReadMatchResult, mismatchesInTarget int) (int, []mapperutils.ReadMatchResult, int) {
+	mapPerParalogSeqIndex := make(map[int][]mapperutils.ReadMatchResult)
+
+	// accumulate mapping results per paralog main id
+	for _, mapping := range alternativeMappingsFw {
+		mapPerParalogSeqIndex[mapping.SequenceIndex/2] = append(mapPerParalogSeqIndex[mapping.SequenceIndex/2], mapping)
+	}
+
+	for _, mapping := range alternativeMappingsRv {
+		mapPerParalogSeqIndex[mapping.SequenceIndex/2] = append(mapPerParalogSeqIndex[mapping.SequenceIndex/2], mapping)
+	}
+
+	bestId := -1
+	minMis := 1000000
+	for paralogSeqIndex, result := range mapPerParalogSeqIndex {
+		// do fw and rv map?
+		if len(result) != 2 {
+			logrus.Debug("Mate unmapped or multimapped  in paralog mapping attempt.")
+			continue
+		}
+
+		if len(result) > 2 {
+			logrus.Fatalf("Read mapps to multiple locations on same region and strand: paralog id %s, result %s", paralogSeqIndex, result)
+		}
+
+		// only consider cases where fwId == rvId-1 || fwId-1 == rvId && fwId / 2 == rvId / 2
+		if !(result[0].SequenceIndex == result[1].SequenceIndex-1 || result[1].SequenceIndex == result[0].SequenceIndex-1) {
+			logrus.Debugf("Fw and Rv Reads map to same strand on same region: paralog id %s, result %s", paralogSeqIndex, result)
+			continue
+		}
+
+		mismatches := len(result[0].MismatchesRead) + len(result[1].MismatchesRead)
+		if bestId == -1 {
+			bestId = paralogSeqIndex
+			minMis = mismatches
+			continue
+		}
+
+		if mismatches < minMis {
+			bestId = paralogSeqIndex
+			minMis = mismatches
+		}
+
+	}
+	if minMis < mismatchesInTarget && bestId != 1 {
+		return bestId, mapPerParalogSeqIndex[bestId], minMis
+	}
+	return -1, nil, -1
 }
