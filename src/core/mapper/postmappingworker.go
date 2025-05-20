@@ -2,6 +2,7 @@ package mapper
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -19,6 +20,8 @@ func PostMappingWorker(mappedReadPairChan <-chan *ReadPairMatchResults, wg *sync
 	// I. Extract and sort mappring readpairs into map: mainSeqIndex -> [mappings]
 	resultsPerSeqIndex := make(map[int][]*ReadPairMatchResults)
 	for mappedReadPair := range mappedReadPairChan {
+		fmt.Println(mappedReadPair)
+
 		// TODO: Handle multimappings
 		if len(mappedReadPair.Fw) > 1 || len(mappedReadPair.Rv) > 1 {
 
@@ -188,6 +191,58 @@ type ReadPairMatchResults struct {
 	Fw       []*mapperutils.ReadMatchResult
 	Rv       []*mapperutils.ReadMatchResult
 	Index    *index.GenomeIndex
+}
+
+func (i ReadPairMatchResults) String() string {
+	var builder strings.Builder
+	builder.Write([]byte("ReadPairR1 Header: "))
+	builder.Write([]byte(i.ReadPair.ReadR1.Header))
+	builder.Write([]byte("\n"))
+	builder.Write([]byte("  <== FW MAPPINGS ==>"))
+	builder.Write([]byte("\n"))
+	for _, mapping := range i.Fw {
+		builder.Write([]byte("\t SeqIndex: "))
+		seqIndex := strconv.Itoa(mapping.SequenceIndex)
+		builder.WriteString(seqIndex)
+		builder.WriteString("\n")
+		builder.WriteString("\t GENOME -> ")
+		builder.WriteString(mapping.MatchedGenome.String())
+		builder.WriteString("\n")
+		builder.WriteString("\t READ   -> ")
+		builder.WriteString(mapping.MatchedRead.String())
+		builder.WriteString("\n")
+		builder.WriteString("\t MISMAT -> ")
+		ints := mapping.MismatchesRead
+		strs := make([]string, len(ints))
+		for i, v := range ints {
+			strs[i] = strconv.Itoa(v)
+		}
+		builder.WriteString(strings.Join(strs, ","))
+		builder.WriteString("\n")
+	}
+	builder.Write([]byte("  <== RV MAPPINGS ==>"))
+	builder.Write([]byte("\n"))
+	for _, mapping := range i.Rv {
+		builder.Write([]byte("\t SeqIndex: "))
+		seqIndex := strconv.Itoa(mapping.SequenceIndex)
+		builder.WriteString(seqIndex)
+		builder.WriteString("\n")
+		builder.WriteString("\t GENOME -> ")
+		builder.WriteString(mapping.MatchedGenome.String())
+		builder.WriteString("\n")
+		builder.WriteString("\t READ   -> ")
+		builder.WriteString(mapping.MatchedRead.String())
+		builder.WriteString("\n")
+		builder.WriteString("\t MISMAT -> ")
+		ints := mapping.MismatchesRead
+		strs := make([]string, len(ints))
+		for i, v := range ints {
+			strs[i] = strconv.Itoa(v)
+		}
+		builder.WriteString(strings.Join(strs, ","))
+		builder.WriteString("\n")
+	}
+	return builder.String()
 }
 
 func getCoverageSlice(mappedReadPairs []*ReadPairMatchResults, geneLength int) []int {
