@@ -85,57 +85,6 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 		postprocessReadMatch(genomeIndex, readPair.ReadR2, resRv)
 	}
 
-	if len(resultFw) > 1 || len(resultRv) > 1 {
-		// TODO: handle multimapping reads
-
-		//logrus.WithFields(logrus.Fields{
-		//	"numResultsFw": len(resultFw),
-		//	"numResultsRv": len(resultRv),
-		//	"readFw":       readPair.ReadR1.Header,
-		//	"readRv":       readPair.ReadR2.Header,
-		//}).Warn("multimapping reads not handled yet")
-
-		var builder strings.Builder
-
-		// TODO: handle this appropriately
-		// combine every first of pair read with every second of pair read
-
-		for i := 0; i < len(resultFw); i++ {
-			for j := 0; j < len(resultRv); j++ {
-				s, isOk := readPairResultToSamString(genomeIndex, readPair, resultFw[i], resultRv[j])
-				if !isOk {
-					continue
-				}
-				builder.WriteString(s)
-			}
-		}
-
-		//for _, resFw := range resultFw {
-		//	s, isOk := readPairResultToSamString(genomeIndex, readPair, resFw, nil)
-		//	if !isOk {
-		//		continue
-		//	}
-		//	builder.WriteString(s)
-		//}
-		//
-		//for _, resRv := range resultRv {
-		//	s, isOk := readPairResultToSamString(genomeIndex, readPair, nil, resRv)
-		//	if !isOk {
-		//		continue
-		//	}
-		//	builder.WriteString(s)
-		//}
-
-		return builder.String(), true
-	}
-
-	// multimapping was handled before so length is always 1
-	resFw := resultFw[0]
-	resRv := resultRv[0]
-
-	// postprocessReadMatch(genomeIndex, readPair.ReadR1, resFw)
-	// postprocessReadMatch(genomeIndex, readPair.ReadR2, resRv)
-
 	return &ReadPairMatchResults{
 		ReadPair: readPair,
 		Fw:       resultFw,
@@ -331,7 +280,9 @@ func determineLeftNormalizationShiftRv(
 	}
 }
 
-func FormatMappedReadPairToSAM(resFw *mapperutils.ReadMatchResult, resRv *mapperutils.ReadMatchResult, readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex) (string, bool) {
+func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.ReadPair,
+	resFw *mapperutils.ReadMatchResult, resRv *mapperutils.ReadMatchResult) (string, bool) {
+
 	flagFw := sam.Flag{}
 	flagRv := sam.Flag{}
 
@@ -450,7 +401,7 @@ func FormatMappedReadPairToSAM(resFw *mapperutils.ReadMatchResult, resRv *mapper
 			}).Error("Error getting CIGAR string", errCigarFw)
 
 			// TODO: handle error
-			// return "", false
+			//return "", false
 			cigarFw = "*"
 		}
 	}
@@ -466,7 +417,7 @@ func FormatMappedReadPairToSAM(resFw *mapperutils.ReadMatchResult, resRv *mapper
 			}).Error("Error getting CIGAR string", errCigarRv)
 
 			// TODO: handle error
-			// return "", false
+			//return "", false
 			cigarRv = "*"
 		}
 	}

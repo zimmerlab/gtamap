@@ -1,6 +1,7 @@
 package unmappedpass
 
 import (
+	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"sync"
 
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
@@ -8,8 +9,8 @@ import (
 
 type UnmappedTask struct {
 	ReadPair *fastq.ReadPair
-	ResultFw []*ReadMatchResult
-	ResultRv []*ReadMatchResult
+	ResultFw []*mapperutils.ReadMatchResult
+	ResultRv []*mapperutils.ReadMatchResult
 }
 
 type UnmappedChannel struct {

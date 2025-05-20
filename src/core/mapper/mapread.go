@@ -680,7 +680,7 @@ func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.Genome
 		MatchedRead:    regionvector.NewRegionVector(),
 		MatchedGenome:  regionvector.NewRegionVector(),
 		MismatchesRead: make([]int, 0),
-		SecondPass:     false,
+		NeedRemap:      false,
 	}
 
 	applyPossibleDiagonals(read, genomeIndex, diagonalHandler, result, &results)
