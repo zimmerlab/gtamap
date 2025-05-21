@@ -1,31 +1,32 @@
-package unmappedpass
+package incompletemappingpass
 
 import (
-	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"sync"
+
+	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 )
 
-type UnmappedTask struct {
+type IncompleteMappingTask struct {
 	ReadPair *fastq.ReadPair
 	ResultFw []*mapperutils.ReadMatchResult
 	ResultRv []*mapperutils.ReadMatchResult
 }
 
-type UnmappedChannel struct {
-	in     chan *UnmappedTask
-	out    chan *UnmappedTask
-	buffer []*UnmappedTask
+type IncompleteMappingChannel struct {
+	in     chan *IncompleteMappingTask
+	out    chan *IncompleteMappingTask
+	buffer []*IncompleteMappingTask
 	mu     sync.Mutex
 	closed bool
 }
 
-func NewUnmappedChannel() *UnmappedChannel {
-	channel := &UnmappedChannel{
-		in:     make(chan *UnmappedTask),
-		out:    make(chan *UnmappedTask),
-		buffer: make([]*UnmappedTask, 0),
+func NewIncompleteMappingChannel() *IncompleteMappingChannel {
+	channel := &IncompleteMappingChannel{
+		in:     make(chan *IncompleteMappingTask),
+		out:    make(chan *IncompleteMappingTask),
+		buffer: make([]*IncompleteMappingTask, 0),
 	}
 
 	go channel.process()
@@ -33,10 +34,10 @@ func NewUnmappedChannel() *UnmappedChannel {
 	return channel
 }
 
-func (s *UnmappedChannel) process() {
+func (s *IncompleteMappingChannel) process() {
 	var (
-		outCh chan<- *UnmappedTask
-		next  *UnmappedTask
+		outCh chan<- *IncompleteMappingTask
+		next  *IncompleteMappingTask
 	)
 
 	for {
@@ -82,15 +83,15 @@ func (s *UnmappedChannel) process() {
 	}
 }
 
-func (s *UnmappedChannel) Send(task *UnmappedTask) {
+func (s *IncompleteMappingChannel) Send(task *IncompleteMappingTask) {
 	s.in <- task
 }
 
-func (s *UnmappedChannel) Receive() (*UnmappedTask, bool) {
+func (s *IncompleteMappingChannel) Receive() (*IncompleteMappingTask, bool) {
 	item, ok := <-s.out
 	return item, ok
 }
 
-func (s *UnmappedChannel) Close() {
+func (s *IncompleteMappingChannel) Close() {
 	close(s.in)
 }

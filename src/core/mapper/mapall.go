@@ -7,7 +7,7 @@ import (
 
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/index"
-	"github.com/KleinSamuel/gtamap/src/core/mapper/unmappedpass"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/incompletemappingpass"
 	"github.com/KleinSamuel/gtamap/src/core/timer"
 	"github.com/KleinSamuel/gtamap/src/datawriter"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
@@ -62,7 +62,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	// contains the read pairs that need to be mapped
 	taskChan := make(chan MappingTask, numWorkers*bufferSizeMultiplier)
 	// contains all read pairs that could not be mapped in the first pass
-	unmappedChan := unmappedpass.NewUnmappedChannel()
+	incompleteMatchChan := incompletemappingpass.NewIncompleteMappingChannel()
 	// contains the string results of the mapping
 	outputChan := make(chan string)
 	// contains the results of the first pass
@@ -95,7 +95,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	// start the mapping worker goroutine pool
 	for i := 0; i < numWorkers; i++ {
 		wgFirstPass.Add(1)
-		go MapperWorker(i, genomeIndex, &wgFirstPass, taskChan, unmappedChan, resultChan, progressChan, timerChan)
+		go MapperWorker(i, genomeIndex, &wgFirstPass, taskChan, incompleteMatchChan, resultChan, progressChan, timerChan)
 	}
 
 	wgFourthPass.Add(1)
@@ -106,9 +106,9 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 
 	logrus.Info("Done with first pass mapping")
 
-	unmappedChan.Close()
+	incompleteMatchChan.Close()
 
-	go unmappedpass.UnmappedWorker(unmappedChan, &wgFourthPass)
+	go incompletemappingpass.IncompleteMappingWorker(incompleteMatchChan, &wgFourthPass)
 
 	wgFourthPass.Wait()
 

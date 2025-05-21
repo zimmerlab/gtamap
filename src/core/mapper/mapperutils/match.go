@@ -38,7 +38,7 @@ type ReadMatchResult struct {
 	MatchedGenome   *regionvector.RegionVector // region vector containing the matched positions in the genome
 	MismatchesRead  []int                      // the positions of the mismatches in the read
 	diagonalHandler *DiagonalHandler
-	Unmappable      bool
+	IncompleteMap   bool
 	NeedRemap       bool // true if this result must undergo a remap
 }
 

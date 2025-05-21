@@ -2,15 +2,16 @@ package main
 
 import (
 	"fmt"
-	"github.com/KleinSamuel/gtamap/src/core/mapper/unmappedpass"
 	"sync"
+
+	"github.com/KleinSamuel/gtamap/src/core/mapper/incompletemappingpass"
 )
 
 func main() {
 	fmt.Println("hello")
 
 	taskChan := make(chan int)
-	unmappedChan := unmappedpass.NewUnmappedChannel()
+	incompleteMappingChan := incompletemappingpass.NewIncompleteMappingChannel()
 
 	go Producer(taskChan)
 
@@ -18,23 +19,23 @@ func main() {
 
 	for i := 0; i < 4; i++ {
 		wgFirstPass.Add(1)
-		go ConsumerFirst(i, taskChan, unmappedChan, &wgFirstPass)
+		go ConsumerFirst(i, taskChan, incompleteMappingChan, &wgFirstPass)
 	}
 
-	var wgUnmapped sync.WaitGroup
-	wgUnmapped.Add(1)
+	var wgIncompleteMapping sync.WaitGroup
+	wgIncompleteMapping.Add(1)
 
 	fmt.Println("waiting for first pass")
 
 	wgFirstPass.Wait()
 
-	unmappedChan.Close()
+	incompleteMappingChan.Close()
 
-	go ConsumerSecond(unmappedChan, &wgUnmapped)
+	go ConsumerSecond(incompleteMappingChan, &wgIncompleteMapping)
 
-	fmt.Println("waiting for unmapped pass")
+	fmt.Println("waiting for incomplete mapping pass")
 
-	wgUnmapped.Wait()
+	wgIncompleteMapping.Wait()
 
 	fmt.Println("done all")
 }
@@ -51,7 +52,7 @@ func Producer(taskChan chan<- int) {
 	fmt.Println("done producing")
 }
 
-func ConsumerFirst(id int, taskChan <-chan int, unmappedChan *unmappedpass.UnmappedChannel,
+func ConsumerFirst(id int, taskChan <-chan int, incompleteMappingChan *incompletemappingpass.IncompleteMappingChannel,
 	wg *sync.WaitGroup,
 ) {
 	defer wg.Done()
@@ -60,7 +61,7 @@ func ConsumerFirst(id int, taskChan <-chan int, unmappedChan *unmappedpass.Unmap
 		fmt.Println("task: ", task)
 
 		if task%2 == 0 {
-			unmappedChan.Send(&unmappedpass.UnmappedTask{
+			incompleteMappingChan.Send(&incompletemappingpass.IncompleteMappingTask{
 				ReadPair: nil,
 				ResultFw: nil,
 				ResultRv: nil,
@@ -71,13 +72,13 @@ func ConsumerFirst(id int, taskChan <-chan int, unmappedChan *unmappedpass.Unmap
 	fmt.Println("producer done", id)
 }
 
-func ConsumerSecond(unmappedChan *unmappedpass.UnmappedChannel, wg *sync.WaitGroup) {
+func ConsumerSecond(incompleteMappingChan *incompletemappingpass.IncompleteMappingChannel, wg *sync.WaitGroup) {
 	fmt.Println("ConsumerSecond")
 
 	defer wg.Done()
 
 	for {
-		task, ok := unmappedChan.Receive()
+		task, ok := incompleteMappingChan.Receive()
 		if !ok {
 			break
 		}

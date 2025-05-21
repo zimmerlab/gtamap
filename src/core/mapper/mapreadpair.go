@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/KleinSamuel/gtamap/src/core/mapper/unmappedpass"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/incompletemappingpass"
 	"github.com/KleinSamuel/gtamap/src/utils"
 
 	"github.com/KleinSamuel/gtamap/src/core/index"
@@ -17,7 +17,7 @@ import (
 )
 
 func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
-	unmappedChan *unmappedpass.UnmappedChannel,
+	incompleteMappingChan *incompletemappingpass.IncompleteMappingChannel,
 	timerChannel chan<- *timer.Timer,
 ) (*ReadPairMatchResults, bool) {
 	keepFw := Filter(readPair.ReadR1.Sequence, genomeIndex)
@@ -69,7 +69,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	}
 
 	if needRemap {
-		unmappedChan.Send(&unmappedpass.UnmappedTask{
+		incompleteMappingChan.Send(&incompletemappingpass.IncompleteMappingTask{
 			ReadPair: readPair,
 			ResultFw: resultFw,
 			ResultRv: resultRv,
@@ -281,8 +281,8 @@ func determineLeftNormalizationShiftRv(
 }
 
 func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.ReadPair,
-	resFw *mapperutils.ReadMatchResult, resRv *mapperutils.ReadMatchResult) (string, bool) {
-
+	resFw *mapperutils.ReadMatchResult, resRv *mapperutils.ReadMatchResult,
+) (string, bool) {
 	flagFw := sam.Flag{}
 	flagRv := sam.Flag{}
 
@@ -401,7 +401,7 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 			}).Error("Error getting CIGAR string", errCigarFw)
 
 			// TODO: handle error
-			//return "", false
+			// return "", false
 			cigarFw = "*"
 		}
 	}
@@ -417,7 +417,7 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 			}).Error("Error getting CIGAR string", errCigarRv)
 
 			// TODO: handle error
-			//return "", false
+			// return "", false
 			cigarRv = "*"
 		}
 	}

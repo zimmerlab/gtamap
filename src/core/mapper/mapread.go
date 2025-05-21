@@ -418,7 +418,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 							"gapGenome": gapGenome,
 						}).Debug("gap read is larger than gap genome")
 
-						result.Unmappable = true
+						result.IncompleteMap = true
 						return
 					}
 
@@ -468,7 +468,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 									}).Debug("too many mismatches in middle extension (left) -> skip sequence")
 									// continue sequenceLoop
 
-									result.Unmappable = true
+									result.IncompleteMap = true
 									return
 								}
 							}
@@ -515,7 +515,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 										"numMismatches":         len(result.MismatchesRead),
 									}).Debug("too many mismatches in middle extension (right) -> skip sequence")
 
-									result.Unmappable = true
+									result.IncompleteMap = true
 									return
 								}
 							}
@@ -558,7 +558,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 			if startGenome < 0 {
 				logrus.Debug("genome index out of bounds")
 
-				result.Unmappable = true
+				result.IncompleteMap = true
 				return
 			}
 
@@ -587,7 +587,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 						"numMismatches":         len(result.MismatchesRead),
 					}).Debug("too many mismatches in left extension -> skip sequence")
 
-					result.Unmappable = true
+					result.IncompleteMap = true
 					return
 				}
 			}
@@ -634,7 +634,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 			if startGenome+len(readSequence) > len(*genomeIndex.Sequences[result.SequenceIndex]) {
 				logrus.Debug("genome index out of bounds")
 
-				result.Unmappable = true
+				result.IncompleteMap = true
 				return
 			}
 
@@ -658,7 +658,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 					}).Debug("too many mismatches in right extension -> skip sequence")
 					// continue sequenceLoop
 
-					result.Unmappable = true
+					result.IncompleteMap = true
 					return
 				}
 			}
@@ -691,7 +691,7 @@ func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.Genome
 
 		extendDiagonals(read, genomeIndex, result)
 
-		if result.Unmappable {
+		if result.IncompleteMap {
 			continue
 		}
 
