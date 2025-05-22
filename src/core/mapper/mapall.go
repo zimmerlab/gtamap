@@ -103,28 +103,28 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	go TimerWorker(timerChan, &waitGroupTimer)
 
 	// wait group that keeps track of the mapping goroutines that are still running
-	var wgFirstPass sync.WaitGroup
-	var wgFourthPass sync.WaitGroup
+	var wgMainMappingPass sync.WaitGroup
+	var wgIncompleteMappingPass sync.WaitGroup
 
 	// start the mapping worker goroutine pool
 	for i := 0; i < numWorkers; i++ {
-		wgFirstPass.Add(1)
-		go MapperWorker(i, genomeIndex, &wgFirstPass, taskChan, incompleteMatchChan, confidentMappingChan, paralogMappingChan, resultChan, progressChan, timerChan)
+		wgMainMappingPass.Add(1)
+		go MapperWorker(i, genomeIndex, &wgMainMappingPass, taskChan, incompleteMatchChan, confidentMappingChan, paralogMappingChan, resultChan, progressChan, timerChan)
 	}
 
-	wgFourthPass.Add(1)
+	wgIncompleteMappingPass.Add(1)
 
 	go MappingTaskProducer(reader, taskChan, maxTasks, specificQname)
 
-	wgFirstPass.Wait()
+	wgMainMappingPass.Wait()
 
 	logrus.Info("Done with first pass mapping")
 
 	incompleteMatchChan.Close()
 
-	go incompletemappingpass.IncompleteMappingWorker(incompleteMatchChan, &wgFourthPass)
+	go incompletemappingpass.IncompleteMappingWorker(incompleteMatchChan, &wgIncompleteMappingPass)
 
-	wgFourthPass.Wait()
+	wgIncompleteMappingPass.Wait()
 
 	close(resultChan)
 	waitgroupMappings.Wait()
