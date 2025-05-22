@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/KleinSamuel/gtamap/src/core/mapper/confidentmappingpass"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/incompletemappingpass"
 	"github.com/KleinSamuel/gtamap/src/utils"
 
@@ -18,8 +19,10 @@ import (
 
 func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	incompleteMappingChan *incompletemappingpass.IncompleteMappingChannel,
+	confidentMatchesChan *confidentmappingpass.ConfidentMappingChannel,
+	paralogMappingChan chan<- *mapperutils.ReadPairMatchResults,
 	timerChannel chan<- *timer.Timer,
-) (*ReadPairMatchResults, bool) {
+) (*mapperutils.ReadPairMatchResults, bool) {
 	keepFw := Filter(readPair.ReadR1.Sequence, genomeIndex)
 	keepRw := Filter(readPair.ReadR2.Sequence, genomeIndex)
 
@@ -68,6 +71,9 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 		}
 	}
 
+	// if needRemap
+	// -> add to incompleteMappingChan
+	// -> else add to result chan
 	if needRemap {
 		incompleteMappingChan.Send(&incompletemappingpass.IncompleteMappingTask{
 			ReadPair: readPair,
@@ -85,12 +91,26 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 		postprocessReadMatch(genomeIndex, readPair.ReadR2, resRv)
 	}
 
-	return &ReadPairMatchResults{
+	// check if uniq map:
+	// - if not -> check if needRemap
+	// - if yes -> add to confidentMatchesChan
+	if len(resultFw) == 1 && len(resultRv) == 1 && len(resultFw[0].MismatchesRead)+len(resultRv[0].MismatchesRead) < 6 { // currently just sending everything
+		confidentMatchesChan.Send(&confidentmappingpass.ConfidentMappingTask{
+			ReadPair: readPair,
+			ResultFw: resultFw[0], // there should only exist fw[0] and rv[0] in a confident match
+			ResultRv: resultRv[0],
+			Index:    genomeIndex,
+		})
+	}
+
+	readPairMapping := &mapperutils.ReadPairMatchResults{
 		ReadPair: readPair,
 		Fw:       resultFw,
 		Rv:       resultRv,
-		Index:    genomeIndex,
-	}, true
+	}
+
+	paralogMappingChan <- readPairMapping
+	return readPairMapping, true
 }
 
 func postprocessReadMatch(genomeIndex *index.GenomeIndex, read *fastq.Read, result *mapperutils.ReadMatchResult) {

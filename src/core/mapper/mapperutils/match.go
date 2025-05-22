@@ -7,6 +7,7 @@ import (
 
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
+	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/sirupsen/logrus"
 )
 
@@ -193,4 +194,64 @@ func (m ReadMatchResult) GetCigar() (string, error) {
 	}
 
 	return builder.String(), nil
+}
+
+// holds all relevant mapping information of potentially several hits per readpair
+// bundled into one type
+type ReadPairMatchResults struct {
+	ReadPair *fastq.ReadPair
+	Fw       []*ReadMatchResult
+	Rv       []*ReadMatchResult
+}
+
+func (i ReadPairMatchResults) String() string {
+	var builder strings.Builder
+	builder.Write([]byte("ReadPairR1 Header: "))
+	builder.Write([]byte(i.ReadPair.ReadR1.Header))
+	builder.Write([]byte("\n"))
+	builder.Write([]byte("  <== FW MAPPINGS ==>"))
+	builder.Write([]byte("\n"))
+	for _, mapping := range i.Fw {
+		builder.Write([]byte("\t SeqIndex: "))
+		seqIndex := strconv.Itoa(mapping.SequenceIndex)
+		builder.WriteString(seqIndex)
+		builder.WriteString("\n")
+		builder.WriteString("\t GENOME -> ")
+		builder.WriteString(mapping.MatchedGenome.String())
+		builder.WriteString("\n")
+		builder.WriteString("\t READ   -> ")
+		builder.WriteString(mapping.MatchedRead.String())
+		builder.WriteString("\n")
+		builder.WriteString("\t MISMAT -> ")
+		ints := mapping.MismatchesRead
+		strs := make([]string, len(ints))
+		for i, v := range ints {
+			strs[i] = strconv.Itoa(v)
+		}
+		builder.WriteString(strings.Join(strs, ","))
+		builder.WriteString("\n")
+	}
+	builder.Write([]byte("  <== RV MAPPINGS ==>"))
+	builder.Write([]byte("\n"))
+	for _, mapping := range i.Rv {
+		builder.Write([]byte("\t SeqIndex: "))
+		seqIndex := strconv.Itoa(mapping.SequenceIndex)
+		builder.WriteString(seqIndex)
+		builder.WriteString("\n")
+		builder.WriteString("\t GENOME -> ")
+		builder.WriteString(mapping.MatchedGenome.String())
+		builder.WriteString("\n")
+		builder.WriteString("\t READ   -> ")
+		builder.WriteString(mapping.MatchedRead.String())
+		builder.WriteString("\n")
+		builder.WriteString("\t MISMAT -> ")
+		ints := mapping.MismatchesRead
+		strs := make([]string, len(ints))
+		for i, v := range ints {
+			strs[i] = strconv.Itoa(v)
+		}
+		builder.WriteString(strings.Join(strs, ","))
+		builder.WriteString("\n")
+	}
+	return builder.String()
 }

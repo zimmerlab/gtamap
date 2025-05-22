@@ -1,8 +1,9 @@
 package incompletemappingpass
 
 import (
-	"fmt"
 	"sync"
+
+	"github.com/sirupsen/logrus"
 )
 
 func IncompleteMappingWorker(incompleteMappingChan *IncompleteMappingChannel, wgIncompleteMapping *sync.WaitGroup) {
@@ -14,6 +15,6 @@ func IncompleteMappingWorker(incompleteMappingChan *IncompleteMappingChannel, wg
 			break
 		}
 
-		fmt.Println("incomplete mapping pass: ", task.ReadPair.ReadR1.Header)
+		logrus.Debugf("Incomplete mapping pass for readPair: %s", task.ReadPair.ReadR1.Header)
 	}
 }

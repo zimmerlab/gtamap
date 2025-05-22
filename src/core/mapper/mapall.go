@@ -7,7 +7,9 @@ import (
 
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/index"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/confidentmappingpass"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/incompletemappingpass"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/core/timer"
 	"github.com/KleinSamuel/gtamap/src/datawriter"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
@@ -63,10 +65,14 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	taskChan := make(chan MappingTask, numWorkers*bufferSizeMultiplier)
 	// contains all read pairs that could not be mapped in the first pass
 	incompleteMatchChan := incompletemappingpass.NewIncompleteMappingChannel()
+	// contains all read pairs that map uniq and almost perfect
+	confidentMappingChan := confidentmappingpass.NewConfidentMappingChannel()
+	// contains all read pairs that need to be mapped to the paralog index (all)
+	paralogMappingChan := make(chan *mapperutils.ReadPairMatchResults)
 	// contains the string results of the mapping
 	outputChan := make(chan string)
 	// contains the results of the first pass
-	resultChan := make(chan *ReadPairMatchResults)
+	resultChan := make(chan *mapperutils.ReadPairMatchResults)
 	// contains information about the duration of each step
 	timerChan := make(chan *timer.Timer)
 	// contains information about the progress of the mapping
@@ -80,9 +86,17 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	waitgroupWriter.Add(1)
 	go OutputWorker(outputChan, &waitgroupWriter, writer)
 
+	var waitgroupConfidentMap sync.WaitGroup
+	waitgroupConfidentMap.Add(1)
+	go confidentmappingpass.ConfidentMappingWorker(confidentMappingChan, &waitgroupConfidentMap)
+
+	var waitgroupParalog sync.WaitGroup
+	waitgroupParalog.Add(1)
+	go ParalogMappingWorker(paralogMappingChan, &waitgroupParalog, genomeIndex)
+
 	var waitgroupMappings sync.WaitGroup
 	waitgroupMappings.Add(1)
-	go PostMappingWorker(resultChan, &waitgroupMappings, outputChan)
+	go PostMappingWorker(resultChan, &waitgroupMappings, outputChan, genomeIndex)
 
 	var waitGroupTimer sync.WaitGroup
 	waitGroupTimer.Add(1)
@@ -95,7 +109,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	// start the mapping worker goroutine pool
 	for i := 0; i < numWorkers; i++ {
 		wgFirstPass.Add(1)
-		go MapperWorker(i, genomeIndex, &wgFirstPass, taskChan, incompleteMatchChan, resultChan, progressChan, timerChan)
+		go MapperWorker(i, genomeIndex, &wgFirstPass, taskChan, incompleteMatchChan, confidentMappingChan, paralogMappingChan, resultChan, progressChan, timerChan)
 	}
 
 	wgFourthPass.Add(1)

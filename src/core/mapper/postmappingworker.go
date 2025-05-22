@@ -1,256 +1,42 @@
 package mapper
 
 import (
-	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
-	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/sirupsen/logrus"
 )
 
-func PostMappingWorker(mappedReadPairChan <-chan *ReadPairMatchResults, wg *sync.WaitGroup, outputChan chan<- string) {
-	logrus.Info("Started accumulating mapped readpairs")
+func PostMappingWorker(finalMatchesChan <-chan *mapperutils.ReadPairMatchResults, wg *sync.WaitGroup, outputChan chan<- string, index *index.GenomeIndex) {
 	defer wg.Done()
 
-	// I. Extract and sort mappring readpairs into map: mainSeqIndex -> [mappings]
-	resultsPerSeqIndex := make(map[int][]*ReadPairMatchResults)
-	for mappedReadPair := range mappedReadPairChan {
-		fmt.Println(mappedReadPair)
-
-		// TODO: Handle multimappings
-		if len(mappedReadPair.Fw) > 1 || len(mappedReadPair.Rv) > 1 {
-
-			if len(mappedReadPair.Fw) != len(mappedReadPair.Rv) {
-			}
-
-			logrus.Fatalf("Multimapping readpair found. Currently not handled: Read ID: %s", mappedReadPair.ReadPair.ReadR1.Header)
-		}
-
-		if mappedReadPair.Fw[0].SequenceIndex/2 != mappedReadPair.Rv[0].SequenceIndex/2 {
-			logrus.Infof("Mates of Readpair don't agree on seq index %s", mappedReadPair.ReadPair.ReadR1.Header)
-		}
-
-		// For now I simply take the first Fw and Rv
-		// projects 0,1 -> 0; 2,3 -> 1; 4,5 -> 2 to map to main taret seq id
-		parentSeqIndex := mappedReadPair.Fw[0].SequenceIndex / 2
-
-		resultsPerSeqIndex[parentSeqIndex] = append(resultsPerSeqIndex[parentSeqIndex], mappedReadPair)
-	}
-	logrus.Info("Finished accumulating mapped readpairs")
-
-	// II. extract coverage
-	// Here we assume that there are already only one fw and rv per mappedREadPair
-	// I will have to create a new struct which only holds one fw/rv but other than that is the exact same
-	// as ReadPairMatchResults
-	multiMapsPerSeqIndex := make(map[string][]*ReadPairMatchResults)
-	for seqIndex, mappedReadPairs := range resultsPerSeqIndex {
-		coverageSliceFw, coverageSliceRv := getCoverageSlices(mappedReadPairs, len((*mappedReadPairs[0].Index.Sequences[seqIndex])))
-		highCovRegionsfw := getHighCoverageRegons(coverageSliceFw)
-		highCovRegionsrv := getHighCoverageRegons(coverageSliceRv)
-		multimaps := getMultimappingReads(mappedReadPairs, highCovRegionsfw, highCovRegionsrv)
-
-		targetRegionId := mappedReadPairs[0].Index.GetSequenceInfo(seqIndex).GeneId
-		multiMapsPerSeqIndex[targetRegionId] = multimaps
-	}
-
-	paralogReads := make(map[string]struct{})
-
-	for seqIndex, ambiguousReadPairs := range multiMapsPerSeqIndex {
-		for _, ambiguousReadPair := range ambiguousReadPairs {
-			// currMM := len(ambiguousReadPair.Rv[0].MismatchesRead) + len(ambiguousReadPair.Fw[0].MismatchesRead)
-
-			if !(ambiguousReadPair.ReadPair.ReadR1.Header == "A00604:202:HLYW3DSXY:3:2670:22363:10880 2:N:0:AACTCGGA+TCTGGACA") {
-				continue
-			}
-
-			// var lastFw []mapperutils.ReadMatchResult
-			// var lastRv []mapperutils.ReadMatchResult
-
-			for i := 0; i < 10; i++ {
-				// alternativeMappingsFw, isMappableFw := MapRead(ambiguousReadPair.ReadPair.ReadR1, ambiguousReadPair.Index.ParalogRegions[seqIndex])
-				alternativeMappingsRv, _ := MapRead(ambiguousReadPair.ReadPair.ReadR2, ambiguousReadPair.Index.ParalogRegions[seqIndex])
-
-				fmt.Println(alternativeMappingsRv)
-				// if i == 0 {
-				// 	lastFw = alternativeMappingsFw
-				// 	lastRv = alternativeMappingsRv
-				// 	continue
-				// }
-				//
-				// if len(lastFw) != len(alternativeMappingsFw) {
-				// 	fmt.Println("Fw Map differs")
-				// 	fmt.Println(lastFw)
-				// 	fmt.Println(alternativeMappingsFw)
-				// }
-				// if len(lastRv) != len(alternativeMappingsRv) {
-				// 	fmt.Println("Rv Map differs")
-				// 	fmt.Println(lastRv)
-				// 	fmt.Println(alternativeMappingsRv)
-				// }
-				// lastFw = alternativeMappingsFw
-				// lastRv = alternativeMappingsRv
-
-				// if !isMappableFw || !isMappableRv {
-				// 	continue
-				// }
-
-			}
-			fmt.Println("-------------------------------------")
-
-			// here we make use of the fact that we are using paired end reads
-			// this means we only consider a valid mapping as: fw and rv agree on main seq index and are on
-			// diff strands
-			// if ambiguousReadPair.ReadPair.ReadR2.Header == "A00604:202:HLYW3DSXY:3:1275:17381:36855 1:N:0:AACTCGGA+TCTGGACA" {
-			// 	fmt.Println()
-			// }
-			// bestParalogId, _, minMM := getPossibleMapping(alternativeMappingsFw, alternativeMappingsRv, currMM)
-			//
-			// if bestParalogId == -1 {
-			// 	logrus.Debugf("No alternative mapping found for %s with %s mismatches", ambiguousReadPair.ReadPair.ReadR1.Header, strconv.Itoa(currMM))
-			// } else {
-			// 	logrus.Debugf("Alternative mapping found for %s in paralog region %s with %s less mismatches", ambiguousReadPair.ReadPair.ReadR1.Header, bestParalogId, strconv.Itoa(currMM-minMM))
-			// 	paralogReads[ambiguousReadPair.ReadPair.ReadR2.Header] = struct{}{}
-			// 	i++
-			//
-			// 	// fmt.Println(possibleMapping)
-			// 	// fmt.Println(possibleMapping[0].SequenceIndex)
-			// 	// fmt.Println(possibleMapping[1].SequenceIndex)
-			// }
-		}
-		fmt.Println(len(ambiguousReadPairs))
-	}
-	// fmt.Println(i)
+	// TODO Here comes the Ambiguity Logic
 
 	// WRITE TO SAM
-	for _, mappedReadPairs := range resultsPerSeqIndex {
-		for _, mappedReadPair := range mappedReadPairs {
-			resultFw := mappedReadPair.Fw
-			resultRv := mappedReadPair.Rv
-
-			if len(resultFw) > 1 || len(resultRv) > 1 {
-				// TODO: handle multimapping reads
-
-				//logrus.WithFields(logrus.Fields{
-				//	"numResultsFw": len(resultFw),
-				//	"numResultsRv": len(resultRv),
-				//	"readFw":       readPair.ReadR1.Header,
-				//	"readRv":       readPair.ReadR2.Header,
-				//}).Warn("multimapping reads not handled yet")
-
-				var builder strings.Builder
-
-				// TODO: handle this appropriately
-				// combine every first of pair read with every second of pair read
-
-				for i := 0; i < len(resultFw); i++ {
-					for j := 0; j < len(resultRv); j++ {
-						s, isOk := readPairResultToSamString(mappedReadPair.Index, mappedReadPair.ReadPair, resultFw[i], resultRv[j])
-						if !isOk {
-							continue
-						}
-						builder.WriteString(s)
-					}
+	for mappedReadPair := range finalMatchesChan {
+		var builder strings.Builder
+		for i := 0; i < len(mappedReadPair.Fw); i++ {
+			for j := 0; j < len(mappedReadPair.Rv); j++ {
+				s, isOk := readPairResultToSamString(index, mappedReadPair.ReadPair, mappedReadPair.Fw[i], mappedReadPair.Rv[j])
+				if !isOk {
+					continue
 				}
-
-				//for _, resFw := range resultFw {
-				//	s, isOk := readPairResultToSamString(genomeIndex, readPair, resFw, nil)
-				//	if !isOk {
-				//		continue
-				//	}
-				//	builder.WriteString(s)
-				//}
-				//
-				//for _, resRv := range resultRv {
-				//	s, isOk := readPairResultToSamString(genomeIndex, readPair, nil, resRv)
-				//	if !isOk {
-				//		continue
-				//	}
-				//	builder.WriteString(s)
-				//}
-
-				outputChan <- builder.String()
-			}
-			_, exists := paralogReads[mappedReadPair.ReadPair.ReadR2.Header]
-			if exists {
-				out, _ := readPairResultToSamString(mappedReadPair.Index, mappedReadPair.ReadPair, resultFw[0], resultRv[0])
-				outputChan <- out
+				builder.WriteString(s)
 			}
 		}
+		outputChan <- builder.String()
 	}
 }
 
-// holds all relevant mapping information of potentially several hits per readpair
-// bundled into one type
-type ReadPairMatchResults struct {
-	ReadPair *fastq.ReadPair
-	Fw       []*mapperutils.ReadMatchResult
-	Rv       []*mapperutils.ReadMatchResult
-	Index    *index.GenomeIndex
-}
-
-func (i ReadPairMatchResults) String() string {
-	var builder strings.Builder
-	builder.Write([]byte("ReadPairR1 Header: "))
-	builder.Write([]byte(i.ReadPair.ReadR1.Header))
-	builder.Write([]byte("\n"))
-	builder.Write([]byte("  <== FW MAPPINGS ==>"))
-	builder.Write([]byte("\n"))
-	for _, mapping := range i.Fw {
-		builder.Write([]byte("\t SeqIndex: "))
-		seqIndex := strconv.Itoa(mapping.SequenceIndex)
-		builder.WriteString(seqIndex)
-		builder.WriteString("\n")
-		builder.WriteString("\t GENOME -> ")
-		builder.WriteString(mapping.MatchedGenome.String())
-		builder.WriteString("\n")
-		builder.WriteString("\t READ   -> ")
-		builder.WriteString(mapping.MatchedRead.String())
-		builder.WriteString("\n")
-		builder.WriteString("\t MISMAT -> ")
-		ints := mapping.MismatchesRead
-		strs := make([]string, len(ints))
-		for i, v := range ints {
-			strs[i] = strconv.Itoa(v)
-		}
-		builder.WriteString(strings.Join(strs, ","))
-		builder.WriteString("\n")
-	}
-	builder.Write([]byte("  <== RV MAPPINGS ==>"))
-	builder.Write([]byte("\n"))
-	for _, mapping := range i.Rv {
-		builder.Write([]byte("\t SeqIndex: "))
-		seqIndex := strconv.Itoa(mapping.SequenceIndex)
-		builder.WriteString(seqIndex)
-		builder.WriteString("\n")
-		builder.WriteString("\t GENOME -> ")
-		builder.WriteString(mapping.MatchedGenome.String())
-		builder.WriteString("\n")
-		builder.WriteString("\t READ   -> ")
-		builder.WriteString(mapping.MatchedRead.String())
-		builder.WriteString("\n")
-		builder.WriteString("\t MISMAT -> ")
-		ints := mapping.MismatchesRead
-		strs := make([]string, len(ints))
-		for i, v := range ints {
-			strs[i] = strconv.Itoa(v)
-		}
-		builder.WriteString(strings.Join(strs, ","))
-		builder.WriteString("\n")
-	}
-	return builder.String()
-}
-
-func getCoverageSlice(mappedReadPairs []*ReadPairMatchResults, geneLength int) []int {
+func getCoverageSlice(mappedReadPairs []*mapperutils.ReadPairMatchResults, geneLength int, index *index.GenomeIndex) []int {
 	coverage := make([]int, geneLength)
 	for _, mappedReadPair := range mappedReadPairs {
 		// forward reads
 		for _, region := range mappedReadPair.Fw[0].MatchedGenome.Regions {
-			if mappedReadPair.Index.IsSequenceForward(mappedReadPair.Fw[0].SequenceIndex) {
+			if index.IsSequenceForward(mappedReadPair.Fw[0].SequenceIndex) {
 				for pos := region.Start; pos < region.End; pos++ {
 					coverage[pos]++
 				}
@@ -266,7 +52,7 @@ func getCoverageSlice(mappedReadPairs []*ReadPairMatchResults, geneLength int) [
 
 		// reverse reads
 		for _, region := range mappedReadPair.Rv[0].MatchedGenome.Regions {
-			if mappedReadPair.Index.IsSequenceForward(mappedReadPair.Rv[0].SequenceIndex) {
+			if index.IsSequenceForward(mappedReadPair.Rv[0].SequenceIndex) {
 				for pos := region.Start; pos < region.End; pos++ {
 					coverage[pos]++
 				}
@@ -308,8 +94,8 @@ func getHighCoverageRegons(coverageSlice []int) [][2]int {
 	return highCov
 }
 
-func getMultimappingReads(mappedReadPairs []*ReadPairMatchResults, fwIntervals [][2]int, rvIntervals [][2]int) []*ReadPairMatchResults {
-	multimappings := make([]*ReadPairMatchResults, 0)
+func getMultimappingReads(mappedReadPairs []*mapperutils.ReadPairMatchResults, fwIntervals [][2]int, rvIntervals [][2]int) []*mapperutils.ReadPairMatchResults {
+	multimappings := make([]*mapperutils.ReadPairMatchResults, 0)
 main:
 	for _, mappedReadPair := range mappedReadPairs {
 		// check fw
@@ -344,14 +130,14 @@ func spansInterval(regions *regionvector.RegionVector, interval [2]int) bool {
 	return false
 }
 
-func getCoverageSlices(mappedReadPairs []*ReadPairMatchResults, geneLength int) ([]int, []int) {
+func getCoverageSlices(mappedReadPairs []*mapperutils.ReadPairMatchResults, geneLength int, index *index.GenomeIndex) ([]int, []int) {
 	coverageFw := make([]int, geneLength)
 	coverageRv := make([]int, geneLength)
 
 	for _, mappedReadPair := range mappedReadPairs {
 		// fw reads
 		for _, region := range mappedReadPair.Fw[0].MatchedGenome.Regions {
-			if mappedReadPair.Index.IsSequenceForward(mappedReadPair.Fw[0].SequenceIndex) {
+			if index.IsSequenceForward(mappedReadPair.Fw[0].SequenceIndex) {
 				for pos := region.Start; pos < region.End; pos++ {
 					coverageFw[pos]++
 				}
@@ -364,7 +150,7 @@ func getCoverageSlices(mappedReadPairs []*ReadPairMatchResults, geneLength int) 
 
 		// rv reads
 		for _, region := range mappedReadPair.Rv[0].MatchedGenome.Regions {
-			if mappedReadPair.Index.IsSequenceForward(mappedReadPair.Rv[0].SequenceIndex) {
+			if index.IsSequenceForward(mappedReadPair.Rv[0].SequenceIndex) {
 				for pos := region.Start; pos < region.End; pos++ {
 					coverageFw[pos]++
 				}
