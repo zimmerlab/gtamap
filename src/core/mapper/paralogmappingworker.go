@@ -13,7 +13,6 @@ func ParalogMappingWorker(readPairChan <-chan *mapperutils.ReadPairMatchResults,
 
 	// per default we want to map all reads to paraog index (except for confident reads)
 	for readPairResult := range readPairChan {
-
 		for mappedReadPair := range readPairChan {
 			// projects 0,1 -> 0; 2,3 -> 1; 4,5 -> 2 to map to main taret seq id
 			parentSeqIndices := make(map[int]struct{})
@@ -47,7 +46,6 @@ func ParalogMappingWorker(readPairChan <-chan *mapperutils.ReadPairMatchResults,
 				}
 			}
 		}
-		logrus.Info("Finished accumulating mapped readpairs")
 	}
 	wg.Done()
 
