@@ -21,6 +21,8 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]*mapperutils.R
 		MatchesPerSequence: make([]*mapperutils.SequenceMatchResult, genomeIndex.NumSequences()*2),
 	}
 
+	//fmt.Println(read.Header)
+
 	// TODO: purposely hardcoded the kmer length to 10 because the fixed size array requires manual
 	// TODO: intervention when changing the kmer length, having it variable via config could introduce bugs
 	// generate non-overlapping k-mers for the read pair
@@ -197,10 +199,12 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 	dhNew := mapperutils.NewDiagonalHandlerWithDataCopy(dh.Diagonals)
 	resultNew := result.Copy()
 
-	applyDiagonal(read, genomeIndex, dhNew, diagonal, resultNew)
+	keepMatch := applyDiagonal(read, genomeIndex, dhNew, diagonal, resultNew)
 
-	// keep on extending the currently best diagonal
-	applyPossibleDiagonals(read, genomeIndex, dhNew, resultNew, results)
+	if keepMatch {
+		// keep on extending the currently best diagonal
+		applyPossibleDiagonals(read, genomeIndex, dhNew, resultNew, results)
+	}
 
 	diagonalsAfter := dhNew.GetAvailableDiagonals()
 	excluded := findExcludedDiagonal(diagonalsBefore, diagonalsAfter, diagonal)
@@ -265,7 +269,7 @@ func findExcludedDiagonal(before []int, after []int, removed int) []int {
 }
 
 func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperutils.DiagonalHandler,
-	diagonal int, result *mapperutils.ReadMatchResult) {
+	diagonal int, result *mapperutils.ReadMatchResult) bool {
 
 	diagonalRead := regionvector.NewRegionVector()
 	diagonalGenome := regionvector.NewRegionVector()
@@ -277,8 +281,28 @@ func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperu
 			continue
 		}
 		// add the match to the diagonal
-		diagonalRead.AddRegionNonOverlappingPanic(match.FromRead, match.ToRead)
-		diagonalGenome.AddRegionNonOverlappingPanic(match.FromGenome, match.ToGenome)
+		//diagonalRead.AddRegionNonOverlappingPanic(match.FromRead, match.ToRead)
+		//diagonalGenome.AddRegionNonOverlappingPanic(match.FromGenome, match.ToGenome)
+
+		errRead := diagonalRead.AddRegionNonOverlapping(match.FromRead, match.ToRead)
+		if errRead != nil {
+			logrus.WithFields(logrus.Fields{
+				"start": match.FromRead,
+				"end":   match.ToRead,
+				"rv":    diagonalRead,
+				"read":  read.Header,
+			}).Fatal("overlapping region in read (apply diagonal match)")
+		}
+
+		errGenome := diagonalGenome.AddRegionNonOverlapping(match.FromGenome, match.ToGenome)
+		if errGenome != nil {
+			logrus.WithFields(logrus.Fields{
+				"start": match.FromGenome,
+				"end":   match.ToGenome,
+				"rv":    diagonalGenome,
+				"read":  read.Header,
+			}).Fatal("overlapping region in genome (apply diagonal match)")
+		}
 	}
 
 	logrus.WithFields(logrus.Fields{
@@ -307,7 +331,16 @@ func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperu
 		}).Debug("found gap")
 
 		// fill the gap in the read by adding the gap as region
-		diagonalRead.AddRegionNonOverlappingPanic(gapRead.Start, gapRead.End)
+		//diagonalRead.AddRegionNonOverlappingPanic(gapRead.Start, gapRead.End)
+		errRead := diagonalRead.AddRegionNonOverlapping(gapRead.Start, gapRead.End)
+		if errRead != nil {
+			logrus.WithFields(logrus.Fields{
+				"start": gapRead.Start,
+				"end":   gapRead.End,
+				"rv":    diagonalRead,
+				"read":  read.Header,
+			}).Fatal("overlapping region in read (fill diagonal gap)")
+		}
 
 		// count mismatches when filling the gap and skip the match if there are too many
 		geneSeqPos := 0
@@ -326,22 +359,30 @@ func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperu
 			// add the mismatche to the result
 			result.MismatchesRead = append(result.MismatchesRead, i)
 
-			// TODO: ignore the mismatch constraint inside a single diagonal for now
 			// skip this match result if there are too many mismatches
-			//if exceedsMismatchConstraint(read, *result) {
-			//
-			//	logrus.WithFields(logrus.Fields{
-			//		"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
-			//		"maxMismatchPercentage": config.MaxMismatchPercentage(),
-			//		"mismatches":            result.MismatchesRead,
-			//		"numMismatches":         len(result.MismatchesRead),
-			//	}).Debug("too many mismatches in diagonal filling")
-			//
-			//	return
-			//}
+			if exceedsMismatchConstraint(read, result) {
+
+				logrus.WithFields(logrus.Fields{
+					"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
+					"maxMismatchPercentage": config.MaxMismatchPercentage(),
+					"mismatches":            result.MismatchesRead,
+					"numMismatches":         len(result.MismatchesRead),
+				}).Debug("too many mismatches in diagonal filling")
+
+				return false
+			}
 		}
 
-		diagonalGenome.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.End)
+		//diagonalGenome.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.End)
+		errGenome := diagonalGenome.AddRegionNonOverlapping(gapGenome.Start, gapGenome.End)
+		if errGenome != nil {
+			logrus.WithFields(logrus.Fields{
+				"start": gapGenome.Start,
+				"end":   gapGenome.End,
+				"rv":    diagonalGenome,
+				"read":  read.Header,
+			}).Fatal("overlapping region in genome (fill diagonal gap)")
+		}
 	}
 
 	if len(gapsRead.Regions) > 0 {
@@ -362,8 +403,28 @@ func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperu
 			"genome": regionGenome,
 		}).Debug("adding diagonal match to result")
 
-		result.MatchedRead.AddRegionNonOverlappingPanic(regionRead.Start, regionRead.End)
-		result.MatchedGenome.AddRegionNonOverlappingPanic(regionGenome.Start, regionGenome.End)
+		//result.MatchedRead.AddRegionNonOverlappingPanic(regionRead.Start, regionRead.End)
+		//result.MatchedGenome.AddRegionNonOverlappingPanic(regionGenome.Start, regionGenome.End)
+
+		errRead := result.MatchedRead.AddRegionNonOverlapping(regionRead.Start, regionRead.End)
+		if errRead != nil {
+			logrus.WithFields(logrus.Fields{
+				"start": regionRead.Start,
+				"end":   regionRead.End,
+				"rv":    result.MatchedRead,
+				"read":  read.Header,
+			}).Fatal("overlapping region in read (finalize diagonal match)")
+		}
+
+		errGenome := result.MatchedGenome.AddRegionNonOverlapping(regionGenome.Start, regionGenome.End)
+		if errGenome != nil {
+			logrus.WithFields(logrus.Fields{
+				"start": regionGenome.Start,
+				"end":   regionGenome.End,
+				"rv":    result.MatchedGenome,
+				"read":  read.Header,
+			}).Fatal("overlapping region in genome (finalize diagonal match)")
+		}
 	}
 
 	// mark all used regions
@@ -377,6 +438,8 @@ func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperu
 
 	// remove invalid diagonals based on the currently applied diagonal
 	dh.RemoveInvalidDiagonals(result, read)
+
+	return true
 }
 
 func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *mapperutils.ReadMatchResult) {
