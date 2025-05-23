@@ -3,7 +3,6 @@ package confidentmappingpass
 import (
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
@@ -16,88 +15,6 @@ type ConfidentMappingTask struct {
 	ResultFw *mapperutils.ReadMatchResult
 	ResultRv *mapperutils.ReadMatchResult
 	Index    *index.GenomeIndex
-}
-
-type ConfidentMappingChannel struct {
-	in     chan *ConfidentMappingTask
-	out    chan *ConfidentMappingTask
-	buffer []*ConfidentMappingTask
-	mu     sync.Mutex
-	closed bool
-}
-
-func NewConfidentMappingChannel() *ConfidentMappingChannel {
-	channel := &ConfidentMappingChannel{
-		in:     make(chan *ConfidentMappingTask),
-		out:    make(chan *ConfidentMappingTask),
-		buffer: make([]*ConfidentMappingTask, 0),
-	}
-
-	go channel.process()
-
-	return channel
-}
-
-func (s *ConfidentMappingChannel) process() {
-	var (
-		outCh chan<- *ConfidentMappingTask
-		next  *ConfidentMappingTask
-	)
-
-	for {
-		if len(s.buffer) > 0 {
-			outCh = s.out
-			next = s.buffer[0]
-		} else {
-			outCh = nil
-		}
-
-		select {
-		case item, ok := <-s.in:
-			if !ok {
-				s.mu.Lock()
-				s.closed = true
-				s.mu.Unlock()
-
-				if len(s.buffer) == 0 {
-					close(s.out)
-					return
-				}
-
-				s.in = nil
-				continue
-			}
-
-			s.mu.Lock()
-			s.buffer = append(s.buffer, item)
-			s.mu.Unlock()
-
-		case outCh <- next:
-			s.mu.Lock()
-			s.buffer = s.buffer[1:]
-
-			if s.closed && len(s.buffer) == 0 {
-				close(s.out)
-				s.mu.Unlock()
-				return
-			}
-
-			s.mu.Unlock()
-		}
-	}
-}
-
-func (s *ConfidentMappingChannel) Send(task *ConfidentMappingTask) {
-	s.in <- task
-}
-
-func (s *ConfidentMappingChannel) Receive() (*ConfidentMappingTask, bool) {
-	item, ok := <-s.out
-	return item, ok
-}
-
-func (s *ConfidentMappingChannel) Close() {
-	close(s.in)
 }
 
 func (i ConfidentMappingTask) String() string {

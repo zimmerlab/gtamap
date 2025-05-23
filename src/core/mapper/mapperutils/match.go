@@ -199,9 +199,16 @@ func (m ReadMatchResult) GetCigar() (string, error) {
 // holds all relevant mapping information of potentially several hits per readpair
 // bundled into one type
 type ReadPairMatchResults struct {
-	ReadPair *fastq.ReadPair
-	Fw       []*ReadMatchResult
-	Rv       []*ReadMatchResult
+	ReadPair        *fastq.ReadPair
+	Fw              []*ReadMatchResult
+	Rv              []*ReadMatchResult
+	ParalogMappings map[string]map[int]*ValidReadPairCombination // stores the best possible map combination of each paralog index
+}
+
+type ValidReadPairCombination struct {
+	Fw            *ReadMatchResult
+	Rv            *ReadMatchResult
+	NumMismatches int
 }
 
 func (i ReadPairMatchResults) String() string {

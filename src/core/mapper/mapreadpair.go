@@ -19,8 +19,7 @@ import (
 
 func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	incompleteMappingChan *incompletemappingpass.IncompleteMappingChannel,
-	confidentMatchesChan *confidentmappingpass.ConfidentMappingChannel,
-	paralogMappingChan chan<- *mapperutils.ReadPairMatchResults,
+	confidentMatchesChan chan<- *confidentmappingpass.ConfidentMappingTask,
 	timerChannel chan<- *timer.Timer,
 ) (*mapperutils.ReadPairMatchResults, bool) {
 	keepFw := Filter(readPair.ReadR1.Sequence, genomeIndex)
@@ -35,8 +34,8 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 		return nil, false
 	}
 
-	resultFw, isMappableFw := MapRead(readPair.ReadR1, genomeIndex)
-	resultRv, isMappableRv := MapRead(readPair.ReadR2, genomeIndex)
+	resultFw, isMappableFw := MapRead(readPair.ReadR1, genomeIndex, false)
+	resultRv, isMappableRv := MapRead(readPair.ReadR2, genomeIndex, false)
 
 	// TODO: REMOVE DEBUG
 	// if isMappableFw {
@@ -95,12 +94,13 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	// - if not -> check if needRemap
 	// - if yes -> add to confidentMatchesChan
 	if len(resultFw) == 1 && len(resultRv) == 1 && len(resultFw[0].MismatchesRead)+len(resultRv[0].MismatchesRead) < 6 { // currently just sending everything
-		confidentMatchesChan.Send(&confidentmappingpass.ConfidentMappingTask{
+
+		confidentMatchesChan <- &confidentmappingpass.ConfidentMappingTask{
 			ReadPair: readPair,
 			ResultFw: resultFw[0], // there should only exist fw[0] and rv[0] in a confident match
 			ResultRv: resultRv[0],
 			Index:    genomeIndex,
-		})
+		}
 	}
 
 	readPairMapping := &mapperutils.ReadPairMatchResults{
@@ -109,7 +109,6 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 		Rv:       resultRv,
 	}
 
-	paralogMappingChan <- readPairMapping
 	return readPairMapping, true
 }
 

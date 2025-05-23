@@ -16,9 +16,8 @@ func MapperWorker(workerId int, genomeIndex *index.GenomeIndex,
 	wg *sync.WaitGroup,
 	taskChan <-chan MappingTask,
 	incompleteMappingChan *incompletemappingpass.IncompleteMappingChannel,
-	confidentMappingChan *confidentmappingpass.ConfidentMappingChannel,
+	confidentMappingChan chan<- *confidentmappingpass.ConfidentMappingTask,
 	paralogMappingChan chan<- *mapperutils.ReadPairMatchResults,
-	resultChan chan<- *mapperutils.ReadPairMatchResults,
 	progressChan chan<- bool,
 	timerChan chan<- *timer.Timer,
 ) {
@@ -35,10 +34,10 @@ func MapperWorker(workerId int, genomeIndex *index.GenomeIndex,
 			"task":     task.ID,
 		}).Debug("Processing task")
 
-		readPairMappings, isMappable := MapReadPair(task.ReadPair, genomeIndex, incompleteMappingChan, confidentMappingChan, paralogMappingChan, timerChan)
+		readPairMappings, isMappable := MapReadPair(task.ReadPair, genomeIndex, incompleteMappingChan, confidentMappingChan, timerChan)
 
 		if isMappable {
-			resultChan <- readPairMappings
+			paralogMappingChan <- readPairMappings
 		}
 
 		progressChan <- true

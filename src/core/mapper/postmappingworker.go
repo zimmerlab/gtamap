@@ -7,7 +7,6 @@ import (
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
-	"github.com/sirupsen/logrus"
 )
 
 func PostMappingWorker(finalMatchesChan <-chan *mapperutils.ReadPairMatchResults, wg *sync.WaitGroup, outputChan chan<- string, index *index.GenomeIndex) {
@@ -18,6 +17,7 @@ func PostMappingWorker(finalMatchesChan <-chan *mapperutils.ReadPairMatchResults
 	// WRITE TO SAM
 	for mappedReadPair := range finalMatchesChan {
 		var builder strings.Builder
+
 		for i := 0; i < len(mappedReadPair.Fw); i++ {
 			for j := 0; j < len(mappedReadPair.Rv); j++ {
 				s, isOk := readPairResultToSamString(index, mappedReadPair.ReadPair, mappedReadPair.Fw[i], mappedReadPair.Rv[j])
@@ -172,54 +172,4 @@ func getTotalCoverage(coverageFw, coverageRv []int) []int {
 		totalCoverage[i] = coverageFw[i] + coverageRv[len(coverageFw)-1-i]
 	}
 	return totalCoverage
-}
-
-func getPossibleMapping(alternativeMappingsFw []mapperutils.ReadMatchResult, alternativeMappingsRv []mapperutils.ReadMatchResult, mismatchesInTarget int) (int, []mapperutils.ReadMatchResult, int) {
-	mapPerParalogSeqIndex := make(map[int][]mapperutils.ReadMatchResult)
-
-	// accumulate mapping results per paralog main id
-	for _, mapping := range alternativeMappingsFw {
-		mapPerParalogSeqIndex[mapping.SequenceIndex/2] = append(mapPerParalogSeqIndex[mapping.SequenceIndex/2], mapping)
-	}
-
-	for _, mapping := range alternativeMappingsRv {
-		mapPerParalogSeqIndex[mapping.SequenceIndex/2] = append(mapPerParalogSeqIndex[mapping.SequenceIndex/2], mapping)
-	}
-
-	bestId := -1
-	minMis := 1000000
-	for paralogSeqIndex, result := range mapPerParalogSeqIndex {
-		// do fw and rv map?
-		if len(result) != 2 {
-			logrus.Debug("Mate unmapped or multimapped  in paralog mapping attempt.")
-			continue
-		}
-
-		if len(result) > 2 {
-			logrus.Fatalf("Read mapps to multiple locations on same region and strand: paralog id %s, result %s", paralogSeqIndex, result)
-		}
-
-		// only consider cases where fwId == rvId-1 || fwId-1 == rvId && fwId / 2 == rvId / 2
-		if !(result[0].SequenceIndex == result[1].SequenceIndex-1 || result[1].SequenceIndex == result[0].SequenceIndex-1) {
-			logrus.Debugf("Fw and Rv Reads map to same strand on same region: paralog id %s, result %s", paralogSeqIndex, result)
-			continue
-		}
-
-		mismatches := len(result[0].MismatchesRead) + len(result[1].MismatchesRead)
-		if bestId == -1 {
-			bestId = paralogSeqIndex
-			minMis = mismatches
-			continue
-		}
-
-		if mismatches < minMis {
-			bestId = paralogSeqIndex
-			minMis = mismatches
-		}
-
-	}
-	if minMis < mismatchesInTarget && bestId != 1 {
-		return bestId, mapPerParalogSeqIndex[bestId], minMis
-	}
-	return -1, nil, -1
 }

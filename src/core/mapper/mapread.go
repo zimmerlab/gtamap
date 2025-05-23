@@ -9,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]*mapperutils.ReadMatchResult, bool) {
+func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex, greedy bool) ([]*mapperutils.ReadMatchResult, bool) {
 	logrus.WithFields(logrus.Fields{
 		"read":   read.Header,
 		"length": len(*read.Sequence),
@@ -105,7 +105,7 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]*mapperutils.R
 
 		dh := mapperutils.NewDiagonalHandlerWithDataCopy(sequenceMatches.MatchesPerDiagonal)
 
-		tmpResults := mapReadToSequence(seqIndex, read, genomeIndex, dh)
+		tmpResults := mapReadToSequence(seqIndex, read, genomeIndex, dh, greedy)
 
 		// var result mapperutils.ReadMatchResult
 
@@ -136,7 +136,7 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex) ([]*mapperutils.R
 }
 
 func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperutils.DiagonalHandler,
-	result *mapperutils.ReadMatchResult, results *[]*mapperutils.ReadMatchResult,
+	result *mapperutils.ReadMatchResult, results *[]*mapperutils.ReadMatchResult, isGreedy bool,
 ) {
 	logrus.Debug("")
 	logrus.WithFields(logrus.Fields{
@@ -196,7 +196,10 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 	applyDiagonal(read, genomeIndex, dhNew, diagonal, resultNew)
 
 	// keep on extending the currently best diagonal
-	applyPossibleDiagonals(read, genomeIndex, dhNew, resultNew, results)
+	applyPossibleDiagonals(read, genomeIndex, dhNew, resultNew, results, isGreedy)
+	if isGreedy {
+		return
+	}
 
 	diagonalsAfter := dhNew.GetAvailableDiagonals()
 	excluded := findExcludedDiagonal(diagonalsBefore, diagonalsAfter, diagonal)
@@ -236,7 +239,7 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 
 	dh.RemoveDiagonal(diagonal)
 
-	applyPossibleDiagonals(read, genomeIndex, dh, result, results)
+	applyPossibleDiagonals(read, genomeIndex, dh, result, results, false)
 }
 
 func findExcludedDiagonal(before []int, after []int, removed int) []int {
@@ -670,7 +673,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 }
 
 func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.GenomeIndex,
-	diagonalHandler *mapperutils.DiagonalHandler,
+	diagonalHandler *mapperutils.DiagonalHandler, greedy bool,
 ) []*mapperutils.ReadMatchResult {
 	// list of read match results
 	results := make([]*mapperutils.ReadMatchResult, 0)
@@ -683,7 +686,7 @@ func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.Genome
 		NeedRemap:      false,
 	}
 
-	applyPossibleDiagonals(read, genomeIndex, diagonalHandler, result, &results)
+	applyPossibleDiagonals(read, genomeIndex, diagonalHandler, result, &results, greedy)
 
 	finalResults := make([]*mapperutils.ReadMatchResult, 0)
 

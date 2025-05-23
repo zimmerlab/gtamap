@@ -66,17 +66,22 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	// contains all read pairs that could not be mapped in the first pass
 	incompleteMatchChan := incompletemappingpass.NewIncompleteMappingChannel()
 	// contains all read pairs that map uniq and almost perfect
-	confidentMappingChan := confidentmappingpass.NewConfidentMappingChannel()
+	// confidentMappingChan := confidentmappingpass.NewConfidentMappingChannel()
+	confidentMappingChan := make(chan *confidentmappingpass.ConfidentMappingTask)
 	// contains all read pairs that need to be mapped to the paralog index (all)
 	paralogMappingChan := make(chan *mapperutils.ReadPairMatchResults)
 	// contains the string results of the mapping
 	outputChan := make(chan string)
-	// contains the results of the first pass
-	resultChan := make(chan *mapperutils.ReadPairMatchResults)
+	// contains the results of the first pass (main mapping) and also already hold paralog mappings
+	finalMatchesChan := make(chan *mapperutils.ReadPairMatchResults)
 	// contains information about the duration of each step
 	timerChan := make(chan *timer.Timer)
 	// contains information about the progress of the mapping
 	progressChan := make(chan bool)
+
+	var waitgroupConfidentMap sync.WaitGroup
+	waitgroupConfidentMap.Add(1)
+	go confidentmappingpass.ConfidentMappingWorker(confidentMappingChan, &waitgroupConfidentMap)
 
 	var waitgroupProgress sync.WaitGroup
 	waitgroupProgress.Add(1)
@@ -86,52 +91,50 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	waitgroupWriter.Add(1)
 	go OutputWorker(outputChan, &waitgroupWriter, writer)
 
-	var waitgroupConfidentMap sync.WaitGroup
-	waitgroupConfidentMap.Add(1)
-	go confidentmappingpass.ConfidentMappingWorker(confidentMappingChan, &waitgroupConfidentMap)
+	var waitgroupMappings sync.WaitGroup
+	waitgroupMappings.Add(1)
+	go PostMappingWorker(finalMatchesChan, &waitgroupMappings, outputChan, genomeIndex)
 
 	var waitgroupParalog sync.WaitGroup
 	waitgroupParalog.Add(1)
-	go ParalogMappingWorker(paralogMappingChan, &waitgroupParalog, genomeIndex)
-
-	var waitgroupMappings sync.WaitGroup
-	waitgroupMappings.Add(1)
-	go PostMappingWorker(resultChan, &waitgroupMappings, outputChan, genomeIndex)
+	go ParalogMappingWorker(paralogMappingChan, &waitgroupParalog, genomeIndex, finalMatchesChan)
 
 	var waitGroupTimer sync.WaitGroup
 	waitGroupTimer.Add(1)
 	go TimerWorker(timerChan, &waitGroupTimer)
 
 	// wait group that keeps track of the mapping goroutines that are still running
-	var wgMainMappingPass sync.WaitGroup
 	var wgIncompleteMappingPass sync.WaitGroup
+	wgIncompleteMappingPass.Add(1)
+	go incompletemappingpass.IncompleteMappingWorker(incompleteMatchChan, &wgIncompleteMappingPass)
 
+	var wgMainMappingPass sync.WaitGroup
 	// start the mapping worker goroutine pool
 	for i := 0; i < numWorkers; i++ {
 		wgMainMappingPass.Add(1)
-		go MapperWorker(i, genomeIndex, &wgMainMappingPass, taskChan, incompleteMatchChan, confidentMappingChan, paralogMappingChan, resultChan, progressChan, timerChan)
+		go MapperWorker(i, genomeIndex, &wgMainMappingPass, taskChan, incompleteMatchChan, confidentMappingChan, paralogMappingChan, progressChan, timerChan)
 	}
-
-	wgIncompleteMappingPass.Add(1)
 
 	go MappingTaskProducer(reader, taskChan, maxTasks, specificQname)
 
 	wgMainMappingPass.Wait()
+	close(confidentMappingChan)
+	close(paralogMappingChan)
+	incompleteMatchChan.Close()
 
 	logrus.Info("Done with first pass mapping")
 
-	incompleteMatchChan.Close()
-
-	go incompletemappingpass.IncompleteMappingWorker(incompleteMatchChan, &wgIncompleteMappingPass)
-
 	wgIncompleteMappingPass.Wait()
+	waitgroupConfidentMap.Wait()
+	waitgroupParalog.Wait()
+	close(finalMatchesChan)
 
-	close(resultChan)
 	waitgroupMappings.Wait()
-	close(outputChan)
-	close(timerChan)
 
+	close(outputChan)
 	waitgroupWriter.Wait()
+
+	close(timerChan)
 	waitGroupTimer.Wait()
 
 	writer.Close()
