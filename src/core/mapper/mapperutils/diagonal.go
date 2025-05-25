@@ -141,10 +141,10 @@ func (dh *DiagonalHandler) RemovedConsumedRegionsAndDiagonals() {
 		for _, match := range matches {
 			if match.Used {
 
-				logrus.WithFields(logrus.Fields{
-					"match":    match,
-					"diagonal": diagonal,
-				}).Debug("removed match from diagonal")
+				//logrus.WithFields(logrus.Fields{
+				//	"match":    match,
+				//	"diagonal": diagonal,
+				//}).Debug("removed match from diagonal")
 
 				continue
 			}
@@ -167,9 +167,9 @@ func (dh *DiagonalHandler) RemovedConsumedRegionsAndDiagonals() {
 
 	for _, key := range keysToDelete {
 
-		logrus.WithFields(logrus.Fields{
-			"diagonal": key,
-		}).Debug("removed diagonal")
+		//logrus.WithFields(logrus.Fields{
+		//	"diagonal": key,
+		//}).Debug("removed diagonal")
 
 		delete(dh.Diagonals, key)
 	}
@@ -189,9 +189,10 @@ func (dh *DiagonalHandler) RemoveInvalidDiagonals(result *ReadMatchResult, read 
 	}
 
 	for _, key := range keysToDelete {
-		logrus.WithFields(logrus.Fields{
-			"diagonal": key,
-		}).Debug("removed diagonal")
+
+		//logrus.WithFields(logrus.Fields{
+		//	"diagonal": key,
+		//}).Debug("removed diagonal")
 
 		delete(dh.Diagonals, key)
 	}
@@ -243,6 +244,38 @@ func (dh *DiagonalHandler) IsValidExtension(possibleExtension []*Match, result R
 		if maxGenome == -1 || match.ToGenome > maxGenome {
 			maxGenome = match.ToGenome
 		}
+	}
+
+	minReadResult := -1
+	maxReadResult := -1
+	minGenomeResult := -1
+	maxGenomeResult := -1
+
+	// get the min and max positions of the already mapped regions in the read and genome
+	for _, resultMatch := range result.MatchedRead.Regions {
+		if minReadResult == -1 || resultMatch.Start < minReadResult {
+			minReadResult = resultMatch.Start
+		}
+		if maxReadResult == -1 || resultMatch.End > maxReadResult {
+			maxReadResult = resultMatch.End
+		}
+	}
+	for _, resultMatch := range result.MatchedGenome.Regions {
+		if minGenomeResult == -1 || resultMatch.Start < minGenomeResult {
+			minGenomeResult = resultMatch.Start
+		}
+		if maxGenomeResult == -1 || resultMatch.End > maxGenomeResult {
+			maxGenomeResult = resultMatch.End
+		}
+	}
+
+	// the diagonal regions on the read can not overlap any other region that was already mapped
+	if !(minRead < minReadResult && maxRead < minReadResult) || !(minRead > maxReadResult && maxRead > maxReadResult) {
+		return false
+	}
+	// the diagonal regions on the genome can not overlap any other region that was already mapped
+	if !(minGenome < minGenomeResult && maxGenome < minGenomeResult) || !(minGenome > maxGenomeResult && maxGenome > maxGenomeResult) {
+		return false
 	}
 
 	// check if the diagonal position within the genome is still consistent with the already mapped regions
