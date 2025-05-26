@@ -131,7 +131,6 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	thirdpassChan.Close()
 	wgThirdPass.Wait()
 
-	waitgroupConfidentMap.Wait()
 	close(outputChan)
 	waitgroupWriter.Wait()
 
