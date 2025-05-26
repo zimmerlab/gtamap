@@ -1,66 +1,97 @@
 package confidentmappingpass
 
 import (
-	"strconv"
-	"strings"
+	"sync"
 
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 )
 
-type ConfidentMappingTask struct {
+type ConfidentTask struct {
 	ReadPair *fastq.ReadPair
 	ResultFw *mapperutils.ReadMatchResult
 	ResultRv *mapperutils.ReadMatchResult
 }
 
-func (i ConfidentMappingTask) String() string {
-	var builder strings.Builder
-	builder.WriteString("ReadPairR1 Header: ")
-	builder.WriteString(i.ReadPair.ReadR1.Header)
-	builder.WriteString("\n")
-	builder.WriteString("  <== FW MAPPING ==>")
-	builder.WriteString("\n")
-	builder.WriteString("\t SeqIndex: ")
-	mapping := i.ResultFw
-	seqIndex := strconv.Itoa(mapping.SequenceIndex)
-	builder.WriteString(seqIndex)
-	builder.WriteString("\n")
-	builder.WriteString("\t GENOME -> ")
-	builder.WriteString(mapping.MatchedGenome.String())
-	builder.WriteString("\n")
-	builder.WriteString("\t READ   -> ")
-	builder.WriteString(mapping.MatchedRead.String())
-	builder.WriteString("\n")
-	builder.WriteString("\t MISMAT -> ")
-	ints := mapping.MismatchesRead
-	strs := make([]string, len(ints))
-	for i, v := range ints {
-		strs[i] = strconv.Itoa(v)
+type ConfidentPassChan struct {
+	in     chan *ConfidentTask
+	out    chan *ConfidentTask
+	buffer []*ConfidentTask
+	mu     sync.Mutex
+	closed bool
+}
+
+func NewConfidentChannel() *ConfidentPassChan {
+	channel := &ConfidentPassChan{
+		in:     make(chan *ConfidentTask),
+		out:    make(chan *ConfidentTask),
+		buffer: make([]*ConfidentTask, 0),
 	}
-	builder.WriteString(strings.Join(strs, ","))
-	builder.WriteString("\n")
-	builder.WriteString("  <== RV MAPPING ==>")
-	builder.WriteString("\n")
-	builder.WriteString("\t SeqIndex: ")
-	mapping = i.ResultRv
-	seqIndex = strconv.Itoa(mapping.SequenceIndex)
-	builder.WriteString(seqIndex)
-	builder.WriteString("\n")
-	builder.WriteString("\t GENOME -> ")
-	builder.WriteString(mapping.MatchedGenome.String())
-	builder.WriteString("\n")
-	builder.WriteString("\t READ   -> ")
-	builder.WriteString(mapping.MatchedRead.String())
-	builder.WriteString("\n")
-	builder.WriteString("\t MISMAT -> ")
-	ints = mapping.MismatchesRead
-	strs = make([]string, len(ints))
-	for i, v := range ints {
-		strs[i] = strconv.Itoa(v)
+
+	go channel.process()
+
+	return channel
+}
+
+func (s *ConfidentPassChan) process() {
+	var (
+		outCh chan<- *ConfidentTask
+		next  *ConfidentTask
+	)
+
+	for {
+		if len(s.buffer) > 0 {
+			outCh = s.out
+			next = s.buffer[0]
+		} else {
+			outCh = nil
+		}
+
+		select {
+		case item, ok := <-s.in:
+			if !ok {
+				s.mu.Lock()
+				s.closed = true
+				s.mu.Unlock()
+
+				if len(s.buffer) == 0 {
+					close(s.out)
+					return
+				}
+
+				s.in = nil
+				continue
+			}
+
+			s.mu.Lock()
+			s.buffer = append(s.buffer, item)
+			s.mu.Unlock()
+
+		case outCh <- next:
+			s.mu.Lock()
+			s.buffer = s.buffer[1:]
+
+			if s.closed && len(s.buffer) == 0 {
+				close(s.out)
+				s.mu.Unlock()
+				return
+			}
+
+			s.mu.Unlock()
+		}
 	}
-	builder.WriteString(strings.Join(strs, ","))
-	builder.WriteString("\n")
-	return builder.String()
+}
+
+func (s *ConfidentPassChan) Send(task *ConfidentTask) {
+	s.in <- task
+}
+
+func (s *ConfidentPassChan) Receive() (*ConfidentTask, bool) {
+	item, ok := <-s.out
+	return item, ok
+}
+
+func (s *ConfidentPassChan) Close() {
+	close(s.in)
 }

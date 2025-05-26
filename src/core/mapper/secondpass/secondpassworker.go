@@ -8,7 +8,7 @@ import (
 
 func SecondpassMappingWorker(incompleteMappingChan *SecondPassChannel, wgIncompleteMapping *sync.WaitGroup) {
 	// in here we receive all non confident readpairs. Some have multiple maps for fw and rv and some are
-	// not completely mapped yet.
+	// not completely mapped yet. Confident readpairs are contained in confidentChan.
 	defer wgIncompleteMapping.Done()
 
 	for {
@@ -17,6 +17,6 @@ func SecondpassMappingWorker(incompleteMappingChan *SecondPassChannel, wgIncompl
 			break
 		}
 
-		logrus.Debugf("Incomplete mapping pass for readPair: %s", task.ReadPair.ReadR1.Header)
+		logrus.Infof("Secondpass map: %s", task.ReadPair.ReadR1.Header)
 	}
 }

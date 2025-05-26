@@ -6,10 +6,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func ConfidentMappingWorker(confidentMappingChan <-chan *ConfidentMappingTask, wgConfidentMapping *sync.WaitGroup) {
+func ConfidentMappingWorker(confidentChan *ConfidentPassChan, wgConfidentMapping *sync.WaitGroup) {
 	defer wgConfidentMapping.Done()
 
-	for mappedReadPair := range confidentMappingChan {
-		logrus.Debugf("Using ReadPairMapping %s as confident readPair to determine introns and strandedness.", mappedReadPair.ReadPair.ReadR1.Header)
+	for {
+		task, ok := confidentChan.Receive()
+		if !ok {
+			break
+		}
+		logrus.Infof("Using ReadPairMapping %s as confident readPair to determine introns and strandedness.", task.ReadPair.ReadR1.Header)
 	}
 }

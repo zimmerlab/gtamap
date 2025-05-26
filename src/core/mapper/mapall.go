@@ -69,7 +69,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	// contains all read pairs (multimapped and parially mapped) except for confident read pairs
 	thirdpassChan := thirdpass.NewThirdPassChannel()
 	// contains all confident read pairs that map unique and almost perfect
-	confidentMappingChan := make(chan *confidentmappingpass.ConfidentMappingTask)
+	confidentMappingChan := confidentmappingpass.NewConfidentChannel()
 	// contains all read pairs that need to be mapped to the paralog index (all)
 	paralogMappingChan := make(chan *mapperutils.ReadPairMatchResults)
 	// contains the string results of the mapping
@@ -80,11 +80,6 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	timerChan := make(chan *timer.Timer)
 	// contains information about the progress of the mapping
 	progressChan := make(chan bool)
-
-	// Wait
-	var waitgroupConfidentMap sync.WaitGroup
-	waitgroupConfidentMap.Add(1)
-	go confidentmappingpass.ConfidentMappingWorker(confidentMappingChan, &waitgroupConfidentMap)
 
 	var waitgroupProgress sync.WaitGroup
 	waitgroupProgress.Add(1)
@@ -107,9 +102,6 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	go TimerWorker(timerChan, &waitGroupTimer)
 
 	// wait group that keeps track of the mapping goroutines that are still running
-	var wgSecondpass sync.WaitGroup
-	wgSecondpass.Add(1)
-	go secondpass.SecondpassMappingWorker(secondpassChan, &wgSecondpass)
 
 	var wgMainMappingPass sync.WaitGroup
 	// start the mapping worker goroutine pool
@@ -121,13 +113,29 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	go MappingTaskProducer(reader, taskChan, maxTasks, specificQname)
 
 	wgMainMappingPass.Wait()
-	close(confidentMappingChan)
 	close(paralogMappingChan)
+
+	logrus.Info("Done with first pass mapping and paralog mapping")
+
+	var wgThirdPass sync.WaitGroup
+	wgThirdPass.Add(1)
+	go thirdpass.ThirdPassWorker(thirdpassChan, &wgThirdPass)
+
+	// wgThirdPass.Wait()
+
+	confidentMappingChan.Close()
+	var waitgroupConfidentMap sync.WaitGroup
+	waitgroupConfidentMap.Add(1)
+	go confidentmappingpass.ConfidentMappingWorker(confidentMappingChan, &waitgroupConfidentMap)
+
 	secondpassChan.Close()
 
-	logrus.Info("Done with first pass mapping")
+	var wgSecondpass sync.WaitGroup
+	wgSecondpass.Add(1)
+	go secondpass.SecondpassMappingWorker(secondpassChan, &wgSecondpass)
 
 	wgSecondpass.Wait()
+
 	waitgroupConfidentMap.Wait()
 	waitgroupParalog.Wait()
 	close(finalMatchesChan)
