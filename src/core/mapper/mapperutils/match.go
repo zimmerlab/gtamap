@@ -41,7 +41,6 @@ type ReadMatchResult struct {
 	MismatchesRead  []int                      // the positions of the mismatches in the read
 	diagonalHandler *DiagonalHandler
 	IncompleteMap   bool
-	NeedRemap       bool // true if this result must undergo a remap
 }
 
 func (m ReadMatchResult) Copy() *ReadMatchResult {

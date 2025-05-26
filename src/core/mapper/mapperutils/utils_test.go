@@ -24,7 +24,6 @@ func TestComputeGapsInDiagonal(t *testing.T) {
 		MatchedRead:    resultMatchedRead,
 		MatchedGenome:  resultMatchedGenome,
 		MismatchesRead: nil,
-		NeedRemap:      false,
 	}
 
 	// testcase 1 where the gap in the diagonal is not overlapping with the matched regions
