@@ -955,9 +955,9 @@ func OptimizeFastaExtraction(targetParalogs map[string]map[string]struct{}, fast
 				_, exists := paralogs[faFileName]
 				if exists {
 					target = t
+					logrus.Infof("Found paralog region '%s' of target region '%s' in --fastaout '%s'. No sequence extraction necessary.", faFileName, target, *fastaDirParalogPre)
 				}
 			}
-			logrus.Infof("Found paralog region '%s' of target region '%s' in --fastaout '%s'. No sequence extraction necessary.", faFileName, target, *fastaDirParalogPre)
 			existingFaFiles[faFileName] = struct{}{}
 			foundFiles++
 		}
