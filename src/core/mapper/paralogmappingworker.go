@@ -5,18 +5,22 @@ import (
 
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/thirdpass"
 	"github.com/sirupsen/logrus"
 )
 
-func ParalogMappingWorker(needParalogMapChan <-chan *mapperutils.ReadPairMatchResults, wg *sync.WaitGroup, index *index.GenomeIndex, finalMatchesChan chan<- *mapperutils.ReadPairMatchResults) {
+func ParalogMappingWorker(needParalogMapChan <-chan *mapperutils.ReadPairMatchResults, wg *sync.WaitGroup, index *index.GenomeIndex,
+	thirdPassChan *thirdpass.ThirdPassChannel,
+) {
 	logrus.Info("Started paralog mapping")
 	defer wg.Done()
 
 	// per default we want to map all reads to paraog index (except for confident reads)
 	for readPairResult := range needParalogMapChan {
 
-		// init paralog map in readPairResult
-		readPairResult.ParalogMappings = make(map[string]map[int]*mapperutils.ValidReadPairCombination)
+		// init
+		paralogMappings := make(map[string]map[int]*mapperutils.ValidReadPairCombination)
+
 		// projects 0,1 -> 0; 2,3 -> 1; 4,5 -> 2 to map to main target region
 		parentSeqIndices := make(map[int]struct{})
 
@@ -60,13 +64,17 @@ func ParalogMappingWorker(needParalogMapChan <-chan *mapperutils.ReadPairMatchRe
 					postprocessReadMatch(index.ParalogRegions[parentSeqId], readPairResult.ReadPair.ReadR1, mapping.Fw)
 					postprocessReadMatch(index.ParalogRegions[parentSeqId], readPairResult.ReadPair.ReadR2, mapping.Rv)
 				}
-				readPairResult.ParalogMappings[parentSeqId] = bestCandidates
+				paralogMappings[parentSeqId] = bestCandidates
 			}
 		}
-		finalMatchesChan <- readPairResult
+		thidPassTask := thirdpass.ThirdPassTask{
+			ReadPairId:  readPairResult.ReadPair.ReadR1.Header,
+			ParalogInfo: paralogMappings,
+		}
+		thirdPassChan.Send(&thidPassTask)
 	}
 
-	logrus.Debug("Finished paralog mapping")
+	logrus.Info("Done with paralog mapping")
 }
 
 // Returns a slice of parentSeqIndices for a given readPairResult. If we map only to one main target region,

@@ -14,6 +14,7 @@ func ConfidentMappingWorker(confidentChan *ConfidentPassChan, wgConfidentMapping
 		if !ok {
 			break
 		}
-		logrus.Infof("Using ReadPairMapping %s as confident readPair to determine introns and strandedness.", task.ReadPair.ReadR1.Header)
+		logrus.Debugf("Using ReadPairMapping %s as confident readPair to determine introns and strandedness.", task.ReadPair.ReadR1.Header)
 	}
+	logrus.Info("Done with Annotation")
 }
