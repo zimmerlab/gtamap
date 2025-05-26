@@ -1001,9 +1001,9 @@ func OptimizeIndexSerialisation(targetParalogs map[string]map[string]struct{}, i
 				_, exists := paralogs[gtaiName]
 				if exists {
 					target = t
+					logrus.Infof("Found serialized index '%s'.gai of target region '%s' in --indexout '%s'.", gtaiName, target, *indexDirParalogPre)
 				}
 			}
-			logrus.Infof("Found serialized index '%s'.gai of target region '%s' in --indexout '%s'.", gtaiName, target, *indexDirParalogPre)
 			existingIndices[gtaiName] = struct{}{}
 			foundIndices++
 		}
