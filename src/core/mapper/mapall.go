@@ -70,6 +70,8 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	thirdpassChan := thirdpass.NewThirdPassChannel()
 	// contains all confident read pairs that map unique and almost perfect
 	confidentMappingChan := confidentmappingpass.NewConfidentChannel()
+	// contains annotation per target region
+	annotationChan := make(chan *mapperutils.TargetAnnotation)
 	// contains all read pairs that need to be mapped to the paralog index (all)
 	paralogMappingChan := make(chan *mapperutils.ReadPairMatchResults)
 	// contains the string results of the mapping
@@ -112,9 +114,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	confidentMappingChan.Close()
 	var waitgroupConfidentMap sync.WaitGroup
 	waitgroupConfidentMap.Add(1)
-	go confidentmappingpass.ConfidentMappingWorker(confidentMappingChan, &waitgroupConfidentMap)
-
-	waitgroupConfidentMap.Wait()
+	go confidentmappingpass.ConfidentMappingWorker(confidentMappingChan, &waitgroupConfidentMap, annotationChan)
 
 	var wgThirdPass sync.WaitGroup
 	wgThirdPass.Add(1)
@@ -122,7 +122,10 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 
 	var wgSecondpass sync.WaitGroup
 	wgSecondpass.Add(1)
-	go secondpass.SecondpassMappingWorker(secondpassChan, &wgSecondpass, thirdpassChan)
+	go secondpass.SecondpassMappingWorker(secondpassChan, &wgSecondpass, annotationChan, thirdpassChan)
+
+	waitgroupConfidentMap.Wait()
+	close(annotationChan)
 
 	waitgroupParalog.Wait()
 	secondpassChan.Close()

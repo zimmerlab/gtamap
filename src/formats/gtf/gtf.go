@@ -6,6 +6,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 )
 
 type Annotation struct {
@@ -18,6 +20,11 @@ type GeneBasic struct {
 	IsForwardStrand bool
 	StartGenomic    uint32
 	EndGenomic      uint32
+}
+
+type GeneIntrons struct {
+	LocalIntrons   []*regionvector.RegionVector
+	GenomicIntrons []*regionvector.RegionVector
 }
 
 type Gene struct {
@@ -46,7 +53,6 @@ type Exon struct {
 }
 
 func ReadGtfFromFile(filePath string) *Annotation {
-
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil
@@ -57,7 +63,6 @@ func ReadGtfFromFile(filePath string) *Annotation {
 }
 
 func ReadGenesFromGtfUsingPath(filePath string, geneIds map[string]struct{}) []*GeneBasic {
-
 	file, err := os.Open(filePath)
 	if err != nil {
 		panic("Could not read gtf file. Make sure it exists!")
@@ -69,7 +74,6 @@ func ReadGenesFromGtfUsingPath(filePath string, geneIds map[string]struct{}) []*
 }
 
 func ReadGenesFromGtf(gtfFile *os.File, geneIds map[string]struct{}) []*GeneBasic {
-
 	genes := make([]*GeneBasic, 0)
 
 	scanner := bufio.NewScanner(gtfFile)
@@ -126,7 +130,6 @@ func ReadGenesFromGtf(gtfFile *os.File, geneIds map[string]struct{}) []*GeneBasi
 }
 
 func ReadGtf(gtfFile *os.File) *Annotation {
-
 	annot := Annotation{
 		Genes: make([]*Gene, 0),
 	}

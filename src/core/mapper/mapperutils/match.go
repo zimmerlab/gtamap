@@ -8,6 +8,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
+	"github.com/KleinSamuel/gtamap/src/formats/gtf"
 	"github.com/sirupsen/logrus"
 )
 
@@ -208,6 +209,11 @@ type ValidReadPairCombination struct {
 	Fw            *ReadMatchResult
 	Rv            *ReadMatchResult
 	NumMismatches int
+}
+
+type TargetAnnotation struct {
+	PreferedStrand   int // 0 -> + (fw+ and rv-); 1 -> - (fw- and rv+)
+	IntronsPerTarget map[int]*gtf.GeneIntrons
 }
 
 func (i ReadPairMatchResults) String() string {
