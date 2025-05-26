@@ -1,6 +1,8 @@
 package sam
 
-import "fmt"
+import (
+	"fmt"
+)
 
 const Version string = "1.6"
 
@@ -54,13 +56,12 @@ type Record struct {
 }
 
 func (entry *Record) String() string {
-
 	if entry == nil {
 		return ""
 	}
 
 	alignmentLineString := fmt.Sprintf("%s\t%s\t%s\t%d\t%d\t%s\t%s\t%d\t%d\t%s\t%s", entry.Qname, entry.Flag.String(), entry.Rname, entry.Pos, entry.Mapq, entry.Cigar, entry.Rnext, entry.Pnext, entry.Tlen, entry.Seq, entry.Qual)
-	//alignmentLineString += fmt.Sprintf("\tXT:Z:T%d", entry.TranscriptId)
+	// alignmentLineString += fmt.Sprintf("\tXT:Z:T%d", entry.TranscriptId)
 
 	for i, transcriptId := range entry.TranscriptIds {
 		if i == 0 {
@@ -100,6 +101,7 @@ func (flag *Flag) String() string {
 func (flag *Flag) SetPaired() {
 	flag.Value |= 1 << 0
 }
+
 func (flag *Flag) IsPaired() bool {
 	return (flag.Value & (1 << 0)) != 0
 }
@@ -112,6 +114,7 @@ func (flag *Flag) IsPaired() bool {
 func (flag *Flag) SetProperlyPaired() {
 	flag.Value |= 1 << 1
 }
+
 func (flag *Flag) IsProperlyPaired() bool {
 	return (flag.Value & (1 << 1)) != 0
 }
@@ -120,6 +123,7 @@ func (flag *Flag) IsProperlyPaired() bool {
 func (flag *Flag) SetUnmapped() {
 	flag.Value |= 1 << 2
 }
+
 func (flag *Flag) IsUnmapped() bool {
 	return (flag.Value & (1 << 2)) != 0
 }
@@ -128,6 +132,7 @@ func (flag *Flag) IsUnmapped() bool {
 func (flag *Flag) SetMateUnmapped() {
 	flag.Value |= 1 << 3
 }
+
 func (flag *Flag) IsMateUnmapped() bool {
 	return (flag.Value & (1 << 3)) != 0
 }
@@ -136,6 +141,7 @@ func (flag *Flag) IsMateUnmapped() bool {
 func (flag *Flag) SetReverseStrand() {
 	flag.Value |= 1 << 4
 }
+
 func (flag *Flag) IsReverseStrand() bool {
 	return (flag.Value & (1 << 4)) != 0
 }
@@ -144,6 +150,7 @@ func (flag *Flag) IsReverseStrand() bool {
 func (flag *Flag) SetMateReverseStrand() {
 	flag.Value |= 1 << 5
 }
+
 func (flag *Flag) IsMateReverseStrand() bool {
 	return (flag.Value & (1 << 5)) != 0
 }
@@ -152,6 +159,7 @@ func (flag *Flag) IsMateReverseStrand() bool {
 func (flag *Flag) SetFirstInPair() {
 	flag.Value |= 1 << 6
 }
+
 func (flag *Flag) IsFirstInPair() bool {
 	return (flag.Value & (1 << 6)) != 0
 }
@@ -160,6 +168,7 @@ func (flag *Flag) IsFirstInPair() bool {
 func (flag *Flag) SetSecondInPair() {
 	flag.Value |= 1 << 7
 }
+
 func (flag *Flag) IsSecondInPair() bool {
 	return (flag.Value & (1 << 7)) != 0
 }
@@ -170,6 +179,7 @@ func (flag *Flag) IsSecondInPair() bool {
 func (flag *Flag) SetNotPrimaryAlignment() {
 	flag.Value |= 1 << 8
 }
+
 func (flag *Flag) IsNotPrimaryAlignment() bool {
 	return (flag.Value & (1 << 8)) != 0
 }
@@ -178,6 +188,7 @@ func (flag *Flag) IsNotPrimaryAlignment() bool {
 func (flag *Flag) SetFailsQualityCheck() {
 	flag.Value |= 1 << 9
 }
+
 func (flag *Flag) FailsQualityCheck() bool {
 	return (flag.Value & (1 << 9)) != 0
 }
@@ -186,6 +197,7 @@ func (flag *Flag) FailsQualityCheck() bool {
 func (flag *Flag) SetDuplicate() {
 	flag.Value |= 1 << 10
 }
+
 func (flag *Flag) IsDuplicate() bool {
 	return (flag.Value & (1 << 10)) != 0
 }
@@ -194,6 +206,7 @@ func (flag *Flag) IsDuplicate() bool {
 func (flag *Flag) SetSupplementary() {
 	flag.Value |= 1 << 11
 }
+
 func (flag *Flag) IsSupplementary() bool {
 	return (flag.Value & (1 << 11)) != 0
 }
@@ -205,50 +218,62 @@ type FlagBuilder struct {
 func NewFlagBuilder() FlagBuilder {
 	return FlagBuilder{flag: Flag{}}
 }
+
 func (b *FlagBuilder) SetPaired() *FlagBuilder {
 	b.flag.SetPaired()
 	return b
 }
+
 func (b *FlagBuilder) SetProperlyPaired() *FlagBuilder {
 	b.flag.SetProperlyPaired()
 	return b
 }
+
 func (b *FlagBuilder) SetUnmapped() *FlagBuilder {
 	b.flag.SetUnmapped()
 	return b
 }
+
 func (b *FlagBuilder) SetMateUnmapped() *FlagBuilder {
 	b.flag.SetMateUnmapped()
 	return b
 }
+
 func (b *FlagBuilder) SetReverseStrand() *FlagBuilder {
 	b.flag.SetReverseStrand()
 	return b
 }
+
 func (b *FlagBuilder) SetMateReverseStrand() *FlagBuilder {
 	b.flag.SetMateReverseStrand()
 	return b
 }
+
 func (b *FlagBuilder) SetFirstInPair() *FlagBuilder {
 	b.flag.SetFirstInPair()
 	return b
 }
+
 func (b *FlagBuilder) SetSecondInPair() *FlagBuilder {
 	b.flag.SetSecondInPair()
 	return b
 }
+
 func (b *FlagBuilder) SetNotPrimaryAlignment() *FlagBuilder {
 	b.flag.SetNotPrimaryAlignment()
 	return b
 }
+
 func (b *FlagBuilder) SetFailsQualityCheck() *FlagBuilder {
 	b.flag.SetFailsQualityCheck()
 	return b
 }
+
 func (b *FlagBuilder) SetDuplicate() *FlagBuilder {
 	b.flag.SetDuplicate()
 	return b
 }
+
 func (b *FlagBuilder) SetSupplementary() *FlagBuilder {
 	b.flag.SetSupplementary()
 	return b

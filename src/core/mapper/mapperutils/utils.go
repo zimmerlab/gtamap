@@ -7,8 +7,8 @@ import (
 // ComputeGapsInDiagonal TODO: write comment
 // Gaps are dis-continuous regions in the diagonal which do not contain any region already mapped.
 func ComputeGapsInDiagonal(diagonalRead *regionvector.RegionVector, diagonalGenome *regionvector.RegionVector,
-	result *ReadMatchResult) (*regionvector.RegionVector, *regionvector.RegionVector) {
-
+	result *ReadMatchResult,
+) (*regionvector.RegionVector, *regionvector.RegionVector) {
 	gapsRead := regionvector.NewRegionVector()
 	gapsGenome := regionvector.NewRegionVector()
 

@@ -1,20 +1,18 @@
 package mapper
 
 import (
+	"sync"
+
 	"github.com/KleinSamuel/gtamap/src/datawriter"
 	"github.com/sirupsen/logrus"
-	"sync"
 )
 
 func OutputWorker(taskQueue <-chan string, wg *sync.WaitGroup, writer *datawriter.Writer) {
-
-	logrus.Debug("Started writeOutputWorker")
+	defer wg.Done()
 
 	for task := range taskQueue {
 		writer.Write(task)
 	}
 
-	wg.Done()
-
-	logrus.Debug("Finished writeOutputWorker")
+	logrus.Info("Finished writing SAM")
 }

@@ -2,11 +2,14 @@ package mapperutils
 
 import (
 	"fmt"
-	"github.com/KleinSamuel/gtamap/src/config"
-	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
-	"github.com/sirupsen/logrus"
 	"strconv"
 	"strings"
+
+	"github.com/KleinSamuel/gtamap/src/config"
+	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
+	"github.com/KleinSamuel/gtamap/src/formats/fastq"
+	"github.com/KleinSamuel/gtamap/src/formats/gtf"
+	"github.com/sirupsen/logrus"
 )
 
 type Match struct {
@@ -36,13 +39,12 @@ type ReadMatchResult struct {
 	MatchedRead     *regionvector.RegionVector // region vector containing the matched positions in the read
 	MatchedGenome   *regionvector.RegionVector // region vector containing the matched positions in the genome
 	MismatchesRead  []int                      // the positions of the mismatches in the read
-	SecondPass      bool                       // true if this result must undergo a second pass
-	Unmappable      bool
 	diagonalHandler *DiagonalHandler
+	IncompleteMap   bool
+	NeedRemap       bool // true if this result must undergo a remap
 }
 
 func (m ReadMatchResult) Copy() *ReadMatchResult {
-
 	var dhCopy *DiagonalHandler
 	if m.diagonalHandler != nil {
 		dhCopy = m.diagonalHandler.Copy()
@@ -53,7 +55,7 @@ func (m ReadMatchResult) Copy() *ReadMatchResult {
 		MatchedRead:     m.MatchedRead.Copy(),
 		MatchedGenome:   m.MatchedGenome.Copy(),
 		MismatchesRead:  append([]int{}, m.MismatchesRead...),
-		SecondPass:      m.SecondPass,
+		NeedRemap:       m.NeedRemap,
 		diagonalHandler: dhCopy,
 	}
 }
@@ -193,4 +195,75 @@ func (m ReadMatchResult) GetCigar() (string, error) {
 	}
 
 	return builder.String(), nil
+}
+
+// holds all relevant mapping information of potentially several hits per readpair
+// bundled into one type
+type ReadPairMatchResults struct {
+	ReadPair *fastq.ReadPair
+	Fw       []*ReadMatchResult
+	Rv       []*ReadMatchResult
+}
+
+type ValidReadPairCombination struct {
+	Fw            *ReadMatchResult
+	Rv            *ReadMatchResult
+	NumMismatches int
+}
+
+type TargetAnnotation struct {
+	PreferedStrand   int // 0 -> + (fw+ and rv-); 1 -> - (fw- and rv+)
+	IntronsPerTarget map[int]*gtf.GeneIntrons
+}
+
+func (i ReadPairMatchResults) String() string {
+	var builder strings.Builder
+	builder.Write([]byte("ReadPairR1 Header: "))
+	builder.Write([]byte(i.ReadPair.ReadR1.Header))
+	builder.Write([]byte("\n"))
+	builder.Write([]byte("  <== FW MAPPINGS ==>"))
+	builder.Write([]byte("\n"))
+	for _, mapping := range i.Fw {
+		builder.Write([]byte("\t SeqIndex: "))
+		seqIndex := strconv.Itoa(mapping.SequenceIndex)
+		builder.WriteString(seqIndex)
+		builder.WriteString("\n")
+		builder.WriteString("\t GENOME -> ")
+		builder.WriteString(mapping.MatchedGenome.String())
+		builder.WriteString("\n")
+		builder.WriteString("\t READ   -> ")
+		builder.WriteString(mapping.MatchedRead.String())
+		builder.WriteString("\n")
+		builder.WriteString("\t MISMAT -> ")
+		ints := mapping.MismatchesRead
+		strs := make([]string, len(ints))
+		for i, v := range ints {
+			strs[i] = strconv.Itoa(v)
+		}
+		builder.WriteString(strings.Join(strs, ","))
+		builder.WriteString("\n")
+	}
+	builder.Write([]byte("  <== RV MAPPINGS ==>"))
+	builder.Write([]byte("\n"))
+	for _, mapping := range i.Rv {
+		builder.Write([]byte("\t SeqIndex: "))
+		seqIndex := strconv.Itoa(mapping.SequenceIndex)
+		builder.WriteString(seqIndex)
+		builder.WriteString("\n")
+		builder.WriteString("\t GENOME -> ")
+		builder.WriteString(mapping.MatchedGenome.String())
+		builder.WriteString("\n")
+		builder.WriteString("\t READ   -> ")
+		builder.WriteString(mapping.MatchedRead.String())
+		builder.WriteString("\n")
+		builder.WriteString("\t MISMAT -> ")
+		ints := mapping.MismatchesRead
+		strs := make([]string, len(ints))
+		for i, v := range ints {
+			strs[i] = strconv.Itoa(v)
+		}
+		builder.WriteString(strings.Join(strs, ","))
+		builder.WriteString("\n")
+	}
+	return builder.String()
 }

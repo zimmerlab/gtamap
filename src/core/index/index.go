@@ -659,7 +659,7 @@ func (i *GenomeIndex) ExtendParalogRegionIndex(targetGene string, indexExtension
 	logrus.WithFields(logrus.Fields{
 		"Added paralog region":                            indexExtension.SequenceInfo[0].GeneId,
 		"to the paralog index belonging to target region": targetGene,
-	}).Info("Extended paralog index of main index")
+	}).Debug("Extended paralog index of main index")
 }
 
 func (i *GenomeIndex) AddKeywordToMapSmall(keyword [5]byte, sequenceIndex uint8, position uint32) {

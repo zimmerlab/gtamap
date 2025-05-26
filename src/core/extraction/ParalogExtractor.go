@@ -39,22 +39,22 @@ func queryTargetId(geneid string, species string) map[string]struct{} {
 
 	resp, err := http.Get(url)
 	if err != nil {
-		logrus.Fatal("Failed to make request: %v", err)
+		logrus.Fatalf("Failed to make request: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		logrus.Fatal("API request failed with status: %s", resp.Status)
+		logrus.Fatalf("API request failed with status: %s", resp.Status)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		logrus.Fatal("Failed to read response body: %v", err)
+		logrus.Fatalf("Failed to read response body: %v", err)
 	}
 
 	var result HomologyResponse
 	if err := json.Unmarshal(body, &result); err != nil {
-		logrus.Fatal("Failed to parse JSON: %v", err)
+		logrus.Fatalf("Failed to parse JSON: %v", err)
 	}
 
 	paralogSeqs := make(map[string]struct{})
@@ -69,7 +69,7 @@ func queryTargetId(geneid string, species string) map[string]struct{} {
 	return paralogSeqs
 }
 
-func GetParaloges(targetGeneIds []string, species string) map[string]map[string]struct{} {
+func GetParalogs(targetGeneIds []string, species string) map[string]map[string]struct{} {
 	paralogSeqs := make(map[string]map[string]struct{})
 	// receive paralog genes per target gene
 	for _, targetGene := range targetGeneIds {
@@ -134,7 +134,6 @@ func GetAbsPathsPerTarget(targetParalogs map[string]map[string]struct{}, indexDi
 		}
 		return nil
 	})
-
 	if err != nil {
 		logrus.Fatalf("Error reading %s directory to get abs paths for paralog.csv meta file: %s", *indexDirParalogPre, err)
 	}

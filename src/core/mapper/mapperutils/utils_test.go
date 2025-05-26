@@ -1,12 +1,12 @@
 package mapperutils
 
 import (
-	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"testing"
+
+	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 )
 
 func TestComputeGapsInDiagonal(t *testing.T) {
-
 	resultMatchedRead := regionvector.NewRegionVector()
 	resultMatchedRead.AddRegionNonOverlappingPanic(100, 110)
 	resultMatchedRead.AddRegionNonOverlappingPanic(110, 120)
@@ -24,7 +24,7 @@ func TestComputeGapsInDiagonal(t *testing.T) {
 		MatchedRead:    resultMatchedRead,
 		MatchedGenome:  resultMatchedGenome,
 		MismatchesRead: nil,
-		SecondPass:     false,
+		NeedRemap:      false,
 	}
 
 	// testcase 1 where the gap in the diagonal is not overlapping with the matched regions
