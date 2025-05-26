@@ -16,6 +16,7 @@ func SecondpassMappingWorker(secondPassChan *SecondPassChannel, wgIncompleteMapp
 	logrus.Info("Started second pass")
 
 	for t := range annotationChan {
+		// should be only one obj
 		fmt.Println(t)
 	}
 
@@ -25,7 +26,7 @@ func SecondpassMappingWorker(secondPassChan *SecondPassChannel, wgIncompleteMapp
 			break
 		}
 
-		logrus.Infof("Secondpass map: %s", task.ReadPair.ReadR1.Header)
+		logrus.Debugf("Secondpass map: %s", task.ReadPair.ReadR1.Header)
 
 		thirdPassChan.Send(&thirdpass.ThirdPassTask{
 			ReadPairId: task.ReadPair.ReadR1.Header,

@@ -1,6 +1,7 @@
 package confidentmappingpass
 
 import (
+	"strconv"
 	"sync"
 
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
@@ -15,16 +16,19 @@ func ConfidentMappingWorker(confidentChan *ConfidentPassChan, wgConfidentMapping
 	annotation := &mapperutils.TargetAnnotation{
 		PreferedStrand: 100,
 	}
+	confidentresults := make([]*ConfidentTask, 0)
 	for {
 		task, ok := confidentChan.Receive()
 		if !ok {
 			break
 		}
-		logrus.Debugf("Using ReadPairMapping %s as confident readPair to determine introns and strandedness.", task.ReadPair.ReadR1.Header)
+		confidentresults = append(confidentresults, task)
 	}
+	logrus.Infof("Done collecting all %s confident maps", strconv.Itoa(len(confidentresults)))
+
+	// TODO ANNOTATE
 
 	annotationChan <- annotation
-
 	logrus.Info("Done with Annotation")
 }
 

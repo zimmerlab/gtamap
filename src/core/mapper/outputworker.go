@@ -8,12 +8,11 @@ import (
 )
 
 func OutputWorker(taskQueue <-chan string, wg *sync.WaitGroup, writer *datawriter.Writer) {
-	logrus.Info("Started writeOutputWorker")
 	defer wg.Done()
 
 	for task := range taskQueue {
 		writer.Write(task)
 	}
 
-	logrus.Info("Finished writeOutputWorker")
+	logrus.Info("Finished writing SAM")
 }
