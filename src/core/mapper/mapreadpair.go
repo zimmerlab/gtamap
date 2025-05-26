@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/KleinSamuel/gtamap/src/core/mapper/confidentmappingpass"
-	"github.com/KleinSamuel/gtamap/src/core/mapper/incompletemappingpass"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/secondpass"
 	"github.com/KleinSamuel/gtamap/src/utils"
 
 	"github.com/KleinSamuel/gtamap/src/core/index"
@@ -18,10 +18,11 @@ import (
 )
 
 func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
-	incompleteMappingChan *incompletemappingpass.IncompleteMappingChannel,
+	secondpassChan *secondpass.SecondPassChannel,
 	confidentMatchesChan chan<- *confidentmappingpass.ConfidentMappingTask,
 	timerChannel chan<- *timer.Timer,
-) (*mapperutils.ReadPairMatchResults, bool) {
+	paralogMappingChan chan<- *mapperutils.ReadPairMatchResults,
+) {
 	keepFw := Filter(readPair.ReadR1.Sequence, genomeIndex)
 	keepRw := Filter(readPair.ReadR2.Sequence, genomeIndex)
 
@@ -31,7 +32,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	}).Debug("Filter results")
 
 	if !keepFw || !keepRw {
-		return nil, false
+		return
 	}
 
 	resultFw, isMappableFw := MapRead(readPair.ReadR1, genomeIndex, false)
@@ -52,34 +53,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 			"num resultsFw": len(resultFw),
 			"num resultsRv": len(resultRv),
 		}).Debug("readpair not mappable")
-		return nil, false
-	}
-
-	needRemap := false
-
-	for i, resFw := range resultFw {
-		if resFw.NeedRemap {
-			logrus.Debug("Remap required for forward read: ", i)
-			needRemap = true
-		}
-	}
-	for i, resRv := range resultRv {
-		if resRv.NeedRemap {
-			logrus.Debug("Remap required for reverse read: ", i)
-			needRemap = true
-		}
-	}
-
-	// if needRemap
-	// -> add to incompleteMappingChan
-	// -> else add to result chan
-	if needRemap {
-		incompleteMappingChan.Send(&incompletemappingpass.IncompleteMappingTask{
-			ReadPair: readPair,
-			ResultFw: resultFw,
-			ResultRv: resultRv,
-		})
-		return nil, false
+		return
 	}
 
 	// postprocess every potential match
@@ -90,16 +64,19 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 		postprocessReadMatch(genomeIndex, readPair.ReadR2, resRv)
 	}
 
+	secondpassChan.Send(&secondpass.SecondPassTask{
+		ReadPair: readPair,
+		ResultFw: resultFw,
+		ResultRv: resultRv,
+	})
+
 	// check if uniq map:
-	// - if not -> check if needRemap
-	// - if yes -> add to confidentMatchesChan
-	if len(resultFw) == 1 && len(resultRv) == 1 && len(resultFw[0].MismatchesRead)+len(resultRv[0].MismatchesRead) < 6 { // currently just sending everything
+	if len(resultFw) == 1 && len(resultRv) == 1 && len(resultFw[0].MismatchesRead)+len(resultRv[0].MismatchesRead) < 6 && resultRv[0].SequenceIndex-1 == resultFw[0].SequenceIndex || resultRv[0].SequenceIndex == resultFw[0].SequenceIndex-1 { // currently just sending everything
 
 		confidentMatchesChan <- &confidentmappingpass.ConfidentMappingTask{
 			ReadPair: readPair,
-			ResultFw: resultFw[0], // there should only exist fw[0] and rv[0] in a confident match
-			ResultRv: resultRv[0],
-			Index:    genomeIndex,
+			ResultFw: resultFw[0].Copy(), // there should only exist fw[0] and rv[0] in a confident match
+			ResultRv: resultRv[0].Copy(),
 		}
 	}
 
@@ -108,8 +85,8 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 		Fw:       resultFw,
 		Rv:       resultRv,
 	}
-
-	return readPairMapping, true
+	// here it is okay to also pass the pointers of resultFw and resultRv since paralogMappingChan is readOnly
+	paralogMappingChan <- readPairMapping
 }
 
 func postprocessReadMatch(genomeIndex *index.GenomeIndex, read *fastq.Read, result *mapperutils.ReadMatchResult) {

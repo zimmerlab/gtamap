@@ -8,8 +8,9 @@ import (
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/confidentmappingpass"
-	"github.com/KleinSamuel/gtamap/src/core/mapper/incompletemappingpass"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/secondpass"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/thirdpass"
 	"github.com/KleinSamuel/gtamap/src/core/timer"
 	"github.com/KleinSamuel/gtamap/src/datawriter"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
@@ -63,10 +64,11 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 
 	// contains the read pairs that need to be mapped
 	taskChan := make(chan MappingTask, numWorkers*bufferSizeMultiplier)
-	// contains all read pairs that could not be mapped in the first pass
-	incompleteMatchChan := incompletemappingpass.NewIncompleteMappingChannel()
-	// contains all read pairs that map uniq and almost perfect
-	// confidentMappingChan := confidentmappingpass.NewConfidentMappingChannel()
+	// contains all read pairs (multimapped and parially mapped) except for confident read pairs
+	secondpassChan := secondpass.NewSecondPassChannel()
+	// contains all read pairs (multimapped and parially mapped) except for confident read pairs
+	thirdpassChan := thirdpass.NewThirdPassChannel()
+	// contains all confident read pairs that map unique and almost perfect
 	confidentMappingChan := make(chan *confidentmappingpass.ConfidentMappingTask)
 	// contains all read pairs that need to be mapped to the paralog index (all)
 	paralogMappingChan := make(chan *mapperutils.ReadPairMatchResults)
@@ -79,6 +81,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	// contains information about the progress of the mapping
 	progressChan := make(chan bool)
 
+	// Wait
 	var waitgroupConfidentMap sync.WaitGroup
 	waitgroupConfidentMap.Add(1)
 	go confidentmappingpass.ConfidentMappingWorker(confidentMappingChan, &waitgroupConfidentMap)
@@ -104,15 +107,15 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	go TimerWorker(timerChan, &waitGroupTimer)
 
 	// wait group that keeps track of the mapping goroutines that are still running
-	var wgIncompleteMappingPass sync.WaitGroup
-	wgIncompleteMappingPass.Add(1)
-	go incompletemappingpass.IncompleteMappingWorker(incompleteMatchChan, &wgIncompleteMappingPass)
+	var wgSecondpass sync.WaitGroup
+	wgSecondpass.Add(1)
+	go secondpass.SecondpassMappingWorker(secondpassChan, &wgSecondpass)
 
 	var wgMainMappingPass sync.WaitGroup
 	// start the mapping worker goroutine pool
 	for i := 0; i < numWorkers; i++ {
 		wgMainMappingPass.Add(1)
-		go MapperWorker(i, genomeIndex, &wgMainMappingPass, taskChan, incompleteMatchChan, confidentMappingChan, paralogMappingChan, progressChan, timerChan)
+		go MapperWorker(i, genomeIndex, &wgMainMappingPass, taskChan, secondpassChan, confidentMappingChan, paralogMappingChan, progressChan, timerChan)
 	}
 
 	go MappingTaskProducer(reader, taskChan, maxTasks, specificQname)
@@ -120,11 +123,11 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	wgMainMappingPass.Wait()
 	close(confidentMappingChan)
 	close(paralogMappingChan)
-	incompleteMatchChan.Close()
+	secondpassChan.Close()
 
 	logrus.Info("Done with first pass mapping")
 
-	wgIncompleteMappingPass.Wait()
+	wgSecondpass.Wait()
 	waitgroupConfidentMap.Wait()
 	waitgroupParalog.Wait()
 	close(finalMatchesChan)

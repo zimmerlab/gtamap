@@ -20,16 +20,17 @@ func ParalogMappingWorker(needParalogMapChan <-chan *mapperutils.ReadPairMatchRe
 		// projects 0,1 -> 0; 2,3 -> 1; 4,5 -> 2 to map to main target region
 		parentSeqIndices := make(map[int]struct{})
 
+		// Keeping logic for now (currently we agreed on only having one main target region)
 		if len(index.Sequences) > 1 {
-			// we have several target regions in out index -> find out which one mappedReadPair is mapping to and then
-			// only remap on paralog index of that target region
+			// if we have several target regions in our index -> find out which ones the RP is mapping to and then
+			// only remap on paralog index of these target regions
 			parentSeqIndices = getParentIndices(readPairResult.Fw, readPairResult.Rv)
 		} else {
 			// if we only have one seq in our index, we can only remap to its corresponding paralog index
-			parentSeqIndices[0] = struct{}{}
+			parentSeqIndices[0] = struct{}{} // if only one seq in main index -> seqIndex == 0
 		}
 
-		logrus.Infof("Mapping readPair (fwId=%s) to paralog regions of parent indices: %s", readPairResult.ReadPair.ReadR1.Header, parentSeqIndices)
+		logrus.Debugf("Mapping readPair (fwId=%s) to paralog regions of parent indices: %s", readPairResult.ReadPair.ReadR1.Header, parentSeqIndices)
 
 		for parentSeqIndex := range parentSeqIndices {
 			parentSeqId := index.GetSequenceInfo(parentSeqIndex).GeneId
@@ -52,9 +53,14 @@ func ParalogMappingWorker(needParalogMapChan <-chan *mapperutils.ReadPairMatchRe
 				}).Debugf("readpair not mappable to paralog index of target region %s", parentSeqId)
 				continue
 			}
-			bestCandidate := getParalogCandidates(paralogMappingsFw, paralogMappingsRv)
-			if bestCandidate != nil {
-				readPairResult.ParalogMappings[parentSeqId] = bestCandidate
+			bestCandidates := getParalogCandidates(paralogMappingsFw, paralogMappingsRv)
+			if len(bestCandidates) != 0 {
+				// postprocess best candidates and add to ParalogMappings
+				for _, mapping := range bestCandidates {
+					postprocessReadMatch(index.ParalogRegions[parentSeqId], readPairResult.ReadPair.ReadR1, mapping.Fw)
+					postprocessReadMatch(index.ParalogRegions[parentSeqId], readPairResult.ReadPair.ReadR2, mapping.Rv)
+				}
+				readPairResult.ParalogMappings[parentSeqId] = bestCandidates
 			}
 		}
 		finalMatchesChan <- readPairResult
@@ -80,7 +86,7 @@ func getParentIndices(fwMatches []*mapperutils.ReadMatchResult, rvMatches []*map
 	return mapPerParalogSeqIndex
 }
 
-// thre results from the paralog greedy map need to be binned and sorted. We only want to look at results that make sense
+// the results from the paralog greedy map need to be binned and sorted. We only want to look at results that make sense
 // (fw needs corresponding rv map on rv seq etc).
 func getParalogCandidates(alternativeMappingsFw []*mapperutils.ReadMatchResult, alternativeMappingsRv []*mapperutils.ReadMatchResult) map[int]*mapperutils.ValidReadPairCombination {
 	fwMapPerParalogSeqIndex := make(map[int][]*mapperutils.ReadMatchResult)
@@ -100,19 +106,22 @@ func getParalogCandidates(alternativeMappingsFw []*mapperutils.ReadMatchResult, 
 		mappedParalogIds[paralogRegionIndex] = struct{}{}
 	}
 
-	alternativeMappinsInParalogs := make(map[int]*mapperutils.ValidReadPairCombination)
+	bestParalogMappings := make(map[int]*mapperutils.ValidReadPairCombination)
 	for paralogId := range mappedParalogIds {
 		fwMapsOfParalogId := fwMapPerParalogSeqIndex[paralogId]
 		rvMapsOfParalogId := rvMapPerParalogSeqIndex[paralogId]
-		alternativeMappinsInParalogs[paralogId] = getPossibleMappingCombinations(fwMapsOfParalogId, rvMapsOfParalogId)
+		bestCombination := getBestPossibleMappingCombination(fwMapsOfParalogId, rvMapsOfParalogId)
+		if bestCombination != nil {
+			bestParalogMappings[paralogId] = bestCombination
+		}
 	}
-	return alternativeMappinsInParalogs
+	return bestParalogMappings
 }
 
 // receives fw and rv matches of one seqID. Returns possible combinations of fw/rv.
 // E.g. fw -> 25 and rv -> 25 doesnt work since they need to map to separate strands etc
 // Currently returns combination with least amount of mm
-func getPossibleMappingCombinations(fwMatches []*mapperutils.ReadMatchResult, rvMatches []*mapperutils.ReadMatchResult) *mapperutils.ValidReadPairCombination {
+func getBestPossibleMappingCombination(fwMatches []*mapperutils.ReadMatchResult, rvMatches []*mapperutils.ReadMatchResult) *mapperutils.ValidReadPairCombination {
 	var bestCombination *mapperutils.ValidReadPairCombination
 	minMisMatches := 100000 // init
 
@@ -140,5 +149,6 @@ func getPossibleMappingCombinations(fwMatches []*mapperutils.ReadMatchResult, rv
 			}
 		}
 	}
+
 	return bestCombination
 }

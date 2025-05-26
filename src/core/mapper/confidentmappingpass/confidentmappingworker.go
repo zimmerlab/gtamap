@@ -10,6 +10,6 @@ func ConfidentMappingWorker(confidentMappingChan <-chan *ConfidentMappingTask, w
 	defer wgConfidentMapping.Done()
 
 	for mappedReadPair := range confidentMappingChan {
-		logrus.Infof("Using ReadPairMapping %s as confident readPair to determine introns and strandedness.", mappedReadPair.ReadPair.ReadR1.Header)
+		logrus.Debugf("Using ReadPairMapping %s as confident readPair to determine introns and strandedness.", mappedReadPair.ReadPair.ReadR1.Header)
 	}
 }
