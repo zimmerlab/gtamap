@@ -54,7 +54,6 @@ func (m ReadMatchResult) Copy() *ReadMatchResult {
 		MatchedRead:     m.MatchedRead.Copy(),
 		MatchedGenome:   m.MatchedGenome.Copy(),
 		MismatchesRead:  append([]int{}, m.MismatchesRead...),
-		NeedRemap:       m.NeedRemap,
 		diagonalHandler: dhCopy,
 	}
 }
