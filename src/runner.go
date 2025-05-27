@@ -271,6 +271,7 @@ func main() {
 		writer := datawriter.InitFromPath(*outputFileMap)
 
 		if *paralogFilePathMap != "" {
+			logrus.Info("Found paralog file. Reading in paralog indices.")
 			paralogFileMap, err := os.Open(*paralogFilePathMap)
 			if err != nil {
 				panic("Error reading provided paralog file. Make sure it exists")
@@ -316,10 +317,10 @@ func main() {
 		// III. extract all identified non-existent paralogs into separate .fa files in '--fastadir'
 		for target, paralogs := range paralogsToExtractSeq {
 			if len(paralogs) > 0 {
-				logrus.Infof("Extracting %s paralog sequences of target region '%s' into '%s'", strconv.Itoa(len(paralogs)), target, *fastaDirParalogPre)
+				logrus.Infof("Extracting %s paralog sequences of target region %s into %s", strconv.Itoa(len(paralogs)), target, *fastaDirParalogPre)
 				index.ExtractGeneSequenceFromGtfAndFastaForIndex(*gtfFileParalogPre, *fastaFileParalogPre,
 					*fastaDirParalogPre, paralogs, 0, 0, true)
-				logrus.Infof("Finished extracting %s paralog sequences of target region '%s' into '%s'", strconv.Itoa(len(paralogs)), target, *fastaDirParalogPre)
+				logrus.Infof("Finished extracting %s paralog sequences of target region %s into %s", strconv.Itoa(len(paralogs)), target, *fastaDirParalogPre)
 			}
 		}
 
