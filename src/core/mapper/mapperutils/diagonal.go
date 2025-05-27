@@ -270,13 +270,24 @@ func (dh *DiagonalHandler) IsValidExtension(possibleExtension []*Match, result R
 	}
 
 	// the diagonal regions on the read can not overlap any other region that was already mapped
-	if !(minRead < minReadResult && maxRead < minReadResult) || !(minRead > maxReadResult && maxRead > maxReadResult) {
+	if !(maxRead <= minReadResult || minRead >= maxReadResult) {
 		return false
 	}
+
 	// the diagonal regions on the genome can not overlap any other region that was already mapped
-	if !(minGenome < minGenomeResult && maxGenome < minGenomeResult) || !(minGenome > maxGenomeResult && maxGenome > maxGenomeResult) {
+	if !(maxGenome <= minGenomeResult || minGenome >= maxGenomeResult) {
 		return false
 	}
+
+	// OLD
+	// the diagonal regions on the read can not overlap any other region that was already mapped
+	//if !(minRead <= minReadResult && maxRead <= minReadResult) || !(minRead <= maxReadResult && maxRead <= maxReadResult) {
+	//	return false
+	//}
+	//// the diagonal regions on the genome can not overlap any other region that was already mapped
+	//if !(minGenome <= minGenomeResult && maxGenome <= minGenomeResult) || !(minGenome <= maxGenomeResult && maxGenome <= maxGenomeResult) {
+	//	return false
+	//}
 
 	// check if the diagonal position within the genome is still consistent with the already mapped regions
 	for i, resultMatch := range result.MatchedRead.Regions {
