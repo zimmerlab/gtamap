@@ -9,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func SecondpassMappingWorker(secondPassChan *SecondPassChannel, wgIncompleteMapping *sync.WaitGroup, annotationChan <-chan *mapperutils.TargetAnnotation, thirdPassChan *thirdpass.ThirdPassChannel) {
+func SecondpassMappingWorker(secondPassChan *SecondPassChannel, wgIncompleteMapping *sync.WaitGroup, annotationChan <-chan map[int]*mapperutils.TargetAnnotation, thirdPassChan *thirdpass.ThirdPassChannel) {
 	// in here we receive all non confident readpairs. Some have multiple maps for fw and rv and some are
 	// not completely mapped yet. Confident readpairs are contained in confidentChan.
 	defer wgIncompleteMapping.Done()

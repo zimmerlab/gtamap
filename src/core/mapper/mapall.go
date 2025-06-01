@@ -71,7 +71,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	// contains all confident read pairs that map unique and almost perfect
 	confidentMappingChan := confidentmappingpass.NewConfidentChannel()
 	// contains annotation per target region
-	annotationChan := make(chan *mapperutils.TargetAnnotation)
+	annotationChan := make(chan map[int]*mapperutils.TargetAnnotation)
 	// contains all read pairs that need to be mapped to the paralog index (all)
 	paralogMappingChan := make(chan *mapperutils.ReadPairMatchResults)
 	// contains the string results of the mapping

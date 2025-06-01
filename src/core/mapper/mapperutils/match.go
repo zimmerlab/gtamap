@@ -8,7 +8,6 @@ import (
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
-	"github.com/KleinSamuel/gtamap/src/formats/gtf"
 	"github.com/sirupsen/logrus"
 )
 
@@ -211,18 +210,44 @@ type ValidReadPairCombination struct {
 
 // hold information for main seq id
 type TargetAnnotation struct {
-	PreferedStrand   int                      // 0 -> + (fw+ and rv-); 1 -> - (fw- and rv+)
-	IntronsPerTarget map[int]*gtf.GeneIntrons // maps to sub sequence index, meaning each gene has two slices of introns
+	PreferedStrand int                            // 0 -> + (fw+ and rv-); 1 -> - (fw- and rv+)
+	Confidence     float32                        // percentage of reads contributing to PreferedStrand
+	Introns        map[int][]*regionvector.Intron // maps to sub sequence index, meaning each gene has two slices of introns 0 -> plusOrintation 1 -> minusOrientation
+	// zero bases coords, start incl, stop excl
 }
 
-func (i ReadPairMatchResults) String() string {
+func (t TargetAnnotation) String() string {
+	var sb strings.Builder
+	strand := "+"
+	if t.PreferedStrand == 1 {
+		strand = "-"
+	}
+
+	sb.WriteString(fmt.Sprintf("Preferred Strand: [%s] ", strand))
+	sb.WriteString(fmt.Sprintf("(Confidence: %.2f%%)", t.Confidence*100))
+
+	for orientation, introns := range t.Introns {
+		orientationLabel := "+"
+		if orientation == 1 {
+			orientationLabel = "-"
+		}
+		sb.WriteString(fmt.Sprintf("\n(%s):", orientationLabel))
+		for _, intron := range introns {
+			sb.WriteString(fmt.Sprintf("\t[%d, %d) #%d", intron.Start, intron.End, intron.Evidence))
+		}
+	}
+
+	return sb.String()
+}
+
+func (r ReadPairMatchResults) String() string {
 	var builder strings.Builder
 	builder.Write([]byte("ReadPairR1 Header: "))
-	builder.Write([]byte(i.ReadPair.ReadR1.Header))
+	builder.Write([]byte(r.ReadPair.ReadR1.Header))
 	builder.Write([]byte("\n"))
 	builder.Write([]byte("  <== FW MAPPINGS ==>"))
 	builder.Write([]byte("\n"))
-	for _, mapping := range i.Fw {
+	for _, mapping := range r.Fw {
 		builder.Write([]byte("\t SeqIndex: "))
 		seqIndex := strconv.Itoa(mapping.SequenceIndex)
 		builder.WriteString(seqIndex)
@@ -244,7 +269,7 @@ func (i ReadPairMatchResults) String() string {
 	}
 	builder.Write([]byte("  <== RV MAPPINGS ==>"))
 	builder.Write([]byte("\n"))
-	for _, mapping := range i.Rv {
+	for _, mapping := range r.Rv {
 		builder.Write([]byte("\t SeqIndex: "))
 		seqIndex := strconv.Itoa(mapping.SequenceIndex)
 		builder.WriteString(seqIndex)
