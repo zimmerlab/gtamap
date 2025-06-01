@@ -254,8 +254,8 @@ func getGapsPlusOrientation(sId int, cMapsPerSeq []*ConfidentTask, index *index.
 	minusStrandednessEvidence := 0
 
 	// iterate over confMaps of target seqs
-	gapsInPlus := make([]*regionvector.Region, 0)
-	gapsInMinus := make([]*regionvector.Region, 0)
+	gapsInPlus := make([]*regionvector.Region, len(cMapsPerSeq))
+	gapsInMinus := make([]*regionvector.Region, len(cMapsPerSeq))
 	// iterate over each confMap in target seq seqId
 	for _, confMap := range cMapsPerSeq {
 
