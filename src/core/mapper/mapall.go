@@ -114,7 +114,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	confidentMappingChan.Close()
 	var waitgroupConfidentMap sync.WaitGroup
 	waitgroupConfidentMap.Add(1)
-	go confidentmappingpass.ConfidentMappingWorker(confidentMappingChan, &waitgroupConfidentMap, annotationChan)
+	go confidentmappingpass.ConfidentMappingWorker(confidentMappingChan, &waitgroupConfidentMap, annotationChan, genomeIndex)
 
 	var wgThirdPass sync.WaitGroup
 	wgThirdPass.Add(1)

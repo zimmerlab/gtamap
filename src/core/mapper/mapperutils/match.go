@@ -209,9 +209,10 @@ type ValidReadPairCombination struct {
 	NumMismatches int
 }
 
+// hold information for main seq id
 type TargetAnnotation struct {
-	PreferedStrand   int // 0 -> + (fw+ and rv-); 1 -> - (fw- and rv+)
-	IntronsPerTarget map[int]*gtf.GeneIntrons
+	PreferedStrand   int                      // 0 -> + (fw+ and rv-); 1 -> - (fw- and rv+)
+	IntronsPerTarget map[int]*gtf.GeneIntrons // maps to sub sequence index, meaning each gene has two slices of introns
 }
 
 func (i ReadPairMatchResults) String() string {
