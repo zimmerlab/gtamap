@@ -253,9 +253,6 @@ func getGapsPlusOrientation(sId int, cMapsPerSeq []*ConfidentTask, index *index.
 	plusStrandednessEvidence := 0
 	minusStrandednessEvidence := 0
 
-	// iterate over confMaps of target seqs
-	gapsInPlus := make([]*regionvector.Region, len(cMapsPerSeq))
-	gapsInMinus := make([]*regionvector.Region, len(cMapsPerSeq))
 	// iterate over each confMap in target seq seqId
 	for _, confMap := range cMapsPerSeq {
 
@@ -272,14 +269,14 @@ func getGapsPlusOrientation(sId int, cMapsPerSeq []*ConfidentTask, index *index.
 			rStart := confMap.ResultFw.MatchedGenome.Regions[i+1].Start
 			if rStart > lStop {
 				if confMap.ResultFw.SequenceIndex%2 == 0 {
-					gapsInPlus = append(gapsInPlus, &regionvector.Region{
+					plusOrientatedGapsPerMainSeqId = append(plusOrientatedGapsPerMainSeqId, &regionvector.Region{
 						// Start: lStop + 1,
 						// End:   rStart - 1,
 						Start: lStop + int(index.SequenceInfo[sId].StartGenomic),
 						End:   rStart + int(index.SequenceInfo[sId].StartGenomic),
 					})
 				} else {
-					gapsInMinus = append(gapsInMinus, &regionvector.Region{
+					plusOrientatedGapsPerMainSeqId = append(plusOrientatedGapsPerMainSeqId, &regionvector.Region{
 						// Start: len(*index.Sequences[sId]) - rStart,
 						// End:   len(*index.Sequences[sId]) - lStop,
 						Start: len(*index.Sequences[sId]) - rStart + int(index.SequenceInfo[sId].StartGenomic),
@@ -295,19 +292,18 @@ func getGapsPlusOrientation(sId int, cMapsPerSeq []*ConfidentTask, index *index.
 			rStart := confMap.ResultRv.MatchedGenome.Regions[i+1].Start
 			if rStart > lStop {
 				if confMap.ResultRv.SequenceIndex%2 == 0 {
-					gapsInPlus = append(gapsInPlus, &regionvector.Region{
+					plusOrientatedGapsPerMainSeqId = append(plusOrientatedGapsPerMainSeqId, &regionvector.Region{
 						Start: lStop + int(index.SequenceInfo[sId].StartGenomic),
 						End:   rStart + int(index.SequenceInfo[sId].StartGenomic),
 					})
 				} else {
-					gapsInMinus = append(gapsInMinus, &regionvector.Region{
+					plusOrientatedGapsPerMainSeqId = append(plusOrientatedGapsPerMainSeqId, &regionvector.Region{
 						Start: len(*index.Sequences[sId]) - rStart + int(index.SequenceInfo[sId].StartGenomic),
 						End:   len(*index.Sequences[sId]) - lStop + int(index.SequenceInfo[sId].StartGenomic),
 					})
 				}
 			}
 		}
-		plusOrientatedGapsPerMainSeqId = append(gapsInPlus, gapsInMinus...)
 	}
 
 	return plusOrientatedGapsPerMainSeqId, plusStrandednessEvidence, minusStrandednessEvidence
