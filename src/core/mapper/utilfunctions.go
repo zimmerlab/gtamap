@@ -32,11 +32,11 @@ func scoreSpliceSites(donorFirstBase byte, donorSecondBase byte, acceptorFirstBa
 		} else if donorFirstBase == byte('G') && donorSecondBase == byte('C') &&
 			acceptorFirstBase == byte('A') && acceptorSecondBase == byte('G') {
 			// non-canonical splice site GC/AG
-			return 2, true
+			return 1, true
 		} else if donorFirstBase == byte('A') && donorSecondBase == byte('T') &&
 			acceptorFirstBase == byte('A') && acceptorSecondBase == byte('C') {
 			// non-canonical splice site AT/AC
-			return 2, true
+			return 1, true
 		}
 	} else {
 		if donorFirstBase == byte('C') && donorSecondBase == byte('T') &&
@@ -46,14 +46,14 @@ func scoreSpliceSites(donorFirstBase byte, donorSecondBase byte, acceptorFirstBa
 		} else if donorFirstBase == byte('C') && donorSecondBase == byte('T') &&
 			acceptorFirstBase == byte('G') && acceptorSecondBase == byte('C') {
 			// non-canonical splice site GC/AG on rev strand
-			return 2, true
+			return 1, true
 		} else if donorFirstBase == byte('G') && donorSecondBase == byte('T') &&
 			acceptorFirstBase == byte('A') && acceptorSecondBase == byte('T') {
 			// non-canonical splice site AT/AC on rev strand
-			return 2, true
+			return 1, true
 		}
 	}
 
 	// all other non-canonical splice sites
-	return 3, false
+	return 2, false
 }
