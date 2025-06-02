@@ -17,7 +17,7 @@ func SecondpassMappingWorker(secondPassChan *SecondPassChannel, wgIncompleteMapp
 
 	var annotation map[int]*mapperutils.TargetAnnotation
 	for annot := range annotationChan {
-		// should be only one obj
+		// is only one object
 		annotation = annot
 	}
 	fmt.Println(annotation)
