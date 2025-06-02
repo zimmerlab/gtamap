@@ -15,10 +15,12 @@ func SecondpassMappingWorker(secondPassChan *SecondPassChannel, wgIncompleteMapp
 	defer wgIncompleteMapping.Done()
 	logrus.Info("Started second pass")
 
-	for t := range annotationChan {
+	var annotation map[int]*mapperutils.TargetAnnotation
+	for annot := range annotationChan {
 		// should be only one obj
-		fmt.Println(t)
+		annotation = annot
 	}
+	fmt.Println(annotation)
 
 	for {
 		task, ok := secondPassChan.Receive()
