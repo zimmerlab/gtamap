@@ -2,14 +2,21 @@ package regionvector
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"slices"
 	"sort"
+
+	"github.com/sirupsen/logrus"
 )
 
 type Region struct {
 	Start int // 0-based
 	End   int // end-exlusive
+}
+
+type Intron struct {
+	Start    int // 0-based
+	End      int // end-exlusive
+	Evidence int
 }
 
 func (r *Region) Length() int {
@@ -36,7 +43,6 @@ func NewRegionVector() *RegionVector {
 // - the regions are sorted in ascending order by their start position
 // - the regions are non-overlapping
 func (rv *RegionVector) HasGaps() bool {
-
 	if len(rv.Regions) <= 1 {
 		return false
 	}
@@ -54,9 +60,7 @@ func (rv *RegionVector) HasGaps() bool {
 // It does not allow overlapping regions and will panic if the region overlaps with any existing region.
 // The regions are sorted in ascending order based on their start position.
 func (rv *RegionVector) AddRegionNonOverlappingPanic(start int, end int) {
-
 	err := rv.AddRegionNonOverlapping(start, end)
-
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
 			"start": start,
@@ -77,7 +81,6 @@ func (rv *RegionVector) AddRegionNonOverlapping(start int, end int) error {
 // It does not allow overlapping regions and will return an error if the region overlaps with any existing region.
 // The regions are sorted in ascending order based on their start position.
 func (rv *RegionVector) AddRegionObjNonOverlapping(region *Region) error {
-
 	if region.Start == region.End {
 		return fmt.Errorf("region start and end are equal")
 	}
@@ -128,7 +131,6 @@ func (rv *RegionVector) AddRegionAndMerge(start int, end int) {
 // AddRegionObjAndMerge adds a region to the region vector and merges it with any overlapping regions.
 // The regions are sorted in ascending order based on their start position.
 func (rv *RegionVector) AddRegionObjAndMerge(r *Region) {
-
 	if len(rv.Regions) == 0 {
 		rv.Regions = append(rv.Regions, r)
 		return
@@ -198,7 +200,6 @@ func (rv *RegionVector) GetFirstGap() *Region {
 // GetGapAfterRegionIndex returns the gap after the region with given index.
 // It returns nil if the region index is out of bounds or if there is no gap after the region.
 func (rv *RegionVector) GetGapAfterRegionIndex(regionIndex int) *Region {
-
 	if regionIndex >= len(rv.Regions) {
 		return nil
 	}
@@ -216,7 +217,6 @@ func (rv *RegionVector) GetGapAfterRegionIndex(regionIndex int) *Region {
 }
 
 func (rv *RegionVector) GetGap(num int) *Region {
-
 	if num < 0 || num >= len(rv.Regions)-1 {
 		return nil
 	}
@@ -253,7 +253,6 @@ func (rv *RegionVector) GetGap(num int) *Region {
 // When the position is 15, the function will return -1
 // When the position is 20, the function will return -1
 func (rv *RegionVector) GetGapIndexAfterPos(position int) int {
-
 	for i := 0; i < len(rv.Regions)-1; i++ {
 		if rv.Regions[i].End > position && rv.Regions[i].End < rv.Regions[i+1].Start {
 			return i
@@ -303,7 +302,6 @@ func (rv *RegionVector) GetLastRegion() *Region {
 // region at the given index including the size of the region at that index.
 // Returns an error if the given index is out of bounds.
 func (rv *RegionVector) GetSizeLeftIncluding(regionIndex int) (int, error) {
-
 	if regionIndex < 0 || regionIndex >= len(rv.Regions) {
 		return -1, fmt.Errorf("region index out of bounds")
 	}
@@ -321,7 +319,6 @@ func (rv *RegionVector) GetSizeLeftIncluding(regionIndex int) (int, error) {
 // region at the given index including the size of the region at that index.
 // Returns an error if the given index is out of bounds.
 func (rv *RegionVector) GetSizeRightIncluding(regionIndex int) (int, error) {
-
 	if regionIndex < 0 || regionIndex >= len(rv.Regions) {
 		return -1, fmt.Errorf("region index out of bounds")
 	}
@@ -346,7 +343,6 @@ func (rv *RegionVector) GetSizeRightIncluding(regionIndex int) (int, error) {
 //
 // If the relative position is out of bounds, the function will return an error.
 func (rv *RegionVector) GetRegionIndexContainingPosRelative(relPos int) (int, error) {
-
 	if relPos < 0 || relPos >= rv.Length() {
 		return -1, fmt.Errorf("relative position out of bounds")
 	}
@@ -419,7 +415,6 @@ func (rv *RegionVector) Copy() *RegionVector {
 // If the region vector contains the regions [0, 30] and the given region is [5, 25],
 // The resulting region vector will contain the regions [0, 5], [25, 30].
 func (rv *RegionVector) RemoveRegion(start int, end int) {
-
 	if len(rv.Regions) == 0 {
 		// the region vector is empty
 		return
@@ -482,7 +477,6 @@ func (rv *RegionVector) RemoveRegion(start int, end int) {
 }
 
 func (rv *RegionVector) UncoveredRegionsBySelf(min int, max int) *RegionVector {
-
 	rvUncovered := NewRegionVector()
 
 	// the total region for which the uncovered regions should be computed
@@ -497,7 +491,6 @@ func (rv *RegionVector) UncoveredRegionsBySelf(min int, max int) *RegionVector {
 }
 
 func (rv *RegionVector) UncoveredRegionsBySelfAndOther(rvCovered *RegionVector, min int, max int) *RegionVector {
-
 	// the uncovered regions by the region vector itself
 	rvUncovered := rv.UncoveredRegionsBySelf(min, max)
 

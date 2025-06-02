@@ -2,16 +2,16 @@ package index
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+
 	"github.com/KleinSamuel/gtamap/src/dataloader"
 	"github.com/KleinSamuel/gtamap/src/formats/fasta"
 	"github.com/KleinSamuel/gtamap/src/formats/gtf"
 	"github.com/sirupsen/logrus"
-	"os"
-	"path/filepath"
 )
 
 func ExtractSequenceFromFastaForIndex(fastaPath string, chromosome string, start int, end int, outputPath string) {
-
 	fastaIndexPath := fastaPath + ".fai"
 
 	logrus.WithFields(logrus.Fields{
@@ -62,8 +62,8 @@ func ExtractSequenceFromFastaForIndex(fastaPath string, chromosome string, start
 }
 
 func ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath string, fastaPath string, outputPath string,
-	geneIds map[string]struct{}, upstreamBases int, downstreamBases int, separateExtraction bool) {
-
+	geneIds map[string]struct{}, upstreamBases int, downstreamBases int, separateExtraction bool,
+) {
 	fastaIndexPath := fastaPath + ".fai"
 
 	logrus.WithFields(logrus.Fields{
@@ -85,6 +85,13 @@ func ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath string, fastaPath string
 	}
 
 	geneInfo := gtf.ReadGenesFromGtfUsingPath(gtfPath, geneIds)
+	if len(geneInfo) == 0 {
+		logrus.WithFields(logrus.Fields{
+			"geneIds": geneIds,
+			"gtf":     gtfPath,
+		}).Warnf("Target geneIds were found in provided gtf")
+		return
+	}
 
 	fastaIndex := fasta.ReadFastaIndexUsingPath(fastaIndexPath)
 	if fastaIndex == nil {
@@ -100,6 +107,10 @@ func ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath string, fastaPath string
 	if separateExtraction {
 		// write each gene to separate fa file
 		for _, gene := range geneInfo {
+			if gene == nil {
+				logrus.Warn("Skipping gene since it was not found in provided gtf.")
+				continue
+			}
 
 			outFilePath := filepath.Join(outputPath, gene.GeneId+".fa")
 			outFile, errOpen := os.Create(outFilePath)
@@ -157,7 +168,7 @@ func ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath string, fastaPath string
 			geneStart := int(gene.StartGenomic) - upstreamBases
 			if geneStart < 0 {
 				geneStart = 0
-				
+
 				logrus.WithFields(logrus.Fields{
 					"geneId":   gene.GeneId,
 					"start":    gene.StartGenomic,
@@ -175,11 +186,12 @@ func ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath string, fastaPath string
 		}
 		outFile.Close()
 	}
+	return
 }
 
 func AppendSequenceToFastaFile(name string, contig string, isForwardStrand bool, startGenomic int, endGenomic int,
-	sequence []byte, charPerLine int, outFile *os.File) {
-
+	sequence []byte, charPerLine int, outFile *os.File,
+) {
 	strand := "+"
 	if !isForwardStrand {
 		strand = "-"
@@ -206,7 +218,6 @@ func AppendSequenceToFastaFile(name string, contig string, isForwardStrand bool,
 }
 
 func writeToFasta(gene *gtf.GeneBasic, outFile *os.File, fastaFile *os.File, fastaIndex *fasta.Index) {
-
 	logrus.WithFields(logrus.Fields{
 		"geneId": gene.GeneId,
 	}).Info("Extracting sequence information")

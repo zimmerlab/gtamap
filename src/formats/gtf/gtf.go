@@ -6,8 +6,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-
-	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 )
 
 type Annotation struct {
@@ -20,11 +18,6 @@ type GeneBasic struct {
 	IsForwardStrand bool
 	StartGenomic    uint32
 	EndGenomic      uint32
-}
-
-type GeneIntrons struct {
-	LocalIntrons   []*regionvector.RegionVector
-	GenomicIntrons []*regionvector.RegionVector
 }
 
 type Gene struct {

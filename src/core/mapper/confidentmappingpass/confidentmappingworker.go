@@ -1,6 +1,7 @@
 package confidentmappingpass
 
 import (
+	"sort"
 	"strconv"
 	"sync"
 
@@ -10,23 +11,33 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func ConfidentMappingWorker(confidentChan *ConfidentPassChan, wgConfidentMapping *sync.WaitGroup, annotationChan chan<- *mapperutils.TargetAnnotation) {
+func ConfidentMappingWorker(confidentChan *ConfidentPassChan, wgConfidentMapping *sync.WaitGroup, annotationChan chan<- map[int]*mapperutils.TargetAnnotation, index *index.GenomeIndex) {
 	defer wgConfidentMapping.Done()
 
-	annotation := &mapperutils.TargetAnnotation{
-		PreferedStrand: 100,
-	}
-	confidentresults := make([]*ConfidentTask, 0)
+	cMapsPerSeq := make(map[int][]*ConfidentTask, 0)
+
 	for {
-		task, ok := confidentChan.Receive()
+		confidentResult, ok := confidentChan.Receive()
 		if !ok {
 			break
 		}
-		confidentresults = append(confidentresults, task)
-	}
-	logrus.Infof("Done collecting all %s confident maps", strconv.Itoa(len(confidentresults)))
 
-	// TODO ANNOTATE
+		// we know that fw and rv belong together, otherwise the rp wouldn't be sent to confidentChan
+		targetMainId := confidentResult.ResultFw.SequenceIndex / 2
+		cMapsPerSeq[targetMainId] = append(cMapsPerSeq[targetMainId], confidentResult)
+	}
+
+	// mainTargetId -> annotation
+	// annotation then stores introns in plus orientation and minus orientation
+	annotation := make(map[int]*mapperutils.TargetAnnotation)
+
+	logrus.Info("Finished collecting all confident maps")
+	for targetId, cMaps := range cMapsPerSeq {
+		logrus.Infof("%s confident maps for taregt region %s", strconv.Itoa(len(cMaps)), strconv.Itoa(targetId))
+		// get Introns per seqId
+		// NOTE: Introns are 0 based, start inclusive and end exclusive
+		annotation[targetId] = InferIntronsOfTarget(targetId, cMaps, index)
+	}
 
 	annotationChan <- annotation
 	logrus.Info("Done with Annotation")
@@ -173,4 +184,252 @@ func getTotalCoverage(coverageFw, coverageRv []int) []int {
 		totalCoverage[i] = coverageFw[i] + coverageRv[len(coverageFw)-1-i]
 	}
 	return totalCoverage
+}
+
+func InferIntronsOfTarget(targetId int, confMaps []*ConfidentTask, index *index.GenomeIndex) *mapperutils.TargetAnnotation {
+	// I. get all gaps of targetId in plus orientation
+	plusOrientatedGaps, plusEvidence, minusEvidence := getGapsPlusOrientation(targetId, confMaps, index) // map[int][]*interval.Interval
+	// II. count how often each gap exists (plus orientation gaps)
+	countedGapsOfTarget := countGaps(plusOrientatedGaps)
+	// III. cluster plus oriented gaps and get start/stop with highest evidence (eStart|eStop)
+	plusOrientatedIntronsOfTarget := clusterGaps(countedGapsOfTarget)
+	// IV. now we mirror these plus orientated introns to get minus coords
+	minusOrientatedIntronsOfTarget := invertIntrons(targetId, plusOrientatedIntronsOfTarget, index)
+
+	var preferredStrandedness int
+	var confidence float32
+	if plusEvidence > minusEvidence {
+		preferredStrandedness = 0 // fw -> 0 rv -> 1 (plus configuration)
+		confidence = float32(plusEvidence) / float32(plusEvidence+minusEvidence)
+	} else {
+		preferredStrandedness = 1 // fw -> 1 rv -> 0 (minus configuration)
+		confidence = float32(minusEvidence) / float32(plusEvidence+minusEvidence)
+	}
+
+	if plusEvidence == minusEvidence {
+		preferredStrandedness = -1
+		confidence = 0.5
+	}
+
+	intronMap := make(map[int][]*regionvector.Intron)
+	intronMap[0] = plusOrientatedIntronsOfTarget
+	intronMap[1] = minusOrientatedIntronsOfTarget
+
+	// sort
+	sort.Slice(plusOrientatedIntronsOfTarget, func(i, j int) bool {
+		return plusOrientatedIntronsOfTarget[i].Start < plusOrientatedIntronsOfTarget[j].Start
+	})
+
+	sort.Slice(minusOrientatedIntronsOfTarget, func(i, j int) bool {
+		return minusOrientatedIntronsOfTarget[i].Start < minusOrientatedIntronsOfTarget[j].Start
+	})
+
+	targetAnnotation := mapperutils.TargetAnnotation{
+		PreferedStrand: preferredStrandedness,
+		Confidence:     confidence,
+		Introns:        intronMap,
+	}
+
+	return &targetAnnotation
+}
+
+func invertIntrons(sId int, intronsOfTarget []*regionvector.Intron, index *index.GenomeIndex) []*regionvector.Intron {
+	mirroredIntronsPerSeqId := make([]*regionvector.Intron, 0)
+	geneLength := int(index.GetSequenceInfo(sId).EndGenomic - index.GetSequenceInfo(sId).StartGenomic)
+	for _, intron := range intronsOfTarget {
+		mirroredIntronsPerSeqId = append(mirroredIntronsPerSeqId, &regionvector.Intron{
+			Start:    geneLength - intron.End + 2*int(index.SequenceInfo[sId].StartGenomic),
+			End:      geneLength - intron.Start + 2*int(index.SequenceInfo[sId].StartGenomic), // since end exclusive
+			Evidence: intron.Evidence,
+		})
+	}
+
+	return mirroredIntronsPerSeqId
+}
+
+// extracts all gaps in fw and rv mappings but mirrors the rv coords to match fw orientation
+func getGapsPlusOrientation(sId int, cMapsPerSeq []*ConfidentTask, index *index.GenomeIndex) ([]*regionvector.Region, int, int) {
+	plusOrientatedGapsPerMainSeqId := make([]*regionvector.Region, 0)
+	plusStrandednessEvidence := 0
+	minusStrandednessEvidence := 0
+
+	// iterate over each confMap in target seq seqId
+	for _, confMap := range cMapsPerSeq {
+
+		// update strandedness counter
+		if confMap.ResultFw.SequenceIndex%2 == 0 {
+			plusStrandednessEvidence++
+		} else {
+			minusStrandednessEvidence++
+		}
+
+		// iterate over the fw matches (pairwise) and check if there is a gap
+		for i := 0; i < len(confMap.ResultFw.MatchedGenome.Regions)-1; i++ {
+			lStop := confMap.ResultFw.MatchedGenome.Regions[i].End
+			rStart := confMap.ResultFw.MatchedGenome.Regions[i+1].Start
+			if rStart > lStop {
+				if confMap.ResultFw.SequenceIndex%2 == 0 {
+					plusOrientatedGapsPerMainSeqId = append(plusOrientatedGapsPerMainSeqId, &regionvector.Region{
+						// Start: lStop + 1,
+						// End:   rStart - 1,
+						Start: lStop + int(index.SequenceInfo[sId].StartGenomic),
+						End:   rStart + int(index.SequenceInfo[sId].StartGenomic),
+					})
+				} else {
+					plusOrientatedGapsPerMainSeqId = append(plusOrientatedGapsPerMainSeqId, &regionvector.Region{
+						// Start: len(*index.Sequences[sId]) - rStart,
+						// End:   len(*index.Sequences[sId]) - lStop,
+						Start: len(*index.Sequences[sId]) - rStart + int(index.SequenceInfo[sId].StartGenomic),
+						End:   len(*index.Sequences[sId]) - lStop + int(index.SequenceInfo[sId].StartGenomic),
+					})
+				}
+			}
+		}
+
+		// the reverse gaps get mirrored to match fw coords
+		for i := 0; i < len(confMap.ResultRv.MatchedGenome.Regions)-1; i++ {
+			lStop := confMap.ResultRv.MatchedGenome.Regions[i].End
+			rStart := confMap.ResultRv.MatchedGenome.Regions[i+1].Start
+			if rStart > lStop {
+				if confMap.ResultRv.SequenceIndex%2 == 0 {
+					plusOrientatedGapsPerMainSeqId = append(plusOrientatedGapsPerMainSeqId, &regionvector.Region{
+						Start: lStop + int(index.SequenceInfo[sId].StartGenomic),
+						End:   rStart + int(index.SequenceInfo[sId].StartGenomic),
+					})
+				} else {
+					plusOrientatedGapsPerMainSeqId = append(plusOrientatedGapsPerMainSeqId, &regionvector.Region{
+						Start: len(*index.Sequences[sId]) - rStart + int(index.SequenceInfo[sId].StartGenomic),
+						End:   len(*index.Sequences[sId]) - lStop + int(index.SequenceInfo[sId].StartGenomic),
+					})
+				}
+			}
+		}
+	}
+
+	return plusOrientatedGapsPerMainSeqId, plusStrandednessEvidence, minusStrandednessEvidence
+}
+
+func countGaps(gapsOfTarget []*regionvector.Region) map[regionvector.Region]int {
+	gapMap := make(map[regionvector.Region]int)
+	// count unique gapsPerSeq per sid
+	for _, g := range gapsOfTarget {
+		// check if we have already seen the curr gap in sid
+		gap := regionvector.Region{Start: g.Start, End: g.End}
+		_, exists := gapMap[gap]
+		if !exists {
+			// init new count with 1
+			gapMap[gap] = 1
+		} else {
+			// increment
+			gapMap[gap] = gapMap[gap] + 1
+		}
+	}
+	return gapMap
+}
+
+type IntronCluster struct {
+	lStart      int // left most coord
+	rStop       int // right most coord
+	maxEvidence int // how many gaps had eStart and eStop
+	eStart      int // start of gap with max evidence
+	eStop       int // stop of gap with max evidence
+}
+
+func clusterGaps(targetGaps map[regionvector.Region]int) []*regionvector.Intron {
+	// cluster overlapping gaps
+	clusters := make([]*IntronCluster, 0)
+	for currGap, currGapEvidence := range targetGaps {
+		if len(clusters) == 0 {
+			// init slice with first cluster
+			cluster := &IntronCluster{
+				lStart:      currGap.Start,
+				rStop:       currGap.End,
+				maxEvidence: currGapEvidence,
+				eStart:      currGap.Start,
+				eStop:       currGap.End,
+			}
+			clusters = append(clusters, cluster)
+			continue
+		}
+		// keep track if curr gap was added
+		addedToExistingCluster := false
+
+		for _, cluster := range clusters {
+			// is the currGap overlapping with the cluster
+			// I. -----##########------- cluster
+			//    ------######---------- currGap → contained by cluster, add to cluster
+			if currGap.Start >= cluster.lStart && currGap.End <= cluster.rStop {
+				if cluster.maxEvidence < currGapEvidence {
+					cluster.maxEvidence = currGapEvidence
+					cluster.eStart = currGap.Start
+					cluster.eStop = currGap.End
+				}
+				addedToExistingCluster = true
+				break
+			}
+			// II -----##########------- cluster
+			//    ---#############------ currGap → contains cluster completely
+			if currGap.Start <= cluster.lStart && currGap.End >= cluster.rStop {
+				if cluster.maxEvidence < currGapEvidence {
+					cluster.maxEvidence = currGapEvidence
+					cluster.eStart = currGap.Start
+					cluster.eStop = currGap.End
+					cluster.lStart = currGap.Start
+					cluster.rStop = currGap.End
+				} else {
+					cluster.lStart = currGap.Start
+					cluster.rStop = currGap.End
+				}
+				addedToExistingCluster = true
+				break
+			}
+			// III -----##########------- cluster
+			//     ---############------  currGap → partially contains cluster completely
+			if currGap.Start <= cluster.lStart && currGap.End >= cluster.lStart && currGap.End <= cluster.rStop {
+				if cluster.maxEvidence < currGapEvidence {
+					cluster.maxEvidence = currGapEvidence
+					cluster.eStart = currGap.Start
+					cluster.eStop = currGap.End
+				}
+				cluster.lStart = currGap.Start
+				addedToExistingCluster = true
+				break
+			}
+			// IV  -----##########------- cluster
+			//     -----############----  currGap → partially contains cluster completely
+			if currGap.Start >= cluster.lStart && currGap.Start <= cluster.rStop && currGap.End >= cluster.rStop {
+				if cluster.maxEvidence < currGapEvidence {
+					cluster.maxEvidence = currGapEvidence
+					cluster.eStart = currGap.Start
+					cluster.eStop = currGap.End
+				}
+				cluster.rStop = currGap.End
+				addedToExistingCluster = true
+				break
+			}
+		}
+
+		// if the gap wasn't added to any existing cluster, create a new one
+		if !addedToExistingCluster {
+			newCluster := &IntronCluster{
+				lStart:      currGap.Start,
+				rStop:       currGap.End,
+				maxEvidence: currGapEvidence,
+				eStart:      currGap.Start,
+				eStop:       currGap.End,
+			}
+			clusters = append(clusters, newCluster)
+		}
+	}
+
+	// now extract introns with highest evidence
+	fwOrientatedGapsOfTarget := make([]*regionvector.Intron, 0)
+	for _, intronCluster := range clusters {
+		fwOrientatedGapsOfTarget = append(fwOrientatedGapsOfTarget, &regionvector.Intron{
+			Start:    intronCluster.eStart,
+			End:      intronCluster.eStop,
+			Evidence: intronCluster.maxEvidence,
+		})
+	}
+	return fwOrientatedGapsOfTarget
 }
