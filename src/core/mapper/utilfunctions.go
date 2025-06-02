@@ -22,41 +22,38 @@ func sortedIndicesDesc(list []int) []int {
 }
 
 func scoreSpliceSites(donorFirstBase byte, donorSecondBase byte, acceptorFirstBase byte,
-	acceptorSecondBase byte, isForwardStrand bool) int {
-
+	acceptorSecondBase byte, isForwardStrand bool,
+) (int, bool) {
 	if isForwardStrand {
-
 		if donorFirstBase == byte('G') && donorSecondBase == byte('T') &&
 			acceptorFirstBase == byte('A') && acceptorSecondBase == byte('G') {
 			// canonical splice site GT/AG
-			return 0
+			return 0, true
 		} else if donorFirstBase == byte('G') && donorSecondBase == byte('C') &&
 			acceptorFirstBase == byte('A') && acceptorSecondBase == byte('G') {
 			// non-canonical splice site GC/AG
-			return 1
+			return 2, true
 		} else if donorFirstBase == byte('A') && donorSecondBase == byte('T') &&
 			acceptorFirstBase == byte('A') && acceptorSecondBase == byte('C') {
 			// non-canonical splice site AT/AC
-			return 1
+			return 2, true
 		}
-
 	} else {
-
 		if donorFirstBase == byte('C') && donorSecondBase == byte('T') &&
 			acceptorFirstBase == byte('A') && acceptorSecondBase == byte('C') {
 			// canonical splice site GT/AG on rev strand
-			return 0
+			return 0, true
 		} else if donorFirstBase == byte('C') && donorSecondBase == byte('T') &&
 			acceptorFirstBase == byte('G') && acceptorSecondBase == byte('C') {
 			// non-canonical splice site GC/AG on rev strand
-			return 1
+			return 2, true
 		} else if donorFirstBase == byte('G') && donorSecondBase == byte('T') &&
 			acceptorFirstBase == byte('A') && acceptorSecondBase == byte('T') {
 			// non-canonical splice site AT/AC on rev strand
-			return 1
+			return 2, true
 		}
 	}
 
 	// all other non-canonical splice sites
-	return 2
+	return 3, false
 }

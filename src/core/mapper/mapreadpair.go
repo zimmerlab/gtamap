@@ -133,11 +133,19 @@ func determineLeftNormalizationShiftFw(
 	logrus.Debug("determine left normalization for forward seq")
 
 	regionIndexBeforeGap := result.MatchedGenome.GetGapIndexAfterPos(0)
+	gapRank := 0 // stores the gap rank (first gap = 0, second gap = 1 ...)
 
 	// find gaps in genome (bases in reference that are not present in read)
 	for regionIndexBeforeGap > -1 {
 
 		gapGenome := result.MatchedGenome.GetGapAfterRegionIndex(regionIndexBeforeGap)
+
+		// skip gaps which have known splice sites
+		if result.SpliceSitesInfo[gapRank] {
+			gapRank++
+			regionIndexBeforeGap = result.MatchedGenome.GetGapIndexAfterPos(gapGenome.End + 1)
+			continue
+		}
 
 		// only handle gaps in genome that have no mutual gap in read
 		// (only introns or deletions)
@@ -205,11 +213,19 @@ func determineLeftNormalizationShiftRv(
 	logrus.Debug("determine left normalization for reverse seq")
 
 	regionIndexBeforeGap := result.MatchedGenome.GetGapIndexAfterPos(0)
+	gapRank := 0 // stores the gap rank (first gap = 0, second gap = 1 ...)
 
 	// find gaps in genome (bases in reference that are not present in read)
 	for regionIndexBeforeGap > -1 {
 
 		gapGenome := result.MatchedGenome.GetGapAfterRegionIndex(regionIndexBeforeGap)
+
+		// skip gaps which have known splice sites
+		if result.SpliceSitesInfo[gapRank] {
+			gapRank++
+			regionIndexBeforeGap = result.MatchedGenome.GetGapIndexAfterPos(gapGenome.End + 1)
+			continue
+		}
 
 		// only handle gaps in genome that have no mutual gap in read
 		// (only introns or deletions)

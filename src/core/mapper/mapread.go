@@ -442,6 +442,42 @@ func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperu
 	return true
 }
 
+func annotateSpliceSites(read *fastq.Read, genomeIndex *index.GenomeIndex, result *mapperutils.ReadMatchResult) {
+	// used to keep track of the read position for the next gap
+	readGapPos := 0
+	// returns the index of the first region after which a gap occurs (-1 if no gap)
+	indexRegionBeforeGap := result.MatchedGenome.GetGapIndexAfterPos(readGapPos)
+
+	// loop through all gaps in the read (-1 means there is no more gap)
+	seqIndex := result.SequenceIndex
+	for indexRegionBeforeGap > -1 {
+
+		gapGenome := result.MatchedGenome.GetGapAfterRegionIndex(indexRegionBeforeGap)
+
+		donorSiteStart := gapGenome.Start
+		acceptorSiteStart := gapGenome.End
+
+		donorSiteSeq := (*genomeIndex.Sequences[seqIndex])[donorSiteStart : donorSiteStart+2]
+		acceptorSiteSeq := (*genomeIndex.Sequences[seqIndex])[acceptorSiteStart-2 : acceptorSiteStart]
+
+		isForwardStrand := genomeIndex.IsSequenceForward(seqIndex)
+
+		_, isKnownSpliceSite := scoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
+			acceptorSiteSeq[0], acceptorSiteSeq[1], isForwardStrand)
+
+		// annotate split with spliceSite info
+		if result.SpliceSitesInfo == nil {
+			result.SpliceSitesInfo = make([]bool, 0)
+			result.SpliceSitesInfo = append(result.SpliceSitesInfo, isKnownSpliceSite)
+		} else {
+			result.SpliceSitesInfo = append(result.SpliceSitesInfo, isKnownSpliceSite)
+		}
+
+		readGapPos = gapGenome.End + 1
+		indexRegionBeforeGap = result.MatchedGenome.GetGapIndexAfterPos(readGapPos)
+	}
+}
+
 func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *mapperutils.ReadMatchResult) {
 	if result.MatchedRead.Length() == len(*read.Sequence) {
 		logrus.Debug("read fully matched")
@@ -754,15 +790,19 @@ func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.Genome
 
 	finalResults := make([]*mapperutils.ReadMatchResult, 0)
 
-	for _, result := range results {
+	for _, res := range results {
 
-		extendDiagonals(read, genomeIndex, result)
+		extendDiagonals(read, genomeIndex, res)
 
-		if result.IncompleteMap {
+		if res.MatchedGenome.HasGaps() {
+			annotateSpliceSites(read, genomeIndex, res)
+		}
+
+		if res.IncompleteMap {
 			continue
 		}
 
-		finalResults = append(finalResults, result)
+		finalResults = append(finalResults, res)
 	}
 
 	return finalResults
@@ -844,7 +884,7 @@ func determineBestSplit(
 
 		// add a penalty if the splice site is not canonical
 		// 2 means that there is no known splice site
-		spliceSitePenalty := scoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
+		spliceSitePenalty, _ := scoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
 			acceptorSiteSeq[0], acceptorSiteSeq[1], isForwardStrand)
 
 		numMismatches += spliceSitePenalty
