@@ -238,8 +238,10 @@ func invertIntrons(sId int, intronsOfTarget []*regionvector.Intron, index *index
 	geneLength := int(index.GetSequenceInfo(sId).EndGenomic - index.GetSequenceInfo(sId).StartGenomic)
 	for _, intron := range intronsOfTarget {
 		mirroredIntronsPerSeqId = append(mirroredIntronsPerSeqId, &regionvector.Intron{
-			Start:    geneLength - intron.End + 2*int(index.SequenceInfo[sId].StartGenomic),
-			End:      geneLength - intron.Start + 2*int(index.SequenceInfo[sId].StartGenomic), // since end exclusive
+			// Start:    geneLength - intron.End + 2*int(index.SequenceInfo[sId].StartGenomic),
+			// End:      geneLength - intron.Start + 2*int(index.SequenceInfo[sId].StartGenomic),
+			Start:    geneLength - intron.End,
+			End:      geneLength - intron.Start,
 			Evidence: intron.Evidence,
 		})
 	}
@@ -270,17 +272,17 @@ func getGapsPlusOrientation(sId int, cMapsPerSeq []*ConfidentTask, index *index.
 			if rStart > lStop {
 				if confMap.ResultFw.SequenceIndex%2 == 0 {
 					plusOrientatedGapsPerMainSeqId = append(plusOrientatedGapsPerMainSeqId, &regionvector.Region{
-						// Start: lStop + 1,
-						// End:   rStart - 1,
-						Start: lStop + int(index.SequenceInfo[sId].StartGenomic),
-						End:   rStart + int(index.SequenceInfo[sId].StartGenomic),
+						// Start: lStop + int(index.SequenceInfo[sId].StartGenomic),
+						// End:   rStart + int(index.SequenceInfo[sId].StartGenomic),
+						Start: lStop,
+						End:   rStart,
 					})
 				} else {
 					plusOrientatedGapsPerMainSeqId = append(plusOrientatedGapsPerMainSeqId, &regionvector.Region{
-						// Start: len(*index.Sequences[sId]) - rStart,
-						// End:   len(*index.Sequences[sId]) - lStop,
-						Start: len(*index.Sequences[sId]) - rStart + int(index.SequenceInfo[sId].StartGenomic),
-						End:   len(*index.Sequences[sId]) - lStop + int(index.SequenceInfo[sId].StartGenomic),
+						// Start: len(*index.Sequences[sId]) - rStart + int(index.SequenceInfo[sId].StartGenomic),
+						// End:   len(*index.Sequences[sId]) - lStop + int(index.SequenceInfo[sId].StartGenomic),
+						Start: len(*index.Sequences[sId]) - rStart,
+						End:   len(*index.Sequences[sId]) - lStop,
 					})
 				}
 			}
@@ -293,13 +295,17 @@ func getGapsPlusOrientation(sId int, cMapsPerSeq []*ConfidentTask, index *index.
 			if rStart > lStop {
 				if confMap.ResultRv.SequenceIndex%2 == 0 {
 					plusOrientatedGapsPerMainSeqId = append(plusOrientatedGapsPerMainSeqId, &regionvector.Region{
-						Start: lStop + int(index.SequenceInfo[sId].StartGenomic),
-						End:   rStart + int(index.SequenceInfo[sId].StartGenomic),
+						// Start: lStop + int(index.SequenceInfo[sId].StartGenomic),
+						// End:   rStart + int(index.SequenceInfo[sId].StartGenomic),
+						Start: lStop,
+						End:   rStart,
 					})
 				} else {
 					plusOrientatedGapsPerMainSeqId = append(plusOrientatedGapsPerMainSeqId, &regionvector.Region{
-						Start: len(*index.Sequences[sId]) - rStart + int(index.SequenceInfo[sId].StartGenomic),
-						End:   len(*index.Sequences[sId]) - lStop + int(index.SequenceInfo[sId].StartGenomic),
+						// Start: len(*index.Sequences[sId]) - rStart + int(index.SequenceInfo[sId].StartGenomic),
+						// End:   len(*index.Sequences[sId]) - lStop + int(index.SequenceInfo[sId].StartGenomic),
+						Start: len(*index.Sequences[sId]) - rStart,
+						End:   len(*index.Sequences[sId]) - lStop,
 					})
 				}
 			}
