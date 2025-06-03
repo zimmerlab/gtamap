@@ -93,10 +93,9 @@ func AssignReadMatchResults(fwMappings []*ReadMatchResult, rvMappings []*ReadMat
 
 // receives fw and rv matches of one seqID. Returns possible combinations of fw/rv.
 // E.g. fw -> 25 and rv -> 25 doesnt work since they need to map to separate strands etc
-// Currently returns combination with least amount of mm
-func GetBestPossibleMappingCombination(fwMatches []*ReadMatchResult, rvMatches []*ReadMatchResult) *ValidReadPairCombination {
+// Currently returns the best combination with less or equal amount of mm the provided maxMismatches param
+func GetBestPossibleMappingCombination(fwMatches []*ReadMatchResult, rvMatches []*ReadMatchResult, maxMismatches int) *ValidReadPairCombination {
 	var bestCombination *ValidReadPairCombination
-	minMisMatches := 100000 // init
 
 	for i := 0; i < len(fwMatches); i++ {
 		fwMatch := fwMatches[i]
@@ -104,8 +103,8 @@ func GetBestPossibleMappingCombination(fwMatches []*ReadMatchResult, rvMatches [
 			rvMatch := rvMatches[j]
 			if fwMatch.SequenceIndex-1 == rvMatch.SequenceIndex || fwMatch.SequenceIndex == rvMatch.SequenceIndex-1 {
 				currMM := len(fwMatch.MismatchesRead) + len(rvMatch.MismatchesRead)
-				if currMM < minMisMatches {
-					minMisMatches = currMM
+				if currMM < maxMismatches {
+					maxMismatches = currMM
 					if bestCombination == nil {
 						bestCombination = &ValidReadPairCombination{
 							Fw:            fwMatch,
@@ -113,7 +112,7 @@ func GetBestPossibleMappingCombination(fwMatches []*ReadMatchResult, rvMatches [
 							NumMismatches: currMM,
 						}
 					} else {
-						minMisMatches = currMM
+						maxMismatches = currMM
 						bestCombination.Fw = fwMatch
 						bestCombination.Rv = rvMatch
 						bestCombination.NumMismatches = currMM

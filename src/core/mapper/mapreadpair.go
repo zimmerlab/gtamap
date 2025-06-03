@@ -65,13 +65,19 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	})
 
 	// check if confident map
-	if len(resultFw) == 1 && len(resultRv) == 1 && len(resultFw[0].MismatchesRead)+len(resultRv[0].MismatchesRead) < 6 && (resultRv[0].SequenceIndex-1 == resultFw[0].SequenceIndex || resultRv[0].SequenceIndex == resultFw[0].SequenceIndex-1) { // currently just sending everything
-		confidentMatchesChan.Send(&confidentmappingpass.ConfidentTask{
-			ReadPair: readPair,
-			ResultFw: resultFw[0].Copy(), // there should only exist fw[0] and rv[0] in a confident match
-			ResultRv: resultRv[0].Copy(),
-		})
+	// hasConfdentConfiguration allows to discover conf maps even if len(fw) > 1 && len(rv) > 1
+	possibleConfMap, confMap := hasConfdentConfiguration(resultFw, resultRv, readPair)
+	if possibleConfMap {
+		confidentMatchesChan.Send(confMap)
 	}
+	// alternatively use more strict way of determining conf map
+	// if isStrictConfidentMap(resultFw, resultRv) {
+	// 	confidentMatchesChan.Send(&confidentmappingpass.ConfidentTask{
+	// 		ReadPair: readPair,
+	// 		ResultFw: resultFw[0], // there should only exist fw[0] and rv[0] in a confident match
+	// 		ResultRv: resultRv[0],
+	// 	})
+	// }
 
 	readPairMapping := &mapperutils.ReadPairMatchResults{
 		ReadPair: readPair,
@@ -80,6 +86,28 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	}
 	// here it is okay to also pass the pointers of resultFw and resultRv since paralogMappingChan is readOnly
 	paralogMappingChan <- readPairMapping
+}
+
+func isStrictConfidentMap(resultFw []*mapperutils.ReadMatchResult, resultRv []*mapperutils.ReadMatchResult) bool {
+	return len(resultFw) == 1 && len(resultRv) == 1 && len(resultFw[0].MismatchesRead)+len(resultRv[0].MismatchesRead) < 6 && (resultRv[0].SequenceIndex-1 == resultFw[0].SequenceIndex || resultRv[0].SequenceIndex == resultFw[0].SequenceIndex-1)
+}
+
+func hasConfdentConfiguration(resultFw []*mapperutils.ReadMatchResult, resultRv []*mapperutils.ReadMatchResult, rp *fastq.ReadPair) (bool, *confidentmappingpass.ConfidentTask) {
+	fwMapPerSeqIndex, rvMapPerSeqIndex, mappedIds := mapperutils.AssignReadMatchResults(resultFw, resultRv)
+
+	for targetId := range mappedIds {
+		fwMapsOfTargetId := fwMapPerSeqIndex[targetId]
+		rvMapsOfTargetId := rvMapPerSeqIndex[targetId]
+		validCombination := mapperutils.GetBestPossibleMappingCombination(fwMapsOfTargetId, rvMapsOfTargetId, 6) // allow at most 6 mm in conf map
+		if validCombination != nil {
+			return true, &confidentmappingpass.ConfidentTask{
+				ReadPair: rp,
+				ResultFw: validCombination.Fw,
+				ResultRv: validCombination.Rv,
+			}
+		}
+	}
+	return false, nil
 }
 
 func postprocessReadMatch(genomeIndex *index.GenomeIndex, read *fastq.Read, result *mapperutils.ReadMatchResult) {

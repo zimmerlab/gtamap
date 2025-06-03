@@ -103,7 +103,7 @@ func getParalogCandidates(alternativeMappingsFw []*mapperutils.ReadMatchResult, 
 	for paralogId := range mappedParalogIds {
 		fwMapsOfParalogId := fwMapPerParalogSeqIndex[paralogId]
 		rvMapsOfParalogId := rvMapPerParalogSeqIndex[paralogId]
-		bestCombination := mapperutils.GetBestPossibleMappingCombination(fwMapsOfParalogId, rvMapsOfParalogId)
+		bestCombination := mapperutils.GetBestPossibleMappingCombination(fwMapsOfParalogId, rvMapsOfParalogId, 1000)
 		if bestCombination != nil {
 			bestParalogMappings[paralogId] = bestCombination
 		}
