@@ -97,66 +97,16 @@ func getParentIndices(fwMatches []*mapperutils.ReadMatchResult, rvMatches []*map
 // the results from the paralog greedy map need to be binned and sorted. We only want to look at results that make sense
 // (fw needs corresponding rv map on rv seq etc).
 func getParalogCandidates(alternativeMappingsFw []*mapperutils.ReadMatchResult, alternativeMappingsRv []*mapperutils.ReadMatchResult) map[int]*mapperutils.ValidReadPairCombination {
-	fwMapPerParalogSeqIndex := make(map[int][]*mapperutils.ReadMatchResult)
-	rvMapPerParalogSeqIndex := make(map[int][]*mapperutils.ReadMatchResult)
-	mappedParalogIds := make(map[int]struct{})
-
-	// accumulate mapping results per paralog main id
-	for _, mapping := range alternativeMappingsFw {
-		paralogRegionIndex := mapping.SequenceIndex / 2 // maps back to the main sequence index
-		fwMapPerParalogSeqIndex[paralogRegionIndex] = append(fwMapPerParalogSeqIndex[paralogRegionIndex], mapping)
-		mappedParalogIds[paralogRegionIndex] = struct{}{}
-	}
-
-	for _, mapping := range alternativeMappingsRv {
-		paralogRegionIndex := mapping.SequenceIndex / 2
-		rvMapPerParalogSeqIndex[paralogRegionIndex] = append(rvMapPerParalogSeqIndex[paralogRegionIndex], mapping)
-		mappedParalogIds[paralogRegionIndex] = struct{}{}
-	}
+	fwMapPerParalogSeqIndex, rvMapPerParalogSeqIndex, mappedParalogIds := mapperutils.AssignReadMatchResults(alternativeMappingsFw, alternativeMappingsRv)
 
 	bestParalogMappings := make(map[int]*mapperutils.ValidReadPairCombination)
 	for paralogId := range mappedParalogIds {
 		fwMapsOfParalogId := fwMapPerParalogSeqIndex[paralogId]
 		rvMapsOfParalogId := rvMapPerParalogSeqIndex[paralogId]
-		bestCombination := getBestPossibleMappingCombination(fwMapsOfParalogId, rvMapsOfParalogId)
+		bestCombination := mapperutils.GetBestPossibleMappingCombination(fwMapsOfParalogId, rvMapsOfParalogId, 1000)
 		if bestCombination != nil {
 			bestParalogMappings[paralogId] = bestCombination
 		}
 	}
 	return bestParalogMappings
-}
-
-// receives fw and rv matches of one seqID. Returns possible combinations of fw/rv.
-// E.g. fw -> 25 and rv -> 25 doesnt work since they need to map to separate strands etc
-// Currently returns combination with least amount of mm
-func getBestPossibleMappingCombination(fwMatches []*mapperutils.ReadMatchResult, rvMatches []*mapperutils.ReadMatchResult) *mapperutils.ValidReadPairCombination {
-	var bestCombination *mapperutils.ValidReadPairCombination
-	minMisMatches := 100000 // init
-
-	for i := 0; i < len(fwMatches); i++ {
-		fwMatch := fwMatches[i]
-		for j := 0; j < len(rvMatches); j++ {
-			rvMatch := rvMatches[j]
-			if fwMatch.SequenceIndex-1 == rvMatch.SequenceIndex || fwMatch.SequenceIndex == rvMatch.SequenceIndex-1 {
-				currMM := len(fwMatch.MismatchesRead) + len(rvMatch.MismatchesRead)
-				if currMM < minMisMatches {
-					minMisMatches = currMM
-					if bestCombination == nil {
-						bestCombination = &mapperutils.ValidReadPairCombination{
-							Fw:            fwMatch,
-							Rv:            rvMatch,
-							NumMismatches: currMM,
-						}
-					} else {
-						minMisMatches = currMM
-						bestCombination.Fw = fwMatch
-						bestCombination.Rv = rvMatch
-						bestCombination.NumMismatches = currMM
-					}
-				}
-			}
-		}
-	}
-
-	return bestCombination
 }

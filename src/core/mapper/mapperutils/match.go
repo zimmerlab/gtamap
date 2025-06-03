@@ -70,6 +70,61 @@ func (m ReadMatchResult) Copy() *ReadMatchResult {
 	}
 }
 
+func AssignReadMatchResults(fwMappings []*ReadMatchResult, rvMappings []*ReadMatchResult) (map[int][]*ReadMatchResult, map[int][]*ReadMatchResult, map[int]struct{}) {
+	fwMapPerSeqIndex := make(map[int][]*ReadMatchResult)
+	rvMapPerSeqIndex := make(map[int][]*ReadMatchResult)
+	mappedRegionIds := make(map[int]struct{})
+
+	// accumulate mapping results
+	for _, mapping := range fwMappings {
+		regionIndex := mapping.SequenceIndex / 2 // maps back to the main sequence index
+		fwMapPerSeqIndex[regionIndex] = append(fwMapPerSeqIndex[regionIndex], mapping)
+		mappedRegionIds[regionIndex] = struct{}{}
+	}
+
+	for _, mapping := range rvMappings {
+		regionIndex := mapping.SequenceIndex / 2
+		rvMapPerSeqIndex[regionIndex] = append(rvMapPerSeqIndex[regionIndex], mapping)
+		mappedRegionIds[regionIndex] = struct{}{}
+	}
+
+	return fwMapPerSeqIndex, rvMapPerSeqIndex, mappedRegionIds
+}
+
+// receives fw and rv matches of one seqID. Returns possible combinations of fw/rv.
+// E.g. fw -> 25 and rv -> 25 doesnt work since they need to map to separate strands etc
+// Currently returns the best combination with less or equal amount of mm the provided maxMismatches param
+func GetBestPossibleMappingCombination(fwMatches []*ReadMatchResult, rvMatches []*ReadMatchResult, maxMismatches int) *ValidReadPairCombination {
+	var bestCombination *ValidReadPairCombination
+
+	for i := 0; i < len(fwMatches); i++ {
+		fwMatch := fwMatches[i]
+		for j := 0; j < len(rvMatches); j++ {
+			rvMatch := rvMatches[j]
+			if fwMatch.SequenceIndex-1 == rvMatch.SequenceIndex || fwMatch.SequenceIndex == rvMatch.SequenceIndex-1 {
+				currMM := len(fwMatch.MismatchesRead) + len(rvMatch.MismatchesRead)
+				if currMM < maxMismatches {
+					maxMismatches = currMM
+					if bestCombination == nil {
+						bestCombination = &ValidReadPairCombination{
+							Fw:            fwMatch,
+							Rv:            rvMatch,
+							NumMismatches: currMM,
+						}
+					} else {
+						maxMismatches = currMM
+						bestCombination.Fw = fwMatch
+						bestCombination.Rv = rvMatch
+						bestCombination.NumMismatches = currMM
+					}
+				}
+			}
+		}
+	}
+
+	return bestCombination
+}
+
 func (m ReadMatchResult) GetCigar() (string, error) {
 	var builder strings.Builder
 
