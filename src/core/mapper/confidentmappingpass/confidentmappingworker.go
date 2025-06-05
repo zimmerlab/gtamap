@@ -33,7 +33,7 @@ func ConfidentMappingWorker(confidentChan *ConfidentPassChan, wgConfidentMapping
 
 	logrus.Info("Finished collecting all confident maps")
 	for targetId, cMaps := range cMapsPerSeq {
-		logrus.Infof("%s confident maps for taregt region %s", strconv.Itoa(len(cMaps)), strconv.Itoa(targetId))
+		logrus.Infof("%s confident maps for target region %s", strconv.Itoa(len(cMaps)), strconv.Itoa(targetId))
 		// get Introns per seqId
 		// NOTE: Introns are 0 based, start inclusive and end exclusive
 		annotation[targetId] = InferIntronsOfTarget(targetId, cMaps, index)

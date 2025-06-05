@@ -104,6 +104,11 @@ func GetBestPossibleMappingCombination(fwMatches []*ReadMatchResult, rvMatches [
 			if fwMatch.SequenceIndex-1 == rvMatch.SequenceIndex || fwMatch.SequenceIndex == rvMatch.SequenceIndex-1 {
 				currMM := len(fwMatch.MismatchesRead) + len(rvMatch.MismatchesRead)
 				if currMM < maxMismatches {
+					// skip possible combinations if they have short diagonals
+					// (like a diag of length 10 in the end; these cases are likely wrong and should not be classified as confident map)
+					if !(hasLongDiagonals(rvMatch) && hasLongDiagonals(fwMatch)) {
+						continue
+					}
 					maxMismatches = currMM
 					if bestCombination == nil {
 						bestCombination = &ValidReadPairCombination{
@@ -123,6 +128,34 @@ func GetBestPossibleMappingCombination(fwMatches []*ReadMatchResult, rvMatches [
 	}
 
 	return bestCombination
+}
+
+// returns false as soon as one region is smaller than 2*kmerlength
+// iterates over gaps and checks lengths of region before and after gaps
+func hasLongDiagonals(mapping *ReadMatchResult) bool {
+	// used to keep track of the read position for the next gap
+	readGapPos := 0
+	// returns the index of the first region after which a gap occurs (-1 if no gap)
+	indexRegionBeforeGap := mapping.MatchedGenome.GetGapIndexAfterPos(readGapPos)
+
+	startIndex := 0
+
+	// loop through all gaps in the read (-1 means there is no more gap)
+	for indexRegionBeforeGap > -1 {
+		if mapping.MatchedGenome.Regions[indexRegionBeforeGap].End-mapping.MatchedGenome.Regions[startIndex].Start < int(config.KmerLength())*2 {
+			return false
+		}
+		startIndex = indexRegionBeforeGap + 1
+		readGapPos = mapping.MatchedGenome.Regions[indexRegionBeforeGap].End + 1
+		indexRegionBeforeGap = mapping.MatchedGenome.GetGapIndexAfterPos(readGapPos)
+	}
+
+	if indexRegionBeforeGap == -1 && startIndex != 0 {
+		if mapping.MatchedGenome.Regions[len(mapping.MatchedGenome.Regions)-1].End-mapping.MatchedGenome.Regions[startIndex].Start < int(config.KmerLength())*2 {
+			return false
+		}
+	}
+	return true
 }
 
 func (m ReadMatchResult) GetCigar() (string, error) {
