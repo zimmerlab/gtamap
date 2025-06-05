@@ -87,9 +87,9 @@ func ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath string, fastaPath string
 	geneInfo := gtf.ReadGenesFromGtfUsingPath(gtfPath, geneIds)
 	if len(geneInfo) == 0 {
 		logrus.WithFields(logrus.Fields{
-			"geneIds": geneIds,
-			"gtf":     gtfPath,
-		}).Warnf("Target geneIds were found in provided gtf")
+			"provided geneIds": geneIds,
+			"gtf":              gtfPath,
+		}).Warnf("Non of the target geneIds were found in provided gtf")
 		return
 	}
 
