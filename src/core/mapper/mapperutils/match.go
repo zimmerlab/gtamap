@@ -155,7 +155,7 @@ func hasLongDiagonals(mapping *ReadMatchResult) bool {
 	}
 
 	if indexRegionBeforeGap == -1 && startIndex != 0 {
-		if mapping.MatchedGenome.Regions[len(mapping.MatchedGenome.Regions)-1].End-mapping.MatchedGenome.Regions[startIndex].Start < int(config.KmerLength())*2 {
+		if mapping.MatchedGenome.GetLastRegion().End-mapping.MatchedGenome.Regions[startIndex].Start < int(config.KmerLength())*2 {
 			return false
 		}
 	}
