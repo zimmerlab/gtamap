@@ -374,6 +374,52 @@ func (rv *RegionVector) Overlaps(start int, end int) bool {
 	return false
 }
 
+// input: genomicRv
+// returns start and ends of aligned diagonals / diagonal borders
+func (rv *RegionVector) GetAlignmentBlocks() []*Region {
+	blocks := make([]*Region, 0)
+	// if there are no gaps return start and end of region vector
+	if !rv.HasGaps() {
+		blocks = append(blocks, &Region{
+			Start: rv.GetFirstRegion().Start,
+			End:   rv.GetLastRegion().End,
+		})
+	}
+
+	// used to keep track of the read position for the next gap
+	readGapPos := 0
+	// returns the index of the first region after which a gap occurs (-1 if no gap)
+	indexRegionBeforeGap := rv.GetGapIndexAfterPos(readGapPos)
+
+	startIndex := 0
+
+	// loop through all gaps in the read (-1 means there is no more gap)
+	for indexRegionBeforeGap > -1 {
+		blockStart := rv.Regions[startIndex].Start
+		blockEnd := rv.Regions[indexRegionBeforeGap].End
+
+		blocks = append(blocks, &Region{
+			Start: blockStart,
+			End:   blockEnd,
+		})
+
+		startIndex = indexRegionBeforeGap + 1
+		readGapPos = rv.Regions[indexRegionBeforeGap].End + 1
+		indexRegionBeforeGap = rv.GetGapIndexAfterPos(readGapPos)
+	}
+
+	if indexRegionBeforeGap == -1 && startIndex != 0 {
+		blockStart := rv.Regions[startIndex].Start
+		blockEnd := rv.GetLastRegion().End
+
+		blocks = append(blocks, &Region{
+			Start: blockStart,
+			End:   blockEnd,
+		})
+	}
+	return blocks
+}
+
 // Equals checks if the region vector is equal to another region vector.
 // Both regions vectors are taken as is and are not sorted by this function.
 // Even if the regions are the same but in different order, the function will return false.
