@@ -177,6 +177,11 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 		logrus.Debug("no suitable diagonal found")
 		logrus.Debug("adding partial result to results")
 
+		// check if result is not empty
+		if len(result.MatchedGenome.Regions) == 0 || len(result.MatchedRead.Regions) == 0 {
+			return
+		}
+
 		*results = append(*results, result)
 
 		return
