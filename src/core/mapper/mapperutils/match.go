@@ -102,6 +102,10 @@ func GetBestPossibleMappingCombination(fwMatches []*ReadMatchResult, rvMatches [
 		for j := 0; j < len(rvMatches); j++ {
 			rvMatch := rvMatches[j]
 			if fwMatch.SequenceIndex-1 == rvMatch.SequenceIndex || fwMatch.SequenceIndex == rvMatch.SequenceIndex-1 {
+				// dont allow IncompleteMaps
+				if fwMatch.IncompleteMap || rvMatch.IncompleteMap {
+					continue
+				}
 				currMM := len(fwMatch.MismatchesRead) + len(rvMatch.MismatchesRead)
 				if currMM < maxMismatches {
 					// skip possible combinations if they have short diagonals
