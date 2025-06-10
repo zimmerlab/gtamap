@@ -315,9 +315,9 @@ type ValidReadPairCombination struct {
 
 // hold information for main seq id
 type TargetAnnotation struct {
-	PreferedStrand int                            // 0 -> + (fw+ and rv-); 1 -> - (fw- and rv+)
-	Confidence     float32                        // percentage of reads contributing to PreferedStrand
-	Introns        map[int][]*regionvector.Intron // maps to sub sequence index, meaning each gene has two slices of introns 0 -> plusOrintation 1 -> minusOrientation
+	PreferedStrand int                             // 0 -> + (fw+ and rv-); 1 -> - (fw- and rv+)
+	Confidence     float32                         // percentage of reads contributing to PreferedStrand
+	Introns        map[int]*regionvector.RegionSet // maps to sub sequence index, meaning each gene has two slices of introns 0 -> plusOrintation 1 -> minusOrientation
 	// zero bases coords, start incl, stop excl
 }
 
@@ -337,7 +337,7 @@ func (t TargetAnnotation) String() string {
 			orientationLabel = "-"
 		}
 		sb.WriteString(fmt.Sprintf("\n(%s):", orientationLabel))
-		for _, intron := range introns {
+		for _, intron := range introns.Regions {
 			sb.WriteString(fmt.Sprintf("\t[%d, %d) #%d", intron.Start, intron.End, intron.Evidence))
 		}
 	}

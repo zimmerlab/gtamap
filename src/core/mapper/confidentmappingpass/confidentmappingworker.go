@@ -1,7 +1,6 @@
 package confidentmappingpass
 
 import (
-	"sort"
 	"strconv"
 	"sync"
 
@@ -211,18 +210,9 @@ func InferIntronsOfTarget(targetId int, confMaps []*ConfidentTask, index *index.
 		confidence = 0.5
 	}
 
-	intronMap := make(map[int][]*regionvector.Intron)
-	intronMap[0] = plusOrientatedIntronsOfTarget
-	intronMap[1] = minusOrientatedIntronsOfTarget
-
-	// sort
-	sort.Slice(plusOrientatedIntronsOfTarget, func(i, j int) bool {
-		return plusOrientatedIntronsOfTarget[i].Start < plusOrientatedIntronsOfTarget[j].Start
-	})
-
-	sort.Slice(minusOrientatedIntronsOfTarget, func(i, j int) bool {
-		return minusOrientatedIntronsOfTarget[i].Start < minusOrientatedIntronsOfTarget[j].Start
-	})
+	intronMap := make(map[int]*regionvector.RegionSet)
+	intronMap[0] = regionvector.NewRegionSet(plusOrientatedIntronsOfTarget)
+	intronMap[1] = regionvector.NewRegionSet(minusOrientatedIntronsOfTarget)
 
 	targetAnnotation := mapperutils.TargetAnnotation{
 		PreferedStrand: preferredStrandedness,

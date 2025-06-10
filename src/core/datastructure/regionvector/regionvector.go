@@ -359,6 +359,47 @@ func (rv *RegionVector) GetRegionIndexContainingPosRelative(relPos int) (int, er
 	return -1, fmt.Errorf("relative position not found in any region")
 }
 
+type RegionSet struct {
+	Regions []*Intron
+	Starts  []int
+}
+
+func NewRegionSet(regions []*Intron) *RegionSet {
+	sort.Slice(regions, func(i, j int) bool {
+		return regions[i].Start < regions[j].Start
+	})
+
+	starts := make([]int, len(regions))
+	for i, r := range regions {
+		starts[i] = r.Start
+	}
+
+	return &RegionSet{Regions: regions, Starts: starts}
+}
+
+// check if readMatch is partly inside an intron
+func (rs *RegionSet) IntersectsIntrons(B []*Region) bool {
+	for _, b := range B {
+		idx := sort.Search(len(rs.Starts), func(i int) bool {
+			return rs.Starts[i] > b.End
+		})
+
+		if idx > 0 && overlaps(rs.Regions[idx-1], b) {
+			return true
+		}
+		if idx < len(rs.Regions) && overlaps(rs.Regions[idx], b) {
+			return true
+		}
+	}
+	return false
+}
+
+func overlaps(a *Intron, b *Region) bool {
+	fmt.Printf("%d < %d and %d < %d -> %s\n", a.Start, b.End, b.Start, a.End, a.Start < b.End && b.Start < a.End)
+
+	return a.Start < b.End && b.Start < a.End
+}
+
 // OverlapsByRegion checks if the region vector overlaps with the given region.
 func (rv *RegionVector) OverlapsByRegion(region *Region) bool {
 	return rv.Overlaps(region.Start, region.End)
