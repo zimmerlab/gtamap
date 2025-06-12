@@ -2,13 +2,14 @@ package debugout
 
 import (
 	"fmt"
+	"os"
+	"strconv"
+	"strings"
+
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
-	"os"
-	"strconv"
-	"strings"
 )
 
 const contextWindow = 5
@@ -28,6 +29,15 @@ func GenerateAlignmentView(genomeIndex *index.GenomeIndex, mappedRead mapperutil
 	file.WriteString("Sequence Index: ")
 	file.WriteString(strconv.Itoa(mappedRead.SequenceIndex))
 	file.WriteString("\n")
+	file.WriteString("Splice Sites: ")
+	for _, s := range mappedRead.SpliceSitesInfo {
+		if s {
+			file.WriteString("True ")
+		} else {
+			file.WriteString("False ")
+		}
+	}
+	file.WriteString("\n")
 	file.WriteString(view)
 	file.WriteString("\n")
 	file.WriteString("\n")
@@ -39,21 +49,12 @@ func getAlignment(genomeIndex *index.GenomeIndex, mappedRead mapperutils.ReadMat
 	var geneView strings.Builder
 	var coordView strings.Builder
 	var builder strings.Builder
-	var geneSeq = genomeIndex.Sequences[mappedRead.SequenceIndex]
-	// merge regions based on genomic region vector:
-	// read := {0, 10}, {10, 120}, {120, 150}}
-	// gene := {100, 110}, {110, 230}, {1020, 1050}}
-	// mergedRead: [{0 120}, {120 150}]
-	// mergedGene: [{100 230}, {1020 1050}]
-	mergedReadRegions, mergedGeneRegions := mergeAlignedRegions(mappedRead.MatchedRead.Regions, mappedRead.MatchedGenome.Regions)
+	geneSeq := genomeIndex.Sequences[mappedRead.SequenceIndex]
+	readStart := mappedRead.MatchedRead.Regions[0].Start
 
-	for i := 0; i < len(mergedReadRegions); i++ {
-		readRegion := mergedReadRegions[i]
-		geneRegion := mergedGeneRegions[i]
-		readStart := readRegion.Start
-		readStop := readRegion.End
-		geneStart := geneRegion.Start
-		geneStop := geneRegion.End
+	for _, genomeRegion := range mappedRead.MatchedGenome.GetAlignmentBlocks() {
+		geneStart := genomeRegion.Start
+		geneStop := genomeRegion.End
 
 		// append prefix separator
 		for j := geneStart - contextWindow; j < geneStart; j++ {
@@ -77,26 +78,22 @@ func getAlignment(genomeIndex *index.GenomeIndex, mappedRead mapperutils.ReadMat
 		count := 0
 		strStart := strconv.Itoa(readStart)
 		strStartInGene := strconv.Itoa(geneStart)
-		strStop := strconv.Itoa(readStop)
-		strStopInGene := strconv.Itoa(geneStop)
-		coordLength := len(strStart) + len(strStop) + len(strStartInGene) + len(strStopInGene) + 4 // 4 chars for sep
-		for j := geneStart; j < geneStop; j++ {
+		coordLength := len(strStart) + len(strStartInGene) + 4 // 4 chars for sep
+
+		for j := genomeRegion.Start; j < genomeRegion.End; j++ {
+			readPos := regionvector.GenomicCoordToReadCoord(readStart, j, mappedRead.MatchedGenome.Regions)
+
 			if j == geneStart {
 				coordView.WriteByte('|')
 				coordView.WriteString(strStart)
-				coordView.WriteByte('-')
-				coordView.WriteString(strStop)
 				coordView.WriteByte(',')
 				coordView.WriteString(strStartInGene)
-				coordView.WriteByte('-')
-				coordView.WriteString(strStopInGene)
 			} else if count > coordLength {
 				coordView.WriteByte(' ')
 			}
 
-			posInRead := readStart + j - geneStart
-			readView.WriteByte((*readMeta.Sequence)[posInRead])
-			mapView.WriteByte(getMappingByte((*readMeta.Sequence)[readStart+j-geneStart], (*geneSeq)[j]))
+			readView.WriteByte((*readMeta.Sequence)[readPos])
+			mapView.WriteByte(getMappingByte((*readMeta.Sequence)[readPos], (*geneSeq)[j]))
 			geneView.WriteByte((*geneSeq)[j])
 			count++
 		}
@@ -110,16 +107,8 @@ func getAlignment(genomeIndex *index.GenomeIndex, mappedRead mapperutils.ReadMat
 				geneView.WriteByte((*geneSeq)[j])
 			}
 		}
-
-		// TODO: this would currently also append ----- to the actual end of a gene
-		if i == len(mappedRead.MatchedRead.Regions)-1 {
-			// append suffix separator
-			for j := geneStop - contextWindow; j < geneStop; j++ {
-				// readView.WriteByte(' ')
-				// coordView.WriteByte(' ')
-				// mapView.WriteByte(' ')
-				geneView.WriteByte('-')
-			}
+		for i := 0; i < 3; i++ {
+			coordView.WriteByte(' ')
 		}
 	}
 	builder.WriteString(coordView.String())
@@ -164,13 +153,6 @@ func mergeRegions(regions []*regionvector.Region) []regionvector.Region {
 }
 
 func mergeAlignedRegions(readRegions []*regionvector.Region, genomeRegions []*regionvector.Region) ([]regionvector.Region, []regionvector.Region) {
-	if len(readRegions) != len(genomeRegions) {
-		panic("read and genome regions must be aligned and equal in length")
-	}
-	if len(readRegions) == 0 {
-		return nil, nil
-	}
-
 	mergedReads := []regionvector.Region{*readRegions[0]}
 	mergedGenomes := []regionvector.Region{*genomeRegions[0]}
 
