@@ -338,7 +338,7 @@ func (t TargetAnnotation) String() string {
 		}
 		sb.WriteString(fmt.Sprintf("\n(%s):", orientationLabel))
 		for _, intron := range introns.Regions {
-			sb.WriteString(fmt.Sprintf("\t[%d, %d) #%d", intron.Start, intron.End, intron.Evidence))
+			sb.WriteString(intron.String())
 		}
 	}
 
