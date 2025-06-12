@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 )
@@ -17,6 +18,7 @@ type Intron struct {
 	Start    int // 0-based
 	End      int // end-exlusive
 	Evidence int
+	Rank     int // rank of intron in seq
 }
 
 func (r *Region) Length() int {
@@ -364,10 +366,39 @@ type RegionSet struct {
 	Starts  []int
 }
 
+func (i Intron) String() string {
+	var sb strings.Builder
+
+	sb.WriteString(fmt.Sprintf("#%d: [%d, %d) ", i.Evidence, i.Start, i.End))
+	return sb.String()
+}
+
+func GenomicCoordToReadCoord(startInRead, genomeCoord int, genomeIntervals []*Region) int {
+	pos := 0
+	for _, genomicRegion := range genomeIntervals {
+		if genomicRegion.End < genomeCoord {
+			pos += genomicRegion.Length()
+			continue
+		} else {
+			pos += genomeCoord - genomicRegion.Start
+			break
+		}
+	}
+
+	return pos + startInRead
+}
+
 func NewRegionSet(regions []*Intron) *RegionSet {
 	sort.Slice(regions, func(i, j int) bool {
 		return regions[i].Start < regions[j].Start
 	})
+
+	// rank introns
+	pos := 0
+	for _, intron := range regions {
+		intron.Rank = pos
+		pos++
+	}
 
 	starts := make([]int, len(regions))
 	for i, r := range regions {
@@ -377,7 +408,7 @@ func NewRegionSet(regions []*Intron) *RegionSet {
 	return &RegionSet{Regions: regions, Starts: starts}
 }
 
-// check if readMatch is partly inside an intron
+// IntersectsIntrons check if readMatch is partly inside an intron
 func (rs *RegionSet) IntersectsIntrons(B []*Region) bool {
 	for _, b := range B {
 		idx := sort.Search(len(rs.Starts), func(i int) bool {
@@ -394,9 +425,51 @@ func (rs *RegionSet) IntersectsIntrons(B []*Region) bool {
 	return false
 }
 
-func overlaps(a *Intron, b *Region) bool {
-	fmt.Printf("%d < %d and %d < %d -> %s\n", a.Start, b.End, b.Start, a.End, a.Start < b.End && b.Start < a.End)
+// GetIntersectingIntron returns coords
+func (rs *RegionSet) GetIntersectingIntron(b *Region) *Intron {
+	idx := sort.Search(len(rs.Starts), func(i int) bool {
+		return rs.Starts[i] > b.End
+	})
 
+	if idx > 0 && overlaps(rs.Regions[idx-1], b) {
+		return rs.Regions[idx-1]
+	}
+	if idx < len(rs.Regions) && overlaps(rs.Regions[idx], b) {
+		return rs.Regions[idx]
+	}
+	return nil
+}
+
+// GetIntersectingIntrons performs binary search to jump to first intersecting interval and
+// then counts how many intervals from that point are overlapping
+// stops search as soon as no overlap can be found
+// returns a list of all overlapping introns
+func (rs *RegionSet) GetIntersectingIntrons(b *Region) []*Intron {
+	introns := make([]*Intron, 0)
+	idx := sort.Search(len(rs.Starts), func(i int) bool {
+		return rs.Starts[i] >= b.Start
+	})
+
+	for i := idx - 1; i >= 0 && rs.Regions[i].End > b.Start; i-- {
+		if overlaps(rs.Regions[i], b) {
+			introns = append(introns, rs.Regions[i])
+		} else {
+			break
+		}
+	}
+
+	for i := idx; i < len(rs.Regions) && rs.Regions[i].Start < b.End; i++ {
+		if overlaps(rs.Regions[i], b) {
+			introns = append(introns, rs.Regions[i])
+		} else {
+			break
+		}
+	}
+	return introns
+}
+
+// overlaps is needed to check if a region overlaps an intron and since intron is a different struct compared to region I made an extra func
+func overlaps(a *Intron, b *Region) bool {
 	return a.Start < b.End && b.Start < a.End
 }
 
@@ -415,8 +488,52 @@ func (rv *RegionVector) Overlaps(start int, end int) bool {
 	return false
 }
 
-// input: genomicRv
-// returns start and ends of aligned diagonals / diagonal borders
+// MergeAlignmentBlocks merges all blocks of the region vec and overwrites them
+func (rv *RegionVector) MergeAlignmentBlocks() {
+	blocks := make([]*Region, 0)
+	// if there are no gaps return start and end of region vector
+	if !rv.HasGaps() {
+		blocks = append(blocks, &Region{
+			Start: rv.GetFirstRegion().Start,
+			End:   rv.GetLastRegion().End,
+		})
+	}
+
+	// used to keep track of the read position for the next gap
+	readGapPos := 0
+	// returns the index of the first region after which a gap occurs (-1 if no gap)
+	indexRegionBeforeGap := rv.GetGapIndexAfterPos(readGapPos)
+
+	startIndex := 0
+
+	// loop through all gaps in the read (-1 means there is no more gap)
+	for indexRegionBeforeGap > -1 {
+		blockStart := rv.Regions[startIndex].Start
+		blockEnd := rv.Regions[indexRegionBeforeGap].End
+
+		blocks = append(blocks, &Region{
+			Start: blockStart,
+			End:   blockEnd,
+		})
+
+		startIndex = indexRegionBeforeGap + 1
+		readGapPos = rv.Regions[indexRegionBeforeGap].End + 1
+		indexRegionBeforeGap = rv.GetGapIndexAfterPos(readGapPos)
+	}
+
+	if indexRegionBeforeGap == -1 && startIndex != 0 {
+		blockStart := rv.Regions[startIndex].Start
+		blockEnd := rv.GetLastRegion().End
+
+		blocks = append(blocks, &Region{
+			Start: blockStart,
+			End:   blockEnd,
+		})
+	}
+	rv.Regions = blocks
+}
+
+// GetFirstRegion returns start and ends of aligned diagonals / diagonal borders
 func (rv *RegionVector) GetAlignmentBlocks() []*Region {
 	blocks := make([]*Region, 0)
 	// if there are no gaps return start and end of region vector
