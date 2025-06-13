@@ -14,6 +14,12 @@ type Region struct {
 	End   int // end-exlusive
 }
 
+type Gap struct {
+	Start           int // 0-based
+	End             int // end-exlusive
+	KnownSpliceSite bool
+}
+
 type Intron struct {
 	Start    int // 0-based
 	End      int // end-exlusive

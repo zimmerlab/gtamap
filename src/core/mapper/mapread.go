@@ -460,15 +460,28 @@ func annotateSpliceSites(read *fastq.Read, genomeIndex *index.GenomeIndex, resul
 		gapGenome := result.MatchedGenome.GetGapAfterRegionIndex(indexRegionBeforeGap)
 
 		donorSiteStart := gapGenome.Start
-		acceptorSiteStart := gapGenome.End
-
 		donorSiteSeq := (*genomeIndex.Sequences[seqIndex])[donorSiteStart : donorSiteStart+2]
+
+		acceptorSiteStart := gapGenome.End
 		acceptorSiteSeq := (*genomeIndex.Sequences[seqIndex])[acceptorSiteStart-2 : acceptorSiteStart]
 
-		isForwardStrand := genomeIndex.IsSequenceForward(seqIndex)
+		var lookOnPlusStrand bool
+		if genomeIndex.GetSequenceInfo(seqIndex / 2).IsForwardStrand {
+			if genomeIndex.IsSequenceForward(seqIndex) {
+				lookOnPlusStrand = true
+			} else {
+				lookOnPlusStrand = false
+			}
+		} else {
+			if genomeIndex.IsSequenceForward(seqIndex) {
+				lookOnPlusStrand = false
+			} else {
+				lookOnPlusStrand = true
+			}
+		}
 
 		_, isKnownSpliceSite := scoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
-			acceptorSiteSeq[0], acceptorSiteSeq[1], isForwardStrand)
+			acceptorSiteSeq[0], acceptorSiteSeq[1], lookOnPlusStrand)
 
 		// annotate split with spliceSite info
 		if result.SpliceSitesInfo == nil {
@@ -803,10 +816,6 @@ func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.Genome
 			annotateSpliceSites(read, genomeIndex, res)
 		}
 
-		if res.IncompleteMap {
-			continue
-		}
-
 		finalResults = append(finalResults, res)
 	}
 
@@ -885,13 +894,32 @@ func determineBestSplit(
 		acceptorSiteStart := gapGenome.End - splitRev
 		acceptorSiteSeq := (*genomeIndex.Sequences[seqIndex])[acceptorSiteStart-2 : acceptorSiteStart]
 
-		isForwardStrand := genomeIndex.IsSequenceForward(seqIndex)
+		var lookOnPlusStrand bool
+		if genomeIndex.GetSequenceInfo(seqIndex / 2).IsForwardStrand {
+			if genomeIndex.IsSequenceForward(seqIndex) {
+				lookOnPlusStrand = true
+			} else {
+				lookOnPlusStrand = false
+			}
+		} else {
+			if genomeIndex.IsSequenceForward(seqIndex) {
+				lookOnPlusStrand = false
+			} else {
+				lookOnPlusStrand = true
+			}
+		}
+		// isForwardStrand needs to be true if:
+		// seqIndex == 0 && FirstOfPair
+		// seqIndex == 1 && SecondOfPair
+		// false if
+		// seqIndex == 0 && SecondOfPair
+		// seqIndex == 1 && FirstOfPair
 
 		// add a penalty if the splice site is not canonical
 		// 2 means that there is no known splice site
-		spliceSitePenalty, _ := scoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
-			acceptorSiteSeq[0], acceptorSiteSeq[1], isForwardStrand)
 
+		spliceSitePenalty, _ := scoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
+			acceptorSiteSeq[0], acceptorSiteSeq[1], lookOnPlusStrand)
 		numMismatches += spliceSitePenalty
 
 		logrus.WithFields(logrus.Fields{

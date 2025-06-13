@@ -12,7 +12,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 )
 
-const contextWindow = 5
+const contextWindow = 10
 
 func GenerateAlignmentView(genomeIndex *index.GenomeIndex, mappedRead mapperutils.ReadMatchResult, readMeta *fastq.Read) {
 	view := getAlignment(genomeIndex, mappedRead, readMeta)
@@ -29,7 +29,7 @@ func GenerateAlignmentView(genomeIndex *index.GenomeIndex, mappedRead mapperutil
 	file.WriteString("Sequence Index: ")
 	file.WriteString(strconv.Itoa(mappedRead.SequenceIndex))
 	file.WriteString("\n")
-	file.WriteString("Splice Sites: ")
+	file.WriteString("Splice Sites (before second pass): ")
 	for _, s := range mappedRead.SpliceSitesInfo {
 		if s {
 			file.WriteString("True ")
@@ -39,6 +39,7 @@ func GenerateAlignmentView(genomeIndex *index.GenomeIndex, mappedRead mapperutil
 	}
 	file.WriteString("\n")
 	file.WriteString(view)
+	file.WriteString(string(*genomeIndex.Sequences[mappedRead.SequenceIndex]))
 	file.WriteString("\n")
 	file.WriteString("\n")
 }
@@ -50,11 +51,13 @@ func getAlignment(genomeIndex *index.GenomeIndex, mappedRead mapperutils.ReadMat
 	var coordView strings.Builder
 	var builder strings.Builder
 	geneSeq := genomeIndex.Sequences[mappedRead.SequenceIndex]
-	readStart := mappedRead.MatchedRead.Regions[0].Start
+	readStartALignment := mappedRead.MatchedRead.Regions[0].Start
 
 	for _, genomeRegion := range mappedRead.MatchedGenome.GetAlignmentBlocks() {
 		geneStart := genomeRegion.Start
 		geneStop := genomeRegion.End
+		readStartCoord := regionvector.GenomicCoordToReadCoord(readStartALignment, geneStart, mappedRead.MatchedGenome.Regions)
+		readStopCoord := regionvector.GenomicCoordToReadCoord(readStartALignment, geneStop, mappedRead.MatchedGenome.Regions)
 
 		// append prefix separator
 		for j := geneStart - contextWindow; j < geneStart; j++ {
@@ -76,18 +79,24 @@ func getAlignment(genomeIndex *index.GenomeIndex, mappedRead mapperutils.ReadMat
 
 		// append alignment
 		count := 0
-		strStart := strconv.Itoa(readStart)
+		strStart := strconv.Itoa(readStartCoord)
 		strStartInGene := strconv.Itoa(geneStart)
-		coordLength := len(strStart) + len(strStartInGene) + 4 // 4 chars for sep
+		strStop := strconv.Itoa(readStopCoord)
+		strStopInGene := strconv.Itoa(geneStop)
+		coordLength := len(strStart) + len(strStartInGene) + len(strStop) + len(strStopInGene) + 6 // 6 chars for sep
 
 		for j := genomeRegion.Start; j < genomeRegion.End; j++ {
-			readPos := regionvector.GenomicCoordToReadCoord(readStart, j, mappedRead.MatchedGenome.Regions)
+			readPos := regionvector.GenomicCoordToReadCoord(readStartALignment, j, mappedRead.MatchedGenome.Regions)
 
 			if j == geneStart {
 				coordView.WriteByte('|')
 				coordView.WriteString(strStart)
-				coordView.WriteByte(',')
+				coordView.WriteByte('-')
+				coordView.WriteString(strStop)
+				coordView.WriteByte(';')
 				coordView.WriteString(strStartInGene)
+				coordView.WriteByte('-')
+				coordView.WriteString(strStopInGene)
 			} else if count > coordLength {
 				coordView.WriteByte(' ')
 			}

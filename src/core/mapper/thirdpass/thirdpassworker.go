@@ -30,6 +30,9 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 
 		for i := 0; i < len(task.TargetInfo.Fw); i++ {
 			for j := 0; j < len(task.TargetInfo.Rv); j++ {
+				if task.TargetInfo.Fw[i].IncompleteMap || task.TargetInfo.Rv[j].IncompleteMap {
+					continue
+				}
 				s, isOk := readPairResultToSamString(index, task.TargetInfo.ReadPair, task.TargetInfo.Fw[i], task.TargetInfo.Rv[j])
 				if !isOk {
 					continue
