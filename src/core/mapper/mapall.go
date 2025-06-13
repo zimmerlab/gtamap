@@ -122,7 +122,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 
 	var wgSecondpass sync.WaitGroup
 	wgSecondpass.Add(1)
-	go secondpass.SecondpassMappingWorker(secondpassChan, &wgSecondpass, annotationChan, thirdpassChan)
+	go secondpass.SecondpassMappingWorker(secondpassChan, &wgSecondpass, annotationChan, thirdpassChan, genomeIndex)
 
 	waitgroupConfidentMap.Wait()
 	close(annotationChan)

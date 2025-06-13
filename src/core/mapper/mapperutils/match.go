@@ -102,6 +102,10 @@ func GetBestPossibleMappingCombination(fwMatches []*ReadMatchResult, rvMatches [
 		for j := 0; j < len(rvMatches); j++ {
 			rvMatch := rvMatches[j]
 			if fwMatch.SequenceIndex-1 == rvMatch.SequenceIndex || fwMatch.SequenceIndex == rvMatch.SequenceIndex-1 {
+				// dont allow IncompleteMaps
+				if fwMatch.IncompleteMap || rvMatch.IncompleteMap {
+					continue
+				}
 				currMM := len(fwMatch.MismatchesRead) + len(rvMatch.MismatchesRead)
 				if currMM < maxMismatches {
 					// skip possible combinations if they have short diagonals
@@ -151,7 +155,7 @@ func hasLongDiagonals(mapping *ReadMatchResult) bool {
 	}
 
 	if indexRegionBeforeGap == -1 && startIndex != 0 {
-		if mapping.MatchedGenome.Regions[len(mapping.MatchedGenome.Regions)-1].End-mapping.MatchedGenome.Regions[startIndex].Start < int(config.KmerLength())*2 {
+		if mapping.MatchedGenome.GetLastRegion().End-mapping.MatchedGenome.Regions[startIndex].Start < int(config.KmerLength())*2 {
 			return false
 		}
 	}
@@ -311,9 +315,9 @@ type ValidReadPairCombination struct {
 
 // hold information for main seq id
 type TargetAnnotation struct {
-	PreferedStrand int                            // 0 -> + (fw+ and rv-); 1 -> - (fw- and rv+)
-	Confidence     float32                        // percentage of reads contributing to PreferedStrand
-	Introns        map[int][]*regionvector.Intron // maps to sub sequence index, meaning each gene has two slices of introns 0 -> plusOrintation 1 -> minusOrientation
+	PreferedStrand int                             // 0 -> + (fw+ and rv-); 1 -> - (fw- and rv+)
+	Confidence     float32                         // percentage of reads contributing to PreferedStrand
+	Introns        map[int]*regionvector.RegionSet // maps to sub sequence index, meaning each gene has two slices of introns 0 -> plusOrintation 1 -> minusOrientation
 	// zero bases coords, start incl, stop excl
 }
 
@@ -333,8 +337,8 @@ func (t TargetAnnotation) String() string {
 			orientationLabel = "-"
 		}
 		sb.WriteString(fmt.Sprintf("\n(%s):", orientationLabel))
-		for _, intron := range introns {
-			sb.WriteString(fmt.Sprintf("\t[%d, %d) #%d", intron.Start, intron.End, intron.Evidence))
+		for _, intron := range introns.Regions {
+			sb.WriteString(intron.String())
 		}
 	}
 
