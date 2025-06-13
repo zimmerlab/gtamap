@@ -908,12 +908,6 @@ func determineBestSplit(
 				lookOnPlusStrand = true
 			}
 		}
-		// isForwardStrand needs to be true if:
-		// seqIndex == 0 && FirstOfPair
-		// seqIndex == 1 && SecondOfPair
-		// false if
-		// seqIndex == 0 && SecondOfPair
-		// seqIndex == 1 && FirstOfPair
 
 		// add a penalty if the splice site is not canonical
 		// 2 means that there is no known splice site
