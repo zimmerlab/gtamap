@@ -431,6 +431,34 @@ func (rs *RegionSet) IntersectsIntrons(B []*Region) bool {
 	return false
 }
 
+func (rs *RegionSet) GetNextIntron(pos int) *Intron {
+	i := 0
+	for _, start := range rs.Starts {
+		if start >= pos {
+			return rs.Regions[i]
+		}
+		i++
+	}
+	return nil
+}
+
+func (rs *RegionSet) GetPrevIntron(pos int) *Intron {
+	i := 0
+	intronIndex := -1
+	found := false
+	for _, start := range rs.Starts {
+		if start <= pos {
+			found = true
+			intronIndex = i
+		}
+		i++
+	}
+	if found {
+		return rs.Regions[intronIndex]
+	}
+	return nil
+}
+
 // GetIntersectingIntron returns coords
 func (rs *RegionSet) GetIntersectingIntron(b *Region) *Intron {
 	idx := sort.Search(len(rs.Starts), func(i int) bool {

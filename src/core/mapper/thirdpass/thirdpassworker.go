@@ -1,6 +1,7 @@
 package thirdpass
 
 import (
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -31,6 +32,10 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 		for i := 0; i < len(task.TargetInfo.Fw); i++ {
 			for j := 0; j < len(task.TargetInfo.Rv); j++ {
 				if task.TargetInfo.Fw[i].IncompleteMap || task.TargetInfo.Rv[j].IncompleteMap {
+					continue
+				}
+				if task.TargetInfo.Fw[i].MatchedRead.Length() != 150 || task.TargetInfo.Rv[j].MatchedRead.Length() != 150 {
+					fmt.Println(task.TargetInfo.ReadPair.ReadR1.Header)
 					continue
 				}
 				s, isOk := readPairResultToSamString(index, task.TargetInfo.ReadPair, task.TargetInfo.Fw[i], task.TargetInfo.Rv[j])
