@@ -68,6 +68,9 @@ func needsRemap(readMapping *mapperutils.ReadMatchResult, annotation *mapperutil
 	if annotation.Introns[readMapping.SequenceIndex].IntersectsIntrons(readMapping.MatchedGenome.GetAlignmentBlocks()) {
 		logrus.Debug("Have to remap readMatchResult due to: Intron boundaries not respected")
 		return true
+	} else if readMapping.MatchedGenome.HasGaps() {
+		// if the read doesn't intersect with introns but has at least one gap
+		return true
 	}
 	return false
 }
@@ -75,6 +78,12 @@ func needsRemap(readMapping *mapperutils.ReadMatchResult, annotation *mapperutil
 func remapReadPair(readPairMapping *mapperutils.ReadPairMatchResults, annotationMap map[int]*mapperutils.TargetAnnotation) {
 	for _, mapping := range readPairMapping.Fw {
 		mainSeqId := mapping.SequenceIndex / 2
+		if readPairMapping.ReadPair.ReadR1.Header == "436071" {
+			fmt.Println("s")
+			x := annotationMap[mapping.SequenceIndex/2].Introns[mapping.SequenceIndex].GetIntersectingIntrons(mapping.MatchedGenome.GetFirstGap())
+			fmt.Println(x)
+		}
+
 		if needsRemap(mapping, annotationMap[mainSeqId]) {
 			remapRead(mapping, annotationMap[mainSeqId], readPairMapping.ReadPair.ReadR1)
 		}
@@ -99,8 +108,8 @@ func enforceIntrons(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntro
 
 	var gap *regionvector.Region = &regionvector.Region{}
 
-	// here we adjust all junctions in the read which
-	// overlap with exactly one inferred intron but start/stop are not quite right
+	// here we iterate over all junctions of a read
+	// and handle cases I-VI accordingly
 	if readMatchResult.MatchedGenome.HasGaps() {
 		for i := 0; i < len(alignedGenomeBlocks)-1; i++ {
 
@@ -109,44 +118,53 @@ func enforceIntrons(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntro
 			gap.Start = gapStart
 			gap.End = gapStop
 
+			// we return a SLICE of overlapping introns because of cases like this:
+			// (READ)      +++-----------------+++++++  -> one junction can span across several introns of inferred annotation
+			// (REF)  ++++++++--------+++------+++++++
 			overlappingIntrons := targetSeqIntronSet.GetIntersectingIntrons(gap)
-			// this could be the sign for a deletion
+
 			if len(overlappingIntrons) == 0 {
-				// read +++++++-------------+++++++  -> small kmer gets mapped into some random part of the gene
-				// ++++++++++++++++++++++++++++++++ (REF)
+				// Case V (Deletion)
+				// (READ) +++++++-------------+++++++
+				// (REF) ++++++++++++++++++++++++++++++++
 				logrus.WithFields(logrus.Fields{
-					"Implied gap in read":  gap,
-					"Read Blocks":          alignedGenomeBlocks,
-					"Overlapping Introns":  overlappingIntrons,
-					"Left Anchor:":         alignedGenomeBlocks[i],
-					"RIght Anchor:":        alignedGenomeBlocks[i+1],
-					"Left Anchor Length:":  alignedGenomeBlocks[i].Length(),
-					"RIght Anchor Length:": alignedGenomeBlocks[i+1].Length(),
-				}).Info("Found inconsistent junction which has no overlapping introns")
+					"Implied gap in read": gap,
+					"Length of Deletion":  gap.Length(),
+					"Read Blocks":         alignedGenomeBlocks,
+				}).Debug("Found deletion in read.")
+				// Just log / use for report later
 				continue
 
 			}
 
-			// we return a list of overlapping introns because of cases like this:
-			// read ++-----------------++++++++  -> spans two introns and needs adjustment
-			// ++++++++--------+++------+++++++ (REF)
-			// get left and right inferred intron
-			lIntron := overlappingIntrons[0]
-			rIntron := overlappingIntrons[len(overlappingIntrons)-1]
+			//                lIntron    rIntron
+			// (REF)  ++++++++--------+++------+++++++
+			// (READ)      +++-----------------+++++++
+			lIntron := overlappingIntrons[0]                         // left most intron -> end of alignment block
+			rIntron := overlappingIntrons[len(overlappingIntrons)-1] // right most intron -> start of next alignment block
 
 			if rIntron.Start < alignedGenomeBlocks[i+1].Start && rIntron.End > alignedGenomeBlocks[i+1].End || lIntron.Start < alignedGenomeBlocks[i].Start && lIntron.End > alignedGenomeBlocks[i].End {
+				// Case III
 				// read +++++++-------------------+--  -> small kmer gets mapped into some random part of the gene
 				// ++++++++++++----+++--------------- (REF)
 				// -> we need to check after every inferred intron if the small kmer matches inside the exon
+
 				logrus.WithFields(logrus.Fields{
 					"Implied gap in read": gap,
 					"Read Blocks":         alignedGenomeBlocks,
 					"Overlapping Introns": overlappingIntrons,
-				}).Info("Found inconsistent junction which has unstable anchors mapped inside intron")
+				}).Debug("Found inconsistent junction which has instable anchors mapped inside intron")
 
 				continue
 			}
 
+			logrus.WithFields(logrus.Fields{
+				"Implied gap in read": gap,
+				"Read Blocks":         alignedGenomeBlocks,
+				"Overlapping Introns": overlappingIntrons,
+			}).Debug("Found inconsistent read junction not following inferred intron boundaries")
+
+			// Case VI
 			correctedL := lIntron.Start - gapStart
 			correctedR := rIntron.End - gapStop
 
