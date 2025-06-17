@@ -122,10 +122,13 @@ func enforceIntrons(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntro
 			rIntron := overlappingIntrons[len(overlappingIntrons)-1] // right most intron -> start of next alignment block
 
 			// Case III right
-			// read +++++++-------------------+--  -> small kmer gets mapped into some random part of the gene
-			// ++++++++++++----+++--------------- (REF)
+			// (READ) +++++++-------------------+--  -> small kmer gets mapped into some random part of the gene
+			// (REF)  +++++++----+++---------------
 			// -> we need to check after every inferred intron if the small kmer matches inside the exon
 			if rIntron.Start < readMatchResult.MatchedGenome.Regions[i+1].Start && rIntron.End > readMatchResult.MatchedGenome.Regions[i+1].End {
+				if read.Header == "668741" {
+					fmt.Println(read.Header)
+				}
 
 				logrus.WithFields(logrus.Fields{
 					"Implied gap in read": gap,
@@ -176,6 +179,7 @@ func enforceIntrons(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntro
 
 			// Case VI
 			// (READ) ++++++++++-------+++++++++++
+			// (READ) ++++++-------+++++++++++++++ (or)
 			// (REF)  ++++++++-------++++++++++++
 			readMatchResult.MatchedGenome.Regions[i].End = readMatchResult.MatchedGenome.Regions[i].End + correctedL
 			readMatchResult.MatchedGenome.Regions[i+1].Start = readMatchResult.MatchedGenome.Regions[i+1].Start + correctedR
@@ -294,8 +298,8 @@ func remapUsedDiagonal(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 		// check for potential overhangs into neighbor intron of anchor seed
 		//(READ) ++++++++++*-----######---------->
 		//(REF) +++++++++++---------------*######>
-		if anchorRegion.End > nextIntronFromAnchor.End {
-			padding := anchorRegion.End - nextIntronFromAnchor.End
+		if anchorRegion.End > nextIntronFromAnchor.Start {
+			padding := anchorRegion.End - nextIntronFromAnchor.Start
 
 			// add padding to region to remap
 			// before:               |remap|
