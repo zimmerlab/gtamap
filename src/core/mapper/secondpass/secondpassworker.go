@@ -84,9 +84,11 @@ func remapRead(readMapping *mapperutils.ReadMatchResult, annotation *mapperutils
 }
 
 func enforceIntrons(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet *regionvector.RegionSet, read *fastq.Read, genomeIndex *index.GenomeIndex) {
+	// strore original regions to combat anomalies in remap
+	originalRegions := readMatchResult.MatchedGenome.Copy() // i think i only need this if my read has more than 1 gaps
 	gap := regionvector.Region{}
 
-	if read.Header == "505828" {
+	if read.Header == "2765177" {
 		fmt.Println("s")
 	}
 
@@ -126,28 +128,31 @@ func enforceIntrons(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntro
 			lIntron := overlappingIntrons[0]                         // left most intron -> end of alignment block
 			rIntron := overlappingIntrons[len(overlappingIntrons)-1] // right most intron -> start of next alignment block
 
+			lAnchor := readMatchResult.MatchedGenome.Regions[i]
+			rAnchor := readMatchResult.MatchedGenome.Regions[i+1]
+
 			if lIntron.Start == gapStart && rIntron.End == gapStop {
 				// if gap already complies with intron boundaries,don't do anything
 				continue
 			}
 
-			// Case III right
-			// (READ) +++++++-------------------+--  -> small kmer gets mapped into some random part of the gene
-			// (REF)  +++++++----+++---------------
-			// -> we need to check after every inferred intron if the small kmer matches inside the exon
-			if rIntron.Start < readMatchResult.MatchedGenome.Regions[i+1].Start && rIntron.End > readMatchResult.MatchedGenome.Regions[i+1].End {
+			if rIntron.Start < rAnchor.Start && rIntron.End > rAnchor.End {
+				// Case III right default
+				// (READ) +++++++-------------------+--  -> small kmer gets mapped into some random part of the gene
+				// (REF)  +++++++----+++---------------
+				// -> we need to check after every inferred intron if the small kmer matches inside the exon
 
 				logrus.WithFields(logrus.Fields{
 					"Implied gap in read": gap,
 					"Read Blocks":         readMatchResult.MatchedGenome.Regions,
 					"Overlapping Introns": overlappingIntrons,
-				}).Debug("Found inconsistent junction which has unstable (right) anchor mapped inside intron")
+				}).Debug("Found inconsistent junction which has unstable (right) anchor mapped inside intron.")
 
-				remapUsedDiagonal(readMatchResult, targetSeqIntronSet, read, readMatchResult.MatchedGenome.Regions[i+1], false, readMatchResult.MatchedGenome.Regions[i], genomeIndex, lIntron.End)
+				// remapUsedDiagonal(readMatchResult, targetSeqIntronSet, read, rAnchor, false, lAnchor, genomeIndex, lIntron.End)
+				applyDynamicRemap(readMatchResult, targetSeqIntronSet, read, genomeIndex, rIntron, rAnchor, gap, overlappingIntrons, lAnchor, lIntron, originalRegions)
 				continue
-			} else if lIntron.Start < readMatchResult.MatchedGenome.Regions[i].Start && lIntron.End > readMatchResult.MatchedGenome.Regions[i].End {
-				fmt.Println(read.Header)
-				// Case III left
+			} else if lIntron.Start < lAnchor.Start && lIntron.End > lAnchor.End {
+				// Case III left default
 				// (READ) -------------+----+++++++++--  -> small kmer gets mapped into some random part of the gene
 				// (REF)  +++++-------------+++++++++--
 				// -> we need to check after every inferred intron if the small kmer matches inside the exon
@@ -157,9 +162,10 @@ func enforceIntrons(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntro
 					"Implied gap in read": gap,
 					"Read Blocks":         readMatchResult.MatchedGenome.Regions,
 					"Overlapping Introns": overlappingIntrons,
-				}).Debug("Found inconsistent junction which has unstable (left) anchor mapped inside intron")
+				}).Debug("Found inconsistent junction which has unstable (left) anchor mapped inside intron.")
 
-				remapUsedDiagonal(readMatchResult, targetSeqIntronSet, read, readMatchResult.MatchedGenome.Regions[i], true, readMatchResult.MatchedGenome.Regions[i+1], genomeIndex, rIntron.Start)
+				// remapUsedDiagonal(readMatchResult, targetSeqIntronSet, read, lAnchor, true, rAnchor, genomeIndex, rIntron.Start)
+				applyDynamicRemap(readMatchResult, targetSeqIntronSet, read, genomeIndex, rIntron, rAnchor, gap, overlappingIntrons, lAnchor, lIntron, originalRegions)
 				continue
 			}
 
@@ -178,11 +184,10 @@ func enforceIntrons(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntro
 			// (REF)  ++++++++-------+++++++++++++++++++++++
 			if correctedR != correctedL {
 				// we need to determine weak anchor and remap completely
-				if readMatchResult.MatchedGenome.Regions[i].Length() < readMatchResult.MatchedGenome.Regions[i+1].Length() {
-					fmt.Println(read.Header)
-					remapUsedDiagonal(readMatchResult, targetSeqIntronSet, read, readMatchResult.MatchedGenome.Regions[i], true, readMatchResult.MatchedGenome.Regions[i+1], genomeIndex, rIntron.Start)
+				if lAnchor.Length() < rAnchor.Length() {
+					remapUsedDiagonal(readMatchResult, targetSeqIntronSet, read, lAnchor, true, rAnchor, genomeIndex, rIntron.Start)
 				} else {
-					remapUsedDiagonal(readMatchResult, targetSeqIntronSet, read, readMatchResult.MatchedGenome.Regions[i+1], false, readMatchResult.MatchedGenome.Regions[i], genomeIndex, lIntron.Start)
+					remapUsedDiagonal(readMatchResult, targetSeqIntronSet, read, rAnchor, false, lAnchor, genomeIndex, lIntron.Start)
 				}
 				continue
 			}
@@ -191,8 +196,12 @@ func enforceIntrons(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntro
 			// (READ) ++++++++++-------+++++++++++
 			// (READ) ++++++-------+++++++++++++++ (or)
 			// (REF)  ++++++++-------++++++++++++
-			readMatchResult.MatchedGenome.Regions[i].End = readMatchResult.MatchedGenome.Regions[i].End + correctedL
-			readMatchResult.MatchedGenome.Regions[i+1].Start = readMatchResult.MatchedGenome.Regions[i+1].Start + correctedR
+			// to
+			// (READ) ++++++++-------+++++++++++++
+			// (READ) ++++++++-------+++++++++++++
+			// (REF)  ++++++++-------++++++++++++
+			lAnchor.End = lAnchor.End + correctedL
+			rAnchor.Start = rAnchor.Start + correctedR
 		}
 	}
 }
@@ -431,4 +440,49 @@ func leftRemapAlignmentBlockFromPos(remapStart int, anchorRegion *regionvector.R
 	}
 
 	return remap, score, mm
+}
+
+// applyDynamicRemap decides whether to remap region into upstream or downstream direction.
+// due to previous remaps, this can lead to the aligned blocks of the reads to get out of order which is why we need these extra
+// if statements
+// before we can check the default left and right Case III we need to accout for previous remap cases
+// (READ)---------------------------++++++++##-----####----**------------------------
+// first right remap res
+// (READ)---------------------------++++++++---------------**-------------######-----
+// but now per default gta map will do left remap -> leads to a shift of len(**) in read -> completely destroys mapping
+// (READ)----**---------------------++++++++------------------------------######-----
+// (REF) ++++++---------------------++++++++------------------------------######**+++
+// what we want is to do another right remap
+// (READ)---------------------------++++++++------------------------------######**+++
+// (REF) ++++++---------------------++++++++------------------------------######**+++
+func applyDynamicRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet *regionvector.RegionSet, read *fastq.Read, genomeIndex *index.GenomeIndex, rIntron *regionvector.Intron, rAnchor *regionvector.Region, gap regionvector.Region, overlappingIntrons []*regionvector.Intron, lAnchor *regionvector.Region, lIntron *regionvector.Intron, originalRegions *regionvector.RegionVector) {
+	lAnchorReadEnd := regionvector.GenomicCoordToReadCoord(readMatchResult.MatchedRead.GetFirstRegion().Start, lAnchor.End, originalRegions.Regions)
+	rAnchorReadStart := regionvector.GenomicCoordToReadCoord(readMatchResult.MatchedRead.GetFirstRegion().Start, rAnchor.Start, originalRegions.Regions)
+
+	if rIntron.Start < rAnchor.Start && rIntron.End > rAnchor.End {
+		// for a right extension, the left anchor coords in the read need to be smaller than the right anchor coords of the read
+		if lAnchorReadEnd > rAnchorReadStart {
+			// left
+			remapUsedDiagonal(readMatchResult, targetSeqIntronSet, read, rAnchor, true, lAnchor, genomeIndex, rIntron.Start)
+		} else {
+			remapUsedDiagonal(readMatchResult, targetSeqIntronSet, read, rAnchor, false, lAnchor, genomeIndex, lIntron.Start)
+		}
+		// right
+	} else if lIntron.Start < lAnchor.Start && lIntron.End > lAnchor.End {
+		// Case III left
+		// (READ) -------------+----+++++++++--  -> small kmer gets mapped into some random part of the gene
+		// (REF)  +++++-------------+++++++++--
+		// -> we need to check after every inferred intron if the small kmer matches inside the exon
+		// fmt.Println(read.Header)
+		if lAnchorReadEnd > rAnchorReadStart {
+			// right
+			remapUsedDiagonal(readMatchResult, targetSeqIntronSet, read, lAnchor, false, rAnchor, genomeIndex, lIntron.Start)
+		} else {
+			// left
+			remapUsedDiagonal(readMatchResult, targetSeqIntronSet, read, lAnchor, true, rAnchor, genomeIndex, rIntron.Start)
+		}
+
+		fmt.Println(read.Header)
+
+	}
 }
