@@ -384,7 +384,6 @@ func GenomicCoordToReadCoord(startInRead, genomeCoord int, genomeIntervals []*Re
 	for _, genomicRegion := range genomeIntervals {
 		if genomicRegion.End < genomeCoord {
 			pos += genomicRegion.Length()
-			continue
 		} else {
 			pos += genomeCoord - genomicRegion.Start
 			break
