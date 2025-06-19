@@ -35,6 +35,26 @@ type RegionVector struct {
 	Regions []*Region
 }
 
+// GetLargestAnchor GetLargestNachor returns the largest anchor region
+// WARN: Before calling this, the func MergeAlignmentBlocks needs to be called (once)
+func (rv RegionVector) GetLargestAnchor() (*Region, int) {
+	if !rv.HasGaps() {
+		return rv.Regions[0], 0
+	}
+
+	max := -1
+	var largestAnchor *Region
+	rank := 0
+	for _, region := range rv.Regions {
+		if region.Length() > max {
+			max = region.Length()
+			largestAnchor = region
+		}
+		rank++
+	}
+	return largestAnchor, rank
+}
+
 func (r *Region) String() string {
 	return fmt.Sprintf("[%d, %d]", r.Start, r.End)
 }
