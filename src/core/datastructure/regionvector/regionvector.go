@@ -45,12 +45,12 @@ func (rv RegionVector) GetLargestAnchor() (*Region, int) {
 	max := -1
 	var largestAnchor *Region
 	rank := 0
-	for _, region := range rv.Regions {
+	for i, region := range rv.Regions {
 		if region.Length() > max {
 			max = region.Length()
 			largestAnchor = region
+			rank = i
 		}
-		rank++
 	}
 	return largestAnchor, rank
 }
