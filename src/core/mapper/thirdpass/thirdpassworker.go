@@ -36,6 +36,7 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 				}
 				if task.TargetInfo.Fw[i].MatchedRead.Length() != 150 || task.TargetInfo.Rv[j].MatchedRead.Length() != 150 {
 					fmt.Println(task.TargetInfo.ReadPair.ReadR1.Header)
+					fmt.Println("LLLLLLLLLLLLL WTFFFF")
 					continue
 				}
 				s, isOk := readPairResultToSamString(index, task.TargetInfo.ReadPair, task.TargetInfo.Fw[i], task.TargetInfo.Rv[j])
@@ -168,7 +169,7 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 		if errCigarFw != nil {
 			logrus.WithFields(logrus.Fields{
 				"read": readPair.ReadR1.Header,
-			}).Error("Error getting CIGAR string", errCigarFw)
+			}).Error("Error getting CIGAR string: ", errCigarFw)
 
 			// TODO: handle error
 			// return "", false
@@ -184,7 +185,7 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 		if errCigarRv != nil {
 			logrus.WithFields(logrus.Fields{
 				"read": readPair.ReadR2.Header,
-			}).Error("Error getting CIGAR string", errCigarRv)
+			}).Error("Error getting CIGAR string: ", errCigarRv)
 
 			// TODO: handle error
 			// return "", false

@@ -8,7 +8,6 @@ import (
 // Filter the read
 // TODO: finalize the filter step as this is the most crucial step in terms of runtime
 func Filter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
-
 	numMatching := 0
 
 	numMatchingFw := 0
@@ -18,7 +17,7 @@ func Filter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
 
 		kmer := (*readSequence)[i : i+int(config.KmerLength())]
 
-		//matches := genomeIndex.KeywordTree.FindKeyword(&kmer, i)
+		// matches := genomeIndex.KeywordTree.FindKeyword(&kmer, i)
 		matches := genomeIndex.GetKeywordFromMap(*(*[10]byte)(kmer))
 
 		okFw := false
@@ -50,8 +49,8 @@ func Filter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
 	//	}).Info("Filtering result")
 	//}
 
-	//fmt.Println("numMatchingFw: ", numMatchingFw)
-	//fmt.Println("numMatchingRw: ", numMatchingRw)
+	// fmt.Println("numMatchingFw: ", numMatchingFw)
+	// fmt.Println("numMatchingRw: ", numMatchingRw)
 
 	return numMatching >= 8
 }
