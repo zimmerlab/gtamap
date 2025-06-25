@@ -14,8 +14,7 @@ app.use(WaveUI, {})
 import router from "./router.js"
 app.use(router)
 
-// TODO: add actual api domain
-let API_BASEURL = location.protocol + '//' + location.hostname + ':8080'
+let API_BASEURL = location.protocol + '//' + location.hostname + ':8000'
 //if (process.env.NODE_ENV === 'development') {
 //    API_BASEURL = location.protocol + '//' + location.hostname + ':8080'
 //}
