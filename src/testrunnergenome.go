@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/KleinSamuel/gtamap/src/analysis"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
@@ -208,8 +209,10 @@ func main() {
 
 	//extractGeneSequenceFromGtfAndFastaForIndex()
 
-	testSpecificRead()
+	//testSpecificRead()
 	//testTas2r4DeletionReads()
 	//testTas2ReadsAll()
 	//testIndex()
+	
+	analysis.CompareResults()
 }
