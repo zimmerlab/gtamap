@@ -21,6 +21,24 @@ func main() {
 		log.Fatalf("Error initializing analysis service: %v", err)
 	}
 
+	starGenomePath := "/home/sam/Projects/gtamap-paper/pipeline/output/ENSG00000173585/ENSG00000173585.star.genome.sam"
+
+	if err := s.AnalysisService.AddMapperInfo("star", starGenomePath); err != nil {
+		log.Fatalf("Error initializing analysis service: %v", err)
+	}
+
+	hisat2GenomePath := "/home/sam/Projects/gtamap-paper/pipeline/output/ENSG00000173585/ENSG00000173585.hisat2.genome.sam"
+
+	if err := s.AnalysisService.AddMapperInfo("hisat2", hisat2GenomePath); err != nil {
+		log.Fatalf("Error initializing analysis service: %v", err)
+	}
+
+	bbmapGenomePath := "/home/sam/Projects/gtamap-paper/pipeline/output/ENSG00000173585/ENSG00000173585.bbmap.genome.sam"
+
+	if err := s.AnalysisService.AddMapperInfo("bbmap", bbmapGenomePath); err != nil {
+		log.Fatalf("Error initializing analysis service: %v", err)
+	}
+
 	s.Start()
 
 }
