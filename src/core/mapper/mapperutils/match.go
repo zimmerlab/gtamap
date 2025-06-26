@@ -165,7 +165,7 @@ func hasLongDiagonals(mapping *ReadMatchResult) bool {
 func (m ReadMatchResult) GetCigar() (string, error) {
 	var builder strings.Builder
 	if m.MatchedGenome.Length() != m.MatchedRead.Length() {
-		return "", fmt.Errorf("length of matched genome unequal to length matched read")
+		return "", fmt.Errorf("length of matched genome unequal to length matched read: Genome: %d vs Read: %d", m.MatchedGenome.Length(), m.MatchedRead.Length())
 	}
 
 	isForwardStrand := m.SequenceIndex == 0
