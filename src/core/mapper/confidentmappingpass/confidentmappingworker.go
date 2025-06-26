@@ -230,9 +230,10 @@ func invertIntrons(sId int, intronsOfTarget []*regionvector.Intron, index *index
 		mirroredIntronsPerSeqId = append(mirroredIntronsPerSeqId, &regionvector.Intron{
 			// Start:    geneLength - intron.End + 2*int(index.SequenceInfo[sId].StartGenomic),
 			// End:      geneLength - intron.Start + 2*int(index.SequenceInfo[sId].StartGenomic),
-			Start:    geneLength - intron.End,
-			End:      geneLength - intron.Start,
-			Evidence: intron.Evidence,
+			Start:          geneLength - intron.End,
+			End:            geneLength - intron.Start,
+			Evidence:       intron.Evidence,
+			TrueSpliceSite: intron.TrueSpliceSite,
 		})
 	}
 
@@ -327,11 +328,12 @@ func countGaps(gapsOfTarget []*regionvector.Gap) map[regionvector.Gap]int {
 }
 
 type IntronCluster struct {
-	lStart      int // left most coord
-	rStop       int // right most coord
-	maxEvidence int // how many gaps had eStart and eStop
-	eStart      int // start of gap with max evidence
-	eStop       int // stop of gap with max evidence
+	lStart                       int // left most coord
+	rStop                        int // right most coord
+	maxEvidence                  int // how many gaps had eStart and eStop
+	eStart                       int // start of gap with max evidence
+	eStop                        int // stop of gap with max evidence
+	maxEvidenceFollowsSpliceSite bool
 }
 
 func clusterGaps(targetGaps map[regionvector.Gap]int) []*regionvector.Intron {
@@ -341,11 +343,12 @@ func clusterGaps(targetGaps map[regionvector.Gap]int) []*regionvector.Intron {
 		if len(clusters) == 0 {
 			// init slice with first cluster
 			cluster := &IntronCluster{
-				lStart:      currGap.Start,
-				rStop:       currGap.End,
-				maxEvidence: currGapEvidence,
-				eStart:      currGap.Start,
-				eStop:       currGap.End,
+				lStart:                       currGap.Start,
+				rStop:                        currGap.End,
+				maxEvidence:                  currGapEvidence,
+				eStart:                       currGap.Start,
+				eStop:                        currGap.End,
+				maxEvidenceFollowsSpliceSite: currGap.KnownSpliceSite,
 			}
 			clusters = append(clusters, cluster)
 			continue
@@ -362,6 +365,7 @@ func clusterGaps(targetGaps map[regionvector.Gap]int) []*regionvector.Intron {
 					cluster.maxEvidence = currGapEvidence
 					cluster.eStart = currGap.Start
 					cluster.eStop = currGap.End
+					cluster.maxEvidenceFollowsSpliceSite = currGap.KnownSpliceSite
 				}
 				addedToExistingCluster = true
 				break
@@ -375,6 +379,7 @@ func clusterGaps(targetGaps map[regionvector.Gap]int) []*regionvector.Intron {
 					cluster.eStop = currGap.End
 					cluster.lStart = currGap.Start
 					cluster.rStop = currGap.End
+					cluster.maxEvidenceFollowsSpliceSite = currGap.KnownSpliceSite
 				} else {
 					cluster.lStart = currGap.Start
 					cluster.rStop = currGap.End
@@ -389,6 +394,7 @@ func clusterGaps(targetGaps map[regionvector.Gap]int) []*regionvector.Intron {
 					cluster.maxEvidence = currGapEvidence
 					cluster.eStart = currGap.Start
 					cluster.eStop = currGap.End
+					cluster.maxEvidenceFollowsSpliceSite = currGap.KnownSpliceSite
 				}
 				cluster.lStart = currGap.Start
 				addedToExistingCluster = true
@@ -401,6 +407,7 @@ func clusterGaps(targetGaps map[regionvector.Gap]int) []*regionvector.Intron {
 					cluster.maxEvidence = currGapEvidence
 					cluster.eStart = currGap.Start
 					cluster.eStop = currGap.End
+					cluster.maxEvidenceFollowsSpliceSite = currGap.KnownSpliceSite
 				}
 				cluster.rStop = currGap.End
 				addedToExistingCluster = true
@@ -411,11 +418,12 @@ func clusterGaps(targetGaps map[regionvector.Gap]int) []*regionvector.Intron {
 		// if the gap wasn't added to any existing cluster, create a new one
 		if !addedToExistingCluster {
 			newCluster := &IntronCluster{
-				lStart:      currGap.Start,
-				rStop:       currGap.End,
-				maxEvidence: currGapEvidence,
-				eStart:      currGap.Start,
-				eStop:       currGap.End,
+				lStart:                       currGap.Start,
+				rStop:                        currGap.End,
+				maxEvidence:                  currGapEvidence,
+				eStart:                       currGap.Start,
+				eStop:                        currGap.End,
+				maxEvidenceFollowsSpliceSite: currGap.KnownSpliceSite,
 			}
 			clusters = append(clusters, newCluster)
 		}
@@ -425,9 +433,10 @@ func clusterGaps(targetGaps map[regionvector.Gap]int) []*regionvector.Intron {
 	fwOrientatedGapsOfTarget := make([]*regionvector.Intron, 0)
 	for _, intronCluster := range clusters {
 		fwOrientatedGapsOfTarget = append(fwOrientatedGapsOfTarget, &regionvector.Intron{
-			Start:    intronCluster.eStart,
-			End:      intronCluster.eStop,
-			Evidence: intronCluster.maxEvidence,
+			Start:          intronCluster.eStart,
+			End:            intronCluster.eStop,
+			Evidence:       intronCluster.maxEvidence,
+			TrueSpliceSite: intronCluster.maxEvidenceFollowsSpliceSite,
 		})
 	}
 	return fwOrientatedGapsOfTarget
