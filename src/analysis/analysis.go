@@ -5,6 +5,95 @@ import (
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
 )
 
+type AnalysisService struct {
+	MapperNames []string
+	MapperInfos map[string]*MapperInfo
+}
+
+type MapperInfo struct {
+	ParsedFile     *sam.ParsedFile
+	RecordsByQname map[string][]*sam.Record
+}
+
+func NewAnalysisService() *AnalysisService {
+	return &AnalysisService{
+		MapperNames: make([]string, 0),
+		MapperInfos: make(map[string]*MapperInfo),
+	}
+}
+
+func (service *AnalysisService) AddMapperInfo(mapperName string, mapperSamFilePath string) error {
+
+	parsedFile, err := sam.ParseSAMFile(mapperSamFilePath)
+	if err != nil {
+		return fmt.Errorf("error reading sam file: %w", err)
+	}
+
+	if _, exists := service.MapperInfos[mapperName]; !exists {
+		service.MapperNames = append(service.MapperNames, mapperName)
+		service.MapperInfos[mapperName] = &MapperInfo{
+			ParsedFile:     parsedFile,
+			RecordsByQname: make(map[string][]*sam.Record),
+		}
+	}
+
+	for _, record := range parsedFile.Records {
+		if _, exists := service.MapperInfos[mapperName].RecordsByQname[record.Qname]; !exists {
+			service.MapperInfos[mapperName].RecordsByQname[record.Qname] = []*sam.Record{}
+		}
+		service.MapperInfos[mapperName].RecordsByQname[record.Qname] = append(service.MapperInfos[mapperName].RecordsByQname[record.Qname], &record)
+	}
+
+	return nil
+}
+
+type ReadInfo struct {
+	Qname            string `json:"qname"`
+	Length           int    `json:"readLength"`
+	IsPaired         bool   `json:"isPaired"`
+	NumMatchesGtamap int    `json:"numMatchesGtamap"`
+}
+
+func ReadInfoTable() []*ReadInfo {
+
+	gtamapTarget := "/home/sam/Projects/gtamap-paper/pipeline/output/ENSG00000173585/ENSG00000173585.gtamap.target.sam"
+
+	gtamapTargetFile, errGtamapTarget := sam.ParseSAMFile(gtamapTarget)
+	if errGtamapTarget != nil {
+		panic("Error reading GTAMap target file: " + errGtamapTarget.Error())
+	}
+
+	gtamapRecordsByQname := make(map[string][]*sam.Record)
+	for _, record := range gtamapTargetFile.Records {
+		if _, exists := gtamapRecordsByQname[record.Qname]; !exists {
+			gtamapRecordsByQname[record.Qname] = []*sam.Record{}
+		}
+		gtamapRecordsByQname[record.Qname] = append(gtamapRecordsByQname[record.Qname], &record)
+	}
+
+	readInfoList := make([]*ReadInfo, 0, len(gtamapRecordsByQname))
+
+	for qname, records := range gtamapRecordsByQname {
+
+		firstRecord := records[0]
+
+		readLength := len(firstRecord.Seq)
+		isPaired := firstRecord.Flag.IsPaired()
+		numMatchesGtamap := len(records)
+
+		readInfo := &ReadInfo{
+			Qname:            qname,
+			Length:           readLength,
+			IsPaired:         isPaired,
+			NumMatchesGtamap: numMatchesGtamap,
+		}
+
+		readInfoList = append(readInfoList, readInfo)
+	}
+
+	return readInfoList
+}
+
 func CompareResults() {
 
 	gtamapTarget := "/home/sam/Projects/gtamap-paper/pipeline/output/ENSG00000173585/ENSG00000173585.gtamap.target.sam"
