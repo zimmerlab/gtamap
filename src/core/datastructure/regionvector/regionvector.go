@@ -38,22 +38,27 @@ type RegionVector struct {
 
 // GetLargestAnchor GetLargestNachor returns the largest anchor region
 // WARN: Before calling this, the func MergeAlignmentBlocks needs to be called (once)
-func (rv RegionVector) GetLargestAnchor() (*Region, int) {
+func (rv RegionVector) GetLargestAnchor(introns *RegionSet) (*Region, int, int) {
 	if !rv.HasGaps() {
-		return rv.Regions[0], 0
+		return rv.Regions[0], 0, 0
 	}
 
-	max := -1
+	maxLength := -1
+	index := 0
 	var largestAnchor *Region
-	rank := 0
 	for i, region := range rv.Regions {
-		if region.Length() > max {
-			max = region.Length()
+		if region.Length() > maxLength {
+			maxLength = region.Length()
 			largestAnchor = region
-			rank = i
+			index = i
 		}
 	}
-	return largestAnchor, rank
+	prevIntron := introns.GetPrevIntron(largestAnchor.Start)
+	if prevIntron == nil {
+		return largestAnchor, 0, index
+	}
+
+	return largestAnchor, prevIntron.Rank, index // anchor rank == intron rank of prev intron
 }
 
 func (r *Region) String() string {
@@ -396,7 +401,6 @@ type RegionSet struct {
 func (i Intron) String() string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("#%d: [%d, %d) %d", i.Evidence, i.Start, i.End, i.TrueSpliceSite))
 	return sb.String()
 }
 
