@@ -671,7 +671,7 @@ func (rv *RegionVector) Copy() *RegionVector {
 // The resulting region vector will contain the regions [0, 5], [25, 30].
 // If the region vector contains the regions [0, 30] and the given region is [5, 25],
 // The resulting region vector will contain the regions [0, 5], [25, 30].
-func (rv *RegionVector) RemoveRegion(start int, end int) {
+func (rv *RegionVector) _RemoveRegion(start int, end int) { // original version
 	if len(rv.Regions) == 0 {
 		// the region vector is empty
 		return
@@ -757,4 +757,86 @@ func (rv *RegionVector) UncoveredRegionsBySelfAndOther(rvCovered *RegionVector, 
 	}
 
 	return rvUncovered
+}
+
+// RemoveRegion removes a region from the region vector.
+// The existing regions will be updated such that any position within the given region is not contained in
+// any region anymore.
+// The region vector must be sorted and non-overlapping.
+// Example:
+// If the region vector contains the regions [0, 10], [10, 20], [20, 30] and the given region is [5, 25]
+// The resulting region vector will contain the regions [0, 5], [25, 30].
+// If the region vector contains the regions [0, 30] and the given region is [5, 25],
+// The resulting region vector will contain the regions [0, 5], [25, 30].
+func (rv *RegionVector) RemoveRegion(start int, end int) { // optimized
+	if len(rv.Regions) == 0 {
+		// the region vector is empty
+		return
+	}
+	if end <= start {
+		// the region to remove is empty
+		return
+	}
+	if end <= rv.Regions[0].Start {
+		// the region to remove is before the first region
+		return
+	}
+	if start >= rv.Regions[len(rv.Regions)-1].End {
+		// the region to remove is after the last region
+		return
+	}
+	if start <= rv.Regions[0].Start && end >= rv.Regions[len(rv.Regions)-1].End {
+		// the region to remove contains all regions
+		rv.Regions = rv.Regions[:0] // reuse slice capacity
+		return
+	}
+
+	// pre-allocate with worst-case capacity to avoid slice growth
+	// worst case: one region splits into two, so max +1 additional region
+	newRegions := make([]*Region, 0, len(rv.Regions)+1)
+
+	for _, r := range rv.Regions {
+		if r.End <= start {
+			// the region is before the region to remove - reuse existing region
+			newRegions = append(newRegions, r)
+			continue
+		}
+		if r.Start >= end {
+			// the region is after the region to remove - reuse existing region
+			newRegions = append(newRegions, r)
+			continue
+		}
+		if r.Start >= start && r.End <= end {
+			// the region is completely contained in the region to remove
+			continue
+		}
+		if r.Start < start && r.End > end {
+			// the region to remove is contained within the current region
+			// Split into two regions - only allocate new ones when needed
+			newRegions = append(newRegions, &Region{r.Start, start})
+			newRegions = append(newRegions, &Region{end, r.End})
+			continue
+		}
+		if r.Start >= start && r.End > end {
+			// Modify existing region in-place if possible, or create new one
+			if r.Start == end {
+				// Can reuse the existing region
+				newRegions = append(newRegions, r)
+			} else {
+				newRegions = append(newRegions, &Region{end, r.End})
+			}
+			continue
+		}
+		if r.Start < start && r.End <= end {
+			// Modify existing region in-place if possible, or create new one
+			if r.End == start {
+				// Can reuse the existing region
+				newRegions = append(newRegions, r)
+			} else {
+				newRegions = append(newRegions, &Region{r.Start, start})
+			}
+			continue
+		}
+	}
+	rv.Regions = newRegions
 }
