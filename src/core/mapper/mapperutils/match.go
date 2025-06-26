@@ -175,6 +175,10 @@ func (m ReadMatchResult) GetCigar() (string, error) {
 		// number of cumulative aligned positions (matches or mismatches) between the read and the genome
 		numMatchesSum := 0
 
+		if len(m.MatchedGenome.Regions) != len(m.MatchedRead.Regions) {
+			m.normalizeRegions()
+		}
+
 		// the regions in MatchedGenome and MatchedRead have the same dimensions
 		for i := 0; i < len(m.MatchedGenome.Regions); i++ {
 
@@ -186,6 +190,9 @@ func (m ReadMatchResult) GetCigar() (string, error) {
 				builder.WriteString(strconv.Itoa(numMatchesSum))
 				builder.WriteString("M")
 				break
+			}
+			if m.MatchedRead == nil {
+				println()
 			}
 
 			gapInGenome := m.MatchedGenome.Regions[i].End < m.MatchedGenome.Regions[i+1].Start
@@ -239,6 +246,10 @@ func (m ReadMatchResult) GetCigar() (string, error) {
 		// this is because the read is on the reverse strand
 
 		numMatchesSum := 0
+
+		if len(m.MatchedGenome.Regions) != len(m.MatchedRead.Regions) {
+			m.normalizeRegions()
+		}
 
 		// the regions in MatchedGenome and MatchedRead have the same dimensions
 		for i := len(m.MatchedGenome.Regions) - 1; i >= 0; i-- {
@@ -300,6 +311,26 @@ func (m ReadMatchResult) GetCigar() (string, error) {
 	}
 
 	return builder.String(), nil
+}
+
+func (m ReadMatchResult) normalizeRegions() {
+	// normalize regions: if a ReadMatchResult was previously incomplete and had a readRegions rv like so
+	// [[50,60], [60, 70] , ..., [140,150]], after the remap happened, it looks like this
+	// [[0,50], [50,60], [60, 70] , ..., [140,150]], after the remap happened, it looks like this
+	// now the dimensions don't always add up -> we have to normalize the readRegions to match the genomeRegions
+	// E.g if genomeRegions contains three regions (with a total length of 150), the read regions also should only
+	// contain 3 regions
+
+	adaptedReadRegions := make([]*regionvector.Region, len(m.MatchedGenome.Regions))
+	originalStart := m.MatchedRead.GetFirstRegion().Start
+	var startRead int
+	var stopRead int
+	for i, region := range m.MatchedGenome.Regions {
+		startRead = regionvector.GenomicCoordToReadCoord(originalStart, region.Start, m.MatchedGenome.Regions)
+		stopRead = regionvector.GenomicCoordToReadCoord(originalStart, region.End, m.MatchedGenome.Regions)
+		adaptedReadRegions[i] = &regionvector.Region{Start: startRead, End: stopRead}
+	}
+	m.MatchedRead.Regions = adaptedReadRegions
 }
 
 // holds all relevant mapping information of potentially several hits per readpair
