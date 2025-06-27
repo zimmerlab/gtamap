@@ -36,8 +36,8 @@
 <!--    </div>-->
 
     <div class="tw:h-1/3 tw:py-2 tw:flex tw:flex-row">
-      <div class="tw:flex-1"></div>
-      <div id="upset-read-div" class="tw:flex-1"></div>
+<!--      <div class="tw:flex-1"></div>-->
+<!--      <div id="upset-read-div" class="tw:flex-1"></div>-->
       <div class="tw:flex-1"></div>
       <div id="upset-recordpos-div" class="tw:flex-1"></div>
       <div class="tw:flex-1"></div>
@@ -66,7 +66,7 @@
 </template>
 
 <script>
-import {ref, inject} from "vue";
+import {ref, inject, nextTick} from "vue";
 
 import igv from "../js/igv/dist/igv.esm.js"
 
@@ -74,9 +74,6 @@ import * as UpSetJS from '@upsetjs/bundle'
 
 export default {
   name: "OverviewPage",
-  components: {
-    // UpSetJS
-  },
   data() {
 
     const ApiService = inject("http")
@@ -183,17 +180,8 @@ export default {
           .then(response => {
             if (response.status === 200) {
 
-              console.log("READ DATA")
-
-              console.log(response.data)
-
               const elems = response.data;
               const { sets, combinations } = UpSetJS.extractCombinations(elems, { type: 'distinctIntersection' });
-
-              console.log(sets);
-              console.log(combinations);
-
-              console.log("END READ DATA")
 
               upsetDataRead.value.sets = sets;
               upsetDataRead.value.combinations = combinations;
@@ -208,33 +196,42 @@ export default {
           })
     }
 
-    let selectionUpsetRead = null;
+    let selectionUpsetRead = ref(null);
 
     function onHoverUpsetRead(set) {
-      selectionUpsetRead = set;
+      selectionUpsetRead.value = set;
       renderUpsetRead();
     }
 
     function renderUpsetRead() {
       let sets = upsetDataRead.value.sets
       let combinations = upsetDataRead.value.combinations
+
+      const dimensions = getChartDimensions(upsetReadContainer);
+
+      console.log(dimensions);
+
       const props = {
         sets,
         combinations,
-        width: 800,
+        width: 400,
         height: 300,
-        selectionUpsetRead,
+        selection: selectionUpsetRead.value,
         onHover: onHoverUpsetRead,
         color: "darkorchid",
-        selectionColor: "darkorchid",
-        title: "Read Assignment To Target",
+        selectionColor: "#65cc32",
+        //hoverHintColor: "#cc9932",
+        //hasSelectionColor: "#cc9932",
+        //alternatingBackgroundColor: true,
+        //hasSelectionOpacity: 0.5,
+        title: "Reads Mapped",
         // barPadding: 2,
         fontSizes: {
           barLabel: "8pt",
           chartLabel: "8pt",
           axisTick: "8pt",
           setLabel: "8pt",
-          title: "12pt",
+          title: "11pt",
         }
       }
       UpSetJS.render(document.getElementById("upset-read-div"), props);
@@ -264,7 +261,9 @@ export default {
                 nameToCombination[combination.name] = combination;
               }
               const sortSets = (a, b) => {
-                const sizeDiff = nameToCombination[b.name].cardinality - nameToCombination[a.name].cardinality;
+                const sizeA = nameToCombination[a.name] ? nameToCombination[a.name].cardinality : 0;
+                const sizeB = nameToCombination[b.name] ? nameToCombination[b.name].cardinality : 0;
+                const sizeDiff = sizeB - sizeA;
                 return sizeDiff !== 0 ? sizeDiff : a.name.localeCompare(b.name);
               };
               const sortCombinations = (a, b) => {
