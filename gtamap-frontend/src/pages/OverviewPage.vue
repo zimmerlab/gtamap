@@ -31,9 +31,15 @@
 
     </div>
 
+<!--    <div>-->
+<!--      {{ selectionUpsetRecordPos }}-->
+<!--    </div>-->
+
     <div class="tw:h-1/3 tw:py-2 tw:flex tw:flex-row">
       <div class="tw:flex-1"></div>
-      <div id="upset-div" class="tw:flex-1"></div>
+      <div id="upset-read-div" class="tw:flex-1"></div>
+      <div class="tw:flex-1"></div>
+      <div id="upset-recordpos-div" class="tw:flex-1"></div>
       <div class="tw:flex-1"></div>
     </div>
 
@@ -166,30 +172,33 @@ export default {
           })
     }
 
-    const upsetData = ref({
+    const upsetDataRead = ref({
       sets: [],
       combinations: []
     });
 
-    const getUpsetData = function() {
+    const getUpsetDataRead = function() {
 
-      ApiService.get("/api/upsetData")
+      ApiService.get("/api/upsetDataRead")
           .then(response => {
             if (response.status === 200) {
+
+              console.log("READ DATA")
+
+              console.log(response.data)
 
               const elems = response.data;
               const { sets, combinations } = UpSetJS.extractCombinations(elems, { type: 'distinctIntersection' });
 
-              console.log("Sets:");
               console.log(sets);
-
-              console.log("Combinations:");
               console.log(combinations);
 
-              upsetData.value.sets = sets;
-              upsetData.value.combinations = combinations;
+              console.log("END READ DATA")
 
-              render();
+              upsetDataRead.value.sets = sets;
+              upsetDataRead.value.combinations = combinations;
+
+              renderUpsetRead();
 
             } else {
               console.error("Failed to fetch upset data");
@@ -199,59 +208,140 @@ export default {
           })
     }
 
-    let selection = null;
+    let selectionUpsetRead = null;
 
-    function onHover(set) {
-      selection = set;
-      render();
+    function onHoverUpsetRead(set) {
+      selectionUpsetRead = set;
+      renderUpsetRead();
     }
 
-    function render() {
-      let sets = upsetData.value.sets
-      let combinations = upsetData.value.combinations
+    function renderUpsetRead() {
+      let sets = upsetDataRead.value.sets
+      let combinations = upsetDataRead.value.combinations
       const props = {
         sets,
         combinations,
         width: 800,
         height: 300,
-        selection,
-        onHover,
+        selectionUpsetRead,
+        onHover: onHoverUpsetRead,
         color: "darkorchid",
         selectionColor: "darkorchid",
+        title: "Read Assignment To Target",
         // barPadding: 2,
         fontSizes: {
           barLabel: "8pt",
           chartLabel: "8pt",
           axisTick: "8pt",
           setLabel: "8pt",
+          title: "12pt",
         }
       }
-      UpSetJS.render(document.getElementById("upset-div"), props);
+      UpSetJS.render(document.getElementById("upset-read-div"), props);
+    }
+
+    const upsetDataRecordPos = ref({
+      sets: [],
+      combinations: []
+    });
+
+    const getUpsetDataRecordPos = function() {
+
+      ApiService.get("/api/upsetDataRecordPos")
+          .then(response => {
+            if (response.status === 200) {
+
+              const elems = response.data;
+
+              const sets = UpSetJS.extractSets(elems, elem => elem.sets);
+              const combinations = UpSetJS.generateCombinations(sets, {
+                type: 'distinctIntersection'
+              });
+
+              // sort the combinations by cardinality (set size) and name
+              const nameToCombination = {};
+              for (const combination of combinations) {
+                nameToCombination[combination.name] = combination;
+              }
+              const sortSets = (a, b) => {
+                const sizeDiff = nameToCombination[b.name].cardinality - nameToCombination[a.name].cardinality;
+                return sizeDiff !== 0 ? sizeDiff : a.name.localeCompare(b.name);
+              };
+              const sortCombinations = (a, b) => {
+                const sizeDiff = b.cardinality - a.cardinality;
+                return sizeDiff !== 0 ? sizeDiff : a.name.localeCompare(b.name);
+              };
+              sets.sort(sortSets);
+              combinations.sort(sortCombinations);
+              // end sort by cardinality and name
+
+              upsetDataRecordPos.value.sets = sets;
+              upsetDataRecordPos.value.combinations = combinations;
+
+              renderUpsetRecordPos();
+
+            } else {
+              console.error("Failed to fetch upset data");
+            }
+          }).catch(err => {
+        console.log(err);
+      })
+    }
+
+    let selectionUpsetRecordPos = ref(null);
+
+    function onHoverUpsetRecordPos(set) {
+      selectionUpsetRecordPos.value = set;
+      renderUpsetRecordPos();
+    }
+
+    function renderUpsetRecordPos() {
+      let sets = upsetDataRecordPos.value.sets
+      let combinations = upsetDataRecordPos.value.combinations
+      const props = {
+        sets,
+        combinations,
+        width: 800,
+        height: 300,
+        selection: selectionUpsetRecordPos.value,
+        onHover: onHoverUpsetRecordPos,
+        color: "darkorchid",
+        selectionColor: "#65cc32",
+        //hoverHintColor: "#cc9932",
+        //hasSelectionColor: "#cc9932",
+        //alternatingBackgroundColor: true,
+        //hasSelectionOpacity: 0.5,
+        title: "Record Position Assignment",
+        fontSizes: {
+          barLabel: "8pt",
+          chartLabel: "8pt",
+          axisTick: "8pt",
+          setLabel: "8pt",
+          title: "11pt",
+        }
+      }
+      UpSetJS.render(document.getElementById("upset-recordpos-div"), props);
     }
 
     return {
-      // elems,
       getIgvConfig,
       initializeIgv,
-      getUpsetData,
+      getUpsetDataRead,
+      renderUpsetRead,
+      getUpsetDataRecordPos,
+      renderUpsetRecordPos,
+      selectionUpsetRecordPos,
       getReadSummaryTableData,
       readSummaryTableData,
       tableData,
       selectedRead,
-      render
-    }
-  },
-  computed: {
-    sets() {
-      return "Hello World"
-      // return extractSets(this.elems)
     }
   },
   mounted() {
     //this.getIgvConfig()
     this.getReadSummaryTableData()
-    // this.render()
-    this.getUpsetData()
+    // this.getUpsetDataRead()
+    this.getUpsetDataRecordPos()
   },
 }
 </script>
