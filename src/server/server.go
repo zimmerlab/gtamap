@@ -30,7 +30,8 @@ func (s *Server) InitRoutes() {
 
 	api.HandleFunc("/readSummaryTable", getReadInfo).Methods("GET")
 
-	api.HandleFunc("/upsetData", s.upsetData).Methods("GET")
+	api.HandleFunc("/upsetDataRead", s.upsetDataRead).Methods("GET")
+	api.HandleFunc("/upsetDataRecordPos", s.upsetDataRecordPos).Methods("GET")
 
 	download := s.Router.PathPrefix("/download").Subrouter()
 
@@ -96,7 +97,7 @@ type UpsetElement struct {
 	Sets []string `json:"sets"`
 }
 
-func (s *Server) upsetData(w http.ResponseWriter, r *http.Request) {
+func (s *Server) upsetDataRead(w http.ResponseWriter, r *http.Request) {
 
 	data := make([]UpsetElement, 0)
 
@@ -117,6 +118,47 @@ func (s *Server) upsetData(w http.ResponseWriter, r *http.Request) {
 		elem := UpsetElement{
 			Name: qname,
 			Sets: sets,
+		}
+
+		data = append(data, elem)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(data)
+}
+
+func (s *Server) upsetDataRecordPos(w http.ResponseWriter, r *http.Request) {
+
+	data := make([]UpsetElement, 0)
+
+	recordPosMap := make(map[string]map[string]bool)
+
+	for mapperName, mapperInfo := range s.AnalysisService.MapperInfos {
+
+		for _, record := range mapperInfo.ParsedFile.Records {
+
+			id := record.Qname + "X" + strconv.Itoa(record.Pos)
+
+			if _, exists := recordPosMap[id]; !exists {
+				//recordPosMap[id] = make([]string, 0)
+				recordPosMap[id] = make(map[string]bool)
+			}
+
+			//recordPosMap[id] = append(recordPosMap[id], mapperName)
+			recordPosMap[id][mapperName] = true
+		}
+	}
+
+	for id, mappers := range recordPosMap {
+
+		mapperList := make([]string, 0, len(mappers))
+		for mapperName := range mappers {
+			mapperList = append(mapperList, mapperName)
+		}
+
+		elem := UpsetElement{
+			Name: id,
+			Sets: mapperList,
 		}
 
 		data = append(data, elem)
