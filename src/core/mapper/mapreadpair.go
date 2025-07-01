@@ -29,8 +29,8 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 		return
 	}
 
-	resultFw, isMappableFw := MapRead(readPair.ReadR1, genomeIndex, false)
-	resultRv, isMappableRv := MapRead(readPair.ReadR2, genomeIndex, false)
+	resultFw, isMappableFw := MapRead(readPair.ReadR1, genomeIndex, true)
+	resultRv, isMappableRv := MapRead(readPair.ReadR2, genomeIndex, true)
 
 	// TODO: REMOVE DEBUG
 	// if isMappableFw {

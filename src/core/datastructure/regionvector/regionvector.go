@@ -22,7 +22,7 @@ type Gap struct {
 
 type Intron struct {
 	Start          int // 0-based
-	End            int // end-exlusive
+	End            int // end-exclusive
 	Evidence       int
 	Rank           int // rank of intron in seq
 	TrueSpliceSite bool
@@ -401,6 +401,7 @@ type RegionSet struct {
 func (i Intron) String() string {
 	var sb strings.Builder
 
+	sb.WriteString(fmt.Sprintf("#%d: [%d, %d) %d", i.Evidence, i.Start, i.End, i.TrueSpliceSite))
 	return sb.String()
 }
 

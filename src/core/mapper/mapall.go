@@ -1,6 +1,7 @@
 package mapper
 
 import (
+	"os"
 	"runtime"
 	"sync"
 	"time"
@@ -36,7 +37,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 
 	numWorkers := runtime.NumCPU()
 	// TODO: REMOVE DEBUG
-	// os.Create("output.txt")
+	os.Create("output.txt")
 
 	if *numThreads > 0 {
 		numWorkers = *numThreads

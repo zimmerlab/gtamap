@@ -123,6 +123,18 @@ func (r *ReadMatchResult) NormalizeRegions() {
 		gapInRead := hasGap(r.MatchedRead.Regions[i], r.MatchedRead.Regions[i+1])
 
 		if gapInGenome || gapInRead {
+			// account for this case
+			// Read [0,10] [10,20] [20,30] [30,40]
+			// GEN  [0,10] [10,20] [20,30] [30,36] -> due to either leftNorm or bcause of best split
+			if r.MatchedGenome.Regions[i].Length() < r.MatchedRead.Regions[i].Length() {
+				padding := r.MatchedRead.Regions[i].Length() - r.MatchedGenome.Regions[i].Length()
+				r.MatchedRead.Regions[i].End -= padding
+				r.MatchedRead.Regions[i+1].Start -= padding
+			} else if r.MatchedGenome.Regions[i].Length() > r.MatchedRead.Regions[i].Length() {
+				padding := r.MatchedGenome.Regions[i].Length() - r.MatchedRead.Regions[i].Length()
+				r.MatchedRead.Regions[i].End += padding
+				r.MatchedRead.Regions[i+1].Start += padding
+			}
 			genomeBlocks = append(genomeBlocks, &regionvector.Region{
 				Start: r.MatchedGenome.Regions[startIndex].Start,
 				End:   r.MatchedGenome.Regions[i].End,

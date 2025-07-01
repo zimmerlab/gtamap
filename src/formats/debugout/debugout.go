@@ -39,7 +39,7 @@ func GenerateAlignmentView(genomeIndex *index.GenomeIndex, mappedRead mapperutil
 	}
 	file.WriteString("\n")
 	file.WriteString(view)
-	file.WriteString(string(*genomeIndex.Sequences[mappedRead.SequenceIndex]))
+	// file.WriteString(string(*genomeIndex.Sequences[mappedRead.SequenceIndex]))
 	file.WriteString("\n")
 	file.WriteString("\n")
 }
@@ -51,13 +51,15 @@ func getAlignment(genomeIndex *index.GenomeIndex, mappedRead mapperutils.ReadMat
 	var coordView strings.Builder
 	var builder strings.Builder
 	geneSeq := genomeIndex.Sequences[mappedRead.SequenceIndex]
-	readStartALignment := mappedRead.MatchedRead.Regions[0].Start
+	readStartAlignment := mappedRead.MatchedRead.Regions[0].Start
 
-	for _, genomeRegion := range mappedRead.MatchedGenome.GetAlignmentBlocks() {
+	for i, genomeRegion := range mappedRead.MatchedGenome.GetAlignmentBlocks() {
 		geneStart := genomeRegion.Start
 		geneStop := genomeRegion.End
-		readStartCoord := regionvector.GenomicCoordToReadCoord(readStartALignment, geneStart, mappedRead.MatchedGenome.Regions)
-		readStopCoord := regionvector.GenomicCoordToReadCoord(readStartALignment, geneStop, mappedRead.MatchedGenome.Regions)
+		// readStartCoord := regionvector.GenomicCoordToReadCoord(readStartAlignment, geneStart, mappedRead.MatchedGenome.Regions)
+		// readStopCoord := regionvector.GenomicCoordToReadCoord(readStartAlignment, geneStop, mappedRead.MatchedGenome.Regions)
+		readStartCoord := mappedRead.MatchedRead.Regions[i].Start
+		readStopCoord := mappedRead.MatchedRead.Regions[i].End
 
 		// append prefix separator
 		for j := geneStart - contextWindow; j < geneStart; j++ {
@@ -86,7 +88,7 @@ func getAlignment(genomeIndex *index.GenomeIndex, mappedRead mapperutils.ReadMat
 		coordLength := len(strStart) + len(strStartInGene) + len(strStop) + len(strStopInGene) + 6 // 6 chars for sep
 
 		for j := genomeRegion.Start; j < genomeRegion.End; j++ {
-			readPos := regionvector.GenomicCoordToReadCoord(readStartALignment, j, mappedRead.MatchedGenome.Regions)
+			readPos := regionvector.GenomicCoordToReadCoord(readStartAlignment, j, mappedRead.MatchedGenome.Regions)
 
 			if j == geneStart {
 				coordView.WriteByte('|')
@@ -101,9 +103,10 @@ func getAlignment(genomeIndex *index.GenomeIndex, mappedRead mapperutils.ReadMat
 				coordView.WriteByte(' ')
 			}
 
-			readView.WriteByte((*readMeta.Sequence)[readPos])
+			readView.WriteByte((*readMeta.Sequence)[readStartCoord])
 			mapView.WriteByte(getMappingByte((*readMeta.Sequence)[readPos], (*geneSeq)[j]))
 			geneView.WriteByte((*geneSeq)[j])
+			readStartCoord++
 			count++
 		}
 

@@ -18,6 +18,9 @@ import (
 func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGroup, outputChan chan<- string, index *index.GenomeIndex) {
 	defer wgThirdPass.Done()
 	logrus.Info("Started third pass")
+	compl := 0
+	incompl := 0
+	inMapping := 0
 
 	for {
 
@@ -27,18 +30,21 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 		}
 		logrus.Debugf("Third pass: %s", task.ReadPairId)
 
+		l, _ := strconv.Atoi(task.ReadPairId)
+		if l >= 2500000 {
+			inMapping++
+		}
+
 		var builder strings.Builder
 
 		for i := 0; i < len(task.TargetInfo.Fw); i++ {
 			for j := 0; j < len(task.TargetInfo.Rv); j++ {
 				if task.TargetInfo.Fw[i].IncompleteMap || task.TargetInfo.Rv[j].IncompleteMap {
+					incompl++
+
 					continue
 				}
-				if task.TargetInfo.Fw[i].MatchedRead.Length() != 150 || task.TargetInfo.Rv[j].MatchedRead.Length() != 150 {
-					fmt.Println(task.TargetInfo.ReadPair.ReadR1.Header)
-					fmt.Println("LLLLLLLLLLLLL WTFFFF")
-					continue
-				}
+				compl++
 				s, isOk := readPairResultToSamString(index, task.TargetInfo.ReadPair, task.TargetInfo.Fw[i], task.TargetInfo.Rv[j])
 				if !isOk {
 					continue
@@ -49,6 +55,9 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 		outputChan <- builder.String()
 	}
 	logrus.Info("Done with third pass")
+	fmt.Printf("C %d\n", compl)
+	fmt.Printf("I %d\n", incompl)
+	fmt.Printf("M %d\n", inMapping)
 }
 
 func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.ReadPair,
@@ -168,8 +177,10 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 
 		if errCigarFw != nil {
 			logrus.WithFields(logrus.Fields{
-				"read": readPair.ReadR1.Header,
-			}).Error("Error getting CIGAR string: ", errCigarFw)
+				"read":              readPair.ReadR1.Header,
+				"length of mapping": resFw.MatchedGenome.Length(),
+				"expected length":   len(*readPair.ReadR1.Sequence),
+			}).Error("Error getting CIGAR string of FW read: ", errCigarFw)
 
 			// TODO: handle error
 			// return "", false
@@ -184,8 +195,10 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 
 		if errCigarRv != nil {
 			logrus.WithFields(logrus.Fields{
-				"read": readPair.ReadR2.Header,
-			}).Error("Error getting CIGAR string: ", errCigarRv)
+				"read":              readPair.ReadR2.Header,
+				"length of mapping": resRv.MatchedGenome.Length(),
+				"expected length":   len(*readPair.ReadR2.Sequence),
+			}).Error("Error getting CIGAR string of RV read: ", errCigarRv)
 
 			// TODO: handle error
 			// return "", false
