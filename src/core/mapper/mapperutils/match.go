@@ -485,6 +485,34 @@ func (t TargetAnnotation) String() string {
 	return sb.String()
 }
 
+func (t TargetAnnotation) LogInfo() {
+	strand := "+"
+	if t.PreferedStrand == 1 {
+		strand = "-"
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"preferred strand": strand,
+		"confidence score": t.Confidence * 100,
+	}).Info("Done with Annotation")
+
+	for orientation, introns := range t.Introns {
+		orientationLabel := "[+]"
+		if orientation == 1 {
+			orientationLabel = "[-]"
+		}
+		logrus.WithFields(logrus.Fields{
+			"orientation": orientationLabel,
+		}).Info("Inferred Introns of")
+
+		for _, intron := range introns.Regions {
+			logrus.WithFields(logrus.Fields{
+				"Intron": intron.String(),
+			}).Info()
+		}
+	}
+}
+
 func (r ReadPairMatchResults) String() string {
 	var builder strings.Builder
 	builder.Write([]byte("ReadPairR1 Header: "))
