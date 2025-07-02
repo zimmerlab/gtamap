@@ -23,33 +23,33 @@ func SecondpassMappingWorker(secondPassChan *SecondPassChannel, wgIncompleteMapp
 		// is only one object
 		annotation = annot
 	}
-	fmt.Println(annotation)
 
-	// var wgRemap sync.WaitGroup
+	var wgRemap sync.WaitGroup
 	logrus.Info("Started second pass")
 
 	for {
 		// logrus.Info("About to receive from secondPassChan...")
 		task, ok := secondPassChan.Receive()
+
 		// logrus.Infof("Received from secondPassChan, ok=%v", ok)
 		if !ok {
 			logrus.Info("Done with second pass")
 			break
 		}
 
-		// wgRemap.Add(1)
-		// go func(t *mapperutils.ReadPairMatchResults) {
-		//	defer wgRemap.Done()
+		wgRemap.Add(1)
+		go func(t *mapperutils.ReadPairMatchResults) {
+			defer wgRemap.Done()
 
-		remapReadPair(task, annotation, genomeIndex)
+			remapReadPair(task, annotation, genomeIndex)
 
-		logrus.Debugf("Secondpass map: %s", task.ReadPair.ReadR1.Header)
+			logrus.Debugf("Secondpass map: %s", task.ReadPair.ReadR1.Header)
 
-		thirdPassChan.Send(&thirdpass.ThirdPassTask{
-			ReadPairId: task.ReadPair.ReadR1.Header,
-			TargetInfo: task,
-		})
-		//}(task)
+			thirdPassChan.Send(&thirdpass.ThirdPassTask{
+				ReadPairId: task.ReadPair.ReadR1.Header,
+				TargetInfo: task,
+			})
+		}(task)
 
 		// TODO: REMOVE DEBUG
 		// for _, mapping := range task.Fw {
@@ -66,7 +66,7 @@ func SecondpassMappingWorker(secondPassChan *SecondPassChannel, wgIncompleteMapp
 		// }
 
 	}
-	// wgRemap.Wait()
+	wgRemap.Wait()
 }
 
 func remapReadPair(readPairMapping *mapperutils.ReadPairMatchResults, annotationMap map[int]*mapperutils.TargetAnnotation, genomeIndex *index.GenomeIndex) {
@@ -81,10 +81,13 @@ func remapReadPair(readPairMapping *mapperutils.ReadPairMatchResults, annotation
 		remapRead(mapping, annotationMap[mainSeqId], readPairMapping.ReadPair.ReadR2, genomeIndex)
 	}
 
-	// make mappings uniq
+	// TODO: make mappings uniq
 }
 
 func remapRead(readMapping *mapperutils.ReadMatchResult, annotation *mapperutils.TargetAnnotation, read *fastq.Read, genomeIndex *index.GenomeIndex) {
+	if read.Header == "A00604:202:HLYW3DSXY:3:1177:22562:7686 1:N:0:AACTCGGA+TCTGGACA" || read.Header == "A00604:202:HLYW3DSXY:3:1177:22562:7686 2:N:0:AACTCGGA+TCTGGACA" || read.Header == "A00604:202:HLYW3DSXY:3:1555:3947:1376 1:N:0:AACTCGGA+TCTGGACA" || read.Header == "A00604:202:HLYW3DSXY:3:2158:23972:22091 1:N:0:AACTCGGA+TCTGGAAA" {
+		fmt.Println("s")
+	}
 	// remap IncompleteMap
 	if len(annotation.Introns[0].Regions) == 0 {
 		logrus.Debug("Second pass remap not possible because no introns were inferred.")
@@ -114,6 +117,11 @@ func rightRemapAlignmentBlockFromPos(remapStart int, anchorRegion *regionvector.
 	mm := make([]int, 0)
 
 	for j := 0; j < len(readSequenceToRemap); j++ {
+		if refPos == len(*refSeq) {
+			// abort in that case
+			score = -1
+			break
+		}
 
 		// jump to next exon in this case
 		//        |anchor                  | here we jump
@@ -159,6 +167,7 @@ func leftRemapAlignmentBlockFromPos(remapStart int, anchorRegion *regionvector.R
 
 	// get next intron
 	nextIntronFromAnchor := targetSeqIntronSet.GetPrevIntron(anchorRegion.Start)
+
 	if nextIntronFromAnchor != nil && nextIntronFromAnchor.End == anchorRegion.Start && nextIntronFromAnchor.Rank != 0 {
 		nextIntronFromAnchor = targetSeqIntronSet.Regions[nextIntronFromAnchor.Rank-1]
 	}
@@ -168,6 +177,11 @@ func leftRemapAlignmentBlockFromPos(remapStart int, anchorRegion *regionvector.R
 	score := 0
 
 	for j := len(readSequenceToRemap) - 1; j >= 0; j-- {
+		if refPos == -1 {
+			// if map goes outside ref bounds set score to -1
+			score = -1
+			break
+		}
 
 		// jump to next exon in this case
 		//                      | jump here
@@ -187,6 +201,9 @@ func leftRemapAlignmentBlockFromPos(remapStart int, anchorRegion *regionvector.R
 			remapStart = nextIntronFromAnchor.Start - 1
 			// update intron if intron not first intron
 			if nextIntronFromAnchor.Rank != 0 {
+				fmt.Println("Want next from")
+				fmt.Println(nextIntronFromAnchor)
+				fmt.Println(nextIntronFromAnchor.Rank)
 				nextIntronFromAnchor = targetSeqIntronSet.Regions[nextIntronFromAnchor.Rank-1]
 			}
 			continue
@@ -210,7 +227,6 @@ func leftRemapAlignmentBlockFromPos(remapStart int, anchorRegion *regionvector.R
 }
 
 func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet *regionvector.RegionSet, read *fastq.Read, genomeIndex *index.GenomeIndex) {
-	remapsDone := make([]string, 0)
 	readMatchResult.NormalizeRegions()
 	if readMatchResult.MatchedGenome.HasGaps() {
 		// get larges anchor in map for right remap
@@ -247,18 +263,19 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 					// startInRead := regionvector.GenomicCoordToReadCoord(readMatchResult.MatchedRead.GetFirstRegion().Start, weakAnchor.Start, readMatchResult.MatchedGenome.Regions)
 					startInRead := readMatchResult.MatchedRead.Regions[mainAnchorIndex+1].Start
 					remapOptions := rightRemap(readMatchResult, targetSeqIntronSet, read, weakAnchor, mainAnchor, genomeIndex, mainAnchorRank, startInRead)
-					bestOption := chooseBestRemap(remapOptions)
+					if remapOptions != nil {
+						bestOption := chooseBestRemap(remapOptions)
 
-					if len(remapOptions[bestOption].MismatchesRead) < len(readMatchResult.MismatchesRead) {
-						// remove weakAnchor and everything right to it
-						readMatchResult.MatchedGenome.RemoveRegion(weakAnchor.Start, readMatchResult.MatchedGenome.GetLastRegion().End)
-						// update map
-						for _, region := range remapOptions[bestOption].RemapVector {
-							readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(region.Start, region.End)
+						if len(remapOptions[bestOption].MismatchesRead) < len(readMatchResult.MismatchesRead) {
+							// remove weakAnchor and everything right to it
+							readMatchResult.MatchedGenome.RemoveRegion(weakAnchor.Start, readMatchResult.MatchedGenome.GetLastRegion().End)
+							// update map
+							for _, region := range remapOptions[bestOption].RemapVector {
+								readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(region.Start, region.End)
+							}
+							// update mm
+							readMatchResult.MismatchesRead = remapOptions[bestOption].MismatchesRead
 						}
-						// update mm
-						readMatchResult.MismatchesRead = remapOptions[bestOption].MismatchesRead
-						remapsDone = append(remapsDone, "R Deletion")
 					}
 
 					mainAnchor = weakAnchor
@@ -317,22 +334,23 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 						startInRead -= padding
 					}
 					remapOptions := rightRemap(readMatchResult, targetSeqIntronSet, read, weakAnchor, mainAnchor, genomeIndex, mainAnchorRank, startInRead)
-					remapsDone = append(remapsDone, "Right Remap")
 
-					// add best matching region back to result
-					// we want the remap with the highest score and if there are remaps with same score, we start with
-					bestOption := chooseBestRemap(remapOptions)
+					if remapOptions != nil {
+						// add best matching region back to result
+						// we want the remap with the highest score and if there are remaps with same score, we start with
+						bestOption := chooseBestRemap(remapOptions)
 
-					// remove weakAnchor and everything right to it
-					readMatchResult.MatchedGenome.RemoveRegion(weakAnchor.Start, readMatchResult.MatchedGenome.GetLastRegion().End)
+						// remove weakAnchor and everything right to it
+						readMatchResult.MatchedGenome.RemoveRegion(weakAnchor.Start, readMatchResult.MatchedGenome.GetLastRegion().End)
 
-					for _, region := range remapOptions[bestOption].RemapVector {
-						readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(region.Start, region.End)
+						for _, region := range remapOptions[bestOption].RemapVector {
+							readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(region.Start, region.End)
+						}
+
+						// update mm in readMatchResult
+						readMatchResult.MismatchesRead = remapOptions[bestOption].MismatchesRead
+						break
 					}
-
-					// update mm in readMatchResult
-					readMatchResult.MismatchesRead = remapOptions[bestOption].MismatchesRead
-					break
 				}
 
 				// Case III
@@ -345,7 +363,6 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 				// (REF)  ++++++++-------++++++++++++
 				mainAnchor.End = mainAnchor.End + correctedL
 				weakAnchor.Start = weakAnchor.Start + correctedR
-				remapsDone = append(remapsDone, "Symmetric Intron Remap (Right)")
 				// go to next anchor
 				mainAnchor = weakAnchor
 				mainAnchorIndex++
@@ -369,10 +386,6 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 				}
 				weakAnchor := readMatchResult.MatchedGenome.Regions[mainAnchorIndex-1]
 
-				if read.Header == "2512526" || read.Header == "2538757" || read.Header == "2833006" || read.Header == "2858657" {
-					fmt.Println("s")
-				}
-
 				overlappingIntrons := targetSeqIntronSet.GetIntersectingIntrons(lGap)
 
 				if len(overlappingIntrons) == 0 {
@@ -387,18 +400,20 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 					}).Debug("Found deletion in read.")
 					// Just log / use for report later
 					// check if left or right diag can be extended
-					remapOptions := leftRemap(readMatchResult, targetSeqIntronSet, read, weakAnchor, mainAnchor, genomeIndex, mainAnchorRank)
-					bestOption := chooseBestRemap(remapOptions)
+					regionReadEnd := regionvector.GenomicCoordToReadCoord(0, weakAnchor.End, readMatchResult.MatchedGenome.Regions)
+					remapOptions := leftRemap(readMatchResult, targetSeqIntronSet, read, weakAnchor, mainAnchor, genomeIndex, mainAnchorRank, regionReadEnd)
+					if remapOptions != nil {
+						bestOption := chooseBestRemap(remapOptions)
 
-					if len(remapOptions[bestOption].MismatchesRead) < len(readMatchResult.MismatchesRead) {
-						// remove weakAnchor and everything left from it
-						readMatchResult.MatchedGenome.RemoveRegion(readMatchResult.MatchedGenome.GetFirstRegion().Start, weakAnchor.End)
-						for _, region := range remapOptions[bestOption].RemapVector {
-							readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(region.Start, region.End)
+						if len(remapOptions[bestOption].MismatchesRead) < len(readMatchResult.MismatchesRead) {
+							// remove weakAnchor and everything left from it
+							readMatchResult.MatchedGenome.RemoveRegion(readMatchResult.MatchedGenome.GetFirstRegion().Start, weakAnchor.End)
+							for _, region := range remapOptions[bestOption].RemapVector {
+								readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(region.Start, region.End)
+							}
+
+							readMatchResult.MismatchesRead = remapOptions[bestOption].MismatchesRead
 						}
-
-						readMatchResult.MismatchesRead = remapOptions[bestOption].MismatchesRead
-						remapsDone = append(remapsDone, "L Deletion")
 					}
 
 					mainAnchor = weakAnchor
@@ -452,20 +467,23 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 						mainAnchor.Start += padding
 					}
 
-					remapOptions := leftRemap(readMatchResult, targetSeqIntronSet, read, weakAnchor, mainAnchor, genomeIndex, mainAnchorRank)
-					bestOption := chooseBestRemap(remapOptions)
+					regionReadEnd := regionvector.GenomicCoordToReadCoord(0, weakAnchor.End, readMatchResult.MatchedGenome.Regions)
+					remapOptions := leftRemap(readMatchResult, targetSeqIntronSet, read, weakAnchor, mainAnchor, genomeIndex, mainAnchorRank, regionReadEnd)
 
-					// remove weakAnchor and everything left from it
-					readMatchResult.MatchedGenome.RemoveRegion(readMatchResult.MatchedGenome.GetFirstRegion().Start, weakAnchor.End)
+					if remapOptions != nil {
+						bestOption := chooseBestRemap(remapOptions)
 
-					// use remap
-					for _, region := range remapOptions[bestOption].RemapVector {
-						readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(region.Start, region.End)
+						// remove weakAnchor and everything left from it
+						readMatchResult.MatchedGenome.RemoveRegion(readMatchResult.MatchedGenome.GetFirstRegion().Start, weakAnchor.End)
+
+						// use remap
+						for _, region := range remapOptions[bestOption].RemapVector {
+							readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(region.Start, region.End)
+						}
+						// update mm in readMatchResult
+						readMatchResult.MismatchesRead = remapOptions[bestOption].MismatchesRead
+						break
 					}
-					// update mm in readMatchResult
-					readMatchResult.MismatchesRead = remapOptions[bestOption].MismatchesRead
-					remapsDone = append(remapsDone, "Left Remap")
-					break
 				}
 
 				// Case III
@@ -478,7 +496,6 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 				// (REF)  ++++++++-------++++++++++++
 				mainAnchor.Start = mainAnchor.Start + correctedL
 				weakAnchor.End = weakAnchor.End + correctedR
-				remapsDone = append(remapsDone, "Symmetric Intron Error (Left)")
 				// go to next anchor
 				mainAnchor = weakAnchor
 				mainAnchorIndex--
@@ -497,22 +514,13 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 		// if there are no gaps we need to remap overhangs
 		correctOverhangs(readMatchResult, targetSeqIntronSet, read, genomeIndex, readMatchResult.MatchedGenome.Regions[0])
 	}
-
-	if readMatchResult.MatchedGenome.Length() != 150 {
-		fmt.Println(read.Header)
-		fmt.Println("REMAP ISSUE READ")
-		fmt.Println(remapsDone)
-
-	}
 }
 
-func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet *regionvector.RegionSet, read *fastq.Read, genomeIndex *index.GenomeIndex, region *regionvector.Region) (bool, bool) {
+func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet *regionvector.RegionSet, read *fastq.Read, genomeIndex *index.GenomeIndex, region *regionvector.Region) {
 	overlappingIntrons := targetSeqIntronSet.GetIntersectingIntrons(region)
-	lCorrected := false
-	rCorrected := false
 	if len(overlappingIntrons) == 0 {
 		// solid map, no remap possible
-		return false, false
+		return
 	}
 	weakAnchor := &regionvector.Region{}
 	mapStart := region.Start
@@ -542,19 +550,22 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 		region.Start = lIntron.End
 		mainAnchorRank := lIntron.Rank + 1
 		readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(weakAnchor.Start, weakAnchor.End)
-		remapOptions := leftRemap(readMatchResult, targetSeqIntronSet, read, weakAnchor, region, genomeIndex, mainAnchorRank)
-		bestOption := chooseBestRemap(remapOptions)
+		regionReadEnd := regionvector.GenomicCoordToReadCoord(0, weakAnchor.End, readMatchResult.MatchedGenome.Regions)
+		remapOptions := leftRemap(readMatchResult, targetSeqIntronSet, read, weakAnchor, region, genomeIndex, mainAnchorRank, regionReadEnd)
 
-		// remove weakAnchor
-		readMatchResult.MatchedGenome.RemoveRegion(readMatchResult.MatchedGenome.GetFirstRegion().Start, weakAnchor.End)
+		if remapOptions != nil {
+			bestOption := chooseBestRemap(remapOptions)
 
-		// use remap
-		for _, r := range remapOptions[bestOption].RemapVector {
-			readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(r.Start, r.End)
+			// remove weakAnchor
+			readMatchResult.MatchedGenome.RemoveRegion(readMatchResult.MatchedGenome.GetFirstRegion().Start, weakAnchor.End)
+
+			// use remap
+			for _, r := range remapOptions[bestOption].RemapVector {
+				readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(r.Start, r.End)
+			}
+			// update mm in readMatchResult
+			readMatchResult.MismatchesRead = remapOptions[bestOption].MismatchesRead
 		}
-		// update mm in readMatchResult
-		readMatchResult.MismatchesRead = remapOptions[bestOption].MismatchesRead
-		lCorrected = true
 	}
 
 	// check if read end needs right remap
@@ -570,29 +581,32 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 
 		startInRead := regionvector.GenomicCoordToReadCoord(readMatchResult.MatchedRead.GetFirstRegion().Start, weakAnchor.Start, readMatchResult.MatchedGenome.Regions)
 		remapOptions := rightRemap(readMatchResult, targetSeqIntronSet, read, weakAnchor, region, genomeIndex, mainAnchorRank, startInRead)
-		bestOption := chooseBestRemap(remapOptions)
+		if remapOptions != nil {
+			bestOption := chooseBestRemap(remapOptions)
 
-		// remove weakAnchor
-		readMatchResult.MatchedGenome.RemoveRegion(weakAnchor.Start, readMatchResult.MatchedGenome.GetLastRegion().End)
+			// remove weakAnchor
+			readMatchResult.MatchedGenome.RemoveRegion(weakAnchor.Start, readMatchResult.MatchedGenome.GetLastRegion().End)
 
-		// use remap
-		for _, r := range remapOptions[bestOption].RemapVector {
-			readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(r.Start, r.End)
+			// use remap
+			for _, r := range remapOptions[bestOption].RemapVector {
+				readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(r.Start, r.End)
+			}
+			// update mm in readMatchResult
+			readMatchResult.MismatchesRead = remapOptions[bestOption].MismatchesRead
 		}
-		// update mm in readMatchResult
-		readMatchResult.MismatchesRead = remapOptions[bestOption].MismatchesRead
-		rCorrected = true
 	}
-	return lCorrected, rCorrected
 }
 
 func rightRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet *regionvector.RegionSet, read *fastq.Read, weakAnchor *regionvector.Region, anchorRegion *regionvector.Region, genomeIndex *index.GenomeIndex, anchorRank int, startInRead int) map[int]*RemapOption {
+	refSeq := genomeIndex.Sequences[readMatchResult.SequenceIndex]
+	if weakAnchor.End > len(*refSeq) {
+		return nil
+	}
 	remapOptions := make(map[int]*RemapOption)
 
 	regionReadEnd := len(*read.Sequence)
 
 	readSequenceToRemap := (*read.Sequence)[startInRead:regionReadEnd]
-	refSeq := genomeIndex.Sequences[readMatchResult.SequenceIndex]
 
 	// get next intron
 	intronRight := targetSeqIntronSet.GetNextIntron(anchorRegion.Start)
@@ -646,11 +660,18 @@ func rightRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet
 	return remapOptions
 }
 
-func leftRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet *regionvector.RegionSet, read *fastq.Read, weakAnchor *regionvector.Region, anchorRegion *regionvector.Region, genomeIndex *index.GenomeIndex, anchorRank int) map[int]*RemapOption {
+func leftRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet *regionvector.RegionSet, read *fastq.Read, weakAnchor *regionvector.Region, anchorRegion *regionvector.Region, genomeIndex *index.GenomeIndex, anchorRank, regionReadEnd int) map[int]*RemapOption {
+	// if this is the case, theres not enough gene left to remap the read
+	// GENOME [2,122]
+	// READ   [30,150] -> 30 bases missing but cant do left remap since only 2 bases in gene are left
+	// then weakAnchor == [-28, 2]
+	if weakAnchor.Start < 0 {
+		// retrun and dont do anything
+		return nil
+	}
 	remapOptions := make(map[int]*RemapOption)
 
 	regionReadStart := 0 // remap entire read from 0 to end of weakAnchor
-	regionReadEnd := weakAnchor.Length()
 
 	readSequenceToRemap := (*read.Sequence)[regionReadStart:regionReadEnd]
 	refSeq := genomeIndex.Sequences[readMatchResult.SequenceIndex]
@@ -784,10 +805,6 @@ func incomplRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronS
 	// and get overlapping introns
 	overlappingIntrons := targetSeqIntronSet.GetIntersectingIntrons(mainAnchor)
 
-	// refMM := readMatchResult.Copy().MismatchesRead
-	//
-	// lPad := false
-	// rPad := false
 	// check if main anchor is fully contained in intron -> stop remap and
 	if len(overlappingIntrons) > 1 {
 		lIntron := overlappingIntrons[0]
@@ -837,36 +854,26 @@ func incomplRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronS
 	mappingStart := readMainAnchor.Start
 	mappingEnd := readMainAnchor.End
 
-	// if readMatchResult.MatchedGenome.Length() != 150 {
-	//
-	// 	fmt.Println("LENGTH != 150")
-	// 	fmt.Println(read.Header)
-	// 	fmt.Println(mappingStart)
-	// 	fmt.Println(mappingEnd)
-	// 	fmt.Println(readMatchResult.MatchedGenome.Regions)
-	// 	fmt.Println(readMatchResult.MatchedRead.Regions)
-	// 	fmt.Println(mainAnchor)
-	// 	fmt.Println(readMatchResult.MismatchesRead)
-	// }
-
 	if mappingStart != 0 {
 		// leftRemap
 		regionToRemap := &regionvector.Region{Start: mainAnchor.Start - mappingStart, End: mainAnchor.Start}
-		remapOptions := leftRemap(readMatchResult, targetSeqIntronSet, read, regionToRemap, mainAnchor, genomeIndex, mainAnchorRank)
-		bestOption := chooseBestRemap(remapOptions)
+		remapOptions := leftRemap(readMatchResult, targetSeqIntronSet, read, regionToRemap, mainAnchor, genomeIndex, mainAnchorRank, regionToRemap.Length())
+		if remapOptions != nil {
+			bestOption := chooseBestRemap(remapOptions)
 
-		// remove everything left of main anchor
-		readMatchResult.MatchedGenome.RemoveRegion(readMatchResult.MatchedGenome.GetFirstRegion().Start, mainAnchor.Start)
-		readMatchResult.MatchedRead.RemoveRegion(0, mappingStart)
+			// remove everything left of main anchor
+			readMatchResult.MatchedGenome.RemoveRegion(readMatchResult.MatchedGenome.GetFirstRegion().Start, mainAnchor.Start)
+			readMatchResult.MatchedRead.RemoveRegion(0, mappingStart)
 
-		for _, region := range remapOptions[bestOption].RemapVector {
-			readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(region.Start, region.End)
+			for _, region := range remapOptions[bestOption].RemapVector {
+				readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(region.Start, region.End)
+			}
+
+			readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(0, mappingStart)
+
+			// update mm in readMatchResult
+			readMatchResult.MismatchesRead = remapOptions[bestOption].MismatchesRead
 		}
-
-		readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(0, mappingStart)
-
-		// update mm in readMatchResult
-		readMatchResult.MismatchesRead = remapOptions[bestOption].MismatchesRead
 
 	}
 
@@ -875,39 +882,25 @@ func incomplRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronS
 		regionToRemap := &regionvector.Region{Start: mainAnchor.End, End: mainAnchor.End + (len(*read.Sequence) - mappingEnd)}
 
 		remapOptions := rightRemap(readMatchResult, targetSeqIntronSet, read, regionToRemap, mainAnchor, genomeIndex, mainAnchorRank, mappingEnd)
-		bestOption := chooseBestRemap(remapOptions)
 
-		// remove everything right of main anchor
-		readMatchResult.MatchedGenome.RemoveRegion(mainAnchor.End, readMatchResult.MatchedGenome.GetLastRegion().End)
-		readMatchResult.MatchedRead.RemoveRegion(mappingEnd, len(*read.Sequence))
+		if remapOptions != nil {
+			bestOption := chooseBestRemap(remapOptions)
 
-		for _, region := range remapOptions[bestOption].RemapVector {
-			readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(region.Start, region.End)
+			// remove everything right of main anchor
+			readMatchResult.MatchedGenome.RemoveRegion(mainAnchor.End, readMatchResult.MatchedGenome.GetLastRegion().End)
+			readMatchResult.MatchedRead.RemoveRegion(mappingEnd, len(*read.Sequence))
+
+			for _, region := range remapOptions[bestOption].RemapVector {
+				readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(region.Start, region.End)
+			}
+
+			readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(mappingEnd, len(*read.Sequence))
+
+			// update mm in readMatchResult
+			readMatchResult.MismatchesRead = remapOptions[bestOption].MismatchesRead
 		}
-
-		readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(mappingEnd, len(*read.Sequence))
-
-		// update mm in readMatchResult
-		readMatchResult.MismatchesRead = remapOptions[bestOption].MismatchesRead
 	}
-	// if len(readMatchResult.MismatchesRead) > 20 {
-	// 	debugout.GenerateAlignmentView(genomeIndex, *readMatchResult, read)
-	// }
 
 	// update bool to include res in sam
 	readMatchResult.IncompleteMap = false
-	// fmt.Println("REMAPPED")
-	// fmt.Println(read.Header)
-	// fmt.Println(mappingStart)
-	// fmt.Println(mappingEnd)
-	// fmt.Println(readMatchResult.MatchedGenome.Regions)
-	// fmt.Println(readMatchResult.MatchedRead.Regions)
-	// fmt.Println(mainAnchor)
-	// fmt.Println(readMatchResult.MismatchesRead)
-	// fmt.Println(refMM)
-
-	if readMatchResult.MatchedGenome.Length() != 150 {
-		fmt.Println("INCOMP ISSUE READ")
-		fmt.Println(read.Header)
-	}
 }
