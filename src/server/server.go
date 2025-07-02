@@ -4,12 +4,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/KleinSamuel/gtamap/src/analysis"
+	"github.com/KleinSamuel/gtamap/src/formats/fasta"
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -32,6 +35,12 @@ func (s *Server) InitRoutes() {
 
 	api.HandleFunc("/upsetDataRead", s.upsetDataRead).Methods("GET")
 	api.HandleFunc("/upsetDataRecordPos", s.upsetDataRecordPos).Methods("GET")
+
+	api.HandleFunc("/readNumMatchesDistribution", s.readNumMatchesDistribution).Methods("GET")
+	api.HandleFunc("/readMultimappingDensityData", s.readMultimappingDensityData).Methods("GET")
+	api.HandleFunc("/readMultimappingDensityDataHeatmap", s.readMultimappingDensityDataHeatmap).Methods("GET")
+	api.HandleFunc("/mapperEmbedding", s.mapperEmbedding).Methods("GET")
+	api.HandleFunc("/mapperMultimappingParallel", s.mapperMultimappingParallel).Methods("GET")
 
 	download := s.Router.PathPrefix("/download").Subrouter()
 
@@ -166,6 +175,342 @@ func (s *Server) upsetDataRecordPos(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(data)
+}
+
+func (s *Server) readNumMatchesDistribution(w http.ResponseWriter, r *http.Request) {
+
+	// TODO: currently only gtamap
+
+	data := s.AnalysisService.MapperInfos["gtamap"].RecordsByQname
+
+	recordInfoList := make([]RecordInfo, 0, len(data))
+
+	for qname, records := range data {
+		recordIds := make([]int, 0, len(records))
+		for _, record := range records {
+			recordIds = append(recordIds, record.Id)
+		}
+
+		recordInfo := RecordInfo{
+			Qname:     qname,
+			RecordIds: recordIds,
+		}
+
+		recordInfoList = append(recordInfoList, recordInfo)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(recordInfoList)
+}
+
+type MultimappingDensity struct {
+	MaxXValue int                       `json:"maxXValue"`
+	Data      []MultimappingDensityInfo `json:"data"`
+}
+
+type MultimappingDensityInfo struct {
+	Mapper          string `json:"mapper"`
+	ReadAssignments []int  `json:"readAssignments"`
+}
+
+type MultimappingDensityInfoHeatmap struct {
+	Mapper      string `json:"mapper"`
+	NumMappings int    `json:"numMappings"`
+	Count       int    `json:"count"`
+}
+
+func (s *Server) readMultimappingDensityDataHeatmap(w http.ResponseWriter, r *http.Request) {
+
+	data := make([]MultimappingDensityInfoHeatmap, 0, len(s.AnalysisService.MapperNames))
+
+	maxValue := 0
+
+	mapperToMap := make(map[string]map[int]int)
+
+	for _, mapperName := range s.AnalysisService.MapperNames {
+
+		numMappingsToCount := make(map[int]int)
+
+		for _, records := range s.AnalysisService.MapperInfos[mapperName].RecordsByQname {
+
+			numMappings := len(records)
+
+			if numMappings > maxValue {
+				maxValue = numMappings
+			}
+
+			if _, exists := numMappingsToCount[numMappings]; !exists {
+				numMappingsToCount[numMappings] = 0
+			}
+
+			numMappingsToCount[numMappings]++
+		}
+
+		if _, exists := mapperToMap[mapperName]; !exists {
+			mapperToMap[mapperName] = make(map[int]int)
+		}
+		mapperToMap[mapperName] = numMappingsToCount
+	}
+
+	for mapperName, numMappingsToCount := range mapperToMap {
+		for i := 1; i <= maxValue; i++ {
+			count, exists := numMappingsToCount[i]
+			if !exists {
+				count = 0
+			}
+
+			multimappingDensityInfo := MultimappingDensityInfoHeatmap{
+				Mapper:      mapperName,
+				NumMappings: i,
+				Count:       count,
+			}
+
+			data = append(data, multimappingDensityInfo)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(data)
+}
+
+func (s *Server) readMultimappingDensityData(w http.ResponseWriter, r *http.Request) {
+
+	maxXValue := 0
+
+	data := make([]MultimappingDensityInfo, 0)
+
+	for mapperName, mapperInfo := range s.AnalysisService.MapperInfos {
+
+		readAssignments := make([]int, 0, len(mapperInfo.RecordsByQname))
+
+		for _, records := range mapperInfo.RecordsByQname {
+			readAssignments = append(readAssignments, len(records))
+
+			if len(records) > int(maxXValue) {
+				maxXValue = len(records)
+			}
+		}
+
+		multimappingDensityInfo := MultimappingDensityInfo{
+			Mapper:          mapperName,
+			ReadAssignments: readAssignments,
+		}
+
+		data = append(data, multimappingDensityInfo)
+	}
+
+	multimappingDensity := MultimappingDensity{
+		MaxXValue: maxXValue,
+		Data:      data,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(multimappingDensity)
+}
+
+type RecordInfo struct {
+	Qname     string `json:"qname"`
+	RecordIds []int  `json:"recordIds"`
+}
+
+type MapperEmbedding struct {
+	Mapper    string      `json:"mapper"`
+	Embedding [][]float32 `json:"embedding"`
+}
+
+type MapperDistanceMatrix struct {
+	Mappers   []string    `json:"mappers"`
+	Distances [][]float32 `json:"distances"`
+}
+
+func (s *Server) mapperEmbedding(w http.ResponseWriter, r *http.Request) {
+
+	numQnames := len(s.AnalysisService.MapperInfos["gtamap"].RecordsByQname)
+	qnameEmbedding := make(map[string]int, numQnames)
+	for qname, _ := range s.AnalysisService.MapperInfos["gtamap"].RecordsByQname {
+		qnameEmbedding[qname] = len(qnameEmbedding)
+	}
+
+	fastaIndexPath := "/home/sam/Projects/gtamap-paper/pipeline/input/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai"
+
+	fastaIndex := fasta.ReadFastaIndexUsingPath(fastaIndexPath)
+
+	numContigs := len(fastaIndex.Entries)
+	contigEmbedding := make(map[string]int, numContigs)
+
+	for contig, _ := range fastaIndex.Entries {
+		contigEmbedding[contig] = len(contigEmbedding)
+	}
+
+	embeddings := make([]MapperEmbedding, 0, len(s.AnalysisService.MapperNames))
+
+	for _, mapperName := range s.AnalysisService.MapperNames {
+
+		mapperEmbedding := make([][]float32, 0)
+
+		for qname, records := range s.AnalysisService.MapperInfos[mapperName].RecordsByQname {
+
+			for _, record := range records {
+
+				contigName := strings.Split(record.Rname, " ")[0]
+
+				oneHotEncoding := make([]float32, 2)
+
+				indexQname := qnameEmbedding[qname]
+				indexContig := contigEmbedding[contigName]
+
+				//oneHotEncoding[indexQname] = float32(1)
+				//oneHotEncoding[numQnames+indexContig] = float32(1)
+				oneHotEncoding[0] = float32(indexQname)
+				oneHotEncoding[1] = float32(indexContig)
+
+				posValue := float32(record.Pos) / float32(fastaIndex.Entries[contigName].Length)
+
+				oneHotEncoding = append(oneHotEncoding, posValue)
+
+				mapperEmbedding = append(mapperEmbedding, oneHotEncoding)
+			}
+		}
+
+		embeddings = append(embeddings, MapperEmbedding{
+			Mapper:    mapperName,
+			Embedding: mapperEmbedding,
+		})
+	}
+	//
+	//distanceMatrix := make([][]float32, len(embeddings))
+	//
+	//for i := 0; i < len(embeddings); i++ {
+	//	distanceMatrix[i] = make([]float32, len(embeddings))
+	//}
+	//
+	//for i := 0; i < len(embeddings); i++ {
+	//
+	//	for j := i + 1; j < len(embeddings); j++ {
+	//		embeddingA := embeddings[i]
+	//		embeddingB := embeddings[j]
+	//
+	//		chamferDist := ChamferDistance(embeddingA.Embedding, embeddingB.Embedding)
+	//		distanceMatrix[i][j] = chamferDist
+	//		distanceMatrix[j][i] = chamferDist
+	//	}
+	//
+	//	fmt.Printf("Done with embedding %d of %d\n", i+1, len(embeddings))
+	//}
+	//
+	//mapperDistanceMatrix := MapperDistanceMatrix{
+	//	Mappers:   make([]string, 0, len(embeddings)),
+	//	Distances: distanceMatrix,
+	//}
+	//for _, embedding := range embeddings {
+	//	mapperDistanceMatrix.Mappers = append(mapperDistanceMatrix.Mappers, embedding.Mapper)
+	//}
+
+	//// write the distance matrix to file
+	//file, err := os.Create("distance_matrix.json")
+	//if err != nil {
+	//	http.Error(w, "Error creating distance matrix file", http.StatusInternalServerError)
+	//	return
+	//}
+	//defer file.Close()
+	//
+	//err = json.NewEncoder(file).Encode(distanceMatix)
+	//if err != nil {
+	//	http.Error(w, "Error writing distance matrix to file", http.StatusInternalServerError)
+	//	return
+	//}
+
+	//// read the distance matrix from file
+	//file, err := os.Open("distance_matrix.json")
+	//if err != nil {
+	//	http.Error(w, "Error reading distance matrix file", http.StatusInternalServerError)
+	//	return
+	//}
+	//defer file.Close()
+	//
+	//var mapperDistanceMatrix MapperDistanceMatrix
+	//
+	//err = json.NewDecoder(file).Decode(&mapperDistanceMatrix)
+	//if err != nil {
+	//	http.Error(w, "Error decoding distance matrix", http.StatusInternalServerError)
+	//	return
+	//}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(embeddings)
+}
+
+type MapperMultimmapingParallel struct {
+	Qname   string         `json:"qname"`
+	Mappers map[string]int `json:"mappers"`
+}
+
+func (s *Server) mapperMultimappingParallel(w http.ResponseWriter, r *http.Request) {
+
+	qnameMap := make(map[string]MapperMultimmapingParallel)
+
+	for qname, _ := range s.AnalysisService.MapperInfos["gtamap"].RecordsByQname {
+
+		mapperMap := make(map[string]int, len(s.AnalysisService.MapperNames))
+		for _, mapperName := range s.AnalysisService.MapperNames {
+			mapperMap[mapperName] = 0
+		}
+
+		qnameMap[qname] = MapperMultimmapingParallel{
+			Qname:   qname,
+			Mappers: mapperMap,
+		}
+	}
+
+	for mapperName, mapperInfo := range s.AnalysisService.MapperInfos {
+		for qname, records := range mapperInfo.RecordsByQname {
+			qnameMap[qname].Mappers[mapperName] = len(records)
+		}
+	}
+
+	result := make([]MapperMultimmapingParallel, 0, len(qnameMap))
+
+	for _, value := range qnameMap {
+		result = append(result, value)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+// EuclideanDistance computes the Euclidean distance between two points.
+func EuclideanDistance(a, b []float32) float32 {
+	if len(a) != len(b) {
+		panic("points must have the same dimension")
+	}
+	sum := float32(0.0)
+	for i := range a {
+		diff := a[i] - b[i]
+		sum += diff * diff
+	}
+	return float32(math.Sqrt(float64(sum)))
+}
+
+// avgMinDist computes the average of minimum distances
+// from each point in fromSet to the closest point in toSet.
+func avgMinDist(fromSet, toSet [][]float32) float32 {
+	total := float32(0.0)
+	for _, p := range fromSet {
+		minDist := float32(math.Inf(1))
+		for _, q := range toSet {
+			dist := EuclideanDistance(p, q)
+			if dist < minDist {
+				minDist = dist
+			}
+		}
+		total += minDist
+	}
+	return total / float32(len(fromSet))
+}
+
+// ChamferDistance computes the Chamfer distance between two point sets.
+func ChamferDistance(setA, setB [][]float32) float32 {
+	return avgMinDist(setA, setB) + avgMinDist(setB, setA)
 }
 
 func serveGenomeFastaFile(w http.ResponseWriter, r *http.Request) {

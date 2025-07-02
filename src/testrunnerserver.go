@@ -49,5 +49,15 @@ func main() {
 		log.Fatalf("Error initializing analysis service: %v", err)
 	}
 
+	contextmap2bowtieGenomePath := "/home/sam/Projects/gtamap-paper/pipeline/output/ENSG00000173585/ENSG00000173585.contextmap2-bowtie2.genome.sam"
+	if err := s.AnalysisService.AddMapperInfo("contextmap2-bowtie2", contextmap2bowtieGenomePath); err != nil {
+		log.Fatalf("Error initializing analysis service: %v", err)
+	}
+
+	contextmap2bwaGenomePath := "/home/sam/Projects/gtamap-paper/pipeline/output/ENSG00000173585/ENSG00000173585.contextmap2-bwa.genome.sam"
+	if err := s.AnalysisService.AddMapperInfo("contextmap2-bwa", contextmap2bwaGenomePath); err != nil {
+		log.Fatalf("Error initializing analysis service: %v", err)
+	}
+
 	s.Start()
 }
