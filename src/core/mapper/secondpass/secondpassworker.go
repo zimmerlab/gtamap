@@ -1,7 +1,6 @@
 package secondpass
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
@@ -85,9 +84,6 @@ func remapReadPair(readPairMapping *mapperutils.ReadPairMatchResults, annotation
 }
 
 func remapRead(readMapping *mapperutils.ReadMatchResult, annotation *mapperutils.TargetAnnotation, read *fastq.Read, genomeIndex *index.GenomeIndex) {
-	if read.Header == "A00604:202:HLYW3DSXY:3:1177:22562:7686 1:N:0:AACTCGGA+TCTGGACA" || read.Header == "A00604:202:HLYW3DSXY:3:1177:22562:7686 2:N:0:AACTCGGA+TCTGGACA" || read.Header == "A00604:202:HLYW3DSXY:3:1555:3947:1376 1:N:0:AACTCGGA+TCTGGACA" || read.Header == "A00604:202:HLYW3DSXY:3:2158:23972:22091 1:N:0:AACTCGGA+TCTGGAAA" {
-		fmt.Println("s")
-	}
 	// remap IncompleteMap
 	if len(annotation.Introns[0].Regions) == 0 {
 		logrus.Debug("Second pass remap not possible because no introns were inferred.")
@@ -201,9 +197,6 @@ func leftRemapAlignmentBlockFromPos(remapStart int, anchorRegion *regionvector.R
 			remapStart = nextIntronFromAnchor.Start - 1
 			// update intron if intron not first intron
 			if nextIntronFromAnchor.Rank != 0 {
-				fmt.Println("Want next from")
-				fmt.Println(nextIntronFromAnchor)
-				fmt.Println(nextIntronFromAnchor.Rank)
 				nextIntronFromAnchor = targetSeqIntronSet.Regions[nextIntronFromAnchor.Rank-1]
 			}
 			continue
