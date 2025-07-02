@@ -36,11 +36,12 @@ func (s *Server) InitRoutes() {
 	api.HandleFunc("/upsetDataRead", s.upsetDataRead).Methods("GET")
 	api.HandleFunc("/upsetDataRecordPos", s.upsetDataRecordPos).Methods("GET")
 
-	api.HandleFunc("/readNumMatchesDistribution", s.readNumMatchesDistribution).Methods("GET")
+	//api.HandleFunc("/readNumMatchesDistribution", s.readNumMatchesDistribution).Methods("GET")
 	api.HandleFunc("/readMultimappingDensityData", s.readMultimappingDensityData).Methods("GET")
 	api.HandleFunc("/readMultimappingDensityDataHeatmap", s.readMultimappingDensityDataHeatmap).Methods("GET")
 	api.HandleFunc("/mapperEmbedding", s.mapperEmbedding).Methods("GET")
 	api.HandleFunc("/mapperMultimappingParallel", s.mapperMultimappingParallel).Methods("GET")
+	api.HandleFunc("/mapperDistances", s.mapperDistances).Methods("GET")
 
 	download := s.Router.PathPrefix("/download").Subrouter()
 
@@ -177,31 +178,31 @@ func (s *Server) upsetDataRecordPos(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(data)
 }
 
-func (s *Server) readNumMatchesDistribution(w http.ResponseWriter, r *http.Request) {
-
-	// TODO: currently only gtamap
-
-	data := s.AnalysisService.MapperInfos["gtamap"].RecordsByQname
-
-	recordInfoList := make([]RecordInfo, 0, len(data))
-
-	for qname, records := range data {
-		recordIds := make([]int, 0, len(records))
-		for _, record := range records {
-			recordIds = append(recordIds, record.Id)
-		}
-
-		recordInfo := RecordInfo{
-			Qname:     qname,
-			RecordIds: recordIds,
-		}
-
-		recordInfoList = append(recordInfoList, recordInfo)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(recordInfoList)
-}
+//func (s *Server) readNumMatchesDistribution(w http.ResponseWriter, r *http.Request) {
+//
+//	// TODO: currently only gtamap
+//
+//	data := s.AnalysisService.MapperInfos["gtamap"].RecordsByQname
+//
+//	recordInfoList := make([]RecordInfo, 0, len(data))
+//
+//	for qname, records := range data {
+//		recordIds := make([]int, 0, len(records))
+//		for _, record := range records {
+//			recordIds = append(recordIds, record.Id)
+//		}
+//
+//		recordInfo := RecordInfo{
+//			Qname:     qname,
+//			RecordIds: recordIds,
+//		}
+//
+//		recordInfoList = append(recordInfoList, recordInfo)
+//	}
+//
+//	w.Header().Set("Content-Type", "application/json")
+//	json.NewEncoder(w).Encode(recordInfoList)
+//}
 
 type MultimappingDensity struct {
 	MaxXValue int                       `json:"maxXValue"`
@@ -511,6 +512,84 @@ func avgMinDist(fromSet, toSet [][]float32) float32 {
 // ChamferDistance computes the Chamfer distance between two point sets.
 func ChamferDistance(setA, setB [][]float32) float32 {
 	return avgMinDist(setA, setB) + avgMinDist(setB, setA)
+}
+
+type MapperDistanceMatrix64 struct {
+	Mappers   []string    `json:"mappers"`
+	Distances [][]float64 `json:"distances"`
+}
+
+func (s *Server) mapperDistances(w http.ResponseWriter, r *http.Request) {
+
+	numQnames := len(s.AnalysisService.MapperInfos["gtamap"].RecordsByQname)
+	qnameEmbedding := make(map[string]int, numQnames)
+	for qname, _ := range s.AnalysisService.MapperInfos["gtamap"].RecordsByQname {
+		qnameEmbedding[qname] = len(qnameEmbedding)
+	}
+
+	fastaIndexPath := "/home/sam/Projects/gtamap-paper/pipeline/input/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai"
+
+	fastaIndex := fasta.ReadFastaIndexUsingPath(fastaIndexPath)
+
+	numContigs := len(fastaIndex.Entries)
+	contigEmbedding := make(map[string]int, numContigs)
+
+	for contig, _ := range fastaIndex.Entries {
+		contigEmbedding[contig] = len(contigEmbedding)
+	}
+
+	distanceMatrix := make([][]float64, len(s.AnalysisService.MapperNames))
+	for i := 0; i < len(s.AnalysisService.MapperNames); i++ {
+		distanceMatrix[i] = make([]float64, len(s.AnalysisService.MapperNames))
+	}
+
+	for i := 0; i < len(s.AnalysisService.MapperNames); i++ {
+
+		mapperNameA := s.AnalysisService.MapperNames[i]
+		recordsA := s.AnalysisService.MapperInfos[mapperNameA].RecordsByQname
+
+		for j := i + 1; j < len(s.AnalysisService.MapperNames); j++ {
+
+			numSame := 0
+			numOther := 0
+
+			mapperNameB := s.AnalysisService.MapperNames[j]
+
+			for qnameB, recordsB := range s.AnalysisService.MapperInfos[mapperNameB].RecordsByQname {
+
+				for _, recordB := range recordsB {
+
+					found := false
+
+					for _, recordA := range recordsA[qnameB] {
+
+						if recordA.Rname == recordB.Rname && recordA.Pos == recordB.Pos {
+							found = true
+							break
+						}
+					}
+
+					if found {
+						numSame++
+					} else {
+						numOther++
+					}
+				}
+			}
+
+			distance := float64(numSame)
+			distanceMatrix[i][j] = distance
+			distanceMatrix[j][i] = distance
+		}
+	}
+
+	result := MapperDistanceMatrix64{
+		Mappers:   s.AnalysisService.MapperNames,
+		Distances: distanceMatrix,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }
 
 func serveGenomeFastaFile(w http.ResponseWriter, r *http.Request) {

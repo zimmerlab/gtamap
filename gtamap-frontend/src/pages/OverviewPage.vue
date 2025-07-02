@@ -34,9 +34,11 @@
 
     <div class="tw:flex tw:flex-row">
       <div class="tw:flex-1"></div>
-      <MapperMultimappingHeatmap id="mapper-multimap-heatmap"></MapperMultimappingHeatmap>
+      <MapperMultimappingHeatmap id="mapper-multimap-heatmap" class="tw:flex-1"></MapperMultimappingHeatmap>
       <div class="tw:flex-1"></div>
     </div>
+
+    <MapperMultimappingParallelPlot id="mapper-multimap-parallel"></MapperMultimappingParallelPlot>
 
     <div class="tw:py-2 tw:flex tw:flex-row">
 <!--      <div class="tw:flex-1"></div>-->
@@ -99,11 +101,13 @@ import * as UpSetJS from '@upsetjs/bundle'
 import * as d3 from 'd3'
 
 import MapperMultimappingHeatmap from "../components/MapperMultimappingHeatmap.vue";
+import MapperMultimappingParallelPlot from "../components/MapperMultimappingParallelPlot.vue";
 
 export default {
   name: "OverviewPage",
   components: {
-    MapperMultimappingHeatmap
+    MapperMultimappingHeatmap,
+    MapperMultimappingParallelPlot
   },
   setup() {
 
@@ -482,6 +486,10 @@ export default {
 
 <style scoped>
 #mapper-multimap-heatmap {
+  transform: scale(1);
+  transform-origin: top left;
+}
+#mapper-multimap-parallel {
   transform: scale(1);
   transform-origin: top left;
 }

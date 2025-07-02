@@ -1,5 +1,8 @@
 <template>
-  <div ref="chartContainer"></div>
+  <w-button @click="toggleFilter" style="margin-bottom: 10px;">
+    {{ filterEnabled ? 'Show concordant results' : 'Hide concordant results' }}
+  </w-button>
+  <div ref="mapperMultimappingParallelContainer"></div>
 </template>
 
 <script>
@@ -12,12 +15,24 @@ export default {
 
     const ApiService = inject("http")
 
-    const chartContainer = ref(null)
+    const mapperMultimappingParallelContainer = ref(null)
+
+    const filterEnabled = ref(false)
+
+    function toggleFilter() {
+      filterEnabled.value = !filterEnabled.value
+
+      // Clear previous chart
+      d3.select(mapperMultimappingParallelContainer.value).selectAll('svg').remove()
+
+      // Redraw chart with new filter setting
+      draw()
+    }
 
     async function draw() {
 
       const margin = { top: 40, right: 20, bottom: 20, left: 20 }
-      const width = chartContainer.value.clientWidth
+      const width = mapperMultimappingParallelContainer.value.clientWidth
       const height = 500
 
       try {
@@ -33,8 +48,8 @@ export default {
 
         const response = await ApiService.get("/api/mapperMultimappingParallel")
 
-        // transfor the response data to the format needed for the sankey diagram
-        const data = response.data.map(d => {
+        // transform the response data to the format needed for the sankey diagram
+        let data = response.data.map(d => {
 
           let res = {
             datapoint: d.qname
@@ -47,6 +62,18 @@ export default {
           return res
         })
 
+        // Apply optional filtering
+        if (filterEnabled.value) {
+          data = data.filter(d => {
+            for (const val in d) {
+              if (val !== 'datapoint' && d[val] !== 2) {
+                return true
+              }
+            }
+            return false
+          })
+        }
+
         // extract the dimensions (mappers) from the data
         const dimensions = Object.keys(data[0]).filter(d => d !== 'datapoint')
         dimensions.sort((a, b) => {
@@ -55,11 +82,11 @@ export default {
           return a.localeCompare(b)
         })
 
-        const width = chartContainer.value.clientWidth
+        const width = mapperMultimappingParallelContainer.value.clientWidth
         const height = 500
 
         const svg = d3
-            .select(chartContainer.value)
+            .select(mapperMultimappingParallelContainer.value)
             .append('svg')
             .attr('width', width)
             .attr('height', height)
@@ -152,13 +179,24 @@ export default {
             .append('title')
             .text(d => `${d.source.id} → ${d.target.id}\n${d.value}`)
 
-        svg.append('text')
+        // title
+        // svg.append('text')
+        //     .attr('x', width / 2)
+        //     .attr('y', margin.top / 2)
+        //     .attr('text-anchor', 'middle')
+        //     .attr('font-size', '12px')
+        //     .attr('font-weight', 'bold')
+        //     .text('Number of Mappings per Read and Mapper')
+
+        // subtitle
+        svg.append("text")
             .attr('x', width / 2)
             .attr('y', margin.top / 2)
-            .attr('text-anchor', 'middle')
-            .attr('font-size', '12px')
-            .attr('font-weight', 'bold')
-            .text('Number of Mappings per Read and Mapper')
+            .attr("text-anchor", "middle")
+            .style("font-size", "11px")
+            .style("fill", "grey")
+            .style("max-width", 400)
+            .text("Number of mapping locations per read and mapper");
 
         const methodPositions = {}
 
@@ -198,7 +236,9 @@ export default {
     })
 
     return {
-      chartContainer,
+      mapperMultimappingParallelContainer,
+      filterEnabled,
+      toggleFilter
     }
   },
 }
