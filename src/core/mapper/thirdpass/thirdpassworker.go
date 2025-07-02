@@ -1,7 +1,6 @@
 package thirdpass
 
 import (
-	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -18,9 +17,6 @@ import (
 func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGroup, outputChan chan<- string, index *index.GenomeIndex) {
 	defer wgThirdPass.Done()
 	logrus.Info("Started third pass")
-	compl := 0
-	incompl := 0
-	inMapping := 0
 
 	for {
 
@@ -30,21 +26,13 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 		}
 		logrus.Debugf("Third pass: %s", task.ReadPairId)
 
-		l, _ := strconv.Atoi(task.ReadPairId)
-		if l >= 2500000 {
-			inMapping++
-		}
-
 		var builder strings.Builder
 
 		for i := 0; i < len(task.TargetInfo.Fw); i++ {
 			for j := 0; j < len(task.TargetInfo.Rv); j++ {
 				if task.TargetInfo.Fw[i].IncompleteMap || task.TargetInfo.Rv[j].IncompleteMap {
-					incompl++
-
 					continue
 				}
-				compl++
 				s, isOk := readPairResultToSamString(index, task.TargetInfo.ReadPair, task.TargetInfo.Fw[i], task.TargetInfo.Rv[j])
 				if !isOk {
 					continue
@@ -55,9 +43,6 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 		outputChan <- builder.String()
 	}
 	logrus.Info("Done with third pass")
-	fmt.Printf("C %d\n", compl)
-	fmt.Printf("I %d\n", incompl)
-	fmt.Printf("M %d\n", inMapping)
 }
 
 func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.ReadPair,
