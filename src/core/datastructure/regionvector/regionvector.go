@@ -400,7 +400,7 @@ type RegionSet struct {
 
 func (i Intron) String() string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("[%d, %d) Confident SpliceSite: [%t] Evidence: [%d] ", i.Start, i.End, i.TrueSpliceSite, i.Evidence))
+	sb.WriteString(fmt.Sprintf("%d: [%d, %d) Confident SpliceSite: [%t] Evidence: [%d]", i.Rank, i.Start, i.End, i.TrueSpliceSite, i.Evidence))
 	return sb.String()
 }
 
