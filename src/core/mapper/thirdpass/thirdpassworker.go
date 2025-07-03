@@ -17,6 +17,8 @@ import (
 func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGroup, outputChan chan<- string, index *index.GenomeIndex) {
 	defer wgThirdPass.Done()
 	logrus.Info("Started third pass")
+	total := 0
+	mmTotal := 0
 
 	for {
 
@@ -33,6 +35,11 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 				if task.TargetInfo.Fw[i].IncompleteMap || task.TargetInfo.Rv[j].IncompleteMap {
 					continue
 				}
+				total += len(*task.TargetInfo.ReadPair.ReadR1.Sequence)
+				mmTotal += len(task.TargetInfo.Fw[i].MismatchesRead)
+				total += len(*task.TargetInfo.ReadPair.ReadR1.Sequence)
+				mmTotal += len(task.TargetInfo.Rv[j].MismatchesRead)
+
 				s, isOk := readPairResultToSamString(index, task.TargetInfo.ReadPair, task.TargetInfo.Fw[i], task.TargetInfo.Rv[j])
 				if !isOk {
 					continue
@@ -43,6 +50,11 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 		outputChan <- builder.String()
 	}
 	logrus.Info("Done with third pass")
+	logrus.WithFields(logrus.Fields{
+		"Average MM":        float64(mmTotal) / float64(total),
+		"Aligned Positions": total,
+		"Mismatches":        mmTotal,
+	}).Info("Stats")
 }
 
 func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.ReadPair,

@@ -1,7 +1,6 @@
 package secondpass
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
@@ -68,9 +67,6 @@ func SecondpassMappingWorker(secondPassChan *SecondPassChannel, wgIncompleteMapp
 }
 
 func remapReadPair(readPairMapping *mapperutils.ReadPairMatchResults, annotationMap map[int]*mapperutils.TargetAnnotation, genomeIndex *index.GenomeIndex) {
-	if readPairMapping.ReadPair.ReadR1.Header == "3027" {
-		fmt.Println("s")
-	}
 	for _, mapping := range readPairMapping.Fw {
 		// here we merge intervals in the genomic regions for easier handling
 		mainSeqId := mapping.SequenceIndex / 2
@@ -508,10 +504,6 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 				mainAnchorIndex--
 			}
 		}
-		if read.Header == "2999896" {
-			println()
-
-		}
 
 		////////////////////////////////////////////////////////
 		///// CHECK IF WE NEED TO CORRECT START OR END REGION //
@@ -524,10 +516,6 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 		////////////////////////////////////////////////////////
 		// if there are no gaps we need to remap overhangs
 
-		if read.Header == "2999896" {
-			println()
-
-		}
 		correctOverhangs(readMatchResult, targetSeqIntronSet, read, genomeIndex, readMatchResult.MatchedGenome.Regions[0])
 	}
 }
