@@ -11,7 +11,7 @@ func Filter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
 	numMatching := 0
 
 	numMatchingFw := 0
-	numMatchingRw := 0
+	numMatchingRv := 0
 
 	for i := 0; i <= len(*readSequence)-(int(config.KmerLength())); i += int(config.KmerLength()) {
 
@@ -34,7 +34,7 @@ func Filter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
 			numMatchingFw++
 		}
 		if okRv {
-			numMatchingRw++
+			numMatchingRv++
 		}
 
 		if matches != nil {
@@ -52,5 +52,5 @@ func Filter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
 	// fmt.Println("numMatchingFw: ", numMatchingFw)
 	// fmt.Println("numMatchingRw: ", numMatchingRw)
 
-	return numMatching >= 8
+	return numMatching >= 6
 }
