@@ -42,8 +42,6 @@ func SecondpassMappingWorker(secondPassChan *SecondPassChannel, wgIncompleteMapp
 
 			remapReadPair(task, annotation, genomeIndex)
 
-			logrus.Debugf("Secondpass map: %s", task.ReadPair.ReadR1.Header)
-
 			thirdPassChan.Send(&thirdpass.ThirdPassTask{
 				ReadPairId: task.ReadPair.ReadR1.Header,
 				TargetInfo: task,
@@ -312,7 +310,8 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 					// startInRead := regionvector.GenomicCoordToReadCoord(readMatchResult.MatchedRead.GetFirstRegion().Start, weakAnchor.Start, readMatchResult.MatchedGenome.Regions)
 					startInRead := readMatchResult.MatchedRead.Regions[mainAnchorIndex+1].Start
 
-					if mainAnchor.End > lIntron.Start {
+					// we check for padding if part of the main anchor is reaching into intron
+					if mainAnchor.End > lIntron.Start && mainAnchor.Start < lIntron.Start {
 						// check for potential overhangs into neighbor intron of anchor seed
 						// before:               |remap|
 						// READ: ++++++++++*-----#######--------->
@@ -393,7 +392,11 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 					}).Debug("Found deletion in read.")
 					// Just log / use for report later
 					// check if left or right diag can be extended
-					regionReadEnd := regionvector.GenomicCoordToReadCoord(0, weakAnchor.End, readMatchResult.MatchedGenome.Regions)
+					regionReadEnd, err := regionvector.GenomicCoordToReadCoord(0, weakAnchor.End, readMatchResult.MatchedGenome.Regions)
+					if err != nil {
+						logrus.Errorf("Error while converting genomic coord to read coord in read %s", read.Header)
+						logrus.Fatal(err)
+					}
 					remapOptions := leftRemap(readMatchResult, targetSeqIntronSet, read, weakAnchor, mainAnchor, genomeIndex, mainAnchorRank, regionReadEnd)
 					if remapOptions != nil {
 						bestOption := chooseBestRemap(remapOptions)
@@ -447,7 +450,8 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 				// (READ)            +++++---------------++++++++++
 				// (REF)  ++++++++-----------------------++++++++++
 				if correctedR != correctedL {
-					if mainAnchor.Start < rIntron.End {
+					// we check for padding if part of the main anchor is reaching into intron
+					if mainAnchor.Start < rIntron.End && mainAnchor.End > rIntron.End {
 						// before:      |remap|   mainAnchor
 						//(READ) -------####------*+++++---------->
 						//(REF)  ####*-------------+++++---------->
@@ -460,7 +464,11 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 						mainAnchor.Start += padding
 					}
 
-					regionReadEnd := regionvector.GenomicCoordToReadCoord(0, weakAnchor.End, readMatchResult.MatchedGenome.Regions)
+					regionReadEnd, err := regionvector.GenomicCoordToReadCoord(0, weakAnchor.End, readMatchResult.MatchedGenome.Regions)
+					if err != nil {
+						logrus.Errorf("Error while converting genomic coord to read coord in read %s", read.Header)
+						logrus.Fatal(err)
+					}
 					remapOptions := leftRemap(readMatchResult, targetSeqIntronSet, read, weakAnchor, mainAnchor, genomeIndex, mainAnchorRank, regionReadEnd)
 
 					if remapOptions != nil {
@@ -510,6 +518,9 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 }
 
 func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet *regionvector.RegionSet, read *fastq.Read, genomeIndex *index.GenomeIndex, region *regionvector.Region) {
+	if read.Header == "4457" {
+		println()
+	}
 	overlappingIntrons := targetSeqIntronSet.GetIntersectingIntrons(region)
 	if len(overlappingIntrons) == 0 {
 		// solid map, no remap possible
@@ -531,7 +542,7 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 	rIntron := overlappingIntrons[len(overlappingIntrons)-1]
 
 	// check if read start needs left remap
-	if lIntron.End > mapStart && mapEnd > lIntron.End {
+	if lIntron.End < mapStart && mapEnd > lIntron.End {
 		//         |mapStart
 		//         +++++++++ (READ)
 		// +++---------+++++(REF)
@@ -543,7 +554,11 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 		region.Start = lIntron.End
 		mainAnchorRank := lIntron.Rank + 1
 		readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(weakAnchor.Start, weakAnchor.End)
-		regionReadEnd := regionvector.GenomicCoordToReadCoord(0, weakAnchor.End, readMatchResult.MatchedGenome.Regions)
+		regionReadEnd, err := regionvector.GenomicCoordToReadCoord(0, weakAnchor.End, readMatchResult.MatchedGenome.Regions)
+		if err != nil {
+			logrus.Errorf("Error while converting genomic coord to read coord in read %s", read.Header)
+			logrus.Fatal(err)
+		}
 		remapOptions := leftRemap(readMatchResult, targetSeqIntronSet, read, weakAnchor, region, genomeIndex, mainAnchorRank, regionReadEnd)
 
 		if remapOptions != nil {
@@ -562,7 +577,7 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 	}
 
 	// check if read end needs right remap
-	if rIntron.Start < mapEnd && mapEnd < rIntron.End {
+	if rIntron.Start < mapEnd && mapEnd < rIntron.Start {
 		// remap
 		// +++++++++ (READ)
 		// +++++---------++++++++ (REF)
@@ -572,7 +587,11 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 		region.End = rIntron.Start
 		mainAnchorRank := rIntron.Rank - 1
 
-		startInRead := regionvector.GenomicCoordToReadCoord(readMatchResult.MatchedRead.GetFirstRegion().Start, weakAnchor.Start, readMatchResult.MatchedGenome.Regions)
+		startInRead, err := regionvector.GenomicCoordToReadCoord(readMatchResult.MatchedRead.GetFirstRegion().Start, weakAnchor.Start, readMatchResult.MatchedGenome.Regions)
+		if err != nil {
+			logrus.Errorf("Error while converting genomic coord to read coord")
+			logrus.Fatal(err)
+		}
 		remapOptions := rightRemap(readMatchResult, targetSeqIntronSet, read, weakAnchor, region, genomeIndex, mainAnchorRank, startInRead)
 		if remapOptions != nil {
 			bestOption := chooseBestRemap(remapOptions)
