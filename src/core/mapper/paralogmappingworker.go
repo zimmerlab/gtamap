@@ -68,8 +68,8 @@ func ParalogMappingWorker(needParalogMapChan <-chan *mapperutils.ReadPairMatchRe
 			}
 		}
 		thidPassTask := thirdpass.ThirdPassTask{
-			ReadPairId:  readPairResult.ReadPair.ReadR1.Header,
-			ParalogInfo: paralogMappings,
+			ReadPairId: readPairResult.ReadPair.ReadR1.Header,
+			//ParalogInfo: paralogMappings,
 		}
 		thirdPassChan.Send(&thidPassTask)
 	}

@@ -1,6 +1,8 @@
 package mapper
 
 import (
+	"fmt"
+
 	"github.com/KleinSamuel/gtamap/src/core/mapper/confidentmappingpass"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/secondpass"
 
@@ -15,7 +17,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	secondpassChan *secondpass.SecondPassChannel,
 	confidentMatchesChan *confidentmappingpass.ConfidentPassChan,
 	timerChannel chan<- *timer.Timer,
-	paralogMappingChan chan<- *mapperutils.ReadPairMatchResults,
+	// paralogMappingChan chan<- *mapperutils.ReadPairMatchResults,
 ) {
 	keepFw := Filter(readPair.ReadR1.Sequence, genomeIndex)
 	keepRw := Filter(readPair.ReadR2.Sequence, genomeIndex)
@@ -29,8 +31,8 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 		return
 	}
 
-	resultFw, isMappableFw := MapRead(readPair.ReadR1, genomeIndex, false)
-	resultRv, isMappableRv := MapRead(readPair.ReadR2, genomeIndex, false)
+	resultFw, isMappableFw := MapRead(readPair.ReadR1, genomeIndex, true)
+	resultRv, isMappableRv := MapRead(readPair.ReadR2, genomeIndex, true)
 
 	// TODO: REMOVE DEBUG
 	// if isMappableFw {
@@ -49,6 +51,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 		}).Debug("readpair not mappable")
 		return
 	}
+	fmt.Printf("Processing %s\n", readPair.ReadR1.Header)
 
 	// postprocess every potential match
 	for _, resFw := range resultFw {
@@ -79,13 +82,13 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	// 	})
 	// }
 
-	readPairMapping := &mapperutils.ReadPairMatchResults{
-		ReadPair: readPair,
-		Fw:       resultFw,
-		Rv:       resultRv,
-	}
+	// readPairMapping := &mapperutils.ReadPairMatchResults{
+	// 	ReadPair: readPair,
+	// 	Fw:       resultFw,
+	// 	Rv:       resultRv,
+	// }
 	// here it is okay to also pass the pointers of resultFw and resultRv since paralogMappingChan is readOnly
-	paralogMappingChan <- readPairMapping
+	// paralogMappingChan <- readPairMapping
 }
 
 func isStrictConfidentMap(resultFw []*mapperutils.ReadMatchResult, resultRv []*mapperutils.ReadMatchResult) bool {
