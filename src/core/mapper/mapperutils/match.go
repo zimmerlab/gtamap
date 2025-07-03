@@ -429,11 +429,13 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 func (r *ReadMatchResult) SyncRegions() {
 	adaptedReadRegions := make([]*regionvector.Region, len(r.MatchedGenome.Regions))
 	originalStart := r.MatchedRead.GetFirstRegion().Start
-	var startRead int
-	var stopRead int
 	for i, region := range r.MatchedGenome.Regions {
-		startRead = regionvector.GenomicCoordToReadCoord(originalStart, region.Start, r.MatchedGenome.Regions)
-		stopRead = regionvector.GenomicCoordToReadCoord(originalStart, region.End, r.MatchedGenome.Regions)
+		startRead, err := regionvector.GenomicCoordToReadCoord(originalStart, region.Start, r.MatchedGenome.Regions)
+		if err != nil {
+			logrus.Errorf("Error while converting genomic coord to read coord")
+			logrus.Fatal(err)
+		}
+		stopRead, err := regionvector.GenomicCoordToReadCoord(originalStart, region.End, r.MatchedGenome.Regions)
 		adaptedReadRegions[i] = &regionvector.Region{Start: startRead, End: stopRead}
 	}
 	r.MatchedRead.Regions = adaptedReadRegions
