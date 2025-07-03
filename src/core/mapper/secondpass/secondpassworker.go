@@ -1,6 +1,7 @@
 package secondpass
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
@@ -67,6 +68,9 @@ func SecondpassMappingWorker(secondPassChan *SecondPassChannel, wgIncompleteMapp
 }
 
 func remapReadPair(readPairMapping *mapperutils.ReadPairMatchResults, annotationMap map[int]*mapperutils.TargetAnnotation, genomeIndex *index.GenomeIndex) {
+	if readPairMapping.ReadPair.ReadR1.Header == "3027" {
+		fmt.Println("s")
+	}
 	for _, mapping := range readPairMapping.Fw {
 		// here we merge intervals in the genomic regions for easier handling
 		mainSeqId := mapping.SequenceIndex / 2
@@ -504,6 +508,10 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 				mainAnchorIndex--
 			}
 		}
+		if read.Header == "2999896" {
+			println()
+
+		}
 
 		////////////////////////////////////////////////////////
 		///// CHECK IF WE NEED TO CORRECT START OR END REGION //
@@ -515,6 +523,11 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 		///// IF READ HAS NO,JUNCTIONS CHECK FOR OVERHANGS /////
 		////////////////////////////////////////////////////////
 		// if there are no gaps we need to remap overhangs
+
+		if read.Header == "2999896" {
+			println()
+
+		}
 		correctOverhangs(readMatchResult, targetSeqIntronSet, read, genomeIndex, readMatchResult.MatchedGenome.Regions[0])
 	}
 }
@@ -541,7 +554,7 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 	rIntron := overlappingIntrons[len(overlappingIntrons)-1]
 
 	// check if read start needs left remap
-	if lIntron.End < mapStart && mapEnd > lIntron.End {
+	if lIntron.End > mapStart && mapEnd > lIntron.End {
 		//         |mapStart
 		//         +++++++++ (READ)
 		// +++---------+++++(REF)
@@ -578,7 +591,7 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 	}
 
 	// check if read end needs right remap
-	if rIntron.Start < mapEnd && mapEnd < rIntron.Start {
+	if rIntron.Start < mapEnd && mapStart < rIntron.Start {
 		// remap
 		// +++++++++ (READ)
 		// +++++---------++++++++ (REF)
