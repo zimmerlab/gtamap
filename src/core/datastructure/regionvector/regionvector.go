@@ -37,7 +37,7 @@ type RegionVector struct {
 }
 
 // GetLargestAnchor GetLargestNachor returns the largest anchor region
-// WARN: Before calling this, the func MergeAlignmentBlocks needs to be called (once)
+// WARN: Before calling this, the func NormalizeRegions needs to be called (once)
 func (rv RegionVector) GetLargestAnchor(introns *RegionSet) (*Region, int, int) {
 	if !rv.HasGaps() {
 		return rv.Regions[0], 0, 0
@@ -53,6 +53,7 @@ func (rv RegionVector) GetLargestAnchor(introns *RegionSet) (*Region, int, int) 
 			index = i
 		}
 	}
+
 	prevIntron := introns.GetPrevIntron(largestAnchor.Start)
 	if prevIntron == nil {
 		return largestAnchor, 0, index
@@ -404,18 +405,30 @@ func (i Intron) String() string {
 	return sb.String()
 }
 
-func GenomicCoordToReadCoord(startInRead, genomeCoord int, genomeIntervals []*Region) int {
+func GenomicCoordToReadCoord(startInRead, genomeCoord int, genomeIntervals []*Region) (int, error) {
 	pos := 0
+	totalLength := 0
 	for _, genomicRegion := range genomeIntervals {
+		totalLength += genomicRegion.Length()
 		if genomicRegion.End < genomeCoord {
 			pos += genomicRegion.Length()
+		} else if genomicRegion.End == genomeCoord {
+			pos += genomicRegion.Length()
+			break
 		} else {
 			pos += genomeCoord - genomicRegion.Start
 			break
 		}
 	}
-
-	return pos + startInRead
+	if pos+startInRead > 151 {
+		fmt.Println(totalLength)
+		fmt.Println(genomeIntervals)
+		return -1, fmt.Errorf("projected read pos larger than total length of map: total length=%d read pos=%d", totalLength, pos)
+	}
+	if pos+startInRead < 0 {
+		return -1, fmt.Errorf("projected read pos smaller 0: total length=%d read pos=%d", totalLength, pos)
+	}
+	return pos + startInRead, nil
 }
 
 func NewRegionSet(regions []*Intron) *RegionSet {
@@ -676,7 +689,7 @@ func (rv *RegionVector) Copy() *RegionVector {
 // The resulting region vector will contain the regions [0, 5], [25, 30].
 // If the region vector contains the regions [0, 30] and the given region is [5, 25],
 // The resulting region vector will contain the regions [0, 5], [25, 30].
-func (rv *RegionVector) _RemoveRegion(start int, end int) { // original version
+func (rv *RegionVector) RemoveRegion(start int, end int) { // original version
 	if len(rv.Regions) == 0 {
 		// the region vector is empty
 		return
@@ -773,7 +786,7 @@ func (rv *RegionVector) UncoveredRegionsBySelfAndOther(rvCovered *RegionVector, 
 // The resulting region vector will contain the regions [0, 5], [25, 30].
 // If the region vector contains the regions [0, 30] and the given region is [5, 25],
 // The resulting region vector will contain the regions [0, 5], [25, 30].
-func (rv *RegionVector) RemoveRegion(start int, end int) { // optimized
+func (rv *RegionVector) _RemoveRegion(start int, end int) { // optimized
 	if len(rv.Regions) == 0 {
 		// the region vector is empty
 		return
