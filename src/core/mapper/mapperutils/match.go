@@ -43,7 +43,7 @@ type ReadMatchResult struct {
 	SpliceSitesInfo []bool // corresponds to the number of junctions of match result. is true if junction follows known SpliceSites
 }
 
-func (r ReadMatchResult) HasUnknownSpliceSites() bool {
+func (r *ReadMatchResult) HasUnknownSpliceSites() bool {
 	if r.SpliceSitesInfo == nil {
 		return false
 	}
@@ -55,17 +55,124 @@ func (r ReadMatchResult) HasUnknownSpliceSites() bool {
 	return false
 }
 
-func (m ReadMatchResult) Copy() *ReadMatchResult {
+func (r *ReadMatchResult) _NormalizeRegions() {
+	// start with genome
+	genomeBlocks := make([]*regionvector.Region, 0)
+	readBlocks := make([]*regionvector.Region, 0)
+
+	startIndex := 0
+
+	// do regions imply gap
+	hasGap := func(a, b *regionvector.Region) bool {
+		return a.End < b.Start // true gap (no adjacency or overlap)
+	}
+
+	for i := 0; i < len(r.MatchedGenome.Regions)-1; i++ {
+		gapInGenome := hasGap(r.MatchedGenome.Regions[i], r.MatchedGenome.Regions[i+1])
+		gapInMask := hasGap(r.MatchedRead.Regions[i], r.MatchedRead.Regions[i+1])
+
+		if gapInGenome || gapInMask {
+			blockStart := r.MatchedGenome.Regions[startIndex].Start
+			blockEnd := r.MatchedGenome.Regions[i].End
+			readBlockStart := r.MatchedRead.Regions[startIndex].Start
+			readBlockEnd := r.MatchedRead.Regions[i].End
+			genomeBlocks = append(genomeBlocks, &regionvector.Region{
+				Start: blockStart,
+				End:   blockEnd,
+			})
+			readBlocks = append(readBlocks, &regionvector.Region{
+				Start: readBlockStart,
+				End:   readBlockEnd,
+			})
+			startIndex = i + 1
+		}
+	}
+
+	// handle the last block
+	if startIndex < len(r.MatchedGenome.Regions) {
+		blockStart := r.MatchedGenome.Regions[startIndex].Start
+		blockEnd := r.MatchedGenome.Regions[len(r.MatchedGenome.Regions)-1].End
+		readBlockStart := r.MatchedRead.Regions[startIndex].Start
+		readBlockEnd := r.MatchedRead.Regions[len(r.MatchedRead.Regions)-1].End
+		genomeBlocks = append(genomeBlocks, &regionvector.Region{
+			Start: blockStart,
+			End:   blockEnd,
+		})
+		readBlocks = append(readBlocks, &regionvector.Region{
+			Start: readBlockStart,
+			End:   readBlockEnd,
+		})
+	}
+
+	r.MatchedGenome.Regions = genomeBlocks
+	r.MatchedRead.Regions = readBlocks
+}
+
+func (r *ReadMatchResult) NormalizeRegions() {
+	genomeBlocks := make([]*regionvector.Region, 0)
+	readBlocks := make([]*regionvector.Region, 0)
+
+	startIndex := 0
+
+	hasGap := func(a, b *regionvector.Region) bool {
+		return a.End < b.Start
+	}
+
+	for i := 0; i < len(r.MatchedGenome.Regions)-1; i++ {
+		gapInGenome := hasGap(r.MatchedGenome.Regions[i], r.MatchedGenome.Regions[i+1])
+		gapInRead := hasGap(r.MatchedRead.Regions[i], r.MatchedRead.Regions[i+1])
+
+		if gapInGenome || gapInRead {
+			// account for this case
+			// Read [0,10] [10,20] [20,30] [30,40]
+			// GEN  [0,10] [10,20] [20,30] [30,36] -> due to either leftNorm or bcause of best split
+			if r.MatchedGenome.Regions[i].Length() < r.MatchedRead.Regions[i].Length() {
+				padding := r.MatchedRead.Regions[i].Length() - r.MatchedGenome.Regions[i].Length()
+				r.MatchedRead.Regions[i].End -= padding
+				r.MatchedRead.Regions[i+1].Start -= padding
+			} else if r.MatchedGenome.Regions[i].Length() > r.MatchedRead.Regions[i].Length() {
+				padding := r.MatchedGenome.Regions[i].Length() - r.MatchedRead.Regions[i].Length()
+				r.MatchedRead.Regions[i].End += padding
+				r.MatchedRead.Regions[i+1].Start += padding
+			}
+			genomeBlocks = append(genomeBlocks, &regionvector.Region{
+				Start: r.MatchedGenome.Regions[startIndex].Start,
+				End:   r.MatchedGenome.Regions[i].End,
+			})
+			readBlocks = append(readBlocks, &regionvector.Region{
+				Start: r.MatchedRead.Regions[startIndex].Start,
+				End:   r.MatchedRead.Regions[i].End,
+			})
+			startIndex = i + 1
+		}
+	}
+
+	if startIndex < len(r.MatchedGenome.Regions) {
+		genomeBlocks = append(genomeBlocks, &regionvector.Region{
+			Start: r.MatchedGenome.Regions[startIndex].Start,
+			End:   r.MatchedGenome.Regions[len(r.MatchedGenome.Regions)-1].End,
+		})
+		readBlocks = append(readBlocks, &regionvector.Region{
+			Start: r.MatchedRead.Regions[startIndex].Start,
+			End:   r.MatchedRead.Regions[len(r.MatchedRead.Regions)-1].End,
+		})
+	}
+
+	r.MatchedGenome.Regions = genomeBlocks
+	r.MatchedRead.Regions = readBlocks
+}
+
+func (r *ReadMatchResult) Copy() *ReadMatchResult {
 	var dhCopy *DiagonalHandler
-	if m.diagonalHandler != nil {
-		dhCopy = m.diagonalHandler.Copy()
+	if r.diagonalHandler != nil {
+		dhCopy = r.diagonalHandler.Copy()
 	}
 
 	return &ReadMatchResult{
-		SequenceIndex:   m.SequenceIndex,
-		MatchedRead:     m.MatchedRead.Copy(),
-		MatchedGenome:   m.MatchedGenome.Copy(),
-		MismatchesRead:  append([]int{}, m.MismatchesRead...),
+		SequenceIndex:   r.SequenceIndex,
+		MatchedRead:     r.MatchedRead.Copy(),
+		MatchedGenome:   r.MatchedGenome.Copy(),
+		MismatchesRead:  append([]int{}, r.MismatchesRead...),
 		diagonalHandler: dhCopy,
 	}
 }
@@ -162,36 +269,46 @@ func hasLongDiagonals(mapping *ReadMatchResult) bool {
 	return true
 }
 
-func (m ReadMatchResult) GetCigar() (string, error) {
+func (r *ReadMatchResult) GetCigar() (string, error) {
 	var builder strings.Builder
+	if r.MatchedGenome.Length() != r.MatchedRead.Length() {
+		return "", fmt.Errorf("length of matched genome unequal to length matched read: Genome: %d vs Read: %d", r.MatchedGenome.Length(), r.MatchedRead.Length())
+	}
 
-	isForwardStrand := m.SequenceIndex == 0
+	isForwardStrand := r.SequenceIndex == 0
 
 	if isForwardStrand {
 
 		// number of cumulative aligned positions (matches or mismatches) between the read and the genome
 		numMatchesSum := 0
 
+		if len(r.MatchedGenome.Regions) != len(r.MatchedRead.Regions) {
+			r.SyncRegions()
+		}
+
 		// the regions in MatchedGenome and MatchedRead have the same dimensions
-		for i := 0; i < len(m.MatchedGenome.Regions); i++ {
+		for i := 0; i < len(r.MatchedGenome.Regions); i++ {
 
 			// each pair of regions represent a match
-			numMatchesSum += m.MatchedGenome.Regions[i].Length()
+			numMatchesSum += r.MatchedGenome.Regions[i].Length()
 
 			// if this is the last match, add the number of matches
-			if i == len(m.MatchedGenome.Regions)-1 {
+			if i == len(r.MatchedGenome.Regions)-1 {
 				builder.WriteString(strconv.Itoa(numMatchesSum))
 				builder.WriteString("M")
 				break
 			}
+			if r.MatchedRead == nil {
+				println()
+			}
 
-			gapInGenome := m.MatchedGenome.Regions[i].End < m.MatchedGenome.Regions[i+1].Start
-			gapInRead := m.MatchedRead.Regions[i].End < m.MatchedRead.Regions[i+1].Start
+			gapInGenome := r.MatchedGenome.Regions[i].End < r.MatchedGenome.Regions[i+1].Start
+			gapInRead := r.MatchedRead.Regions[i].End < r.MatchedRead.Regions[i+1].Start
 
 			if gapInGenome && gapInRead {
 				logrus.WithFields(logrus.Fields{
-					"read":   m.MatchedRead,
-					"genome": m.MatchedGenome,
+					"read":   r.MatchedRead,
+					"genome": r.MatchedGenome,
 				}).Warn("Gap in genome and read at the same time")
 
 				return "", fmt.Errorf("gap in genome and read at the same time")
@@ -208,7 +325,7 @@ func (m ReadMatchResult) GetCigar() (string, error) {
 			// intron or deletion
 			if gapInGenome {
 				// number of skipped bases in the reference
-				numSkipped := m.MatchedGenome.Regions[i+1].Start - m.MatchedGenome.Regions[i].End
+				numSkipped := r.MatchedGenome.Regions[i+1].Start - r.MatchedGenome.Regions[i].End
 
 				builder.WriteString(strconv.Itoa(numSkipped))
 
@@ -223,7 +340,7 @@ func (m ReadMatchResult) GetCigar() (string, error) {
 			// insertion
 			if gapInRead {
 				// number of skipped bases in the read
-				numSkipped := m.MatchedRead.Regions[i+1].Start - m.MatchedRead.Regions[i].End
+				numSkipped := r.MatchedRead.Regions[i+1].Start - r.MatchedRead.Regions[i].End
 
 				builder.WriteString(strconv.Itoa(numSkipped))
 				builder.WriteString("I")
@@ -237,10 +354,14 @@ func (m ReadMatchResult) GetCigar() (string, error) {
 
 		numMatchesSum := 0
 
-		// the regions in MatchedGenome and MatchedRead have the same dimensions
-		for i := len(m.MatchedGenome.Regions) - 1; i >= 0; i-- {
+		if len(r.MatchedGenome.Regions) != len(r.MatchedRead.Regions) {
+			r.SyncRegions()
+		}
 
-			numMatchesSum += m.MatchedGenome.Regions[i].Length()
+		// the regions in MatchedGenome and MatchedRead have the same dimensions
+		for i := len(r.MatchedGenome.Regions) - 1; i >= 0; i-- {
+
+			numMatchesSum += r.MatchedGenome.Regions[i].Length()
 
 			// if this is the last match, add the number of matches
 			if i == 0 {
@@ -249,13 +370,13 @@ func (m ReadMatchResult) GetCigar() (string, error) {
 				break
 			}
 
-			gapInGenome := m.MatchedGenome.Regions[i].Start > m.MatchedGenome.Regions[i-1].End
-			gapInRead := m.MatchedRead.Regions[i].Start > m.MatchedRead.Regions[i-1].End
+			gapInGenome := r.MatchedGenome.Regions[i].Start > r.MatchedGenome.Regions[i-1].End
+			gapInRead := r.MatchedRead.Regions[i].Start > r.MatchedRead.Regions[i-1].End
 
 			if gapInGenome && gapInRead {
 				logrus.WithFields(logrus.Fields{
-					"read":   m.MatchedRead,
-					"genome": m.MatchedGenome,
+					"read":   r.MatchedRead,
+					"genome": r.MatchedGenome,
 				}).Warn("Gap in genome and read at the same time")
 
 				return "", fmt.Errorf("gap in genome and read at the same time")
@@ -272,7 +393,7 @@ func (m ReadMatchResult) GetCigar() (string, error) {
 			// intron or deletion
 			if gapInGenome {
 				// number of skipped bases in the reference
-				numSkipped := m.MatchedGenome.Regions[i].Start - m.MatchedGenome.Regions[i-1].End
+				numSkipped := r.MatchedGenome.Regions[i].Start - r.MatchedGenome.Regions[i-1].End
 
 				builder.WriteString(strconv.Itoa(numSkipped))
 
@@ -287,7 +408,7 @@ func (m ReadMatchResult) GetCigar() (string, error) {
 			// insertion
 			if gapInRead {
 				// number of skipped bases in the read
-				numSkipped := m.MatchedRead.Regions[i].Start - m.MatchedRead.Regions[i-1].End
+				numSkipped := r.MatchedRead.Regions[i].Start - r.MatchedRead.Regions[i-1].End
 
 				builder.WriteString(strconv.Itoa(numSkipped))
 				builder.WriteString("I")
@@ -297,6 +418,27 @@ func (m ReadMatchResult) GetCigar() (string, error) {
 	}
 
 	return builder.String(), nil
+}
+
+// SyncRegions : if a ReadMatchResult was previously incomplete and had a readRegions rv like so
+// [[50,60], [60, 70] , ..., [140,150]], after the remap happened, it looks like this
+// [[0,50], [50,60], [60, 70] , ..., [140,150]], after the remap happened, it looks like this
+// now the dimensions don't always add up -> we have to normalize the readRegions to match the genomeRegions
+// E.g if genomeRegions contains three regions (with a total length of 150), the read regions also should only
+// contain 3 regions
+func (r *ReadMatchResult) SyncRegions() {
+	adaptedReadRegions := make([]*regionvector.Region, len(r.MatchedGenome.Regions))
+	originalStart := r.MatchedRead.GetFirstRegion().Start
+	for i, region := range r.MatchedGenome.Regions {
+		startRead, err := regionvector.GenomicCoordToReadCoord(originalStart, region.Start, r.MatchedGenome.Regions)
+		if err != nil {
+			logrus.Errorf("Error while converting genomic coord to read coord")
+			logrus.Fatal(err)
+		}
+		stopRead, err := regionvector.GenomicCoordToReadCoord(originalStart, region.End, r.MatchedGenome.Regions)
+		adaptedReadRegions[i] = &regionvector.Region{Start: startRead, End: stopRead}
+	}
+	r.MatchedRead.Regions = adaptedReadRegions
 }
 
 // holds all relevant mapping information of potentially several hits per readpair
@@ -343,6 +485,34 @@ func (t TargetAnnotation) String() string {
 	}
 
 	return sb.String()
+}
+
+func (t TargetAnnotation) LogInfo() {
+	strand := "+"
+	if t.PreferedStrand == 1 {
+		strand = "-"
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"preferred strand": strand,
+		"confidence score": t.Confidence * 100,
+	}).Info("Done with Annotation")
+
+	for orientation, introns := range t.Introns {
+		orientationLabel := "[+]"
+		if orientation == 1 {
+			orientationLabel = "[-]"
+		}
+		logrus.WithFields(logrus.Fields{
+			"orientation": orientationLabel,
+		}).Info("Inferred Introns of")
+
+		for _, intron := range introns.Regions {
+			logrus.WithFields(logrus.Fields{
+				"Intron": intron.String(),
+			}).Info()
+		}
+	}
 }
 
 func (r ReadPairMatchResults) String() string {

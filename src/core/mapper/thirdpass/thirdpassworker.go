@@ -17,6 +17,8 @@ import (
 func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGroup, outputChan chan<- string, index *index.GenomeIndex) {
 	defer wgThirdPass.Done()
 	logrus.Info("Started third pass")
+	total := 0
+	mmTotal := 0
 
 	for {
 
@@ -33,6 +35,11 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 				if task.TargetInfo.Fw[i].IncompleteMap || task.TargetInfo.Rv[j].IncompleteMap {
 					continue
 				}
+				total += len(*task.TargetInfo.ReadPair.ReadR1.Sequence)
+				mmTotal += len(task.TargetInfo.Fw[i].MismatchesRead)
+				total += len(*task.TargetInfo.ReadPair.ReadR1.Sequence)
+				mmTotal += len(task.TargetInfo.Rv[j].MismatchesRead)
+
 				s, isOk := readPairResultToSamString(index, task.TargetInfo.ReadPair, task.TargetInfo.Fw[i], task.TargetInfo.Rv[j])
 				if !isOk {
 					continue
@@ -43,6 +50,11 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 		outputChan <- builder.String()
 	}
 	logrus.Info("Done with third pass")
+	logrus.WithFields(logrus.Fields{
+		"Average MM":        float64(mmTotal) / float64(total),
+		"Aligned Positions": total,
+		"Mismatches":        mmTotal,
+	}).Info("Stats")
 }
 
 func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.ReadPair,
@@ -162,8 +174,10 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 
 		if errCigarFw != nil {
 			logrus.WithFields(logrus.Fields{
-				"read": readPair.ReadR1.Header,
-			}).Error("Error getting CIGAR string", errCigarFw)
+				"read":              readPair.ReadR1.Header,
+				"length of mapping": resFw.MatchedGenome.Length(),
+				"expected length":   len(*readPair.ReadR1.Sequence),
+			}).Error("Error getting CIGAR string of FW read: ", errCigarFw)
 
 			// TODO: handle error
 			// return "", false
@@ -178,8 +192,10 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 
 		if errCigarRv != nil {
 			logrus.WithFields(logrus.Fields{
-				"read": readPair.ReadR2.Header,
-			}).Error("Error getting CIGAR string", errCigarRv)
+				"read":              readPair.ReadR2.Header,
+				"length of mapping": resRv.MatchedGenome.Length(),
+				"expected length":   len(*readPair.ReadR2.Sequence),
+			}).Error("Error getting CIGAR string of RV read: ", errCigarRv)
 
 			// TODO: handle error
 			// return "", false

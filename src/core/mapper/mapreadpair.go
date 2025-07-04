@@ -15,7 +15,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	secondpassChan *secondpass.SecondPassChannel,
 	confidentMatchesChan *confidentmappingpass.ConfidentPassChan,
 	timerChannel chan<- *timer.Timer,
-	paralogMappingChan chan<- *mapperutils.ReadPairMatchResults,
+	// paralogMappingChan chan<- *mapperutils.ReadPairMatchResults,
 ) {
 	keepFw := Filter(readPair.ReadR1.Sequence, genomeIndex)
 	keepRw := Filter(readPair.ReadR2.Sequence, genomeIndex)
@@ -79,13 +79,13 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	// 	})
 	// }
 
-	readPairMapping := &mapperutils.ReadPairMatchResults{
-		ReadPair: readPair,
-		Fw:       resultFw,
-		Rv:       resultRv,
-	}
+	// readPairMapping := &mapperutils.ReadPairMatchResults{
+	// 	ReadPair: readPair,
+	// 	Fw:       resultFw,
+	// 	Rv:       resultRv,
+	// }
 	// here it is okay to also pass the pointers of resultFw and resultRv since paralogMappingChan is readOnly
-	paralogMappingChan <- readPairMapping
+	// paralogMappingChan <- readPairMapping
 }
 
 func isStrictConfidentMap(resultFw []*mapperutils.ReadMatchResult, resultRv []*mapperutils.ReadMatchResult) bool {
