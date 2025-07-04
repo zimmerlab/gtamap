@@ -10,6 +10,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
+	"github.com/sirupsen/logrus"
 )
 
 const contextWindow = 10
@@ -88,7 +89,11 @@ func getAlignment(genomeIndex *index.GenomeIndex, mappedRead mapperutils.ReadMat
 		coordLength := len(strStart) + len(strStartInGene) + len(strStop) + len(strStopInGene) + 6 // 6 chars for sep
 
 		for j := genomeRegion.Start; j < genomeRegion.End; j++ {
-			readPos := regionvector.GenomicCoordToReadCoord(readStartAlignment, j, mappedRead.MatchedGenome.Regions)
+			readPos, err := regionvector.GenomicCoordToReadCoord(readStartAlignment, j, mappedRead.MatchedGenome.Regions)
+			if err != nil {
+				logrus.Errorf("Error while converting genomic coord to read coord in read %d", readMeta.Header)
+				logrus.Fatal(err)
+			}
 
 			if j == geneStart {
 				coordView.WriteByte('|')
