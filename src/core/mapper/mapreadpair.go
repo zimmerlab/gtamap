@@ -1,8 +1,6 @@
 package mapper
 
 import (
-	"fmt"
-
 	"github.com/KleinSamuel/gtamap/src/core/mapper/confidentmappingpass"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/secondpass"
 
@@ -51,7 +49,6 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 		}).Debug("readpair not mappable")
 		return
 	}
-	fmt.Printf("Processing %s\n", readPair.ReadR1.Header)
 
 	// postprocess every potential match
 	for _, resFw := range resultFw {
