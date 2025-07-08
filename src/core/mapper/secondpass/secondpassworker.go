@@ -538,8 +538,16 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 	// or  (unlikely i think)
 	// ++++++++++++ (READ)
 	// ----+++++---(REF)
+	// or  (unlikely i think)
+	// +++++++++++++++++++++++++++++ (READ)
+	// +++++++++++++++----++++++++++(REF) (deletion) -> we do not want to correct here
 	lIntron := overlappingIntrons[0]
 	rIntron := overlappingIntrons[len(overlappingIntrons)-1]
+
+	// handle deletion
+	if lIntron.Start > mapStart && rIntron.End < mapEnd {
+		return
+	}
 
 	// check if read start needs left remap
 	if lIntron.End > mapStart && mapEnd > lIntron.End {
