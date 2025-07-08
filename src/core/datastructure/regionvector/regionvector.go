@@ -36,32 +36,6 @@ type RegionVector struct {
 	Regions []*Region
 }
 
-// GetLargestAnchor GetLargestNachor returns the largest anchor region
-// WARN: Before calling this, the func NormalizeRegions needs to be called (once)
-func (rv RegionVector) GetLargestAnchor(introns *RegionSet) (*Region, int, int) {
-	if !rv.HasGaps() {
-		return rv.Regions[0], 0, 0
-	}
-
-	maxLength := -1
-	index := 0
-	var largestAnchor *Region
-	for i, region := range rv.Regions {
-		if region.Length() > maxLength {
-			maxLength = region.Length()
-			largestAnchor = region
-			index = i
-		}
-	}
-
-	prevIntron := introns.GetPrevIntron(largestAnchor.Start)
-	if prevIntron == nil {
-		return largestAnchor, 0, index
-	}
-
-	return largestAnchor, prevIntron.Rank, index // anchor rank == intron rank of prev intron
-}
-
 func (r *Region) String() string {
 	return fmt.Sprintf("[%d, %d]", r.Start, r.End)
 }

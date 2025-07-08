@@ -55,6 +55,72 @@ func (r *ReadMatchResult) HasUnknownSpliceSites() bool {
 	return false
 }
 
+// GetLargestNachor returns the largest anchor region and also accounts for mms
+// WARN: Before calling this, the func NormalizeRegions needs to be called (once)
+func (r ReadMatchResult) GetLargestAnchor(introns *regionvector.RegionSet) (*regionvector.Region, int, int) {
+	if !r.MatchedGenome.HasGaps() {
+		return r.MatchedGenome.Regions[0], 0, 0
+	}
+
+	usedIndices := make(map[int]float32)
+	maxLength := -1
+	mainAnchorIndex := 0
+	var largestAnchor *regionvector.Region
+	for len(usedIndices) < len(r.MatchedGenome.Regions) {
+		for i, region := range r.MatchedGenome.Regions {
+
+			// have we used this anchor before?
+			_, seen := usedIndices[i]
+			if seen {
+				continue // skip if yes
+			}
+
+			if region.Length() > maxLength {
+				maxLength = region.Length()
+				largestAnchor = region
+				mainAnchorIndex = i
+			}
+		}
+
+		readMainAnchor := r.MatchedRead.Regions[mainAnchorIndex]
+		mmsInAnchor := float32(0.0)
+
+		// check how many mm are in main anchor
+		for _, mm := range r.MismatchesRead {
+			if mm >= readMainAnchor.Start && mm <= readMainAnchor.End {
+				mmsInAnchor++
+			}
+		}
+
+		ratio := mmsInAnchor / float32(largestAnchor.Length())
+		if ratio > 0.2 { // main anchor is not supposed to have more than 2% mm
+			usedIndices[mainAnchorIndex] = ratio
+			maxLength = -1
+		} else {
+			break
+		}
+	}
+
+	// all regions had a bad ratio, choose region with smallest ratio
+	if len(usedIndices) == len(r.MatchedGenome.Regions) {
+		minRatio := float32(2)
+		for anchorIndex, ratio := range usedIndices {
+			if ratio < minRatio {
+				largestAnchor = r.MatchedGenome.Regions[anchorIndex]
+				minRatio = ratio
+				mainAnchorIndex = anchorIndex
+			}
+		}
+	}
+
+	prevIntron := introns.GetPrevIntron(largestAnchor.Start)
+	if prevIntron == nil {
+		return largestAnchor, 0, mainAnchorIndex
+	}
+
+	return largestAnchor, prevIntron.Rank, mainAnchorIndex // anchor rank == intron rank of prev intron
+}
+
 func (r *ReadMatchResult) _NormalizeRegions() {
 	// start with genome
 	genomeBlocks := make([]*regionvector.Region, 0)
