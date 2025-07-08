@@ -222,7 +222,7 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 
 	if readMatchResult.MatchedGenome.HasGaps() {
 		// get larges anchor in map for right remap
-		mainAnchor, mainAnchorRank, mainAnchorIndex := readMatchResult.MatchedGenome.GetLargestAnchor(targetSeqIntronSet)
+		mainAnchor, mainAnchorRank, mainAnchorIndex := readMatchResult.GetLargestAnchor(targetSeqIntronSet)
 
 		// Check if there are gaps to the right direction of the anchor
 		// if already corrected the mainAnchor to the right, we don't need to perform a right remap again
@@ -364,7 +364,7 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 		}
 
 		// get larges anchor in map for left remap
-		mainAnchor, mainAnchorRank, mainAnchorIndex = readMatchResult.MatchedGenome.GetLargestAnchor(targetSeqIntronSet)
+		mainAnchor, mainAnchorRank, mainAnchorIndex = readMatchResult.GetLargestAnchor(targetSeqIntronSet)
 
 		// if already corrected the mainAnchor to the left, we don't need to perform a left remap again
 		if mainAnchorIndex > 0 {
@@ -811,7 +811,7 @@ func incomplRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronS
 	readMatchResult.NormalizeRegions()
 
 	// first get mainAnchor
-	mainAnchor, mainAnchorRank, mainAnchorIndex := readMatchResult.MatchedGenome.GetLargestAnchor(targetSeqIntronSet)
+	mainAnchor, mainAnchorRank, mainAnchorIndex := readMatchResult.GetLargestAnchor(targetSeqIntronSet)
 	readMainAnchor := readMatchResult.MatchedRead.Regions[mainAnchorIndex]
 
 	// and get overlapping introns
