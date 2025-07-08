@@ -267,8 +267,9 @@ func AssignReadMatchResults(fwMappings []*ReadMatchResult, rvMappings []*ReadMat
 // receives fw and rv matches of one seqID. Returns possible combinations of fw/rv.
 // E.g. fw -> 25 and rv -> 25 doesnt work since they need to map to separate strands etc
 // Currently returns the best combination with less or equal amount of mm the provided maxMismatches param
-func GetBestPossibleMappingCombination(fwMatches []*ReadMatchResult, rvMatches []*ReadMatchResult, maxMismatches int) *ValidReadPairCombination {
+func GetBestPossibleMappingCombination(fwMatches []*ReadMatchResult, rvMatches []*ReadMatchResult) *ValidReadPairCombination {
 	var bestCombination *ValidReadPairCombination
+	maxMismatches := config.MaxConfMm
 
 	for i := 0; i < len(fwMatches); i++ {
 		fwMatch := fwMatches[i]
@@ -310,29 +311,36 @@ func GetBestPossibleMappingCombination(fwMatches []*ReadMatchResult, rvMatches [
 // returns false as soon as one region is smaller than 2*kmerlength
 // iterates over gaps and checks lengths of region before and after gaps
 func hasLongDiagonals(mapping *ReadMatchResult) bool {
-	// used to keep track of the read position for the next gap
-	readGapPos := 0
-	// returns the index of the first region after which a gap occurs (-1 if no gap)
-	indexRegionBeforeGap := mapping.MatchedGenome.GetGapIndexAfterPos(readGapPos)
-
-	startIndex := 0
-
-	// loop through all gaps in the read (-1 means there is no more gap)
-	for indexRegionBeforeGap > -1 {
-		if mapping.MatchedGenome.Regions[indexRegionBeforeGap].End-mapping.MatchedGenome.Regions[startIndex].Start < int(config.KmerLength())*2 {
-			return false
-		}
-		startIndex = indexRegionBeforeGap + 1
-		readGapPos = mapping.MatchedGenome.Regions[indexRegionBeforeGap].End + 1
-		indexRegionBeforeGap = mapping.MatchedGenome.GetGapIndexAfterPos(readGapPos)
-	}
-
-	if indexRegionBeforeGap == -1 && startIndex != 0 {
-		if mapping.MatchedGenome.GetLastRegion().End-mapping.MatchedGenome.Regions[startIndex].Start < int(config.KmerLength())*2 {
+	mapping.NormalizeRegions()
+	for _, region := range mapping.MatchedGenome.Regions {
+		if region.Length() < config.MinConfAnchorLength {
 			return false
 		}
 	}
 	return true
+	// // used to keep track of the read position for the next gap
+	// readGapPos := 0
+	// // returns the index of the first region after which a gap occurs (-1 if no gap)
+	// indexRegionBeforeGap := mapping.MatchedGenome.GetGapIndexAfterPos(readGapPos)
+	//
+	// startIndex := 0
+	//
+	// // loop through all gaps in the read (-1 means there is no more gap)
+	// for indexRegionBeforeGap > -1 {
+	// 	if mapping.MatchedGenome.Regions[indexRegionBeforeGap].End-mapping.MatchedGenome.Regions[startIndex].Start < config.MinConfAnchorLength {
+	// 		return false
+	// 	}
+	// 	startIndex = indexRegionBeforeGap + 1
+	// 	readGapPos = mapping.MatchedGenome.Regions[indexRegionBeforeGap].End + 1
+	// 	indexRegionBeforeGap = mapping.MatchedGenome.GetGapIndexAfterPos(readGapPos)
+	// }
+	//
+	// if indexRegionBeforeGap == -1 && startIndex != 0 {
+	// 	if mapping.MatchedGenome.GetLastRegion().End-mapping.MatchedGenome.Regions[startIndex].Start < config.MinConfAnchorLength {
+	// 		return false
+	// 	}
+	// }
+	// return true
 }
 
 func (r *ReadMatchResult) GetCigar() (string, error) {

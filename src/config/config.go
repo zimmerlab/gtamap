@@ -16,21 +16,33 @@ var intronLengthMin = 20
 // the maximum error rate allowed per read
 var errorRate float64 = 0.05
 
-var includeReadsImproperlyPaired bool = false
-var includeReadsAmbiguouslyMapped bool = false
-var includeReadsUnmapped bool = false
+var (
+	includeReadsImproperlyPaired  bool = false
+	includeReadsAmbiguouslyMapped bool = false
+	includeReadsUnmapped          bool = false
+)
 
-var outputIncludeReadSequence bool = true
-var outputIncludeReadQuality bool = true
-var outputIncludeDetailedCigar bool = false
+var (
+	outputIncludeReadSequence  bool = true
+	outputIncludeReadQuality   bool = true
+	outputIncludeDetailedCigar bool = false
+)
 
 // properPairLevel sets the level of reads that are considered properly paired
 // 0 = both reads are mapped to the same reference on different strands
 // 1 = 0 and the distance between the reads is consistent with the fragment length
 var properPairLevel uint8 = 0
 
-var fragmentLength int = 0
-var fragmentLengthDeviation int = 0
+var (
+	fragmentLength          int = 0
+	fragmentLengthDeviation int = 0
+)
+
+var (
+	MaxRecDepth         int = 10
+	MaxConfMm               = 6
+	MinConfAnchorLength     = 20
+)
 
 func Env() string {
 	return env
@@ -71,6 +83,7 @@ func IncludeReadsUnmapped() bool {
 func SetOutputIncludeReadSequence(value bool) {
 	outputIncludeReadSequence = value
 }
+
 func OutputIncludeReadSequence() bool {
 	return outputIncludeReadSequence
 }
@@ -78,6 +91,7 @@ func OutputIncludeReadSequence() bool {
 func SetOutputIncludeReadQuality(value bool) {
 	outputIncludeReadQuality = value
 }
+
 func OutputIncludeReadQuality() bool {
 	return outputIncludeReadQuality
 }
@@ -85,6 +99,7 @@ func OutputIncludeReadQuality() bool {
 func SetOutputIncludeDetailedCigar(value bool) {
 	outputIncludeDetailedCigar = value
 }
+
 func OutputIncludeDetailedCigar() bool {
 	return outputIncludeDetailedCigar
 }

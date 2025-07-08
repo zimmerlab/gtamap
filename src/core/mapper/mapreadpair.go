@@ -98,7 +98,7 @@ func hasConfdentConfiguration(resultFw []*mapperutils.ReadMatchResult, resultRv 
 	for targetId := range mappedIds {
 		fwMapsOfTargetId := fwMapPerSeqIndex[targetId]
 		rvMapsOfTargetId := rvMapPerSeqIndex[targetId]
-		validCombination := mapperutils.GetBestPossibleMappingCombination(fwMapsOfTargetId, rvMapsOfTargetId, 6) // allow at most 6 mm in conf map
+		validCombination := mapperutils.GetBestPossibleMappingCombination(fwMapsOfTargetId, rvMapsOfTargetId)
 		if validCombination != nil {
 			return true, &confidentmappingpass.ConfidentTask{
 				ReadPair: rp,
