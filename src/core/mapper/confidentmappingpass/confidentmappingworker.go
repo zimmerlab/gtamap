@@ -1,6 +1,7 @@
 package confidentmappingpass
 
 import (
+	"sort"
 	"strconv"
 	"sync"
 
@@ -249,8 +250,8 @@ func getGapsPlusOrientation(sId int, cMapsPerSeq []*ConfidentTask, index *index.
 
 	// iterate over each confMap in target seq seqId
 	for _, confMap := range cMapsPerSeq {
-		confMap.ResultFw.MatchedGenome.MergeAlignmentBlocks()
-		confMap.ResultRv.MatchedGenome.MergeAlignmentBlocks()
+		confMap.ResultFw.NormalizeRegions()
+		confMap.ResultRv.NormalizeRegions()
 
 		// update strandedness counter
 		if confMap.ResultFw.SequenceIndex%2 == 0 {
@@ -338,9 +339,24 @@ type IntronCluster struct {
 }
 
 func clusterGaps(targetGaps map[regionvector.Gap]int) []*regionvector.Intron {
+	sortedGaps := make([]regionvector.Gap, len(targetGaps))
+	ind := 0
+	for gap := range targetGaps {
+		sortedGaps[ind] = gap
+		ind++
+	}
+	sort.Slice(sortedGaps, func(i, j int) bool {
+		if sortedGaps[i].Start != sortedGaps[j].Start {
+			return sortedGaps[i].Start < sortedGaps[j].Start
+		}
+		return sortedGaps[i].End < sortedGaps[j].End
+	})
 	// cluster overlapping gaps
 	clusters := make([]*IntronCluster, 0)
-	for currGap, currGapEvidence := range targetGaps {
+
+	// iterate in order
+	for _, currGap := range sortedGaps {
+		currGapEvidence := targetGaps[currGap]
 		if len(clusters) == 0 {
 			// init slice with first cluster
 			cluster := &IntronCluster{
@@ -358,59 +374,19 @@ func clusterGaps(targetGaps map[regionvector.Gap]int) []*regionvector.Intron {
 		addedToExistingCluster := false
 
 		for _, cluster := range clusters {
-			// is the currGap overlapping with the cluster
-			// I. -----##########------- cluster
-			//    ------######---------- currGap → contained by cluster, add to cluster
-			if currGap.Start >= cluster.lStart && currGap.End <= cluster.rStop {
-				if cluster.maxEvidence < currGapEvidence {
-					cluster.maxEvidence = currGapEvidence
-					cluster.eStart = currGap.Start
-					cluster.eStop = currGap.End
-					cluster.maxEvidenceFollowsSpliceSite = currGap.KnownSpliceSite
+			if currGap.End > cluster.lStart && currGap.Start < cluster.rStop {
+				if cluster.lStart > currGap.Start && cluster.lStart-currGap.Start < 1000 {
+					cluster.lStart = currGap.Start
 				}
-				addedToExistingCluster = true
-				break
-			}
-			// II -----##########------- cluster
-			//    ---#############------ currGap → contains cluster completely
-			if currGap.Start <= cluster.lStart && currGap.End >= cluster.rStop {
-				if cluster.maxEvidence < currGapEvidence {
-					cluster.maxEvidence = currGapEvidence
-					cluster.eStart = currGap.Start
-					cluster.eStop = currGap.End
-					cluster.lStart = currGap.Start
-					cluster.rStop = currGap.End
-					cluster.maxEvidenceFollowsSpliceSite = currGap.KnownSpliceSite
-				} else {
-					cluster.lStart = currGap.Start
+				if cluster.rStop < currGap.End && currGap.End-cluster.rStop < 1000 {
 					cluster.rStop = currGap.End
 				}
-				addedToExistingCluster = true
-				break
-			}
-			// III -----##########------- cluster
-			//     ---############------  currGap → partially contains cluster completely
-			if currGap.Start <= cluster.lStart && currGap.End >= cluster.lStart && currGap.End <= cluster.rStop {
 				if cluster.maxEvidence < currGapEvidence {
 					cluster.maxEvidence = currGapEvidence
 					cluster.eStart = currGap.Start
 					cluster.eStop = currGap.End
 					cluster.maxEvidenceFollowsSpliceSite = currGap.KnownSpliceSite
 				}
-				cluster.lStart = currGap.Start
-				addedToExistingCluster = true
-				break
-			}
-			// IV  -----##########------- cluster
-			//     -----############----  currGap → partially contains cluster completely
-			if currGap.Start >= cluster.lStart && currGap.Start <= cluster.rStop && currGap.End >= cluster.rStop {
-				if cluster.maxEvidence < currGapEvidence {
-					cluster.maxEvidence = currGapEvidence
-					cluster.eStart = currGap.Start
-					cluster.eStop = currGap.End
-					cluster.maxEvidenceFollowsSpliceSite = currGap.KnownSpliceSite
-				}
-				cluster.rStop = currGap.End
 				addedToExistingCluster = true
 				break
 			}
