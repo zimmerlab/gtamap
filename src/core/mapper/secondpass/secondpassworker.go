@@ -681,11 +681,11 @@ func rightRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet
 }
 
 func leftRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet *regionvector.RegionSet, read *fastq.Read, weakAnchor *regionvector.Region, anchorRegion *regionvector.Region, genomeIndex *index.GenomeIndex, anchorRank, regionReadEnd int) map[int]*RemapOption {
-	// if this is the case, theres not enough gene left to remap the read
-	// GENOME [2,122]
-	// READ   [30,150] -> 30 bases missing but cant do left remap since only 2 bases in gene are left
-	// then weakAnchor == [-28, 2]
 	if weakAnchor.Start < 0 {
+		// if this is the case, theres not enough gene left to remap the read
+		// GENOME [2,122]
+		// READ   [30,150] -> 30 bases missing but cant do left remap since only 2 bases in gene are left
+		// then weakAnchor == [-28, 2]
 		// retrun and dont do anything
 		return nil
 	}
