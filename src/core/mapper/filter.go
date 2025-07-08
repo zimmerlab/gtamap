@@ -28,6 +28,9 @@ func Filter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
 			} else {
 				okRv = true
 			}
+			if okRv && okFw {
+				break // early break
+			}
 		}
 
 		if okFw {
