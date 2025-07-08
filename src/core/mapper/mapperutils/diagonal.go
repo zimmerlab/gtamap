@@ -1,9 +1,11 @@
 package mapperutils
 
 import (
+	"math"
+	"sort"
+
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/sirupsen/logrus"
-	"sort"
 )
 
 type DiagonalHandler struct {
@@ -23,7 +25,6 @@ func NewDiagonalHandlerWithData(m map[int][]*Match) *DiagonalHandler {
 }
 
 func NewDiagonalHandlerWithDataCopy(m map[int][]*Match) *DiagonalHandler {
-
 	mapCopy := make(map[int][]*Match, len(m))
 
 	for key, matches := range m {
@@ -48,8 +49,7 @@ func NewDiagonalHandlerWithDataCopy(m map[int][]*Match) *DiagonalHandler {
 // It returns the position of the diagonal in the genome and the number of unused matches if a diagonal is found.
 // If not, then it returns -1, -1 and false.
 func (dh *DiagonalHandler) GetBestDiagonal() (int, int, bool) {
-
-	indexMax := 0
+	indexMax := math.MaxInt32
 	maxMatches := 0
 	found := false
 
@@ -64,18 +64,24 @@ func (dh *DiagonalHandler) GetBestDiagonal() (int, int, bool) {
 			countUnused++
 		}
 
-		if countUnused > maxMatches {
-			indexMax = key
-			maxMatches = countUnused
-			found = true
+		if countUnused >= maxMatches {
+			if countUnused == maxMatches && key < indexMax {
+				indexMax = key
+				maxMatches = countUnused
+				found = true
+			} else {
+				indexMax = key
+				maxMatches = countUnused
+				found = true
+			}
 		}
+
 	}
 
 	return indexMax, maxMatches, found
 }
 
 func (dh *DiagonalHandler) GetAvailableDiagonals() []int {
-
 	// get sorted list of dh.Diagonals keys
 	diagonalKeys := make([]int, 0, len(dh.Diagonals))
 	for key := range dh.Diagonals {
@@ -91,14 +97,13 @@ func (dh *DiagonalHandler) GetAvailableDiagonals() []int {
 }
 
 func (dh *DiagonalHandler) ConsumeDiagonal(diagonal int) {
-
 	logrus.WithFields(logrus.Fields{
 		"diagonal": diagonal,
 	}).Debug("consuming diagonal")
 
 	for _, match := range dh.Diagonals[diagonal] {
-		//dh.ConsumeRegionRead(match.FromRead, match.ToRead)
-		//dh.ConsumeRegionGenome(match.FromGenome, match.ToGenome)
+		// dh.ConsumeRegionRead(match.FromRead, match.ToRead)
+		// dh.ConsumeRegionGenome(match.FromGenome, match.ToGenome)
 		dh.ConsumeKmer(match.FromRead, match.ToRead, match.FromGenome, match.ToGenome)
 	}
 
@@ -110,7 +115,6 @@ func (dh *DiagonalHandler) ConsumeDiagonal(diagonal int) {
 // This is used when a diagonal is not valid anymore and should be removed from the map without affecting
 // the other diagonals as its matches are not applied.
 func (dh *DiagonalHandler) RemoveDiagonal(diagonal int) {
-
 	logrus.WithFields(logrus.Fields{
 		"diagonal": diagonal,
 	}).Debug("removing diagonal")
@@ -120,7 +124,6 @@ func (dh *DiagonalHandler) RemoveDiagonal(diagonal int) {
 }
 
 func (dh *DiagonalHandler) ConsumeKmer(kmerStart int, kmerStop int, kmerStartGenome int, kmerStopGenome int) {
-
 	logrus.WithFields(logrus.Fields{
 		"kmerStart": kmerStart,
 		"kmerStop":  kmerStop,
@@ -131,7 +134,6 @@ func (dh *DiagonalHandler) ConsumeKmer(kmerStart int, kmerStop int, kmerStartGen
 }
 
 func (dh *DiagonalHandler) RemovedConsumedRegionsAndDiagonals() {
-
 	logrus.Debug("removing consumed regions and diagonals")
 
 	// delete the matches that were marked as used
@@ -140,7 +142,6 @@ func (dh *DiagonalHandler) RemovedConsumedRegionsAndDiagonals() {
 		n := 0
 		for _, match := range matches {
 			if match.Used {
-
 				//logrus.WithFields(logrus.Fields{
 				//	"match":    match,
 				//	"diagonal": diagonal,
@@ -166,7 +167,6 @@ func (dh *DiagonalHandler) RemovedConsumedRegionsAndDiagonals() {
 	}
 
 	for _, key := range keysToDelete {
-
 		//logrus.WithFields(logrus.Fields{
 		//	"diagonal": key,
 		//}).Debug("removed diagonal")
@@ -176,7 +176,6 @@ func (dh *DiagonalHandler) RemovedConsumedRegionsAndDiagonals() {
 }
 
 func (dh *DiagonalHandler) RemoveInvalidDiagonals(result *ReadMatchResult, read *fastq.Read) {
-
 	logrus.Debug("removing invalid diagonals")
 
 	var keysToDelete []int
@@ -189,7 +188,6 @@ func (dh *DiagonalHandler) RemoveInvalidDiagonals(result *ReadMatchResult, read 
 	}
 
 	for _, key := range keysToDelete {
-
 		//logrus.WithFields(logrus.Fields{
 		//	"diagonal": key,
 		//}).Debug("removed diagonal")
@@ -210,7 +208,6 @@ func (dh *DiagonalHandler) RemoveInvalidDiagonals(result *ReadMatchResult, read 
 // Already mapped regions: [0, 10], [20, 30] to genome [1000, 1010], [1020, 1030]
 // New diagonal: [10, 20] to genome [900, 910]
 func (dh *DiagonalHandler) IsValidExtension(possibleExtension []*Match, result ReadMatchResult, read *fastq.Read) bool {
-
 	// if there is nothing matched in the read, then any extension is valid
 	if len(result.MatchedRead.Regions) == 0 {
 		return true
@@ -310,7 +307,6 @@ func (dh *DiagonalHandler) IsValidExtension(possibleExtension []*Match, result R
 }
 
 func (dh *DiagonalHandler) ConsumeRegionRead(startRead int, endRead int) {
-
 	logrus.WithFields(logrus.Fields{
 		"start": startRead,
 		"end":   endRead,
@@ -333,8 +329,8 @@ func (dh *DiagonalHandler) ConsumeRegionRead(startRead int, endRead int) {
 		}
 	}
 }
-func (dh *DiagonalHandler) ConsumeRegionGenome(startGenome int, endGenome int) {
 
+func (dh *DiagonalHandler) ConsumeRegionGenome(startGenome int, endGenome int) {
 	logrus.WithFields(logrus.Fields{
 		"start": startGenome,
 		"end":   endGenome,
