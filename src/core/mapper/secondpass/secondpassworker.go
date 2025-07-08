@@ -818,6 +818,8 @@ func incomplRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronS
 	overlappingIntrons := targetSeqIntronSet.GetIntersectingIntrons(mainAnchor)
 
 	// check if main anchor is fully contained in intron -> stop remap and
+	lPadding := 0
+	rPadding := 0
 	if len(overlappingIntrons) > 1 {
 		lIntron := overlappingIntrons[0]
 		rIntron := overlappingIntrons[len(overlappingIntrons)-1]
@@ -832,9 +834,9 @@ func incomplRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronS
 		//                |         |
 		// REF  ++++--------+++++++---------++++++++
 		// we need padding for both start and end of anchor
-		rPadding := mainAnchor.End - rIntron.Start
+		rPadding = mainAnchor.End - rIntron.Start
 		mainAnchor.End -= rPadding
-		lPadding := lIntron.End - mainAnchor.Start
+		lPadding = lIntron.End - mainAnchor.Start
 		mainAnchor.Start += lPadding
 		readMainAnchor.Start += lPadding
 		readMainAnchor.End -= rPadding
@@ -851,14 +853,14 @@ func incomplRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronS
 			return
 		} else if mainAnchor.Start < intron.End && mainAnchor.End > intron.End {
 			// padding II
-			padding := intron.End - mainAnchor.Start
-			mainAnchor.Start += padding
-			readMainAnchor.Start += padding
+			lPadding = intron.End - mainAnchor.Start
+			mainAnchor.Start += lPadding
+			readMainAnchor.Start += lPadding
 		} else if mainAnchor.End > intron.Start && mainAnchor.Start < intron.Start {
 			// padding I
-			padding := mainAnchor.End - intron.Start
-			mainAnchor.End -= padding
-			readMainAnchor.End -= padding
+			rPadding = mainAnchor.End - intron.Start
+			mainAnchor.End -= rPadding
+			readMainAnchor.End -= rPadding
 		}
 	}
 
