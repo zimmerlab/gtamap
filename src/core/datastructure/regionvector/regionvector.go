@@ -20,6 +20,10 @@ type Gap struct {
 	KnownSpliceSite bool
 }
 
+func (g Gap) Length() int {
+	return g.End - g.Start
+}
+
 type Intron struct {
 	Start          int // 0-based
 	End            int // end-exclusive

@@ -339,18 +339,21 @@ type IntronCluster struct {
 }
 
 func clusterGaps(targetGaps map[regionvector.Gap]int) []*regionvector.Intron {
+	// init slice
 	sortedGaps := make([]regionvector.Gap, len(targetGaps))
 	ind := 0
 	for gap := range targetGaps {
 		sortedGaps[ind] = gap
 		ind++
 	}
+	// sort by length s.t. we cluster bottom up
 	sort.Slice(sortedGaps, func(i, j int) bool {
-		if sortedGaps[i].Start != sortedGaps[j].Start {
+		if sortedGaps[i].Length() != sortedGaps[j].Length() {
 			return sortedGaps[i].Start < sortedGaps[j].Start
 		}
-		return sortedGaps[i].End < sortedGaps[j].End
+		return sortedGaps[i].Length() < sortedGaps[j].Length()
 	})
+
 	// cluster overlapping gaps
 	clusters := make([]*IntronCluster, 0)
 
