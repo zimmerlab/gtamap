@@ -39,9 +39,9 @@ var (
 )
 
 var (
-	MaxRecDepth         int = 10
-	MaxConfMm               = 6
-	MinConfAnchorLength     = 20
+	MaxBranchPoints     int = 10 // how often if applyPossibleDiagonals allowed to branch
+	MaxConfMm           int = 6  // how many mm is a conf map allowed to have
+	MinConfAnchorLength int = 20 // how long does each ali block in a conf map have to be to be considered conf
 )
 
 func Env() string {
