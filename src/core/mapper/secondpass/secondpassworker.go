@@ -68,12 +68,10 @@ func SecondpassMappingWorker(secondPassChan *SecondPassChannel, wgIncompleteMapp
 
 func remapReadPair(readPairMapping *mapperutils.ReadPairMatchResults, annotationMap map[int]*mapperutils.TargetAnnotation, genomeIndex *index.GenomeIndex) {
 	for _, mapping := range readPairMapping.Fw {
-		// here we merge intervals in the genomic regions for easier handling
 		mainSeqId := mapping.SequenceIndex / 2
 		remapRead(mapping, annotationMap[mainSeqId], readPairMapping.ReadPair.ReadR1, genomeIndex)
 	}
 	for _, mapping := range readPairMapping.Rv {
-		// here we merge intervals in the genomic regions for easier handling
 		mainSeqId := mapping.SequenceIndex / 2
 		remapRead(mapping, annotationMap[mainSeqId], readPairMapping.ReadPair.ReadR2, genomeIndex)
 	}
