@@ -189,7 +189,11 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 		return
 	}
 
-	if score < 2 {
+	// if there are more than 5 remaining diags and our best score < 2, we abort and finish in remap
+	// but if we already mapped 3/4 of the read and only lack one more diag, we want to consider it
+	// BAD: many remaining diags and best score < 2
+	// GOOD/OKAY: few remaining diags and best score < 2
+	if score < 2 && len(dh.Diagonals) > 3 {
 		logrus.Debug("no suitable diagonal found")
 		logrus.Debug("adding partial result to results")
 
