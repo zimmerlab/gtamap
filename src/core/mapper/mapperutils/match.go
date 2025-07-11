@@ -121,60 +121,33 @@ func (r ReadMatchResult) GetLargestAnchor(introns *regionvector.RegionSet) (*reg
 	return largestAnchor, prevIntron.Rank, mainAnchorIndex // anchor rank == intron rank of prev intron
 }
 
-func (r *ReadMatchResult) _NormalizeRegions() {
-	// start with genome
-	genomeBlocks := make([]*regionvector.Region, 0)
-	readBlocks := make([]*regionvector.Region, 0)
-
-	startIndex := 0
-
-	// do regions imply gap
-	hasGap := func(a, b *regionvector.Region) bool {
-		return a.End < b.Start // true gap (no adjacency or overlap)
+// original which is wrong
+func (r *ReadMatchResult) NormalizeRegions() {
+	// I. In some cases the regions differ in length but in different positions in genome and read:
+	// READ [10,30] [30,40]
+	// GENO [10,20] [20,40] -> split into regions of kmer length before normalizing
+	kmerLength := int(config.KmerLength())
+	for _, region := range r.MatchedGenome.Regions {
+		if region.Length() != kmerLength && region.Length()%kmerLength == 0 {
+			start := region.Start
+			// remove old region
+			r.MatchedGenome.RemoveRegion(region.Start, region.End)
+			for i := 0; i < region.Length(); i += kmerLength {
+				r.MatchedGenome.AddRegionNonOverlappingPanic(start+i, start+i+kmerLength)
+			}
+		}
 	}
-
-	for i := 0; i < len(r.MatchedGenome.Regions)-1; i++ {
-		gapInGenome := hasGap(r.MatchedGenome.Regions[i], r.MatchedGenome.Regions[i+1])
-		gapInMask := hasGap(r.MatchedRead.Regions[i], r.MatchedRead.Regions[i+1])
-
-		if gapInGenome || gapInMask {
-			blockStart := r.MatchedGenome.Regions[startIndex].Start
-			blockEnd := r.MatchedGenome.Regions[i].End
-			readBlockStart := r.MatchedRead.Regions[startIndex].Start
-			readBlockEnd := r.MatchedRead.Regions[i].End
-			genomeBlocks = append(genomeBlocks, &regionvector.Region{
-				Start: blockStart,
-				End:   blockEnd,
-			})
-			readBlocks = append(readBlocks, &regionvector.Region{
-				Start: readBlockStart,
-				End:   readBlockEnd,
-			})
-			startIndex = i + 1
+	for _, region := range r.MatchedRead.Regions {
+		if region.Length() != kmerLength && region.Length()%kmerLength == 0 {
+			start := region.Start
+			// remove old region
+			r.MatchedRead.RemoveRegion(region.Start, region.End)
+			for i := 0; i < region.Length(); i += kmerLength {
+				r.MatchedRead.AddRegionNonOverlappingPanic(start+i, start+i+kmerLength)
+			}
 		}
 	}
 
-	// handle the last block
-	if startIndex < len(r.MatchedGenome.Regions) {
-		blockStart := r.MatchedGenome.Regions[startIndex].Start
-		blockEnd := r.MatchedGenome.Regions[len(r.MatchedGenome.Regions)-1].End
-		readBlockStart := r.MatchedRead.Regions[startIndex].Start
-		readBlockEnd := r.MatchedRead.Regions[len(r.MatchedRead.Regions)-1].End
-		genomeBlocks = append(genomeBlocks, &regionvector.Region{
-			Start: blockStart,
-			End:   blockEnd,
-		})
-		readBlocks = append(readBlocks, &regionvector.Region{
-			Start: readBlockStart,
-			End:   readBlockEnd,
-		})
-	}
-
-	r.MatchedGenome.Regions = genomeBlocks
-	r.MatchedRead.Regions = readBlocks
-}
-
-func (r *ReadMatchResult) NormalizeRegions() {
 	genomeBlocks := make([]*regionvector.Region, 0)
 	readBlocks := make([]*regionvector.Region, 0)
 
@@ -192,15 +165,15 @@ func (r *ReadMatchResult) NormalizeRegions() {
 			// account for this case
 			// Read [0,10] [10,20] [20,30] [30,40]
 			// GEN  [0,10] [10,20] [20,30] [30,36] -> due to either leftNorm or bcause of best split
-			if r.MatchedGenome.Regions[i].Length() < r.MatchedRead.Regions[i].Length() {
-				padding := r.MatchedRead.Regions[i].Length() - r.MatchedGenome.Regions[i].Length()
-				r.MatchedRead.Regions[i].End -= padding
-				r.MatchedRead.Regions[i+1].Start -= padding
-			} else if r.MatchedGenome.Regions[i].Length() > r.MatchedRead.Regions[i].Length() {
-				padding := r.MatchedGenome.Regions[i].Length() - r.MatchedRead.Regions[i].Length()
-				r.MatchedRead.Regions[i].End += padding
-				r.MatchedRead.Regions[i+1].Start += padding
-			}
+			//if r.MatchedGenome.Regions[i].Length() < r.MatchedRead.Regions[i].Length() {
+			//	padding := r.MatchedRead.Regions[i].Length() - r.MatchedGenome.Regions[i].Length()
+			//	r.MatchedRead.Regions[i].End -= padding
+			//	r.MatchedRead.Regions[i+1].Start -= padding
+			//} else if r.MatchedGenome.Regions[i].Length() > r.MatchedRead.Regions[i].Length() {
+			//	padding := r.MatchedGenome.Regions[i].Length() - r.MatchedRead.Regions[i].Length()
+			//	r.MatchedRead.Regions[i].End += padding
+			//	r.MatchedRead.Regions[i+1].Start += padding
+			//}
 			genomeBlocks = append(genomeBlocks, &regionvector.Region{
 				Start: r.MatchedGenome.Regions[startIndex].Start,
 				End:   r.MatchedGenome.Regions[i].End,
