@@ -266,15 +266,16 @@ func (dh *DiagonalHandler) IsValidExtension(possibleExtension []*Match, result R
 		}
 	}
 
-	// the diagonal regions on the read can not overlap any other region that was already mapped
-	if !(maxRead <= minReadResult || minRead >= maxReadResult) {
-		return false
-	}
-
-	// the diagonal regions on the genome can not overlap any other region that was already mapped
-	if !(maxGenome <= minGenomeResult || minGenome >= maxGenomeResult) {
-		return false
-	}
+	// Commented out since it prevents adding a thrid diag to res, if rank of third diag is 2 (diag inbetween already mapped diags)
+	// // the diagonal regions on the read can not overlap any other region that was already mapped
+	// if !(maxRead <= minReadResult || minRead >= maxReadResult) {
+	// 	return false
+	// }
+	//
+	// // the diagonal regions on the genome can not overlap any other region that was already mapped
+	// if !(maxGenome <= minGenomeResult || minGenome >= maxGenomeResult) {
+	// 	return false
+	// }
 
 	// OLD
 	// the diagonal regions on the read can not overlap any other region that was already mapped
