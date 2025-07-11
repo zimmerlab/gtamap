@@ -516,6 +516,11 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 
 		correctOverhangs(readMatchResult, targetSeqIntronSet, read, genomeIndex, readMatchResult.MatchedGenome.Regions[0])
 	}
+
+	// check if read could be mapped/remapped
+	if 5*len(readMatchResult.MismatchesRead) > len(*read.Sequence) {
+		readMatchResult.IncompleteMap = true
+	}
 }
 
 func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet *regionvector.RegionSet, read *fastq.Read, genomeIndex *index.GenomeIndex, region *regionvector.Region) {
@@ -856,6 +861,8 @@ func incomplRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronS
 
 		if intron.Start < mainAnchor.Start && intron.End > mainAnchor.End {
 			// abort III
+			// just in case
+			readMatchResult.IncompleteMap = true
 			return
 		} else if mainAnchor.Start < intron.End && mainAnchor.End > intron.End {
 			// padding II
