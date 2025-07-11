@@ -51,12 +51,16 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	}
 
 	// postprocess every potential match
-	for _, resFw := range resultFw {
-		postprocessReadMatch(genomeIndex, readPair.ReadR1, resFw)
-	}
-	for _, resRv := range resultRv {
-		postprocessReadMatch(genomeIndex, readPair.ReadR2, resRv)
-	}
+	// commented out for now
+	// IMPORTANT: Currently leads to bug because read rv is not ajdusted when genome rv is adjsuted.
+	// beofre postprocessReadMatch, every region in MatchedGenome and MatchedRead match 1:1 but
+	// with the current implementation, this 1:1 mapping is destroyed.
+	// for _, resFw := range resultFw {
+	// 	postprocessReadMatch(genomeIndex, readPair.ReadR1, resFw)
+	// }
+	// for _, resRv := range resultRv {
+	// 	postprocessReadMatch(genomeIndex, readPair.ReadR2, resRv)
+	// }
 
 	secondpassChan.Send(&mapperutils.ReadPairMatchResults{
 		ReadPair: readPair,
