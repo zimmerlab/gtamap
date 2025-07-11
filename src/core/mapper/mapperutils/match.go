@@ -345,9 +345,6 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 				builder.WriteString("M")
 				break
 			}
-			if r.MatchedRead == nil {
-				println()
-			}
 
 			gapInGenome := r.MatchedGenome.Regions[i].End < r.MatchedGenome.Regions[i+1].Start
 			gapInRead := r.MatchedRead.Regions[i].End < r.MatchedRead.Regions[i+1].Start
