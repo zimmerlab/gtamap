@@ -885,7 +885,7 @@ func incomplRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronS
 		// leftRemap
 		regionToRemap := &regionvector.Region{Start: mainAnchor.Start - mappingStart, End: mainAnchor.Start}
 		remapOptions := leftRemap(readMatchResult, targetSeqIntronSet, read, regionToRemap, mainAnchor, genomeIndex, mainAnchorRank, regionToRemap.Length())
-		if remapOptions != nil {
+		if remapOptions != nil && readMatchResult.MatchedRead.GetFirstRegion().Start != 0 {
 			bestOption := chooseBestRemap(remapOptions)
 
 			// remove everything left of main anchor
@@ -910,7 +910,7 @@ func incomplRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronS
 
 		remapOptions := rightRemap(readMatchResult, targetSeqIntronSet, read, regionToRemap, mainAnchor, genomeIndex, mainAnchorRank, mappingEnd)
 
-		if remapOptions != nil {
+		if remapOptions != nil && readMatchResult.MatchedRead.GetLastRegion().End != len(*read.Sequence) {
 			bestOption := chooseBestRemap(remapOptions)
 
 			// remove everything right of main anchor
