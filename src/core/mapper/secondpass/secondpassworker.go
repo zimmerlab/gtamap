@@ -3,6 +3,7 @@ package secondpass
 import (
 	"sync"
 
+	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
@@ -518,7 +519,7 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 	}
 
 	// check if read could be mapped/remapped
-	if 5*len(readMatchResult.MismatchesRead) > len(*read.Sequence) {
+	if uint8(float64(len(readMatchResult.MismatchesRead))*100/float64(len(*read.Sequence))) > config.MaxMismatchPercentage() {
 		readMatchResult.IncompleteMap = true
 	}
 }
@@ -929,7 +930,7 @@ func incomplRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronS
 	}
 
 	// update bool to include res in sam
-	if 5*len(readMatchResult.MismatchesRead) <= len(*read.Sequence) && readMatchResult.MatchedGenome.Length() == len(*read.Sequence) {
+	if uint8(float64(len(readMatchResult.MismatchesRead))*100/float64(len(*read.Sequence))) < config.MaxMismatchPercentage() {
 		readMatchResult.IncompleteMap = false
 	}
 }
