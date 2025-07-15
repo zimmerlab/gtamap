@@ -521,6 +521,8 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 	// check if read could be mapped/remapped
 	if uint8(float64(len(readMatchResult.MismatchesRead))*100/float64(len(*read.Sequence))) > config.MaxMismatchPercentage() {
 		readMatchResult.IncompleteMap = true
+	} else {
+		readMatchResult.IncompleteMap = false
 	}
 }
 
@@ -931,6 +933,8 @@ func incomplRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronS
 
 	// update bool to include res in sam
 	if uint8(float64(len(readMatchResult.MismatchesRead))*100/float64(len(*read.Sequence))) > config.MaxMismatchPercentage() {
+		readMatchResult.IncompleteMap = true
+	} else {
 		readMatchResult.IncompleteMap = false
 	}
 }
