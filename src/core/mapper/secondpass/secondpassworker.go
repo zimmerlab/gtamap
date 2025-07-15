@@ -930,7 +930,7 @@ func incomplRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronS
 	}
 
 	// update bool to include res in sam
-	if uint8(float64(len(readMatchResult.MismatchesRead))*100/float64(len(*read.Sequence))) < config.MaxMismatchPercentage() {
+	if uint8(float64(len(readMatchResult.MismatchesRead))*100/float64(len(*read.Sequence))) > config.MaxMismatchPercentage() {
 		readMatchResult.IncompleteMap = false
 	}
 }
