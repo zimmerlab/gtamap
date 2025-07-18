@@ -44,6 +44,8 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 
 				// TODO: some reads still are not fully mapped sometimes...
 				if task.TargetInfo.Rv[j].MatchedGenome.Length() != len(*task.TargetInfo.ReadPair.ReadR1.Sequence) && task.TargetInfo.Rv[j].MatchedRead.Length() != len(*task.TargetInfo.ReadPair.ReadR1.Sequence) {
+					logrus.Infof("Read labeled complete but not fully mapped: Fw Read %s matched genome length: %d", task.TargetInfo.ReadPair.ReadR1.Header, task.TargetInfo.Fw[i].MatchedGenome.Length())
+					logrus.Infof("Read labeled complete but not fully mapped: Rv Read %s matched genome length: %d", task.TargetInfo.ReadPair.ReadR2.Header, task.TargetInfo.Rv[j].MatchedGenome.Length())
 					continue
 				}
 
