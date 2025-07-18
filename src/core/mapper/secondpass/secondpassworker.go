@@ -581,16 +581,18 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 
 		if remapOptions != nil {
 			bestOption := chooseBestRemap(remapOptions)
+			if len(remapOptions[bestOption].MismatchesRead) < len(readMatchResult.MismatchesRead) {
 
-			// remove weakAnchor
-			readMatchResult.MatchedGenome.RemoveRegion(readMatchResult.MatchedGenome.GetFirstRegion().Start, weakAnchor.End)
+				// remove weakAnchor
+				readMatchResult.MatchedGenome.RemoveRegion(readMatchResult.MatchedGenome.GetFirstRegion().Start, weakAnchor.End)
 
-			// use remap
-			for _, r := range remapOptions[bestOption].RemapVector {
-				readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(r.Start, r.End)
+				// use remap
+				for _, r := range remapOptions[bestOption].RemapVector {
+					readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(r.Start, r.End)
+				}
+				// update mm in readMatchResult
+				readMatchResult.MismatchesRead = remapOptions[bestOption].MismatchesRead
 			}
-			// update mm in readMatchResult
-			readMatchResult.MismatchesRead = remapOptions[bestOption].MismatchesRead
 		}
 	}
 
@@ -613,16 +615,18 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 		remapOptions := rightRemap(readMatchResult, targetSeqIntronSet, read, weakAnchor, region, genomeIndex, mainAnchorRank, startInRead)
 		if remapOptions != nil {
 			bestOption := chooseBestRemap(remapOptions)
+			if len(remapOptions[bestOption].MismatchesRead) < len(readMatchResult.MismatchesRead) {
 
-			// remove weakAnchor
-			readMatchResult.MatchedGenome.RemoveRegion(weakAnchor.Start, readMatchResult.MatchedGenome.GetLastRegion().End)
+				// remove weakAnchor
+				readMatchResult.MatchedGenome.RemoveRegion(weakAnchor.Start, readMatchResult.MatchedGenome.GetLastRegion().End)
 
-			// use remap
-			for _, r := range remapOptions[bestOption].RemapVector {
-				readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(r.Start, r.End)
+				// use remap
+				for _, r := range remapOptions[bestOption].RemapVector {
+					readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(r.Start, r.End)
+				}
+				// update mm in readMatchResult
+				readMatchResult.MismatchesRead = remapOptions[bestOption].MismatchesRead
 			}
-			// update mm in readMatchResult
-			readMatchResult.MismatchesRead = remapOptions[bestOption].MismatchesRead
 		}
 	}
 }
