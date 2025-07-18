@@ -353,8 +353,10 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 					// (READ) ++++++++-------+++++++++++++
 					// (READ) ++++++++-------+++++++++++++
 					// (REF)  ++++++++-------++++++++++++
-					mainAnchor.End = mainAnchor.End + correctedL
-					weakAnchor.Start = weakAnchor.Start + correctedR
+					if mainAnchor.Length() > abs(correctedL) && weakAnchor.Length() > abs(correctedR) {
+						mainAnchor.End = mainAnchor.End + correctedL
+						weakAnchor.Start = weakAnchor.Start + correctedR
+					}
 				}
 				// go to next anchor
 				mainAnchor = weakAnchor
@@ -495,8 +497,10 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 					// (READ) ++++++++-------+++++++++++++
 					// (READ) ++++++++-------+++++++++++++
 					// (REF)  ++++++++-------++++++++++++
-					mainAnchor.Start = mainAnchor.Start + correctedL
-					weakAnchor.End = weakAnchor.End + correctedR
+					if mainAnchor.Length() > abs(correctedL) && weakAnchor.Length() > abs(correctedR) {
+						mainAnchor.Start = mainAnchor.Start + correctedL
+						weakAnchor.End = weakAnchor.End + correctedR
+					}
 				}
 				// go to next anchor
 				mainAnchor = weakAnchor
