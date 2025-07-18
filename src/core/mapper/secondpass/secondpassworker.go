@@ -858,6 +858,107 @@ func incomplRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronS
 	// then the index of main anchor references the adjacent block in read and mapStart and mapEnd are readRegions[mainAnchorRank].Start / .End
 	readMatchResult.NormalizeRegions()
 
+	// before we do anyting, check if the missing part of the map is a gap in the mapping (lets say 10 bases are missing
+	// in the middle of the read). We want to use the already mapped part of the read before dicarding them in the remap
+	if readMatchResult.MatchedRead.GetFirstRegion().Start == 0 && readMatchResult.MatchedRead.GetLastRegion().End == len(*read.Sequence) && readMatchResult.MatchedRead.Length() != len(*read.Sequence) {
+		for i := 0; i < len(readMatchResult.MatchedRead.Regions)-1; i++ {
+			gapStart := readMatchResult.MatchedRead.Regions[i].End
+			gapEnd := readMatchResult.MatchedRead.Regions[i+1].Start
+			gapGenomeStart := readMatchResult.MatchedGenome.Regions[i].End
+			gapGenomeEnd := readMatchResult.MatchedGenome.Regions[i+1].Start
+			gapRead := &regionvector.Region{
+				Start: gapStart,
+				End:   gapEnd,
+			}
+			gapGenome := &regionvector.Region{
+				Start: gapGenomeStart,
+				End:   gapGenomeEnd,
+			}
+			if gapStart != gapEnd {
+				// if we end up in here, it means our map looks like this
+				// [0,97], [113, 150] -> mid block is missing
+				if gapEnd-gapStart > gapGenome.End-gapGenome.Start {
+					// is insert
+					logrus.Infof("Found insert in %s", read.Header)
+					return
+				}
+				bestSplit := determineBestSplit(genomeIndex, read, readMatchResult.SequenceIndex, gapRead, gapGenome)
+
+				if bestSplit == -1 {
+					// this should not happen because a split should be found every time
+					// even if the split has a bad score (many mismatches, no splice sites, etc)
+					logrus.WithFields(logrus.Fields{
+						"qname": read.Header,
+					}).Fatal("no best split found")
+				}
+
+				logrus.WithFields(logrus.Fields{
+					"split": bestSplit,
+				}).Debug("best split found")
+
+				logrus.WithFields(logrus.Fields{
+					"read":   readMatchResult.MatchedRead,
+					"genome": readMatchResult.MatchedGenome,
+				}).Debug("regions before")
+
+				// when bestSplit is 0 then there is nothing to be added to the left side of the gap
+				if bestSplit > 0 {
+
+					// add the split to the readMatchResult
+					readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(gapRead.Start, gapRead.Start+bestSplit)
+					readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.Start+bestSplit)
+
+					// the read and genome sequences from the start of the gap to the best split (left)
+					readByte := (*read.Sequence)[gapRead.Start : gapRead.Start+bestSplit]
+					genomeByte := (*genomeIndex.Sequences[readMatchResult.SequenceIndex])[gapGenome.Start : gapGenome.Start+bestSplit]
+
+					// add the mismatches to the readMatchResult
+					for i := 0; i < bestSplit; i++ {
+						// add the mismatche to the readMatchResult
+						if readByte[i] != genomeByte[i] {
+							readMatchResult.MismatchesRead = append(readMatchResult.MismatchesRead, gapRead.Start+i)
+						}
+					}
+				}
+
+				logrus.WithFields(logrus.Fields{
+					"read":   readMatchResult.MatchedRead,
+					"genome": readMatchResult.MatchedGenome,
+				}).Debug("regions after left")
+
+				// when bestSplit is equal to the length of the gap then there is nothing
+				// to be added to the right side of the gap
+				if bestSplit < gapRead.Length() {
+
+					logrus.WithFields(logrus.Fields{
+						"gapReadEnd":    gapRead.End,
+						"bestSplit":     bestSplit,
+						"gapReadLength": gapRead.Length(),
+						"left":          gapRead.End - (gapRead.Length() - bestSplit),
+						"right":         gapRead.End,
+					}).Debug("debug split right")
+
+					// add the split to the readMatchResult
+					readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(gapRead.End-(gapRead.Length()-bestSplit), gapRead.End)
+					readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.End-(gapRead.Length()-bestSplit), gapGenome.End)
+
+					// the read and genome sequences from the best split to the end of the gap (right)
+					readByte := (*read.Sequence)[gapRead.End-(gapRead.Length()-bestSplit) : gapRead.End]
+					genomeByte := (*genomeIndex.Sequences[readMatchResult.SequenceIndex])[gapGenome.End-(gapRead.Length()-bestSplit) : gapGenome.End]
+
+					// add the mismatches to the readMatchResult
+					for i := 0; i < gapRead.Length()-bestSplit; i++ {
+						// add the mismatche to the readMatchResult
+						if readByte[i] != genomeByte[i] {
+							readMatchResult.MismatchesRead = append(readMatchResult.MismatchesRead, gapRead.End-(bestSplit-i))
+						}
+					}
+				}
+
+			}
+		}
+	}
+
 	// first get mainAnchor
 	mainAnchor, mainAnchorRank, mainAnchorIndex := readMatchResult.GetLargestAnchor(targetSeqIntronSet)
 	readMainAnchor := readMatchResult.MatchedRead.Regions[mainAnchorIndex]
@@ -971,4 +1072,140 @@ func incomplRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronS
 	} else {
 		readMatchResult.IncompleteMap = false
 	}
+}
+
+func determineBestSplit(
+	genomeIndex *index.GenomeIndex,
+	read *fastq.Read,
+	seqIndex int,
+	gapRead *regionvector.Region,
+	gapGenome *regionvector.Region,
+) int {
+	logrus.WithFields(logrus.Fields{
+		"gapRead":   gapRead,
+		"gapGenome": gapGenome,
+	}).Debug("determining best split")
+
+	// cululative mismatch count for the left and right extensions
+	// for lErrors the index i represents the number of mismatches for the first i positions of the extension
+	// for rErrors the index i represents the number of mismatches for the last i positions of the extension
+	lErrors := make([]int, gapRead.Length()+1)
+	rErrors := make([]int, gapRead.Length()+1)
+
+	lErrors[0] = 0
+	rErrors[0] = 0
+
+	for i := 1; i <= gapRead.Length(); i++ {
+		lErrors[i] = lErrors[i-1]
+		if (*read.Sequence)[gapRead.Start+i-1] != (*genomeIndex.Sequences[seqIndex])[gapGenome.Start+i-1] {
+			lErrors[i]++
+		}
+
+		rErrors[i] = rErrors[i-1]
+		if (*read.Sequence)[gapRead.End-i] != (*genomeIndex.Sequences[seqIndex])[gapGenome.End-i] {
+			rErrors[i]++
+		}
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"lErrors": lErrors,
+		"rErrors": rErrors,
+	}).Debug("determined mismatches")
+
+	// the minimum number of mismatches
+	// the +2 is based on the maximum penalty returned by scoreSpliceSites()
+	minErrors := lErrors[gapRead.Length()] + rErrors[gapRead.Length()] + 2
+	// the position of the split with the minimum number of mismatches
+	minSplit := -1
+
+	// TODO: keep track of the actual mismatch positions
+	// TODO: if no suitable split is found then:
+	// - maybe there is another exon in between if enough bases missing from read
+	// - maybe keep the readpair for unmapped pass
+	for i := 0; i <= gapRead.Length(); i++ {
+
+		lPos := i
+		rPos := gapRead.Length() - i
+
+		numMismatches := lErrors[lPos] + rErrors[rPos]
+
+		donorSiteStart := gapGenome.Start + i
+		donorSiteSeq := (*genomeIndex.Sequences[seqIndex])[donorSiteStart : donorSiteStart+2]
+
+		splitRev := gapRead.Length() - i
+		acceptorSiteStart := gapGenome.End - splitRev
+		acceptorSiteSeq := (*genomeIndex.Sequences[seqIndex])[acceptorSiteStart-2 : acceptorSiteStart]
+
+		var lookOnPlusStrand bool
+		if genomeIndex.GetSequenceInfo(seqIndex / 2).IsForwardStrand {
+			if genomeIndex.IsSequenceForward(seqIndex) {
+				lookOnPlusStrand = true
+			} else {
+				lookOnPlusStrand = false
+			}
+		} else {
+			if genomeIndex.IsSequenceForward(seqIndex) {
+				lookOnPlusStrand = false
+			} else {
+				lookOnPlusStrand = true
+			}
+		}
+
+		// add a penalty if the splice site is not canonical
+		// 2 means that there is no known splice site
+
+		spliceSitePenalty, _ := scoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
+			acceptorSiteSeq[0], acceptorSiteSeq[1], lookOnPlusStrand)
+		numMismatches += spliceSitePenalty
+
+		logrus.WithFields(logrus.Fields{
+			"split":               i,
+			"splice site penalty": spliceSitePenalty,
+			"numMismatches":       numMismatches,
+		}).Debug("possible split")
+
+		if numMismatches <= minErrors {
+			minErrors = numMismatches
+			minSplit = i
+		}
+	}
+
+	return minSplit
+}
+
+func scoreSpliceSites(donorFirstBase byte, donorSecondBase byte, acceptorFirstBase byte,
+	acceptorSecondBase byte, isForwardStrand bool,
+) (int, bool) {
+	if isForwardStrand {
+		if donorFirstBase == byte('G') && donorSecondBase == byte('T') &&
+			acceptorFirstBase == byte('A') && acceptorSecondBase == byte('G') {
+			// canonical splice site GT/AG
+			return 0, true
+		} else if donorFirstBase == byte('G') && donorSecondBase == byte('C') &&
+			acceptorFirstBase == byte('A') && acceptorSecondBase == byte('G') {
+			// non-canonical splice site GC/AG
+			return 1, true
+		} else if donorFirstBase == byte('A') && donorSecondBase == byte('T') &&
+			acceptorFirstBase == byte('A') && acceptorSecondBase == byte('C') {
+			// non-canonical splice site AT/AC
+			return 1, true
+		}
+	} else {
+		if donorFirstBase == byte('C') && donorSecondBase == byte('T') &&
+			acceptorFirstBase == byte('A') && acceptorSecondBase == byte('C') {
+			// canonical splice site GT/AG on rev strand
+			return 0, true
+		} else if donorFirstBase == byte('C') && donorSecondBase == byte('T') &&
+			acceptorFirstBase == byte('G') && acceptorSecondBase == byte('C') {
+			// non-canonical splice site GC/AG on rev strand
+			return 1, true
+		} else if donorFirstBase == byte('G') && donorSecondBase == byte('T') &&
+			acceptorFirstBase == byte('A') && acceptorSecondBase == byte('T') {
+			// non-canonical splice site AT/AC on rev strand
+			return 1, true
+		}
+	}
+
+	// all other non-canonical splice sites
+	return 2, false
 }
