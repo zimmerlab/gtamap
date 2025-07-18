@@ -106,8 +106,10 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex, greedy bool) ([]*
 		}
 
 		dh := mapperutils.NewDiagonalHandlerWithDataCopy(sequenceMatches.MatchesPerDiagonal)
+		initialDepth := 0
 
-		tmpResults := mapReadToSequence(seqIndex, read, genomeIndex, dh, greedy)
+		tmpResults := mapReadToSequence(seqIndex, read, genomeIndex, dh, greedy, &initialDepth)
+		// fmt.Println(x)
 
 		// var result mapperutils.ReadMatchResult
 
@@ -138,7 +140,7 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex, greedy bool) ([]*
 }
 
 func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperutils.DiagonalHandler,
-	result *mapperutils.ReadMatchResult, results *[]*mapperutils.ReadMatchResult, isGreedy bool,
+	result *mapperutils.ReadMatchResult, results *[]*mapperutils.ReadMatchResult, isGreedy bool, currDepth *int,
 ) {
 	logrus.Debug("")
 	logrus.WithFields(logrus.Fields{
@@ -154,26 +156,53 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 	// check if enough kmers can be matched
 
 	// contains the merged region vector of mappable read positions from all remaining diagonals
-	rvRemaining := regionvector.NewRegionVector()
-
-	for _, d := range diagonalsBefore {
-		for _, match := range dh.Diagonals[d] {
-			rvRemaining.AddRegionAndMerge(match.FromRead, match.ToRead)
-		}
-	}
-
-	rvUncovered := result.MatchedRead.UncoveredRegionsBySelfAndOther(rvRemaining, 0, len(*read.Sequence))
-
-	if rvUncovered.Length() >= int(float32(len(*read.Sequence))*0.5) {
-		logrus.WithFields(logrus.Fields{
-			"uncoveredLength": rvUncovered.Length(),
-		}).Debug("uncovered regions are too large")
-		return
-	}
+	// rvRemaining := regionvector.NewRegionVector()
+	//
+	// for _, d := range diagonalsBefore {
+	// 	for _, match := range dh.Diagonals[d] {
+	// 		rvRemaining.AddRegionAndMerge(match.FromRead, match.ToRead)
+	// 	}
+	// }
+	//
+	// rvUncovered := result.MatchedRead.UncoveredRegionsBySelfAndOther(rvRemaining, 0, len(*read.Sequence))
+	//
+	// if rvUncovered.Length() >= int(float32(len(*read.Sequence))*0.5) {
+	// 	logrus.WithFields(logrus.Fields{
+	// 		"uncoveredLength": rvUncovered.Length(),
+	// 	}).Debug("uncovered regions are too large")
+	// 	return
+	// }
 
 	diagonal, score, found := dh.GetBestDiagonal()
 
 	if !found {
+		logrus.Debug("no suitable diagonal found")
+		logrus.Debug("adding partial result to results")
+
+		// check if result is not empty
+		if len(result.MatchedGenome.Regions) == 0 || len(result.MatchedRead.Regions) == 0 {
+			return
+		}
+
+		*results = append(*results, result)
+
+		return
+	}
+
+	if len(result.MatchedRead.Regions) == 0 {
+		// check pot length of best initial diag is smaller than 30, if so, don't map read
+		l := dh.Diagonals[diagonal][len(dh.Diagonals[diagonal])-1].ToRead - dh.Diagonals[diagonal][0].FromRead
+		if l < 30 {
+			return
+		}
+	}
+
+	// if there are more than 3 remaining diags and our best score < 2, we abort and finish in remap
+	// but if we already mapped 3/4 of the read and only lack one more diag, we want to consider it
+	// BAD: many remaining diags and best score < 2
+	// GOOD/OKAY: few remaining diags and best score < 2 (Happens if we already mapped large portion of reads
+	// thus eliminating many of the remaining diags)
+	if score < 2 && len(dh.Diagonals) > 3 {
 		logrus.Debug("no suitable diagonal found")
 		logrus.Debug("adding partial result to results")
 
@@ -202,9 +231,9 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 
 	keepMatch := applyDiagonal(read, genomeIndex, dhNew, diagonal, resultNew)
 
-	if keepMatch {
+	if keepMatch && *currDepth <= config.MaxBranchPoints {
 		// keep on extending the currently best diagonal
-		applyPossibleDiagonals(read, genomeIndex, dhNew, resultNew, results, isGreedy)
+		applyPossibleDiagonals(read, genomeIndex, dhNew, resultNew, results, isGreedy, currDepth)
 	}
 
 	if isGreedy {
@@ -250,7 +279,10 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 
 	dh.RemoveDiagonal(diagonal)
 
-	applyPossibleDiagonals(read, genomeIndex, dh, result, results, false)
+	if *currDepth <= config.MaxBranchPoints {
+		*currDepth++
+		applyPossibleDiagonals(read, genomeIndex, dh, result, results, false, currDepth)
+	}
 }
 
 func findExcludedDiagonal(before []int, after []int, removed int) []int {
@@ -792,7 +824,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 }
 
 func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.GenomeIndex,
-	diagonalHandler *mapperutils.DiagonalHandler, greedy bool,
+	diagonalHandler *mapperutils.DiagonalHandler, greedy bool, currDepth *int,
 ) []*mapperutils.ReadMatchResult {
 	// list of read match results
 	results := make([]*mapperutils.ReadMatchResult, 0)
@@ -804,7 +836,7 @@ func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.Genome
 		MismatchesRead: make([]int, 0),
 	}
 
-	applyPossibleDiagonals(read, genomeIndex, diagonalHandler, result, &results, greedy)
+	applyPossibleDiagonals(read, genomeIndex, diagonalHandler, result, &results, greedy, currDepth)
 
 	finalResults := make([]*mapperutils.ReadMatchResult, 0)
 

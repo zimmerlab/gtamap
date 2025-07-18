@@ -28,6 +28,9 @@ func Filter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
 			} else {
 				okRv = true
 			}
+			if okRv && okFw {
+				break // early break
+			}
 		}
 
 		if okFw {
@@ -52,5 +55,5 @@ func Filter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
 	// fmt.Println("numMatchingFw: ", numMatchingFw)
 	// fmt.Println("numMatchingRw: ", numMatchingRw)
 
-	return numMatching >= 6
+	return numMatchingFw >= 6 || numMatchingRv >= 6
 }
