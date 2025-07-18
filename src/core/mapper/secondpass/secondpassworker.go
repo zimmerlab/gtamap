@@ -218,6 +218,7 @@ func leftRemapAlignmentBlockFromPos(remapStart int, anchorRegion *regionvector.R
 
 func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet *regionvector.RegionSet, read *fastq.Read, genomeIndex *index.GenomeIndex) {
 	readMatchResult.NormalizeRegions()
+	beforeRemap := readMatchResult.Copy()
 
 	if readMatchResult.MatchedGenome.HasGaps() {
 		// get larges anchor in map for right remap
@@ -520,6 +521,25 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 		// if there are no gaps we need to remap overhangs
 
 		correctOverhangs(readMatchResult, targetSeqIntronSet, read, genomeIndex, readMatchResult.MatchedGenome.Regions[0])
+	}
+
+	// in any case we want to reprocess the remapped read again in order to annotate splicesites and new mm (caused by padding)
+	mm := make([]int, 0)
+	readMatchResult.SyncRegions()
+	for i := 0; i < len(readMatchResult.MatchedRead.Regions); i++ {
+		readRegion := readMatchResult.MatchedRead.Regions[i]
+		genomeRegion := readMatchResult.MatchedGenome.Regions[i]
+		for j := 0; j < readRegion.Length(); j++ {
+			posRead := readRegion.Start + j
+			posGenome := genomeRegion.Start + j
+			if (*read.Sequence)[posRead] != (*genomeIndex.Sequences[readMatchResult.SequenceIndex])[posGenome] {
+				mm = append(mm, readRegion.Start+j)
+			}
+		}
+	}
+
+	if len(mm) > len(beforeRemap.MismatchesRead) {
+		*readMatchResult = *beforeRemap
 	}
 
 	// check if read could be mapped/remapped
