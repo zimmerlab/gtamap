@@ -538,7 +538,12 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 		}
 	}
 
+	// TODO: BRANCH
 	if len(mm) > len(beforeRemap.MismatchesRead) {
+		*readMatchResult = *beforeRemap
+	}
+	// TODO: CAN BE REMOVED AFTER BRANCHING
+	if readMatchResult.MatchedGenome.Length() != len(*read.Sequence) {
 		*readMatchResult = *beforeRemap
 	}
 
@@ -635,6 +640,7 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 		remapOptions := rightRemap(readMatchResult, targetSeqIntronSet, read, weakAnchor, region, genomeIndex, mainAnchorRank, startInRead)
 		if remapOptions != nil {
 			bestOption := chooseBestRemap(remapOptions)
+			// TODO: branch if mm == remapMM
 			if len(remapOptions[bestOption].MismatchesRead) < len(readMatchResult.MismatchesRead) {
 
 				// remove weakAnchor
