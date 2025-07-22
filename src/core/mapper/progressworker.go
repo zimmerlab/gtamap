@@ -2,11 +2,12 @@ package mapper
 
 import (
 	"fmt"
-	"github.com/KleinSamuel/gtamap/src/utils"
-	"github.com/sirupsen/logrus"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/KleinSamuel/gtamap/src/utils"
+	"github.com/sirupsen/logrus"
 )
 
 func ProgressWorker(progressChan <-chan bool, wg *sync.WaitGroup) {
@@ -17,7 +18,7 @@ func ProgressWorker(progressChan <-chan bool, wg *sync.WaitGroup) {
 	timerStart := time.Now()
 	timerLast := time.Now()
 
-	for _ = range progressChan {
+	for range progressChan {
 		numTasksDone++
 		if numTasksDone%1_000_000 == 0 {
 

@@ -15,7 +15,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	secondpassChan *secondpass.SecondPassChannel,
 	confidentMatchesChan *confidentmappingpass.ConfidentPassChan,
 	timerChannel chan<- *timer.Timer,
-	paralogMappingChan chan<- *mapperutils.ReadPairMatchResults,
+	// paralogMappingChan chan<- *mapperutils.ReadPairMatchResults,
 ) {
 	keepFw := Filter(readPair.ReadR1.Sequence, genomeIndex)
 	keepRw := Filter(readPair.ReadR2.Sequence, genomeIndex)
@@ -51,12 +51,16 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	}
 
 	// postprocess every potential match
-	for _, resFw := range resultFw {
-		postprocessReadMatch(genomeIndex, readPair.ReadR1, resFw)
-	}
-	for _, resRv := range resultRv {
-		postprocessReadMatch(genomeIndex, readPair.ReadR2, resRv)
-	}
+	// commented out for now
+	// IMPORTANT: Currently leads to bug because read rv is not ajdusted when genome rv is adjsuted.
+	// beofre postprocessReadMatch, every region in MatchedGenome and MatchedRead match 1:1 but
+	// with the current implementation, this 1:1 mapping is destroyed.
+	// for _, resFw := range resultFw {
+	// 	postprocessReadMatch(genomeIndex, readPair.ReadR1, resFw)
+	// }
+	// for _, resRv := range resultRv {
+	// 	postprocessReadMatch(genomeIndex, readPair.ReadR2, resRv)
+	// }
 
 	secondpassChan.Send(&mapperutils.ReadPairMatchResults{
 		ReadPair: readPair,
@@ -79,13 +83,13 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	// 	})
 	// }
 
-	readPairMapping := &mapperutils.ReadPairMatchResults{
-		ReadPair: readPair,
-		Fw:       resultFw,
-		Rv:       resultRv,
-	}
+	// readPairMapping := &mapperutils.ReadPairMatchResults{
+	// 	ReadPair: readPair,
+	// 	Fw:       resultFw,
+	// 	Rv:       resultRv,
+	// }
 	// here it is okay to also pass the pointers of resultFw and resultRv since paralogMappingChan is readOnly
-	paralogMappingChan <- readPairMapping
+	// paralogMappingChan <- readPairMapping
 }
 
 func isStrictConfidentMap(resultFw []*mapperutils.ReadMatchResult, resultRv []*mapperutils.ReadMatchResult) bool {
@@ -98,7 +102,7 @@ func hasConfdentConfiguration(resultFw []*mapperutils.ReadMatchResult, resultRv 
 	for targetId := range mappedIds {
 		fwMapsOfTargetId := fwMapPerSeqIndex[targetId]
 		rvMapsOfTargetId := rvMapPerSeqIndex[targetId]
-		validCombination := mapperutils.GetBestPossibleMappingCombination(fwMapsOfTargetId, rvMapsOfTargetId, 6) // allow at most 6 mm in conf map
+		validCombination := mapperutils.GetBestPossibleMappingCombination(fwMapsOfTargetId, rvMapsOfTargetId)
 		if validCombination != nil {
 			return true, &confidentmappingpass.ConfidentTask{
 				ReadPair: rp,

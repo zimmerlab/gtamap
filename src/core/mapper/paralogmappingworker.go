@@ -68,8 +68,8 @@ func ParalogMappingWorker(needParalogMapChan <-chan *mapperutils.ReadPairMatchRe
 			}
 		}
 		thidPassTask := thirdpass.ThirdPassTask{
-			ReadPairId:  readPairResult.ReadPair.ReadR1.Header,
-			ParalogInfo: paralogMappings,
+			ReadPairId: readPairResult.ReadPair.ReadR1.Header,
+			//ParalogInfo: paralogMappings,
 		}
 		thirdPassChan.Send(&thidPassTask)
 	}
@@ -103,7 +103,7 @@ func getParalogCandidates(alternativeMappingsFw []*mapperutils.ReadMatchResult, 
 	for paralogId := range mappedParalogIds {
 		fwMapsOfParalogId := fwMapPerParalogSeqIndex[paralogId]
 		rvMapsOfParalogId := rvMapPerParalogSeqIndex[paralogId]
-		bestCombination := mapperutils.GetBestPossibleMappingCombination(fwMapsOfParalogId, rvMapsOfParalogId, 1000)
+		bestCombination := mapperutils.GetBestPossibleMappingCombination(fwMapsOfParalogId, rvMapsOfParalogId)
 		if bestCombination != nil {
 			bestParalogMappings[paralogId] = bestCombination
 		}

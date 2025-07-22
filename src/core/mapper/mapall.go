@@ -73,7 +73,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	// contains annotation per target region
 	annotationChan := make(chan map[int]*mapperutils.TargetAnnotation)
 	// contains all read pairs that need to be mapped to the paralog index (all)
-	paralogMappingChan := make(chan *mapperutils.ReadPairMatchResults)
+	// paralogMappingChan := make(chan *mapperutils.ReadPairMatchResults)
 	// contains the string results of the mapping
 	outputChan := make(chan string)
 	// contains information about the duration of each step
@@ -89,9 +89,9 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	waitgroupWriter.Add(1)
 	go OutputWorker(outputChan, &waitgroupWriter, writer)
 
-	var waitgroupParalog sync.WaitGroup
-	waitgroupParalog.Add(1)
-	go ParalogMappingWorker(paralogMappingChan, &waitgroupParalog, genomeIndex, thirdpassChan)
+	// var waitgroupParalog sync.WaitGroup
+	// waitgroupParalog.Add(1)
+	// go ParalogMappingWorker(paralogMappingChan, &waitgroupParalog, genomeIndex, thirdpassChan)
 
 	var waitGroupTimer sync.WaitGroup
 	waitGroupTimer.Add(1)
@@ -103,13 +103,14 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	// start the mapping worker goroutine pool
 	for i := 0; i < numWorkers; i++ {
 		wgMainMappingPass.Add(1)
-		go MapperWorker(i, genomeIndex, &wgMainMappingPass, taskChan, secondpassChan, confidentMappingChan, paralogMappingChan, progressChan, timerChan)
+		// go MapperWorker(i, genomeIndex, &wgMainMappingPass, taskChan, secondpassChan, confidentMappingChan, paralogMappingChan, progressChan, timerChan)
+		go MapperWorker(i, genomeIndex, &wgMainMappingPass, taskChan, secondpassChan, confidentMappingChan, progressChan, timerChan)
 	}
 
 	go MappingTaskProducer(reader, taskChan, maxTasks, specificQname)
 
 	wgMainMappingPass.Wait()
-	close(paralogMappingChan)
+	// close(paralogMappingChan)
 
 	confidentMappingChan.Close()
 	var waitgroupConfidentMap sync.WaitGroup
@@ -127,7 +128,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	waitgroupConfidentMap.Wait()
 	close(annotationChan)
 
-	waitgroupParalog.Wait()
+	// waitgroupParalog.Wait()
 	secondpassChan.Close()
 	wgSecondpass.Wait()
 
