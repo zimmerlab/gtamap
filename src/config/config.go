@@ -1,5 +1,11 @@
 package config
 
+import (
+	"github.com/sirupsen/logrus"
+	"os"
+	"path/filepath"
+)
+
 var env string = "development"
 
 const toolVersion string = "0.2"
@@ -15,6 +21,8 @@ var intronLengthMin = 20
 
 // the maximum error rate allowed per read
 var errorRate float64 = 0.05
+
+var outputDirectory string = "~/gtamap-output"
 
 var (
 	includeReadsImproperlyPaired  bool = false
@@ -62,6 +70,30 @@ func KmerLength() uint8 {
 
 func MaxMismatchPercentage() uint8 {
 	return maxMismatchPercentage
+}
+
+func OutputDirectory() string {
+	// check if directory exists and create it if not
+	if outputDirectory == "" {
+		outputDirectory = "~/gtamap-output"
+	}
+	if outputDirectory[0] == '~' {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			logrus.Fatal("Error getting home directory", err)
+		}
+		outputDirectory = filepath.Join(homeDir, outputDirectory[1:])
+	}
+	if _, err := os.Stat(outputDirectory); os.IsNotExist(err) {
+		err := os.MkdirAll(outputDirectory, os.ModePerm)
+		if err != nil {
+			logrus.Fatal("Error creating output directory", err)
+		}
+	}
+	logrus.WithFields(logrus.Fields{
+		"outputDirectory": outputDirectory,
+	}).Info("Using output directory")
+	return outputDirectory
 }
 
 func IntronLengthMin() int {
