@@ -266,7 +266,10 @@ func main() {
 
 		genomeIndex := index.ReadGenomeIndexByFile(indexFile)
 
-		reader := fastq.InitFromFiles(fastqFwFile, fastqRwFile)
+		reader, errFastq := fastq.InitFromFiles(fastqFwFile, fastqRwFile)
+		if errFastq != nil {
+			logrus.Fatalf("Could not initialize fastq reader: %v", errFastq)
+		}
 
 		writer := datawriter.InitFromPath(*outputFileMap)
 

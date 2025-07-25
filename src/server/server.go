@@ -630,7 +630,7 @@ func serveGenomeAnnotationFile(w http.ResponseWriter, r *http.Request) {
 
 func serveBamFile(w http.ResponseWriter, r *http.Request) {
 
-	filePath := "/home/sam/Projects/gtamap-paper/pipeline/output/ENSG00000173585/ENSG00000173585.gtamap.target.bam"
+	filePath := "/home/sam/Projects/gtamap-paper/pipeline/output/ENSG00000130305/ENSG00000130305.gtamap.target.bam"
 
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		http.Error(w, "File not found", http.StatusNotFound)
@@ -642,7 +642,7 @@ func serveBamFile(w http.ResponseWriter, r *http.Request) {
 
 func serveBamIndexFile(w http.ResponseWriter, r *http.Request) {
 
-	filePath := "/home/sam/Projects/gtamap-paper/pipeline/output/ENSG00000173585/ENSG00000173585.gtamap.target.bam.bai"
+	filePath := "/home/sam/Projects/gtamap-paper/pipeline/output/ENSG00000130305/ENSG00000130305.gtamap.target.bam.bai"
 
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		http.Error(w, "File not found", http.StatusNotFound)

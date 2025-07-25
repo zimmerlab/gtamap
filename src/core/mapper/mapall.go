@@ -46,7 +46,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	bufferSizeMultiplier := 10000
 
 	// TODO: remove after testing
-	maxTasks := 0
+	maxTasks := 50_000_000
 
 	// fw with left normalization required
 	// specificQname := "A00604:202:HLYW3DSXY:3:2114:17020:15562"
@@ -79,11 +79,17 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	// contains information about the duration of each step
 	timerChan := make(chan *timer.Timer)
 	// contains information about the progress of the mapping
-	progressChan := make(chan bool)
+	//progressChan := make(chan bool)
+	progressChan := make(chan Event)
 
 	var waitgroupProgress sync.WaitGroup
 	waitgroupProgress.Add(1)
 	go ProgressWorker(progressChan, &waitgroupProgress)
+
+	progressChan <- Event{
+		Type: EventFileSize,
+		Data: uint64(reader.ProgressReaderR1.TotalBytes + reader.ProgressReaderR2.TotalBytes),
+	}
 
 	var waitgroupWriter sync.WaitGroup
 	waitgroupWriter.Add(1)
@@ -98,7 +104,6 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	go TimerWorker(timerChan, &waitGroupTimer)
 
 	// wait group that keeps track of the mapping goroutines that are still running
-
 	var wgMainMappingPass sync.WaitGroup
 	// start the mapping worker goroutine pool
 	for i := 0; i < numWorkers; i++ {
@@ -107,7 +112,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 		go MapperWorker(i, genomeIndex, &wgMainMappingPass, taskChan, secondpassChan, confidentMappingChan, progressChan, timerChan)
 	}
 
-	go MappingTaskProducer(reader, taskChan, maxTasks, specificQname)
+	go MappingTaskProducer(reader, taskChan, progressChan, maxTasks, specificQname)
 
 	wgMainMappingPass.Wait()
 	// close(paralogMappingChan)
