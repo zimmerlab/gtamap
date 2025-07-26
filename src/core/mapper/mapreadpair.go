@@ -30,6 +30,11 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	}
 
 	resultFw, isMappableFw := MapRead(readPair.ReadR1, genomeIndex, false)
+
+	if !isMappableFw || len(resultFw) == 0 {
+		return
+	}
+
 	resultRv, isMappableRv := MapRead(readPair.ReadR2, genomeIndex, false)
 
 	// TODO: REMOVE DEBUG
@@ -40,13 +45,13 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	// 	debugout.GenerateAlignmentView(genomeIndex, resultRv[0], readPair.ReadR2)
 	// }
 
-	if !isMappableFw || !isMappableRv || len(resultFw) == 0 || len(resultRv) == 0 {
 		logrus.WithFields(logrus.Fields{
 			"isMappableFw":  isMappableFw,
 			"isMappableRv":  isMappableRv,
 			"num resultsFw": len(resultFw),
 			"num resultsRv": len(resultRv),
 		}).Debug("readpair not mappable")
+	if !isMappableRv || len(resultRv) == 0 {
 		return
 	}
 
