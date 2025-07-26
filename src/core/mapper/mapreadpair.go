@@ -175,7 +175,7 @@ func determineLeftNormalizationShiftFw(
 	// find gaps in genome (bases in reference that are not present in read)
 	for regionIndexBeforeGap > -1 {
 
-		gapGenome := result.MatchedGenome.GetGapAfterRegionIndex(regionIndexBeforeGap)
+		gapGenome, _ := result.MatchedGenome.GetGapAfterRegionIndex(regionIndexBeforeGap)
 
 		// skip gaps which have known splice sites
 		if result.SpliceSitesInfo[gapRank] {
@@ -186,8 +186,8 @@ func determineLeftNormalizationShiftFw(
 
 		// only handle gaps in genome that have no mutual gap in read
 		// (only introns or deletions)
-		gapRead := result.MatchedRead.GetGapAfterRegionIndex(regionIndexBeforeGap)
-		if gapRead != nil {
+		gapRead, ok := result.MatchedRead.GetGapAfterRegionIndex(regionIndexBeforeGap)
+		if !ok {
 			logrus.WithFields(logrus.Fields{
 				"gapRead":   gapRead,
 				"gapGenome": gapGenome,
@@ -255,7 +255,7 @@ func determineLeftNormalizationShiftRv(
 	// find gaps in genome (bases in reference that are not present in read)
 	for regionIndexBeforeGap > -1 {
 
-		gapGenome := result.MatchedGenome.GetGapAfterRegionIndex(regionIndexBeforeGap)
+		gapGenome, _ := result.MatchedGenome.GetGapAfterRegionIndex(regionIndexBeforeGap)
 
 		// skip gaps which have known splice sites
 		if result.SpliceSitesInfo[gapRank] {
@@ -266,8 +266,8 @@ func determineLeftNormalizationShiftRv(
 
 		// only handle gaps in genome that have no mutual gap in read
 		// (only introns or deletions)
-		gapRead := result.MatchedRead.GetGapAfterRegionIndex(regionIndexBeforeGap)
-		if gapRead != nil {
+		gapRead, ok := result.MatchedRead.GetGapAfterRegionIndex(regionIndexBeforeGap)
+		if !ok {
 			logrus.WithFields(logrus.Fields{
 				"gapRead":   gapRead,
 				"gapGenome": gapGenome,
