@@ -57,7 +57,7 @@ func (r *ReadMatchResult) HasUnknownSpliceSites() bool {
 
 // GetLargestNachor returns the largest anchor region and also accounts for mms
 // WARN: Before calling this, the func NormalizeRegions needs to be called (once)
-func (r ReadMatchResult) GetLargestAnchor(introns *regionvector.RegionSet) (*regionvector.Region, int, int) {
+func (r ReadMatchResult) GetLargestAnchor(introns *regionvector.RegionSet) (regionvector.Region, int, int) {
 	if !r.MatchedGenome.HasGaps() {
 		return r.MatchedGenome.Regions[0], 0, 0
 	}
@@ -65,7 +65,7 @@ func (r ReadMatchResult) GetLargestAnchor(introns *regionvector.RegionSet) (*reg
 	usedIndices := make(map[int]float32)
 	maxLength := -1
 	mainAnchorIndex := 0
-	var largestAnchor *regionvector.Region
+	var largestAnchor regionvector.Region
 	for len(usedIndices) < len(r.MatchedGenome.Regions) {
 		for i, region := range r.MatchedGenome.Regions {
 
@@ -148,12 +148,12 @@ func (r *ReadMatchResult) NormalizeRegions() {
 		}
 	}
 
-	genomeBlocks := make([]*regionvector.Region, 0)
-	readBlocks := make([]*regionvector.Region, 0)
+	genomeBlocks := make([]regionvector.Region, 0)
+	readBlocks := make([]regionvector.Region, 0)
 
 	startIndex := 0
 
-	hasGap := func(a, b *regionvector.Region) bool {
+	hasGap := func(a, b regionvector.Region) bool {
 		return a.End < b.Start
 	}
 
@@ -174,11 +174,11 @@ func (r *ReadMatchResult) NormalizeRegions() {
 			//	r.MatchedRead.Regions[i].End += padding
 			//	r.MatchedRead.Regions[i+1].Start += padding
 			//}
-			genomeBlocks = append(genomeBlocks, &regionvector.Region{
+			genomeBlocks = append(genomeBlocks, regionvector.Region{
 				Start: r.MatchedGenome.Regions[startIndex].Start,
 				End:   r.MatchedGenome.Regions[i].End,
 			})
-			readBlocks = append(readBlocks, &regionvector.Region{
+			readBlocks = append(readBlocks, regionvector.Region{
 				Start: r.MatchedRead.Regions[startIndex].Start,
 				End:   r.MatchedRead.Regions[i].End,
 			})
@@ -187,11 +187,11 @@ func (r *ReadMatchResult) NormalizeRegions() {
 	}
 
 	if startIndex < len(r.MatchedGenome.Regions) {
-		genomeBlocks = append(genomeBlocks, &regionvector.Region{
+		genomeBlocks = append(genomeBlocks, regionvector.Region{
 			Start: r.MatchedGenome.Regions[startIndex].Start,
 			End:   r.MatchedGenome.Regions[len(r.MatchedGenome.Regions)-1].End,
 		})
-		readBlocks = append(readBlocks, &regionvector.Region{
+		readBlocks = append(readBlocks, regionvector.Region{
 			Start: r.MatchedRead.Regions[startIndex].Start,
 			End:   r.MatchedRead.Regions[len(r.MatchedRead.Regions)-1].End,
 		})
@@ -468,18 +468,24 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 // E.g if genomeRegions contains three regions (with a total length of 150), the read regions also should only
 // contain 3 regions
 func (r *ReadMatchResult) SyncRegions() {
-	adaptedReadRegions := make([]*regionvector.Region, len(r.MatchedGenome.Regions))
-	originalStart := r.MatchedRead.GetFirstRegion().Start
-	for i, region := range r.MatchedGenome.Regions {
-		startRead, err := regionvector.GenomicCoordToReadCoord(originalStart, region.Start, r.MatchedGenome.Regions)
-		if err != nil {
-			logrus.Errorf("Error while converting genomic coord to read coord")
-			logrus.Fatal(err)
+	adaptedReadRegions := make([]regionvector.Region, len(r.MatchedGenome.Regions))
+	originalStart, ok := r.MatchedRead.GetFirstRegion()
+	if ok {
+		for i, region := range r.MatchedGenome.Regions {
+			startRead, err := regionvector.GenomicCoordToReadCoord(originalStart.Start, region.Start, r.MatchedGenome.Regions)
+			if err != nil {
+				logrus.Errorf("Error while converting genomic coord to read coord")
+				logrus.Fatal(err)
+			}
+			stopRead, err := regionvector.GenomicCoordToReadCoord(originalStart.Start, region.End, r.MatchedGenome.Regions)
+			if err != nil {
+				logrus.Errorf("Error while converting genomic coord to read coord")
+				logrus.Fatal(err)
+			}
+			adaptedReadRegions[i] = regionvector.Region{Start: startRead, End: stopRead}
 		}
-		stopRead, err := regionvector.GenomicCoordToReadCoord(originalStart, region.End, r.MatchedGenome.Regions)
-		adaptedReadRegions[i] = &regionvector.Region{Start: startRead, End: stopRead}
+		r.MatchedRead.Regions = adaptedReadRegions
 	}
-	r.MatchedRead.Regions = adaptedReadRegions
 }
 
 // holds all relevant mapping information of potentially several hits per readpair

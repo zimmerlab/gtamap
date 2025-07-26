@@ -32,21 +32,21 @@ type Intron struct {
 	TrueSpliceSite bool
 }
 
-func (r *Region) Length() int {
+func (r Region) Length() int {
 	return r.End - r.Start
 }
 
 type RegionVector struct {
-	Regions []*Region
+	Regions []Region
 }
 
-func (r *Region) String() string {
+func (r Region) String() string {
 	return fmt.Sprintf("[%d, %d]", r.Start, r.End)
 }
 
 func NewRegionVector() *RegionVector {
 	return &RegionVector{
-		Regions: make([]*Region, 0),
+		Regions: make([]Region, 0),
 	}
 }
 
@@ -87,13 +87,13 @@ func (rv *RegionVector) AddRegionNonOverlappingPanic(start int, end int) {
 // It does not allow overlapping regions and will return an error if the region overlaps with any existing region.
 // The regions are sorted in ascending order based on their start position.
 func (rv *RegionVector) AddRegionNonOverlapping(start int, end int) error {
-	return rv.AddRegionObjNonOverlapping(&Region{Start: start, End: end})
+	return rv.AddRegionObjNonOverlapping(Region{Start: start, End: end})
 }
 
 // AddRegionObjNonOverlapping adds a region to the region vector.
 // It does not allow overlapping regions and will return an error if the region overlaps with any existing region.
 // The regions are sorted in ascending order based on their start position.
-func (rv *RegionVector) AddRegionObjNonOverlapping(region *Region) error {
+func (rv *RegionVector) AddRegionObjNonOverlapping(region Region) error {
 	if region.Start == region.End {
 		return fmt.Errorf("region start and end are equal")
 	}
@@ -132,18 +132,18 @@ func (rv *RegionVector) AddRegionObjNonOverlapping(region *Region) error {
 // The resulting region vector may contain overlapping regions and is not sorted.
 // The given region will be appended to the existing regions without any checks.
 func (rv *RegionVector) AddRegion(start int, end int) {
-	rv.Regions = append(rv.Regions, &Region{Start: start, End: end})
+	rv.Regions = append(rv.Regions, Region{Start: start, End: end})
 }
 
 // AddRegionAndMerge adds a region to the region vector and merges it with any overlapping regions.
 // The regions are sorted in ascending order based on their start position.
 func (rv *RegionVector) AddRegionAndMerge(start int, end int) {
-	rv.AddRegionObjAndMerge(&Region{Start: start, End: end})
+	rv.AddRegionObjAndMerge(Region{Start: start, End: end})
 }
 
 // AddRegionObjAndMerge adds a region to the region vector and merges it with any overlapping regions.
 // The regions are sorted in ascending order based on their start position.
-func (rv *RegionVector) AddRegionObjAndMerge(r *Region) {
+func (rv *RegionVector) AddRegionObjAndMerge(r Region) {
 	if len(rv.Regions) == 0 {
 		rv.Regions = append(rv.Regions, r)
 		return
@@ -206,15 +206,15 @@ func (rv *RegionVector) Length() int {
 	return length
 }
 
-func (rv *RegionVector) GetFirstGap() *Region {
+func (rv *RegionVector) GetFirstGap() (Region, bool) {
 	return rv.GetGap(0)
 }
 
 // GetGapAfterRegionIndex returns the gap after the region with given index.
 // It returns nil if the region index is out of bounds or if there is no gap after the region.
-func (rv *RegionVector) GetGapAfterRegionIndex(regionIndex int) *Region {
+func (rv *RegionVector) GetGapAfterRegionIndex(regionIndex int) (Region, bool) {
 	if regionIndex >= len(rv.Regions) {
-		return nil
+		return Region{}, false
 	}
 
 	gap := Region{
@@ -223,19 +223,19 @@ func (rv *RegionVector) GetGapAfterRegionIndex(regionIndex int) *Region {
 	}
 
 	if gap.Start >= gap.End {
-		return nil
+		return Region{}, false
 	}
 
-	return &gap
+	return gap, true
 }
 
-func (rv *RegionVector) GetGap(num int) *Region {
+func (rv *RegionVector) GetGap(num int) (Region, bool) {
 	if num < 0 || num >= len(rv.Regions)-1 {
-		return nil
+		return Region{}, false
 	}
 
 	if len(rv.Regions) <= 1 {
-		return nil
+		return Region{}, false
 	}
 
 	counter := 0
@@ -243,16 +243,16 @@ func (rv *RegionVector) GetGap(num int) *Region {
 	for i := 0; i < len(rv.Regions)-1; i++ {
 		if rv.Regions[i].End != rv.Regions[i+1].Start {
 			if counter == num {
-				return &Region{
+				return Region{
 					Start: rv.Regions[i].End,
 					End:   rv.Regions[i+1].Start,
-				}
+				}, true
 			}
 			counter++
 		}
 	}
 
-	return nil
+	return Region{}, false
 }
 
 // GetGapIndexAfterPos returns the index of the first region after which a gap occurs,
@@ -297,18 +297,18 @@ func (rv *RegionVector) GetGapIndexAfterPos(position int) int {
 //	}
 //}
 
-func (rv *RegionVector) GetFirstRegion() *Region {
+func (rv *RegionVector) GetFirstRegion() (Region, bool) {
 	if len(rv.Regions) == 0 {
-		return nil
+		return Region{}, false
 	}
-	return rv.Regions[0]
+	return rv.Regions[0], true
 }
 
-func (rv *RegionVector) GetLastRegion() *Region {
+func (rv *RegionVector) GetLastRegion() (Region, bool) {
 	if len(rv.Regions) == 0 {
-		return nil
+		return Region{}, false
 	}
-	return rv.Regions[len(rv.Regions)-1]
+	return rv.Regions[len(rv.Regions)-1], true
 }
 
 // GetSizeLeftIncluding returns the size of all regions in the region vector that come before the
@@ -383,7 +383,7 @@ func (i Intron) String() string {
 	return sb.String()
 }
 
-func GenomicCoordToReadCoord(startInRead, genomeCoord int, genomeIntervals []*Region) (int, error) {
+func GenomicCoordToReadCoord(startInRead, genomeCoord int, genomeIntervals []Region) (int, error) {
 	pos := 0
 	totalLength := 0
 	for _, genomicRegion := range genomeIntervals {
@@ -430,7 +430,7 @@ func NewRegionSet(regions []*Intron) *RegionSet {
 }
 
 // IntersectsIntrons check if readMatch is partly inside an intron
-func (rs *RegionSet) IntersectsIntrons(B []*Region) bool {
+func (rs *RegionSet) IntersectsIntrons(B []Region) bool {
 	for _, b := range B {
 		idx := sort.Search(len(rs.Starts), func(i int) bool {
 			return rs.Starts[i] > b.End
@@ -475,7 +475,7 @@ func (rs *RegionSet) GetPrevIntron(pos int) *Intron {
 }
 
 // GetIntersectingIntron returns coords
-func (rs *RegionSet) GetIntersectingIntron(b *Region) *Intron {
+func (rs *RegionSet) GetIntersectingIntron(b Region) *Intron {
 	idx := sort.Search(len(rs.Starts), func(i int) bool {
 		return rs.Starts[i] > b.End
 	})
@@ -493,7 +493,7 @@ func (rs *RegionSet) GetIntersectingIntron(b *Region) *Intron {
 // then counts how many intervals from that point are overlapping
 // stops search as soon as no overlap can be found
 // returns a list of all overlapping introns
-func (rs *RegionSet) GetIntersectingIntrons(b *Region) []*Intron {
+func (rs *RegionSet) GetIntersectingIntrons(b Region) []*Intron {
 	introns := make([]*Intron, 0)
 	idx := sort.Search(len(rs.Starts), func(i int) bool {
 		return rs.Starts[i] >= b.Start
@@ -518,12 +518,12 @@ func (rs *RegionSet) GetIntersectingIntrons(b *Region) []*Intron {
 }
 
 // overlaps is needed to check if a region overlaps an intron and since intron is a different struct compared to region I made an extra func
-func overlaps(a *Intron, b *Region) bool {
+func overlaps(a *Intron, b Region) bool {
 	return a.Start < b.End && b.Start < a.End
 }
 
 // OverlapsByRegion checks if the region vector overlaps with the given region.
-func (rv *RegionVector) OverlapsByRegion(region *Region) bool {
+func (rv *RegionVector) OverlapsByRegion(region Region) bool {
 	return rv.Overlaps(region.Start, region.End)
 }
 
@@ -539,13 +539,17 @@ func (rv *RegionVector) Overlaps(start int, end int) bool {
 
 // MergeAlignmentBlocks merges all blocks of the region vec and overwrites them
 func (rv *RegionVector) MergeAlignmentBlocks() {
-	blocks := make([]*Region, 0)
+	blocks := make([]Region, 0)
 	// if there are no gaps return start and end of region vector
 	if !rv.HasGaps() {
-		blocks = append(blocks, &Region{
-			Start: rv.GetFirstRegion().Start,
-			End:   rv.GetLastRegion().End,
-		})
+		first, firstOk := rv.GetFirstRegion()
+		last, lastOk := rv.GetLastRegion()
+		if firstOk && lastOk {
+			blocks = append(blocks, Region{
+				Start: first.Start,
+				End:   last.End,
+			})
+		}
 	}
 
 	// used to keep track of the read position for the next gap
@@ -560,7 +564,7 @@ func (rv *RegionVector) MergeAlignmentBlocks() {
 		blockStart := rv.Regions[startIndex].Start
 		blockEnd := rv.Regions[indexRegionBeforeGap].End
 
-		blocks = append(blocks, &Region{
+		blocks = append(blocks, Region{
 			Start: blockStart,
 			End:   blockEnd,
 		})
@@ -572,25 +576,31 @@ func (rv *RegionVector) MergeAlignmentBlocks() {
 
 	if indexRegionBeforeGap == -1 && startIndex != 0 {
 		blockStart := rv.Regions[startIndex].Start
-		blockEnd := rv.GetLastRegion().End
+		blockEnd, ok := rv.GetLastRegion()
+		if ok {
+			blocks = append(blocks, Region{
+				Start: blockStart,
+				End:   blockEnd.End,
+			})
+		}
 
-		blocks = append(blocks, &Region{
-			Start: blockStart,
-			End:   blockEnd,
-		})
 	}
 	rv.Regions = blocks
 }
 
 // GetFirstRegion returns start and ends of aligned diagonals / diagonal borders
-func (rv *RegionVector) GetAlignmentBlocks() []*Region {
-	blocks := make([]*Region, 0)
+func (rv *RegionVector) GetAlignmentBlocks() []Region {
+	blocks := make([]Region, 0)
 	// if there are no gaps return start and end of region vector
 	if !rv.HasGaps() {
-		blocks = append(blocks, &Region{
-			Start: rv.GetFirstRegion().Start,
-			End:   rv.GetLastRegion().End,
-		})
+		first, firstOk := rv.GetFirstRegion()
+		last, lastOk := rv.GetLastRegion()
+		if firstOk && lastOk {
+			blocks = append(blocks, Region{
+				Start: first.Start,
+				End:   last.End,
+			})
+		}
 	}
 
 	// used to keep track of the read position for the next gap
@@ -605,7 +615,7 @@ func (rv *RegionVector) GetAlignmentBlocks() []*Region {
 		blockStart := rv.Regions[startIndex].Start
 		blockEnd := rv.Regions[indexRegionBeforeGap].End
 
-		blocks = append(blocks, &Region{
+		blocks = append(blocks, Region{
 			Start: blockStart,
 			End:   blockEnd,
 		})
@@ -617,12 +627,14 @@ func (rv *RegionVector) GetAlignmentBlocks() []*Region {
 
 	if indexRegionBeforeGap == -1 && startIndex != 0 {
 		blockStart := rv.Regions[startIndex].Start
-		blockEnd := rv.GetLastRegion().End
+		blockEnd, ok := rv.GetLastRegion()
+		if ok {
+			blocks = append(blocks, Region{
+				Start: blockStart,
+				End:   blockEnd.End,
+			})
+		}
 
-		blocks = append(blocks, &Region{
-			Start: blockStart,
-			End:   blockEnd,
-		})
 	}
 	return blocks
 }
@@ -650,7 +662,7 @@ func (rv *RegionVector) Equals(other *RegionVector) bool {
 func (rv *RegionVector) Copy() *RegionVector {
 	newRV := NewRegionVector()
 	for _, r := range rv.Regions {
-		newRV.Regions = append(newRV.Regions, &Region{
+		newRV.Regions = append(newRV.Regions, Region{
 			Start: r.Start,
 			End:   r.End,
 		})
@@ -688,21 +700,21 @@ func (rv *RegionVector) RemoveRegion(start int, end int) { // original version
 	}
 	if start <= rv.Regions[0].Start && end >= rv.Regions[len(rv.Regions)-1].End {
 		// the region to remove contains all regions
-		rv.Regions = make([]*Region, 0)
+		rv.Regions = make([]Region, 0)
 		return
 	}
 
-	regions := make([]*Region, 0)
+	regions := make([]Region, 0)
 
 	for _, r := range rv.Regions {
 		if r.End <= start {
 			// the region is before the region to remove
-			regions = append(regions, &Region{r.Start, r.End})
+			regions = append(regions, Region{r.Start, r.End})
 			continue
 		}
 		if r.Start >= end {
 			// the region is after the region to remove
-			regions = append(regions, &Region{r.Start, r.End})
+			regions = append(regions, Region{r.Start, r.End})
 			continue
 		}
 		if r.Start >= start && r.End <= end {
@@ -712,16 +724,16 @@ func (rv *RegionVector) RemoveRegion(start int, end int) { // original version
 		if r.Start < start && r.End > end {
 			// the region to remove is contained within the current region
 			// r.Start == start && r.End == end should be handled in the previous case
-			regions = append(regions, &Region{r.Start, start})
-			regions = append(regions, &Region{end, r.End})
+			regions = append(regions, Region{r.Start, start})
+			regions = append(regions, Region{end, r.End})
 			continue
 		}
 		if r.Start >= start && r.End > end {
-			regions = append(regions, &Region{end, r.End})
+			regions = append(regions, Region{end, r.End})
 			continue
 		}
 		if r.Start < start && r.End <= end {
-			regions = append(regions, &Region{r.Start, start})
+			regions = append(regions, Region{r.Start, start})
 			continue
 		}
 	}
@@ -789,7 +801,7 @@ func (rv *RegionVector) _RemoveRegion(start int, end int) { // optimized
 
 	// pre-allocate with worst-case capacity to avoid slice growth
 	// worst case: one region splits into two, so max +1 additional region
-	newRegions := make([]*Region, 0, len(rv.Regions)+1)
+	newRegions := make([]Region, 0, len(rv.Regions)+1)
 
 	for _, r := range rv.Regions {
 		if r.End <= start {
@@ -809,8 +821,8 @@ func (rv *RegionVector) _RemoveRegion(start int, end int) { // optimized
 		if r.Start < start && r.End > end {
 			// the region to remove is contained within the current region
 			// Split into two regions - only allocate new ones when needed
-			newRegions = append(newRegions, &Region{r.Start, start})
-			newRegions = append(newRegions, &Region{end, r.End})
+			newRegions = append(newRegions, Region{r.Start, start})
+			newRegions = append(newRegions, Region{end, r.End})
 			continue
 		}
 		if r.Start >= start && r.End > end {
@@ -819,7 +831,7 @@ func (rv *RegionVector) _RemoveRegion(start int, end int) { // optimized
 				// Can reuse the existing region
 				newRegions = append(newRegions, r)
 			} else {
-				newRegions = append(newRegions, &Region{end, r.End})
+				newRegions = append(newRegions, Region{end, r.End})
 			}
 			continue
 		}
@@ -829,7 +841,7 @@ func (rv *RegionVector) _RemoveRegion(start int, end int) { // optimized
 				// Can reuse the existing region
 				newRegions = append(newRegions, r)
 			} else {
-				newRegions = append(newRegions, &Region{r.Start, start})
+				newRegions = append(newRegions, Region{r.Start, start})
 			}
 			continue
 		}
