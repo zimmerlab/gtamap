@@ -144,9 +144,9 @@ func testFastqReader() {
 	pathReadsFw := "../resources/reads_first_1.1.fq"
 	//pathReadsRv := "../resources/reads_first_1.2.fq"
 
-	reader := fastq.InitFromPaths(&pathReadsFw, nil)
+	reader, _ := fastq.InitFromPaths(&pathReadsFw, nil)
 
-	read := reader.NextRead()
+	read, _ := reader.NextRead()
 
 	fmt.Println(read.ReadR1)
 	fmt.Println(read.ReadR2)
@@ -189,7 +189,7 @@ func testMapping() {
 	//pathReadsR1 := "/home/sam/Data/sra/SRR29933931.fastq"
 	//var pathReadsR2 *string = nil
 
-	reader := fastq.InitFromPaths(&pathReadsR1, &pathReadsR2)
+	reader, _ := fastq.InitFromPaths(&pathReadsR1, &pathReadsR2)
 
 	writer := datawriter.InitFromPath("./out/reads_ccr9.sam")
 	writer.Write(samHeader.String())
@@ -223,7 +223,7 @@ func testMapping() {
 	taskCounter := 0
 
 	// add each read pair as a mapping task to the task queue
-	for readPair := reader.NextRead(); readPair != nil; readPair = reader.NextRead() {
+	for readPair, _ := reader.NextRead(); readPair != nil; readPair, _ = reader.NextRead() {
 
 		// TODO: remove after testing (only process specific read pair)
 		//name := strings.Split(readPair.ReadR1.Header, " ")[0]

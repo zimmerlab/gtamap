@@ -11,10 +11,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+//var considered int = 0
+//var keepAfterFilter int = 0
+
 func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	secondpassChan *secondpass.SecondPassChannel,
 	confidentMatchesChan *confidentmappingpass.ConfidentPassChan,
 	timerChannel chan<- *timer.Timer,
+	progressChan chan<- Event,
 	// paralogMappingChan chan<- *mapperutils.ReadPairMatchResults,
 ) {
 	keepFw := Filter(readPair.ReadR1.Sequence, genomeIndex)
@@ -28,6 +32,17 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	if !keepFw || !keepRw {
 		return
 	}
+
+	progressChan <- Event{
+		Type: EventTypeReadsAfterFiltering,
+		Data: 1,
+	}
+
+	//keepAfterFilter++
+	//
+	//if keepAfterFilter%100 == 0 {
+	//	fmt.Printf("Keep %d of %d (%.2f)\n", keepAfterFilter, considered, float64(keepAfterFilter)/float64(considered)*100)
+	//}
 
 	resultFw, isMappableFw := MapRead(readPair.ReadR1, genomeIndex, false)
 
@@ -55,6 +70,16 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 		return
 	}
 
+	progressChan <- Event{
+		Type: EventTypeReadsMapped,
+		Data: 1,
+	}
+
+	progressChan <- Event{
+		Type: EventTypeNumMappingLocations,
+		Data: uint64(len(resultFw) + len(resultRv)),
+	}
+
 	// postprocess every potential match
 	// commented out for now
 	// IMPORTANT: Currently leads to bug because read rv is not ajdusted when genome rv is adjsuted.
@@ -78,6 +103,11 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	possibleConfMap, confMap := hasConfdentConfiguration(resultFw, resultRv, readPair)
 	if possibleConfMap {
 		confidentMatchesChan.Send(confMap)
+
+		progressChan <- Event{
+			Type: EventTypeNumConfidentMappings,
+			Data: 1,
+		}
 	}
 	// alternatively use more strict way of determining conf map
 	// if isStrictConfidentMap(resultFw, resultRv) {

@@ -17,7 +17,8 @@ func MapperWorker(workerId int, genomeIndex *index.GenomeIndex,
 	secondpassChan *secondpass.SecondPassChannel,
 	confidentMappingChan *confidentmappingpass.ConfidentPassChan,
 	// paralogMappingChan chan<- *mapperutils.ReadPairMatchResults,
-	progressChan chan<- bool,
+	//progressChan chan<- bool,
+	progressChan chan<- Event,
 	timerChan chan<- *timer.Timer,
 ) {
 	defer wg.Done()
@@ -33,10 +34,15 @@ func MapperWorker(workerId int, genomeIndex *index.GenomeIndex,
 		// 	"task":     task.ID,
 		// }).Debug("Processing task")
 
-		// MapReadPair(task.ReadPair, genomeIndex, secondpassChan, confidentMappingChan, timerChan, paralogMappingChan)
-		MapReadPair(task.ReadPair, genomeIndex, secondpassChan, confidentMappingChan, timerChan)
+		progressChan <- Event{
+			Type: EventTypeReadsProcessed,
+			Data: 1,
+		}
 
-		progressChan <- true
+		// MapReadPair(task.ReadPair, genomeIndex, secondpassChan, confidentMappingChan, timerChan, paralogMappingChan)
+		MapReadPair(task.ReadPair, genomeIndex, secondpassChan, confidentMappingChan, timerChan, progressChan)
+
+		//progressChan <- true
 	}
 
 	logrus.WithFields(logrus.Fields{

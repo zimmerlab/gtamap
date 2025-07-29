@@ -21,7 +21,7 @@ func main() {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	reader := fastq.InitFromPaths(&file1Name, &file2Name)
+	reader, _ := fastq.InitFromPaths(&file1Name, &file2Name)
 
 	recordChan := make(chan fastq.ReadPair, 100)
 	var wg sync.WaitGroup
@@ -33,7 +33,7 @@ func main() {
 	}
 
 	// add each read pair as a mapping task to the task queue
-	for readPair := reader.NextRead(); readPair != nil; readPair = reader.NextRead() {
+	for readPair, _ := reader.NextRead(); readPair != nil; readPair, _ = reader.NextRead() {
 		recordChan <- *readPair
 	}
 

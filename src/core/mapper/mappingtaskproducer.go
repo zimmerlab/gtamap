@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func MappingTaskProducer(reader *fastq.Reader, taskChan chan<- MappingTask,
+func MappingTaskProducer(reader *fastq.Reader, taskChan chan<- MappingTask, progressChan chan<- Event,
 	maxReads int, specificQname string) {
 
 	defer close(taskChan)
@@ -16,14 +16,19 @@ func MappingTaskProducer(reader *fastq.Reader, taskChan chan<- MappingTask,
 	foundSpecificQname := false
 
 	// add each read pair as a mapping task to the task queue
-	for readPair := reader.NextRead(); readPair != nil; readPair = reader.NextRead() {
-		
+	for readPair, _ := reader.NextRead(); readPair != nil; readPair, _ = reader.NextRead() {
+
 		if specificQname != "" {
 			name := strings.Split(readPair.ReadR1.Header, " ")[0]
 			if name != specificQname {
 				continue
 			}
 			foundSpecificQname = true
+		}
+
+		progressChan <- Event{
+			Type: EventBytesProcessed,
+			Data: uint64(reader.ProgressReaderR1.BytesRead + reader.ProgressReaderR2.BytesRead),
 		}
 
 		mappingTask := MappingTask{

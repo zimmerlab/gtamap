@@ -1,0 +1,3 @@
+[submodule "gtamap-frontend/src/js/igv"]
+	path = gtamap-frontend/src/js/igv
+	url = git@github.com:zimmerlab/gtamap-igv.git

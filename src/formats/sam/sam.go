@@ -1,7 +1,11 @@
 package sam
 
 import (
+	"bufio"
 	"fmt"
+	"os"
+	"strconv"
+	"strings"
 )
 
 const Version string = "1.6"
@@ -41,18 +45,26 @@ type RecordPair struct {
 }
 
 type Record struct {
-	Qname         string // id of the read
-	Flag          Flag   // bitwise flag
-	Rname         string // id of the reference
-	Pos           int    // 1-based leftmost mapping position
-	Mapq          int    // mapping quality
-	Cigar         string // CIGAR string (compact representation of alignment)
-	Rnext         string // id of the mate reference
-	Pnext         int    // position of the mate reference
-	Tlen          int    // observed template length
-	Seq           string // read sequence
-	Qual          string // read quality
-	TranscriptIds []int  // ids of the transcripts that this read was aligned to
+	Qname         string   // id of the read
+	Flag          Flag     // bitwise flag
+	Rname         string   // id of the reference
+	Pos           int      // 1-based leftmost mapping position
+	Mapq          int      // mapping quality
+	Cigar         string   // CIGAR string (compact representation of alignment)
+	Rnext         string   // id of the mate reference
+	Pnext         int      // position of the mate reference
+	Tlen          int      // observed template length
+	Seq           string   // read sequence
+	Qual          string   // read quality
+	Tags          []string // optional tags (e.g. NM, XT, etc.)
+	TranscriptIds []int    // ids of the transcripts that this read was aligned to
+}
+
+func (entry *Record) UniformCigar() string {
+	// replace all occurrences of "X" and "=" in the CIGAR string with "M"
+	cigar := strings.ReplaceAll(entry.Cigar, "X", "M")
+	cigar = strings.ReplaceAll(cigar, "=", "M")
+	return cigar
 }
 
 func (entry *Record) String() string {
@@ -281,4 +293,144 @@ func (b *FlagBuilder) SetSupplementary() *FlagBuilder {
 
 func (b *FlagBuilder) Build() Flag {
 	return b.flag
+}
+
+type ParsedHeader struct {
+	Type string
+	Tags map[string]string
+}
+
+type ParsedFile struct {
+	Headers []ParsedHeader
+	Records []Record
+}
+
+func ParseSAMFile(filename string) (*ParsedFile, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("error opening file: %v", err)
+	}
+	defer file.Close()
+
+	samFile := &ParsedFile{
+		Headers: make([]ParsedHeader, 0),
+		Records: make([]Record, 0),
+	}
+
+	scanner := bufio.NewScanner(file)
+	lineNum := 0
+
+	for scanner.Scan() {
+		lineNum++
+		line := strings.TrimSpace(scanner.Text())
+
+		// Skip empty lines
+		if len(line) == 0 {
+			continue
+		}
+
+		// Parse header lines (start with @)
+		if strings.HasPrefix(line, "@") {
+			header, err := parseHeader(line)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing header at line %d: %v", lineNum, err)
+			}
+			samFile.Headers = append(samFile.Headers, header)
+		} else {
+			// Parse alignment record
+			record, err := parseRecord(line)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing record at line %d: %v", lineNum, err)
+			}
+			samFile.Records = append(samFile.Records, record)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading file: %v", err)
+	}
+
+	return samFile, nil
+}
+
+// parseHeader parses a SAM header line
+func parseHeader(line string) (ParsedHeader, error) {
+	fields := strings.Split(line, "\t")
+	if len(fields) < 1 {
+		return ParsedHeader{}, fmt.Errorf("invalid header format")
+	}
+
+	headerType := fields[0][1:] // Remove the @ prefix
+	tags := make(map[string]string)
+
+	for i := 1; i < len(fields); i++ {
+		parts := strings.SplitN(fields[i], ":", 2)
+		if len(parts) == 2 {
+			tags[parts[0]] = parts[1]
+		}
+	}
+
+	return ParsedHeader{
+		Type: headerType,
+		Tags: tags,
+	}, nil
+}
+
+// parseRecord parses a SAM alignment record
+func parseRecord(line string) (Record, error) {
+	fields := strings.Split(line, "\t")
+	if len(fields) < 11 {
+		return Record{}, fmt.Errorf("SAM record must have at least 11 fields, got %d", len(fields))
+	}
+
+	// Parse FLAG
+	flag, err := strconv.Atoi(fields[1])
+	if err != nil {
+		return Record{}, fmt.Errorf("invalid FLAG field: %v", err)
+	}
+
+	// Parse POS
+	pos, err := strconv.Atoi(fields[3])
+	if err != nil {
+		return Record{}, fmt.Errorf("invalid POS field: %v", err)
+	}
+
+	// Parse MAPQ
+	mapq, err := strconv.Atoi(fields[4])
+	if err != nil {
+		return Record{}, fmt.Errorf("invalid MAPQ field: %v", err)
+	}
+
+	// Parse PNEXT
+	pnext, err := strconv.Atoi(fields[7])
+	if err != nil {
+		return Record{}, fmt.Errorf("invalid PNEXT field: %v", err)
+	}
+
+	// Parse TLEN
+	tlen, err := strconv.Atoi(fields[8])
+	if err != nil {
+		return Record{}, fmt.Errorf("invalid TLEN field: %v", err)
+	}
+
+	// Collect optional tags
+	var tags []string
+	if len(fields) > 11 {
+		tags = fields[11:]
+	}
+
+	return Record{
+		Qname: fields[0],
+		Flag:  Flag{flag},
+		Rname: fields[2],
+		Pos:   pos,
+		Mapq:  mapq,
+		Cigar: fields[5],
+		Rnext: fields[6],
+		Pnext: pnext,
+		Tlen:  tlen,
+		Seq:   fields[9],
+		Qual:  fields[10],
+		Tags:  tags,
+	}, nil
 }

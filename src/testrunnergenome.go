@@ -55,9 +55,9 @@ func testFastqReader2() {
 	pathReadsFw := "../resources/reads/manual/reads_ccr9.1.fq"
 	pathReadsRw := "../resources/reads/manual/reads_ccr9.2.fq"
 
-	reader := fastq.InitFromPaths(&pathReadsFw, &pathReadsRw)
+	reader, _ := fastq.InitFromPaths(&pathReadsFw, &pathReadsRw)
 
-	read := reader.NextRead()
+	read, _ := reader.NextRead()
 	fmt.Println(read.ReadR1)
 	fmt.Println(read.ReadR2)
 }
@@ -96,7 +96,7 @@ func testSpecificRead() {
 	outputPath := "/home/sam/Data/gtamap/aldob/ENSG00000136872.sam"
 
 	genomeIndex := index.ReadGenomeIndexByPath(genomeIndexPath)
-	reader := fastq.InitFromPaths(&readsFwPath, &readsRvPath)
+	reader, _ := fastq.InitFromPaths(&readsFwPath, &readsRvPath)
 	writer := datawriter.InitFromPath(outputPath)
 
 	numThreads := 1
@@ -114,7 +114,43 @@ func testTas2ReadsAll() {
 	outputPath := "/home/sam/Data/gtamap/tas2/tas2r4/aligned.sam"
 
 	genomeIndex := index.ReadGenomeIndexByPath(genomeIndexPath)
-	reader := fastq.InitFromPaths(&readsFwPath, &readsRvPath)
+	reader, _ := fastq.InitFromPaths(&readsFwPath, &readsRvPath)
+	writer := datawriter.InitFromPath(outputPath)
+
+	numThreads := 1
+
+	mapper.MapAll(genomeIndex, reader, writer, &numThreads)
+}
+
+func testTas2ReadsAllOnNsun5() {
+
+	genomeIndexPath := "/home/sam/Data/gtamap/nsun5/ENSG00000130305.gtai"
+
+	readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.fastq.gz"
+	readsRvPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_2.fastq.gz"
+
+	outputPath := "/home/sam/Data/gtamap/nsun5/ENSG00000130305.goland.sam"
+
+	genomeIndex := index.ReadGenomeIndexByPath(genomeIndexPath)
+	reader, _ := fastq.InitFromPaths(&readsFwPath, &readsRvPath)
+	writer := datawriter.InitFromPath(outputPath)
+
+	numThreads := 1
+
+	mapper.MapAll(genomeIndex, reader, writer, &numThreads)
+}
+
+func testTas2ReadsAllOnActbRamBug() {
+
+	genomeIndexPath := "/home/sam/Data/gtamap/actb/ENSG00000075624.gtai"
+
+	readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.fastq.gz"
+	readsRvPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_2.fastq.gz"
+
+	outputPath := "/home/sam/Data/gtamap/actb/ENSG00000075624.goland.sam"
+
+	genomeIndex := index.ReadGenomeIndexByPath(genomeIndexPath)
+	reader, _ := fastq.InitFromPaths(&readsFwPath, &readsRvPath)
 	writer := datawriter.InitFromPath(outputPath)
 
 	numThreads := 1
@@ -132,7 +168,7 @@ func testTas2r4DeletionReads() {
 	outputPath := "/home/sam/Data/gtamap/tas2/tas2r4/aligned.with-del.sam"
 
 	genomeIndex := index.ReadGenomeIndexByPath(genomeIndexPath)
-	reader := fastq.InitFromPaths(&readsFwPath, &readsRvPath)
+	reader, _ := fastq.InitFromPaths(&readsFwPath, &readsRvPath)
 	writer := datawriter.InitFromPath(outputPath)
 
 	numThreads := 1
@@ -170,7 +206,7 @@ func main() {
 	logrus.SetFormatter(&logrus.TextFormatter{
 		FullTimestamp: true,
 	})
-	logrus.SetLevel(logrus.DebugLevel)
+	logrus.SetLevel(logrus.InfoLevel)
 
 	//m := deserializeGenomeIndex()
 
@@ -208,8 +244,12 @@ func main() {
 
 	//extractGeneSequenceFromGtfAndFastaForIndex()
 
-	testSpecificRead()
+	//testSpecificRead()
 	//testTas2r4DeletionReads()
 	//testTas2ReadsAll()
+	testTas2ReadsAllOnNsun5()
+	//testTas2ReadsAllOnActbRamBug()
 	//testIndex()
+
+	//analysis.CompareResults()
 }
