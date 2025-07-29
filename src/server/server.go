@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/KleinSamuel/gtamap/src/analysis"
 	"github.com/KleinSamuel/gtamap/src/formats/fasta"
+	"github.com/KleinSamuel/gtamap/src/formats/sam"
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
 	"log"
@@ -35,6 +36,10 @@ func (s *Server) InitRoutes() {
 
 	api.HandleFunc("/upsetDataRead", s.upsetDataRead).Methods("GET")
 	api.HandleFunc("/upsetDataRecordPos", s.upsetDataRecordPos).Methods("GET")
+	api.HandleFunc("/upsetDataRecordPosCigar", s.upsetDataRecordPosCigar).Methods("GET")
+
+	api.HandleFunc("/getRecordXMapperByUpsetElementName", s.getRecordXMapperByUpsetElementName).Methods("GET")
+	api.HandleFunc("/getRecordXMapperByUpsetElementNames", s.getRecordXMapperByUpsetElementNames).Methods("POST")
 
 	//api.HandleFunc("/readNumMatchesDistribution", s.readNumMatchesDistribution).Methods("GET")
 	api.HandleFunc("/readMultimappingDensityData", s.readMultimappingDensityData).Methods("GET")
@@ -150,11 +155,9 @@ func (s *Server) upsetDataRecordPos(w http.ResponseWriter, r *http.Request) {
 			id := record.Qname + "X" + strconv.Itoa(record.Pos)
 
 			if _, exists := recordPosMap[id]; !exists {
-				//recordPosMap[id] = make([]string, 0)
 				recordPosMap[id] = make(map[string]bool)
 			}
 
-			//recordPosMap[id] = append(recordPosMap[id], mapperName)
 			recordPosMap[id][mapperName] = true
 		}
 	}
@@ -176,6 +179,115 @@ func (s *Server) upsetDataRecordPos(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(data)
+}
+
+func (s *Server) upsetDataRecordPosCigar(w http.ResponseWriter, r *http.Request) {
+
+	data := make([]UpsetElement, 0)
+
+	recordPosMap := make(map[string]map[string]bool)
+
+	for mapperName, mapperInfo := range s.AnalysisService.MapperInfos {
+
+		for _, record := range mapperInfo.ParsedFile.Records {
+
+			id := record.Qname + "::" + strconv.Itoa(record.Pos) + "::" + record.UniformCigar()
+
+			if _, exists := recordPosMap[id]; !exists {
+				recordPosMap[id] = make(map[string]bool)
+			}
+
+			recordPosMap[id][mapperName] = true
+		}
+	}
+
+	for id, mappers := range recordPosMap {
+
+		mapperList := make([]string, 0, len(mappers))
+		for mapperName := range mappers {
+			mapperList = append(mapperList, mapperName)
+		}
+
+		elem := UpsetElement{
+			Name: id,
+			Sets: mapperList,
+		}
+
+		data = append(data, elem)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(data)
+}
+
+type UpsetElementNamesDto struct {
+	Names []string `json:"names"`
+}
+
+func (s *Server) getRecordXMapperByUpsetElementNames(w http.ResponseWriter, r *http.Request) {
+
+	var dto UpsetElementNamesDto
+	err := json.NewDecoder(r.Body).Decode(&dto)
+	if err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	fmt.Println("len names:", len(dto.Names))
+}
+
+func testRecords(names []string) {
+
+}
+
+func (s *Server) getRecordXMapperByUpsetElementName(w http.ResponseWriter, r *http.Request) {
+
+	name := r.URL.Query().Get("name")
+
+	fmt.Println("upset element name:", name)
+
+	parts := strings.Split(name, "::")
+
+	if len(parts) < 1 || len(parts) > 3 {
+		http.Error(w, "Invalid name format", http.StatusBadRequest)
+		return
+	}
+
+	qname := parts[0]
+	pos, err := strconv.Atoi(parts[1])
+	if err != nil {
+		http.Error(w, "Invalid position in name", http.StatusBadRequest)
+		return
+	}
+	cigar := ""
+	if len(parts) == 3 {
+		cigar = parts[2]
+	}
+
+	mapperToRecord := make(map[string][]sam.Record)
+
+	for mapperName, mapperInfo := range s.AnalysisService.MapperInfos {
+
+		for _, record := range mapperInfo.ParsedFile.Records {
+
+			qnameMatches := record.Qname == qname
+			posMatches := record.Pos == pos
+			cigarMatches := true
+			if len(parts) == 3 {
+				cigarMatches = record.UniformCigar() == cigar
+			}
+
+			if qnameMatches && posMatches && cigarMatches {
+				if _, exists := mapperToRecord[mapperName]; !exists {
+					mapperToRecord[mapperName] = make([]sam.Record, 0)
+				}
+				mapperToRecord[mapperName] = append(mapperToRecord[mapperName], record)
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(mapperToRecord)
 }
 
 //func (s *Server) readNumMatchesDistribution(w http.ResponseWriter, r *http.Request) {
