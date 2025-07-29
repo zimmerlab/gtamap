@@ -25,7 +25,6 @@ func SecondpassMappingWorker(secondPassChan *SecondPassChannel, wgIncompleteMapp
 	}
 
 	var wgRemap sync.WaitGroup
-	logrus.Info("Started second pass")
 
 	for {
 		// logrus.Info("About to receive from secondPassChan...")
@@ -83,11 +82,11 @@ func remapReadPair(readPairMapping *mapperutils.ReadPairMatchResults, annotation
 func remapRead(readMapping *mapperutils.ReadMatchResult, annotation *mapperutils.TargetAnnotation, read *fastq.Read, genomeIndex *index.GenomeIndex) {
 	// remap IncompleteMap
 	if len(annotation.Introns[0].Regions) == 0 {
-		logrus.Debug("Second pass remap not possible because no introns were inferred.")
+		// logrus.Debug("Second pass remap not possible because no introns were inferred.")
 		return
 	}
 	if readMapping.IncompleteMap || readMapping.MatchedGenome.Length() != len(*read.Sequence) {
-		logrus.Debug("Have to remap readMatchResult due to: IncompleteMap")
+		// logrus.Debug("Have to remap readMatchResult due to: IncompleteMap")
 		incomplRemap(readMapping, annotation.Introns[readMapping.SequenceIndex], read, genomeIndex)
 		return
 	} else {
@@ -246,11 +245,11 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 					// Case I (Deletion)
 					// (READ) +++++++-------------+++++++
 					// (REF) ++++++++++++++++++++++++++++++++
-					logrus.WithFields(logrus.Fields{
-						"Implied gap in read": rGap,
-						"Length of Deletion":  rGap.Length(),
-						"Read Blocks":         readMatchResult.MatchedGenome.Regions,
-					}).Debug("Found deletion in read.")
+					// logrus.WithFields(logrus.Fields{
+					// 	"Implied gap in read": rGap,
+					// 	"Length of Deletion":  rGap.Length(),
+					// 	"Read Blocks":         readMatchResult.MatchedGenome.Regions,
+					// }).Debug("Found deletion in read.")
 					// Just log / use for report later
 					// check if left or right diag can be extended
 					// startInRead := regionvector.GenomicCoordToReadCoord(readMatchResult.MatchedRead.GetFirstRegion().Start, weakAnchor.Start, readMatchResult.MatchedGenome.Regions)
@@ -294,11 +293,11 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 					continue
 				}
 
-				logrus.WithFields(logrus.Fields{
-					"Implied gap in read": rGap,
-					"Read Blocks":         readMatchResult.MatchedGenome.Regions,
-					"Overlapping Introns": overlappingIntrons,
-				}).Debug("Found inconsistent read junction not following inferred intron boundaries")
+				// logrus.WithFields(logrus.Fields{
+				// 	"Implied gap in read": rGap,
+				// 	"Read Blocks":         readMatchResult.MatchedGenome.Regions,
+				// 	"Overlapping Introns": overlappingIntrons,
+				// }).Debug("Found inconsistent read junction not following inferred intron boundaries")
 
 				correctedL := lIntron.Start - rGap.Start
 				correctedR := rIntron.End - rGap.End
@@ -313,6 +312,9 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 				if correctedR != correctedL {
 
 					// startInRead := regionvector.GenomicCoordToReadCoord(readMatchResult.MatchedRead.GetFirstRegion().Start, weakAnchor.Start, readMatchResult.MatchedGenome.Regions)
+					if mainAnchorIndex+1 == len(readMatchResult.MatchedGenome.Regions) {
+						println()
+					}
 					startInRead := readMatchResult.MatchedRead.Regions[mainAnchorIndex+1].Start
 
 					// we check for padding if part of the main anchor is reaching into intron
@@ -401,15 +403,16 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 					//                            |mainAnchor
 					// (READ) ++++----------------+++++++
 					// (REF) ++++++++++++++++++++++++++++++++
-					logrus.WithFields(logrus.Fields{
-						"Implied gap in read": lGap,
-						"Length of Deletion":  lGap.Length(),
-						"Read Blocks":         readMatchResult.MatchedGenome.Regions,
-					}).Debug("Found deletion in read.")
+					// logrus.WithFields(logrus.Fields{
+					// 	"Implied gap in read": lGap,
+					// 	"Length of Deletion":  lGap.Length(),
+					// 	"Read Blocks":         readMatchResult.MatchedGenome.Regions,
+					// }).Debug("Found deletion in read.")
 					// Just log / use for report later
 					// check if left or right diag can be extended
 					regionReadEnd, err := regionvector.GenomicCoordToReadCoord(0, weakAnchor.End, readMatchResult.MatchedGenome.Regions)
 					if err != nil {
+						println(read.Header)
 						logrus.Errorf("Error while converting genomic coord to read coord in read %s", read.Header)
 						logrus.Fatal(err)
 					}
@@ -452,11 +455,11 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 					continue
 				}
 
-				logrus.WithFields(logrus.Fields{
-					"Implied gap in read": lGap,
-					"Read Blocks":         readMatchResult.MatchedGenome.Regions,
-					"Overlapping Introns": overlappingIntrons,
-				}).Debug("Found inconsistent read junction not following inferred intron boundaries")
+				// logrus.WithFields(logrus.Fields{
+				// 	"Implied gap in read": lGap,
+				// 	"Read Blocks":         readMatchResult.MatchedGenome.Regions,
+				// 	"Overlapping Introns": overlappingIntrons,
+				// }).Debug("Found inconsistent read junction not following inferred intron boundaries")
 
 				correctedL := lIntron.Start - lGap.Start
 				correctedR := rIntron.End - lGap.End
@@ -489,6 +492,7 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 
 					regionReadEnd, err := regionvector.GenomicCoordToReadCoord(0, weakAnchor.End, readMatchResult.MatchedGenome.Regions)
 					if err != nil {
+						println(read.Header)
 						logrus.Errorf("Error while converting genomic coord to read coord in read %s", read.Header)
 						logrus.Fatal(err)
 					}
@@ -531,7 +535,6 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 				weakAnchorIndex--
 			}
 		}
-
 	}
 
 	////////////////////////////////////////////////////////
@@ -911,7 +914,7 @@ func incomplRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronS
 				// [0,97], [113, 150] -> mid block is missing
 				if gapEnd-gapStart > gapGenome.End-gapGenome.Start {
 					// is insert
-					logrus.Infof("Found insert in %s", read.Header)
+					// logrus.Infof("Found insert in %s", read.Header)
 					return
 				}
 				bestSplit := determineBestSplit(genomeIndex, read, readMatchResult.SequenceIndex, gapRead, gapGenome)
@@ -924,14 +927,14 @@ func incomplRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronS
 					}).Fatal("no best split found")
 				}
 
-				logrus.WithFields(logrus.Fields{
-					"split": bestSplit,
-				}).Debug("best split found")
+				// logrus.WithFields(logrus.Fields{
+				// 	"split": bestSplit,
+				// }).Debug("best split found")
 
-				logrus.WithFields(logrus.Fields{
-					"read":   readMatchResult.MatchedRead,
-					"genome": readMatchResult.MatchedGenome,
-				}).Debug("regions before")
+				// logrus.WithFields(logrus.Fields{
+				// 	"read":   readMatchResult.MatchedRead,
+				// 	"genome": readMatchResult.MatchedGenome,
+				// }).Debug("regions before")
 
 				// when bestSplit is 0 then there is nothing to be added to the left side of the gap
 				if bestSplit > 0 {
@@ -953,22 +956,22 @@ func incomplRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronS
 					}
 				}
 
-				logrus.WithFields(logrus.Fields{
-					"read":   readMatchResult.MatchedRead,
-					"genome": readMatchResult.MatchedGenome,
-				}).Debug("regions after left")
+				// logrus.WithFields(logrus.Fields{
+				// 	"read":   readMatchResult.MatchedRead,
+				// 	"genome": readMatchResult.MatchedGenome,
+				// }).Debug("regions after left")
 
 				// when bestSplit is equal to the length of the gap then there is nothing
 				// to be added to the right side of the gap
 				if bestSplit < gapRead.Length() {
 
-					logrus.WithFields(logrus.Fields{
-						"gapReadEnd":    gapRead.End,
-						"bestSplit":     bestSplit,
-						"gapReadLength": gapRead.Length(),
-						"left":          gapRead.End - (gapRead.Length() - bestSplit),
-						"right":         gapRead.End,
-					}).Debug("debug split right")
+					// logrus.WithFields(logrus.Fields{
+					// 	"gapReadEnd":    gapRead.End,
+					// 	"bestSplit":     bestSplit,
+					// 	"gapReadLength": gapRead.Length(),
+					// 	"left":          gapRead.End - (gapRead.Length() - bestSplit),
+					// 	"right":         gapRead.End,
+					// }).Debug("debug split right")
 
 					// add the split to the readMatchResult
 					readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(gapRead.End-(gapRead.Length()-bestSplit), gapRead.End)
@@ -1117,10 +1120,10 @@ func determineBestSplit(
 	gapRead *regionvector.Region,
 	gapGenome *regionvector.Region,
 ) int {
-	logrus.WithFields(logrus.Fields{
-		"gapRead":   gapRead,
-		"gapGenome": gapGenome,
-	}).Debug("determining best split")
+	// logrus.WithFields(logrus.Fields{
+	// 	"gapRead":   gapRead,
+	// 	"gapGenome": gapGenome,
+	// }).Debug("determining best split")
 
 	// cululative mismatch count for the left and right extensions
 	// for lErrors the index i represents the number of mismatches for the first i positions of the extension
@@ -1143,10 +1146,10 @@ func determineBestSplit(
 		}
 	}
 
-	logrus.WithFields(logrus.Fields{
-		"lErrors": lErrors,
-		"rErrors": rErrors,
-	}).Debug("determined mismatches")
+	// logrus.WithFields(logrus.Fields{
+	// 	"lErrors": lErrors,
+	// 	"rErrors": rErrors,
+	// }).Debug("determined mismatches")
 
 	// the minimum number of mismatches
 	// the +2 is based on the maximum penalty returned by scoreSpliceSites()
@@ -1194,11 +1197,11 @@ func determineBestSplit(
 			acceptorSiteSeq[0], acceptorSiteSeq[1], lookOnPlusStrand)
 		numMismatches += spliceSitePenalty
 
-		logrus.WithFields(logrus.Fields{
-			"split":               i,
-			"splice site penalty": spliceSitePenalty,
-			"numMismatches":       numMismatches,
-		}).Debug("possible split")
+		// logrus.WithFields(logrus.Fields{
+		// 	"split":               i,
+		// 	"splice site penalty": spliceSitePenalty,
+		// 	"numMismatches":       numMismatches,
+		// }).Debug("possible split")
 
 		if numMismatches <= minErrors {
 			minErrors = numMismatches

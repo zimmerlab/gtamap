@@ -26,7 +26,7 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 		if !ok {
 			break
 		}
-		logrus.Debugf("Third pass: %s", task.ReadPairId)
+		// logrus.Debugf("Third pass: %s", task.ReadPairId)
 
 		var builder strings.Builder
 

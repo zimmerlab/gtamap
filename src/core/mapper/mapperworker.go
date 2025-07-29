@@ -28,10 +28,10 @@ func MapperWorker(workerId int, genomeIndex *index.GenomeIndex,
 
 	for task := range taskChan {
 
-		logrus.WithFields(logrus.Fields{
-			"workerId": workerId,
-			"task":     task.ID,
-		}).Debug("Processing task")
+		// logrus.WithFields(logrus.Fields{
+		// 	"workerId": workerId,
+		// 	"task":     task.ID,
+		// }).Debug("Processing task")
 
 		// MapReadPair(task.ReadPair, genomeIndex, secondpassChan, confidentMappingChan, timerChan, paralogMappingChan)
 		MapReadPair(task.ReadPair, genomeIndex, secondpassChan, confidentMappingChan, timerChan)
