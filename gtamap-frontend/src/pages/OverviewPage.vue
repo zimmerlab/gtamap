@@ -48,6 +48,12 @@
       <div class="tw:flex-1"></div>
     </div>
 
+    <div class="tw:py-2 tw:flex tw:flex-row">
+      <div class="tw:flex-1"></div>
+      <div id="upset-recordposcigar-div" class="tw:flex-1"></div>
+      <div class="tw:flex-1"></div>
+    </div>
+
     <div class="tw:flex tw:flex-row">
 
       <div class="tw:flex-1 tw:p-5">
@@ -290,6 +296,10 @@ export default {
                 type: 'distinctIntersection'
               });
 
+              console.log("Sets and combinations extracted:")
+              console.log(elems)
+              console.log(sets)
+
               // sort the combinations by cardinality (set size) and name
               const nameToCombination = {};
               for (const combination of combinations) {
@@ -329,6 +339,11 @@ export default {
       renderUpsetRecordPos();
     }
 
+    function onClickUpsetRecordPos(set) {
+      console.log("Clicked on upset set")
+      console.log(set)
+    }
+
     function renderUpsetRecordPos() {
       let sets = upsetDataRecordPos.value.sets
       let combinations = upsetDataRecordPos.value.combinations
@@ -339,13 +354,14 @@ export default {
         height: 300,
         selection: selectionUpsetRecordPos.value,
         onHover: onHoverUpsetRecordPos,
+        onClick: onClickUpsetRecordPos,
         color: "darkorchid",
         selectionColor: "#65cc32",
         //hoverHintColor: "#cc9932",
         //hasSelectionColor: "#cc9932",
         //alternatingBackgroundColor: true,
         //hasSelectionOpacity: 0.5,
-        title: "Record Position Assignment",
+        title: "Record Position Assignment (qname + pos)",
         fontSizes: {
           barLabel: "8pt",
           chartLabel: "8pt",
@@ -355,6 +371,98 @@ export default {
         }
       }
       UpSetJS.render(document.getElementById("upset-recordpos-div"), props);
+    }
+
+    // UPSET READ+POS+CIGAR
+    const upsetDataRecordPosCigar = ref({
+      sets: [],
+      combinations: []
+    });
+
+    const getUpsetDataRecordPosCigar = function() {
+
+      ApiService.get("/api/upsetDataRecordPosCigar")
+          .then(response => {
+            if (response.status === 200) {
+
+              const elems = response.data;
+
+              const sets = UpSetJS.extractSets(elems, elem => elem.sets);
+              const combinations = UpSetJS.generateCombinations(sets, {
+                type: 'distinctIntersection'
+              });
+
+              // sort the combinations by cardinality (set size) and name
+              const nameToCombination = {};
+              for (const combination of combinations) {
+                nameToCombination[combination.name] = combination;
+              }
+              const sortSets = (a, b) => {
+                const sizeA = nameToCombination[a.name] ? nameToCombination[a.name].cardinality : 0;
+                const sizeB = nameToCombination[b.name] ? nameToCombination[b.name].cardinality : 0;
+                const sizeDiff = sizeB - sizeA;
+                return sizeDiff !== 0 ? sizeDiff : a.name.localeCompare(b.name);
+              };
+              const sortCombinations = (a, b) => {
+                const sizeDiff = b.cardinality - a.cardinality;
+                return sizeDiff !== 0 ? sizeDiff : a.name.localeCompare(b.name);
+              };
+              sets.sort(sortSets);
+              combinations.sort(sortCombinations);
+              // end sort by cardinality and name
+
+              upsetDataRecordPosCigar.value.sets = sets;
+              upsetDataRecordPosCigar.value.combinations = combinations;
+
+              renderUpsetRecordPosCigar();
+
+            } else {
+              console.error("Failed to fetch upset data");
+            }
+          }).catch(err => {
+        console.log(err);
+      })
+    }
+
+    let selectionUpsetRecordPosCigar = ref(null);
+
+    function onHoverUpsetRecordPosCigar(set) {
+      selectionUpsetRecordPosCigar.value = set;
+      renderUpsetRecordPos();
+    }
+
+    function onClickUpsetRecordPosCigar(set) {
+      console.log("Clicked on upset set read pos cigar")
+      console.log(set)
+    }
+
+    function renderUpsetRecordPosCigar() {
+      let sets = upsetDataRecordPosCigar.value.sets
+      let combinations = upsetDataRecordPosCigar.value.combinations
+      const props = {
+        sets,
+        combinations,
+        width: 800,
+        height: 300,
+        selection: selectionUpsetRecordPosCigar.value,
+        onHover: onHoverUpsetRecordPosCigar,
+        onClick: onClickUpsetRecordPosCigar,
+        color: "darkorchid",
+        selectionColor: "#65cc32",
+        //hoverHintColor: "#cc9932",
+        //hasSelectionColor: "#cc9932",
+        //alternatingBackgroundColor: true,
+        //hasSelectionOpacity: 0.5,
+        title: "Record Position Assignment (qname, pos, cigar)",
+        fontSizes: {
+          barLabel: "8pt",
+          chartLabel: "8pt",
+          axisTick: "8pt",
+          setLabel: "8pt",
+          title: "11pt",
+        }
+      }
+      UpSetJS.render(document.getElementById("upset-recordposcigar-div"), props);
     }
 
     // RIDGE
@@ -466,6 +574,9 @@ export default {
       getUpsetDataRecordPos,
       renderUpsetRecordPos,
       selectionUpsetRecordPos,
+      getUpsetDataRecordPosCigar,
+      renderUpsetRecordPosCigar,
+      selectionUpsetRecordPosCigar,
       getReadSummaryTableData,
       readSummaryTableData,
       tableData,
@@ -479,6 +590,7 @@ export default {
     this.getReadSummaryTableData()
     // this.getUpsetDataRead()
     this.getUpsetDataRecordPos()
+    this.getUpsetDataRecordPosCigar()
     this.createChart()
   },
 }
