@@ -46,7 +46,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	bufferSizeMultiplier := 10000
 
 	// TODO: remove after testing
-	maxTasks := 50_000_000
+	maxTasks := 0
 
 	// fw with left normalization required
 	// specificQname := "A00604:202:HLYW3DSXY:3:2114:17020:15562"
