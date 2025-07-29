@@ -8,8 +8,15 @@ import (
 
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/timer"
-	"github.com/sirupsen/logrus"
 )
+
+type ProgressStats struct {
+	ReadsProcessed       uint64
+	ReadsAfterFiltering  uint64
+	ReadsMapped          uint64
+	NumMappingLocations  uint64
+	NumConfidentMappings uint64
+}
 
 func MapperWorker(workerId int, genomeIndex *index.GenomeIndex,
 	wg *sync.WaitGroup,
@@ -17,15 +24,22 @@ func MapperWorker(workerId int, genomeIndex *index.GenomeIndex,
 	secondpassChan *secondpass.SecondPassChannel,
 	confidentMappingChan *confidentmappingpass.ConfidentPassChan,
 	// paralogMappingChan chan<- *mapperutils.ReadPairMatchResults,
-	//progressChan chan<- bool,
 	progressChan chan<- Event,
 	timerChan chan<- *timer.Timer,
 ) {
 	defer wg.Done()
 
-	logrus.WithFields(logrus.Fields{
-		"workerId": workerId,
-	}).Debug("Started MapperWorker")
+	//logrus.WithFields(logrus.Fields{
+	//	"workerId": workerId,
+	//}).Debug("Started MapperWorker")
+
+	progressStats := &ProgressStats{
+		ReadsProcessed:       0,
+		ReadsAfterFiltering:  0,
+		ReadsMapped:          0,
+		NumMappingLocations:  0,
+		NumConfidentMappings: 0,
+	}
 
 	for task := range taskChan {
 
@@ -34,18 +48,21 @@ func MapperWorker(workerId int, genomeIndex *index.GenomeIndex,
 		// 	"task":     task.ID,
 		// }).Debug("Processing task")
 
-		progressChan <- Event{
-			Type: EventTypeReadsProcessed,
-			Data: 1,
+		// send progress update for every chunk of reads processed
+		progressStats.ReadsProcessed++
+		if progressStats.ReadsProcessed >= 1000 {
+			progressChan <- Event{
+				Type: EventTypeReadsProcessed,
+				Data: uint64(progressStats.ReadsProcessed),
+			}
+			progressStats.ReadsProcessed = 0
 		}
 
-		// MapReadPair(task.ReadPair, genomeIndex, secondpassChan, confidentMappingChan, timerChan, paralogMappingChan)
-		MapReadPair(task.ReadPair, genomeIndex, secondpassChan, confidentMappingChan, timerChan, progressChan)
-
-		//progressChan <- true
+		MapReadPair(task.ReadPair, genomeIndex, secondpassChan, confidentMappingChan, timerChan, progressChan,
+			progressStats)
 	}
 
-	logrus.WithFields(logrus.Fields{
-		"workerId": workerId,
-	}).Debug("Finished MapperWorker")
+	//logrus.WithFields(logrus.Fields{
+	//	"workerId": workerId,
+	//}).Debug("Finished MapperWorker")
 }

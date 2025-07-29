@@ -19,6 +19,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	confidentMatchesChan *confidentmappingpass.ConfidentPassChan,
 	timerChannel chan<- *timer.Timer,
 	progressChan chan<- Event,
+	progressStats *ProgressStats,
 	// paralogMappingChan chan<- *mapperutils.ReadPairMatchResults,
 ) {
 	keepFw := Filter(readPair.ReadR1.Sequence, genomeIndex)
@@ -33,16 +34,14 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 		return
 	}
 
-	progressChan <- Event{
-		Type: EventTypeReadsAfterFiltering,
-		Data: 1,
+	progressStats.ReadsAfterFiltering++
+	if progressStats.ReadsAfterFiltering >= 100 {
+		progressChan <- Event{
+			Type: EventTypeReadsAfterFiltering,
+			Data: progressStats.ReadsAfterFiltering,
+		}
+		progressStats.ReadsAfterFiltering = 0
 	}
-
-	//keepAfterFilter++
-	//
-	//if keepAfterFilter%100 == 0 {
-	//	fmt.Printf("Keep %d of %d (%.2f)\n", keepAfterFilter, considered, float64(keepAfterFilter)/float64(considered)*100)
-	//}
 
 	resultFw, isMappableFw := MapRead(readPair.ReadR1, genomeIndex, false)
 
@@ -70,14 +69,22 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 		return
 	}
 
-	progressChan <- Event{
-		Type: EventTypeReadsMapped,
-		Data: 1,
+	progressStats.ReadsMapped++
+	if progressStats.ReadsMapped >= 100 {
+		progressChan <- Event{
+			Type: EventTypeReadsMapped,
+			Data: progressStats.ReadsMapped,
+		}
+		progressStats.ReadsMapped = 0
 	}
 
-	progressChan <- Event{
-		Type: EventTypeNumMappingLocations,
-		Data: uint64(len(resultFw) + len(resultRv)),
+	progressStats.NumMappingLocations += uint64(len(resultFw) + len(resultRv))
+	if progressStats.NumMappingLocations >= 1000 {
+		progressChan <- Event{
+			Type: EventTypeNumMappingLocations,
+			Data: progressStats.NumMappingLocations,
+		}
+		progressStats.NumMappingLocations = 0
 	}
 
 	// postprocess every potential match
@@ -104,9 +111,13 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	if possibleConfMap {
 		confidentMatchesChan.Send(confMap)
 
-		progressChan <- Event{
-			Type: EventTypeNumConfidentMappings,
-			Data: 1,
+		progressStats.NumConfidentMappings++
+		if progressStats.NumConfidentMappings >= 10 {
+			progressChan <- Event{
+				Type: EventTypeNumConfidentMappings,
+				Data: progressStats.NumConfidentMappings,
+			}
+			progressStats.NumConfidentMappings = 0
 		}
 	}
 	// alternatively use more strict way of determining conf map

@@ -11,6 +11,10 @@ func MappingTaskProducer(reader *fastq.Reader, taskChan chan<- MappingTask, prog
 
 	defer close(taskChan)
 
+	var byteProgress int64 = 0
+	// chunk size for progress updates (1e6 = 1MB)
+	progressChunkSize := int64(1e6)
+
 	// TODO: remove after testing
 	taskCounter := 0
 	foundSpecificQname := false
@@ -26,9 +30,15 @@ func MappingTaskProducer(reader *fastq.Reader, taskChan chan<- MappingTask, prog
 			foundSpecificQname = true
 		}
 
-		progressChan <- Event{
-			Type: EventBytesProcessed,
-			Data: uint64(reader.ProgressReaderR1.BytesRead + reader.ProgressReaderR2.BytesRead),
+		byteProgress += reader.ProgressReaderR1.BytesRead + reader.ProgressReaderR2.BytesRead
+
+		// send progress event if enough bytes have been processed
+		if byteProgress >= progressChunkSize {
+			progressChan <- Event{
+				Type: EventBytesProcessed,
+				Data: uint64(byteProgress),
+			}
+			byteProgress = 0
 		}
 
 		mappingTask := MappingTask{

@@ -239,10 +239,10 @@ func ProgressWorker(progressChan <-chan Event, wg *sync.WaitGroup) {
 			rate := float64(totalReadsProcessed) / elapsed.Minutes() / 1_000_000 // in million reads per minute
 
 			logrus.WithFields(logrus.Fields{
-				"read":        strconv.FormatFloat(math.Round(float64(totalReadsProcessed)/1_000_000*100)/100, 'f', 2, 64) + "M",
-				"delta total": utils.FormatDuration(elapsed),
-				"rate":        strconv.FormatFloat(rate, 'f', 2, 64),
-				"done":        percentFileRead + "%",
+				"reads": strconv.FormatFloat(math.Round(float64(totalReadsProcessed)/1_000_000*100)/100, 'f', 2, 64) + "M",
+				"time":  utils.FormatDuration(elapsed),
+				"rate":  strconv.FormatFloat(rate, 'f', 2, 64) + "M/min",
+				"done":  percentFileRead + "%",
 			}).Info("Progress update")
 		}
 	}

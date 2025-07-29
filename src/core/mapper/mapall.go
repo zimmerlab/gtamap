@@ -79,8 +79,7 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	// contains information about the duration of each step
 	timerChan := make(chan *timer.Timer)
 	// contains information about the progress of the mapping
-	//progressChan := make(chan bool)
-	progressChan := make(chan Event)
+	progressChan := make(chan Event, 1000)
 
 	var waitgroupProgress sync.WaitGroup
 	waitgroupProgress.Add(1)
