@@ -60,6 +60,13 @@ type Record struct {
 	TranscriptIds []int    // ids of the transcripts that this read was aligned to
 }
 
+func (entry *Record) UniformCigar() string {
+	// replace all occurrences of "X" and "=" in the CIGAR string with "M"
+	cigar := strings.ReplaceAll(entry.Cigar, "X", "M")
+	cigar = strings.ReplaceAll(cigar, "=", "M")
+	return cigar
+}
+
 func (entry *Record) String() string {
 	if entry == nil {
 		return ""
