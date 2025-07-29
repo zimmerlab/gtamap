@@ -142,13 +142,15 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 	// mapped position of the read
 	startGenomeFw := 0
 	if resFw != nil {
-		offsetFw := resFw.MatchedGenome.GetFirstRegion().Start
+		firstRegionGenome, _ := resFw.MatchedGenome.GetFirstRegion()
+		offsetFw := firstRegionGenome.Start
 		// if the read is mapped to the reverse strand, we need to calculate the offset because the target sequence
 		// was reverse complemented. therefore the start position in 5'-3' direction of the original sequence is the
 		// end position of the reverse complemented sequence
 		if flagFw.IsReverseStrand() {
 			geneLength := geneEndRelativeToContig - geneStartRelativeToContig
-			offsetFw = geneLength - resFw.MatchedGenome.GetLastRegion().End
+			lastRegionGenome, _ := resFw.MatchedGenome.GetLastRegion()
+			offsetFw = geneLength - lastRegionGenome.End
 		}
 		// +1 because the sam format is 1-based
 		startGenomeFw = geneStartRelativeToContig + offsetFw + 1
@@ -156,10 +158,12 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 
 	startGenomeRv := 0
 	if resRv != nil {
-		offsetRv := resRv.MatchedGenome.GetFirstRegion().Start
+		firstRegionGenome, _ := resRv.MatchedGenome.GetFirstRegion()
+		offsetRv := firstRegionGenome.Start
 		if flagRv.IsReverseStrand() {
 			geneLength := geneEndRelativeToContig - geneStartRelativeToContig
-			offsetRv = geneLength - resRv.MatchedGenome.GetLastRegion().End
+			lastRegionGenome, _ := resRv.MatchedGenome.GetLastRegion()
+			offsetRv = geneLength - lastRegionGenome.End
 		}
 		// +1 because the sam format is 1-based
 		startGenomeRv = geneStartRelativeToContig + offsetRv + 1

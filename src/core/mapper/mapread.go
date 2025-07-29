@@ -488,7 +488,7 @@ func annotateSpliceSites(read *fastq.Read, genomeIndex *index.GenomeIndex, resul
 	seqIndex := result.SequenceIndex
 	for indexRegionBeforeGap > -1 {
 
-		gapGenome := result.MatchedGenome.GetGapAfterRegionIndex(indexRegionBeforeGap)
+		gapGenome, _ := result.MatchedGenome.GetGapAfterRegionIndex(indexRegionBeforeGap)
 
 		donorSiteStart := gapGenome.Start
 		donorSiteSeq := (*genomeIndex.Sequences[seqIndex])[donorSiteStart : donorSiteStart+2]
@@ -545,8 +545,8 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 			// loop through all gaps in the read (-1 means there is no more gap)
 			for indexRegionBeforeGap > -1 {
 
-				gapRead := result.MatchedRead.GetGapAfterRegionIndex(indexRegionBeforeGap)
-				gapGenome := result.MatchedGenome.GetGapAfterRegionIndex(indexRegionBeforeGap)
+				gapRead, _ := result.MatchedRead.GetGapAfterRegionIndex(indexRegionBeforeGap)
+				gapGenome, gapGenomeOk := result.MatchedGenome.GetGapAfterRegionIndex(indexRegionBeforeGap)
 
 				if !gapGenomeOk {
 					// logrus.WithFields(logrus.Fields{
@@ -688,13 +688,15 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 		}
 
 		// there are unmatched positions in front of the read
-		if result.MatchedRead.GetFirstRegion().Start > 0 {
+		firstRegionRead, _ := result.MatchedRead.GetFirstRegion()
+		if firstRegionRead.Start > 0 {
 
 			startRead := 0
-			endRead := result.MatchedRead.GetFirstRegion().Start
+			endRead := firstRegionRead.Start
 			extensionLength := endRead - startRead
 
-			startGenome := result.MatchedGenome.GetFirstRegion().Start - extensionLength
+			firstRegionGenome, _ := result.MatchedGenome.GetFirstRegion()
+			startGenome := firstRegionGenome.Start - extensionLength
 
 			readSequence := (*read.Sequence)[startRead:endRead]
 
@@ -764,13 +766,15 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 		// }).Debug("match after left extension")
 
 		// there are unmatched positions in the back of the read
-		if result.MatchedRead.GetLastRegion().End < len(*read.Sequence) {
+		lastRegionRead, _ := result.MatchedRead.GetLastRegion()
+		if lastRegionRead.End < len(*read.Sequence) {
 
-			startRead := result.MatchedRead.GetLastRegion().End
+			startRead := lastRegionRead.End
 			endRead := len(*read.Sequence)
 			extensionLength := endRead - startRead
 
-			startGenome := result.MatchedGenome.GetLastRegion().End
+			lastRegionGenome, _ := result.MatchedGenome.GetLastRegion()
+			startGenome := lastRegionGenome.End
 
 			readSequence := (*read.Sequence)[startRead:endRead]
 
@@ -867,8 +871,8 @@ func determineBestSplit(
 	genomeIndex *index.GenomeIndex,
 	read *fastq.Read,
 	seqIndex int,
-	gapRead *regionvector.Region,
-	gapGenome *regionvector.Region,
+	gapRead regionvector.Region,
+	gapGenome regionvector.Region,
 ) int {
 	// logrus.WithFields(logrus.Fields{
 	// 	"gapRead":   gapRead,
