@@ -54,41 +54,9 @@
       <div class="tw:flex-1"></div>
     </div>
 
-    <div class="tw:flex tw:flex-row">
-
-      <div class="tw:flex-1 tw:p-5">
-        <div>GTAMap</div>
-        <w-table
-            :loading="tableData.loading"
-            :headers="tableData.headers"
-            :items="readSummaryTableData.items"
-            fixed-headers
-            :pagination="tableData.pagination"
-            :selectable-rows="1"
-            @row-select="selectedRead = $event"
-            style="height: 250px"
-            class="tw:text-xs">
-          >
-        </w-table>
-      </div>
-
-      <div class="tw:flex-1 tw:p-5">
-        <div>Other Mappers</div>
-        <w-table
-            :loading="tableData.loading"
-            :headers="tableData.headers"
-            :items="readSummaryTableData.items"
-            fixed-headers
-            :pagination="tableData.pagination"
-            :selectable-rows="1"
-            @row-select="selectedRead = $event"
-            style="height: 250px"
-            class="tw:text-xs">
-          >
-        </w-table>
-      </div>
+    <div class="tw:flex tw:flex-row tw:px-20 tw:mb-10">
+      <ReadSummaryTable class="tw:flex-1"></ReadSummaryTable>
     </div>
-
 
     <div class="tw:my-5 tw:mb-32">
       <div id="igv-div" class="tw:h-[1000px]"></div>
@@ -108,10 +76,12 @@ import * as d3 from 'd3'
 
 import MapperMultimappingHeatmap from "../components/MapperMultimappingHeatmap.vue";
 import MapperMultimappingParallelPlot from "../components/MapperMultimappingParallelPlot.vue";
+import ReadSummaryTable from "../components/ReadSummaryTable.vue";
 
 export default {
   name: "OverviewPage",
   components: {
+    ReadSummaryTable,
     MapperMultimappingHeatmap,
     MapperMultimappingParallelPlot
   },

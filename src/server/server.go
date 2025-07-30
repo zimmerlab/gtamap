@@ -8,6 +8,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
+	"github.com/sirupsen/logrus"
 	"log"
 	"math"
 	"net/http"
@@ -32,7 +33,7 @@ func (s *Server) InitRoutes() {
 
 	api.HandleFunc("/genomeConfig", getTestGenomeConfig).Methods("GET")
 
-	api.HandleFunc("/readSummaryTable", getReadInfo).Methods("GET")
+	api.HandleFunc("/readSummaryTable", s.getReadSummaryTable).Methods("GET")
 
 	api.HandleFunc("/upsetDataRead", s.upsetDataRead).Methods("GET")
 	api.HandleFunc("/upsetDataRecordPos", s.upsetDataRecordPos).Methods("GET")
@@ -764,9 +765,9 @@ func serveBamIndexFile(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, filePath)
 }
 
-func getReadInfo(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getReadSummaryTable(w http.ResponseWriter, r *http.Request) {
 
-	response := analysis.ReadInfoTable()
+	response := s.ReadSummaryTableData()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
@@ -816,4 +817,177 @@ func getTestGenomeConfig(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+type MapperResult struct {
+	Name   string `json:"name"`
+	Path   string `json:"path"`
+	Target string `json:"target"`
+}
+
+// GetMapperResults retrieves the results of mappers from the output directory.
+// It assumes that the output directory contains files named in the format "mapperName.target.sam".
+func (s *Server) GetMapperResults() []MapperResult {
+
+	results := make([]MapperResult, 0)
+
+	files, err := os.ReadDir(GetOutputDirectory())
+	if err != nil {
+		logrus.Error("Error reading output directory: ", err)
+		return results
+	}
+
+	for _, file := range files {
+		if strings.HasSuffix(file.Name(), ".sam") {
+			parts := strings.Split(file.Name(), ".")
+
+			if len(parts) < 3 {
+				logrus.Warn("Skipping mapper file: ", file.Name())
+				continue
+			}
+
+			result := MapperResult{
+				Name:   parts[1],
+				Path:   GetOutputDirectory() + file.Name(),
+				Target: parts[2],
+			}
+
+			results = append(results, result)
+		}
+	}
+
+	return results
+}
+
+func (s *Server) LoadMapperResults() {
+
+	results := s.GetMapperResults()
+
+	for _, result := range results {
+
+		if err := s.AnalysisService.AddMapperInfo(result.Name, result.Path, result.Target); err != nil {
+			log.Fatalf("Error initializing analysis service: %v", err)
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"mapperName":        result.Name,
+			"mapperSamFilePath": result.Path,
+			"target":            result.Target,
+		}).Debug("added mapper result")
+	}
+}
+
+type ReadOverviewInfo struct {
+	Qname        string              `json:"qname"`
+	Length       int                 `json:"readLength"`
+	NumMappedBy  int                 `json:"numMappedBy"`
+	MappedBy     []string            `json:"mappedBy"`
+	NumLocations int                 `json:"numLocations"`
+	Locations    []*ReadLocationInfo `json:"locations"`
+}
+
+type ReadLocationInfo struct {
+	Pair          string   `json:"pairType"` // "first" or "second"
+	Contig        string   `json:"contigName"`
+	Strand        bool     `json:"isForwardStrand"` // true for forward strand, false for reverse strand
+	Position      int      `json:"position"`
+	CigarString   string   `json:"cigarString"`
+	NumMismatches int      `json:"numMismatches"`
+	NumGaps       int      `json:"numGaps"`
+	NumMappedBy   int      `json:"numMappedBy"`
+	MappedBy      []string `json:"mappedBy"`
+	ReadIndices   []int    `json:"readIndices"`
+}
+
+func (s *Server) ReadSummaryTableData() []ReadOverviewInfo {
+
+	readSummary := make(map[string]*ReadOverviewInfo)
+
+	for mapperName, info := range s.AnalysisService.MapperInfos {
+
+		for qname, records := range info.RecordsByQname {
+
+			if _, exists := readSummary[qname]; !exists {
+				readSummary[qname] = &ReadOverviewInfo{
+					Qname:        qname,
+					Length:       len(records[0].Seq),
+					NumMappedBy:  0,
+					MappedBy:     make([]string, 0),
+					NumLocations: 0,
+					Locations:    make([]*ReadLocationInfo, 0),
+				}
+			}
+
+			readInfo := readSummary[qname]
+			readInfo.MappedBy = append(readInfo.MappedBy, mapperName)
+
+			for _, record := range records {
+
+				found := false
+				for _, location := range readInfo.Locations {
+					if location.Strand == !record.Flag.IsReverseStrand() &&
+						location.Contig == record.Rname &&
+						location.Position == record.Pos &&
+						location.CigarString == record.UniformCigar() {
+
+						// do not add the same mapper multiple times (could be because the same location is used
+						// for multiple read pairs, especially in the current 0.2 gtamap version)
+						for _, mappedBy := range location.MappedBy {
+							if mappedBy == mapperName {
+								found = true
+								break
+							}
+						}
+
+						if found {
+							break
+						}
+
+						location.MappedBy = append(location.MappedBy, mapperName)
+						location.ReadIndices = append(location.ReadIndices, record.IndexInSam)
+						location.NumMappedBy++
+						found = true
+						break
+					}
+				}
+
+				if found {
+					continue
+				}
+
+				pair := "none"
+				if record.Flag.IsFirstInPair() {
+					pair = "first"
+				} else if record.Flag.IsSecondInPair() {
+					pair = "second"
+				}
+
+				locationInfo := ReadLocationInfo{
+					Pair:          pair,
+					Contig:        record.Rname,
+					Strand:        !record.Flag.IsReverseStrand(),
+					Position:      record.Pos,
+					CigarString:   record.UniformCigar(),
+					NumMismatches: -1,
+					NumGaps:       -1,
+					NumMappedBy:   1,
+					MappedBy:      []string{mapperName},
+					ReadIndices:   make([]int, 0),
+				}
+
+				readInfo.Locations = append(readInfo.Locations, &locationInfo)
+				locationInfo.ReadIndices = append(locationInfo.ReadIndices, record.IndexInSam)
+			}
+		}
+	}
+
+	reads := make([]ReadOverviewInfo, 0)
+
+	for _, readInfo := range readSummary {
+		readInfo.NumMappedBy = len(readInfo.MappedBy)
+		readInfo.NumLocations = len(readInfo.Locations)
+		reads = append(reads, *readInfo)
+	}
+
+	return reads
 }

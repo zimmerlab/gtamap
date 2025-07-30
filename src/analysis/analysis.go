@@ -11,6 +11,7 @@ type AnalysisService struct {
 }
 
 type MapperInfo struct {
+	Target         string // target | genome
 	ParsedFile     *sam.ParsedFile
 	RecordsByQname map[string][]*sam.Record
 }
@@ -22,7 +23,7 @@ func NewAnalysisService() *AnalysisService {
 	}
 }
 
-func (service *AnalysisService) AddMapperInfo(mapperName string, mapperSamFilePath string) error {
+func (service *AnalysisService) AddMapperInfo(mapperName string, mapperSamFilePath string, target string) error {
 
 	parsedFile, err := sam.ParseSAMFile(mapperSamFilePath)
 	if err != nil {
@@ -34,6 +35,7 @@ func (service *AnalysisService) AddMapperInfo(mapperName string, mapperSamFilePa
 		service.MapperInfos[mapperName] = &MapperInfo{
 			ParsedFile:     parsedFile,
 			RecordsByQname: make(map[string][]*sam.Record),
+			Target:         target,
 		}
 	}
 

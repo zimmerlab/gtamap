@@ -1,20 +1,20 @@
 <template>
   <w-table
-    :loading="tableData.loading"
-    :headers="tableData.headers"
-    :items="readSummaryTableData.items"
-    fixed-headers
-    :pagination="tableData.pagination"
-    :selectable-rows="1"
-    @row-select="selectedRead = $event"
-    class="tw:text-xs"
-    expandable-rows>
+      :loading="tableData.loading"
+      :headers="tableData.headers"
+      :items="readSummaryTableData.items"
+      fixed-headers
+      :pagination="tableData.pagination"
+      :selectable-rows="1"
+      @row-select="selectedRead = $event"
+      class="tw:text-xs"
+      expandable-rows>
 
     <template #item-cell.readDetails="{ item }">
       <w-button @click.stop="openReadDetails(item)" xs>view</w-button>
     </template>
 
-      <template #item-cell.mappedBy="{ item }">
+    <template #item-cell.mappedBy="{ item }">
         <span v-if="Array.isArray(item.mappedBy)">
           <w-tag
               v-for="(val, idx) in item.mappedBy"
@@ -23,38 +23,38 @@
               color="primary"
           >{{ val }}</w-tag>
         </span>
-        <span v-else>{{ item.mappedBy }}</span>
-      </template>
+      <span v-else>{{ item.mappedBy }}</span>
+    </template>
 
-      <template #row-expansion="{ item }">
-        <w-table
+    <template #row-expansion="{ item }">
+      <w-table
           :headers="tableData.expandedHeaders"
           :items="item.locations">
 
-          <template #item-cell.pairType="{ item }">
+        <template #item-cell.pairType="{ item }">
             <span
                 v-if="item.pairType === 'first'"
             >R1</span>
-            <span
-                v-else-if="item.pairType === 'second'"
-            >R2</span>
-            <span
-                v-else
-            >NA</span>
-          </template>
+          <span
+              v-else-if="item.pairType === 'second'"
+          >R2</span>
+          <span
+              v-else
+          >NA</span>
+        </template>
 
-          <template #item-cell.isForwardStrand="{ item }">
+        <template #item-cell.isForwardStrand="{ item }">
             <span
                 v-if="item.isForwardStrand"
                 color="primary"
             >+</span>
-            <span
-                v-else
-                color="primary"
-            >-</span>
-          </template>
+          <span
+              v-else
+              color="primary"
+          >-</span>
+        </template>
 
-          <template #item-cell.mappedBy="{ item }">
+        <template #item-cell.mappedBy="{ item }">
             <span v-if="Array.isArray(item.mappedBy)">
                 <w-tag
                     v-for="(val, idx) in item.mappedBy"
@@ -63,10 +63,10 @@
                     color="primary"
                 >{{ val }}</w-tag>
               </span>
-            <span v-else>{{ item.mappedBy }}</span>
-          </template>
-        </w-table>
-      </template>
+          <span v-else>{{ item.mappedBy }}</span>
+        </template>
+      </w-table>
+    </template>
   </w-table>
 </template>
 
@@ -75,7 +75,7 @@
 import {ref, inject, onMounted} from 'vue'
 
 export default {
-  name: 'TablePage',
+  name: 'ReadSummaryTable',
   setup() {
 
     const ApiService = inject("http")
