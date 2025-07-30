@@ -145,10 +145,11 @@ export default {
 
               console.log(response.data)
 
-              igvInfo = ref({
+              igvInfo.value ={
                 genome: response.data.genomeConfig,
                 tracks: response.data.tracks,
-              })
+                location: response.data.location,
+              }
 
               initializeIgv()
             }
@@ -165,7 +166,7 @@ export default {
       // the genome information is loaded from API
       const options = {
         genome: igvInfo.value.genome,
-        locus: "3:45884425-45903174"
+        locus: igvInfo.value.location
       }
 
       igv.createBrowser(igvDiv.value, options)
@@ -557,11 +558,11 @@ export default {
   },
   mounted() {
     this.getIgvConfig()
-    this.getReadSummaryTableData()
+    // this.getReadSummaryTableData()
     // this.getUpsetDataRead()
-    this.getUpsetDataRecordPos()
-    this.getUpsetDataRecordPosCigar()
-    this.createChart()
+    // this.getUpsetDataRecordPos()
+    // this.getUpsetDataRecordPosCigar()
+    // this.createChart()
   },
 }
 </script>

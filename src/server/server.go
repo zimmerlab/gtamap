@@ -31,7 +31,8 @@ func (s *Server) InitRoutes() {
 
 	api.HandleFunc("/health", s.healthCheck).Methods("GET")
 
-	api.HandleFunc("/genomeConfig", getTestGenomeConfig).Methods("GET")
+	//api.HandleFunc("/genomeConfig", getTestGenomeConfig).Methods("GET")
+	api.HandleFunc("/genomeConfig", getTargetRegionIgvConfig).Methods("GET")
 
 	api.HandleFunc("/readSummaryTable", s.getReadSummaryTable).Methods("GET")
 
@@ -53,9 +54,13 @@ func (s *Server) InitRoutes() {
 
 	download.HandleFunc("/genome/fasta", serveGenomeFastaFile).Methods("GET")
 	download.HandleFunc("/genome/fastaIndex", serveGenomeFastaIndexFile).Methods("GET")
+
 	download.HandleFunc("/genome/gtf", serveGenomeAnnotationFile).Methods("GET")
 	download.HandleFunc("/gtamap/bam", serveBamFile).Methods("GET")
 	download.HandleFunc("/gtamap/bamIndex", serveBamIndexFile).Methods("GET")
+
+	download.HandleFunc("/targetRegion/fasta", serveTargetRegionFastaFile).Methods("GET")
+	download.HandleFunc("/targetRegion/fastaIndex", serveTargetRegionFastaIndexFile).Methods("GET")
 }
 
 func (s *Server) Start() {
@@ -705,6 +710,22 @@ func (s *Server) mapperDistances(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
+func serveTargetRegionFastaFile(w http.ResponseWriter, r *http.Request) {
+	if _, err := os.Stat(GetTargetFasta()); os.IsNotExist(err) {
+		http.Error(w, "File not found", http.StatusNotFound)
+		return
+	}
+	http.ServeFile(w, r, GetTargetFasta())
+}
+
+func serveTargetRegionFastaIndexFile(w http.ResponseWriter, r *http.Request) {
+	if _, err := os.Stat(GetTargetFastaIndex()); os.IsNotExist(err) {
+		http.Error(w, "File not found", http.StatusNotFound)
+		return
+	}
+	http.ServeFile(w, r, GetTargetFastaIndex())
+}
+
 func serveGenomeFastaFile(w http.ResponseWriter, r *http.Request) {
 
 	filePath := "/home/sam/Projects/gtamap-paper/pipeline/input/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
@@ -789,6 +810,51 @@ type IgvTrackConfig struct {
 	Type        string `json:"type"`
 }
 
+func getTargetRegionIgvConfig(w http.ResponseWriter, r *http.Request) {
+
+	genomeConfig := IgvGenomeConfig{
+		Id:       "Target Region (chr3:123456-789012)",
+		Label:    "BASE_GENOME_LABEL",
+		FastaUrl: "http://localhost:8000/download/targetRegion/fasta",
+		IndexUrl: "http://localhost:8000/download/targetRegion/fastaIndex",
+	}
+
+	//track := IgvTrackConfig{
+	//	Name:        "TEST_TRACK",
+	//	Format:      "bam",
+	//	DisplayMode: "EXPANDED",
+	//	Url:         "http://localhost:8000/download/gtamap/bam",
+	//	IndexUrl:    "http://localhost:8000/download/gtamap/bamIndex",
+	//	Type:        "alignment",
+	//}
+
+	tracks := make([]IgvTrackConfig, 0)
+	//tracks = append(tracks, track)
+
+	// convert global location to local location
+	targetRegionStr := GetTargetRegion()
+	startEnd := strings.Split(strings.Split(targetRegionStr, ":")[1], "-")
+	start, err := strconv.Atoi(startEnd[0])
+	if err != nil {
+		http.Error(w, "Invalid start position in target region", http.StatusBadRequest)
+	}
+	end, err := strconv.Atoi(startEnd[1])
+	if err != nil {
+		http.Error(w, "Invalid end position in target region", http.StatusBadRequest)
+	}
+	targetRegionStrLocal := fmt.Sprintf("%s:%d-%d", GetTargetName(), 1, end-start)
+
+	response := map[string]interface{}{
+		"genomeConfig": genomeConfig,
+		"tracks":       tracks,
+		"location":     targetRegionStrLocal,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+
+}
+
 func getTestGenomeConfig(w http.ResponseWriter, r *http.Request) {
 
 	genomeConfig := IgvGenomeConfig{
@@ -831,7 +897,7 @@ func (s *Server) GetMapperResults() []MapperResult {
 
 	results := make([]MapperResult, 0)
 
-	files, err := os.ReadDir(GetOutputDirectory())
+	files, err := os.ReadDir(GetRunDir())
 	if err != nil {
 		logrus.Error("Error reading output directory: ", err)
 		return results
@@ -848,7 +914,7 @@ func (s *Server) GetMapperResults() []MapperResult {
 
 			result := MapperResult{
 				Name:   parts[1],
-				Path:   GetOutputDirectory() + file.Name(),
+				Path:   GetRunDir() + "/" + file.Name(),
 				Target: parts[2],
 			}
 
