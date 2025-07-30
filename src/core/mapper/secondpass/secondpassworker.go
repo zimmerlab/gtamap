@@ -912,84 +912,83 @@ func incomplRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronS
 			if gapStart != gapEnd {
 				// if we end up in here, it means our map looks like this
 				// [0,97], [113, 150] -> mid block is missing
-				if gapEnd-gapStart > gapGenome.End-gapGenome.Start {
+				// is gap in read smaller than gap in genome?
+				if gapEnd-gapStart <= gapGenome.End-gapGenome.Start {
 					// is insert
 					// logrus.Infof("Found insert in %s", read.Header)
-					return
-				}
-				bestSplit := determineBestSplit(genomeIndex, read, readMatchResult.SequenceIndex, gapRead, gapGenome)
+					bestSplit := determineBestSplit(genomeIndex, read, readMatchResult.SequenceIndex, gapRead, gapGenome)
 
-				if bestSplit == -1 {
-					// this should not happen because a split should be found every time
-					// even if the split has a bad score (many mismatches, no splice sites, etc)
-					logrus.WithFields(logrus.Fields{
-						"qname": read.Header,
-					}).Fatal("no best split found")
-				}
-
-				// logrus.WithFields(logrus.Fields{
-				// 	"split": bestSplit,
-				// }).Debug("best split found")
-
-				// logrus.WithFields(logrus.Fields{
-				// 	"read":   readMatchResult.MatchedRead,
-				// 	"genome": readMatchResult.MatchedGenome,
-				// }).Debug("regions before")
-
-				// when bestSplit is 0 then there is nothing to be added to the left side of the gap
-				if bestSplit > 0 {
-
-					// add the split to the readMatchResult
-					readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(gapRead.Start, gapRead.Start+bestSplit)
-					readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.Start+bestSplit)
-
-					// the read and genome sequences from the start of the gap to the best split (left)
-					readByte := (*read.Sequence)[gapRead.Start : gapRead.Start+bestSplit]
-					genomeByte := (*genomeIndex.Sequences[readMatchResult.SequenceIndex])[gapGenome.Start : gapGenome.Start+bestSplit]
-
-					// add the mismatches to the readMatchResult
-					for i := 0; i < bestSplit; i++ {
-						// add the mismatche to the readMatchResult
-						if readByte[i] != genomeByte[i] {
-							readMatchResult.MismatchesRead = append(readMatchResult.MismatchesRead, gapRead.Start+i)
-						}
+					if bestSplit == -1 {
+						// this should not happen because a split should be found every time
+						// even if the split has a bad score (many mismatches, no splice sites, etc)
+						logrus.WithFields(logrus.Fields{
+							"qname": read.Header,
+						}).Fatal("no best split found")
 					}
-				}
-
-				// logrus.WithFields(logrus.Fields{
-				// 	"read":   readMatchResult.MatchedRead,
-				// 	"genome": readMatchResult.MatchedGenome,
-				// }).Debug("regions after left")
-
-				// when bestSplit is equal to the length of the gap then there is nothing
-				// to be added to the right side of the gap
-				if bestSplit < gapRead.Length() {
 
 					// logrus.WithFields(logrus.Fields{
-					// 	"gapReadEnd":    gapRead.End,
-					// 	"bestSplit":     bestSplit,
-					// 	"gapReadLength": gapRead.Length(),
-					// 	"left":          gapRead.End - (gapRead.Length() - bestSplit),
-					// 	"right":         gapRead.End,
-					// }).Debug("debug split right")
+					// 	"split": bestSplit,
+					// }).Debug("best split found")
 
-					// add the split to the readMatchResult
-					readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(gapRead.End-(gapRead.Length()-bestSplit), gapRead.End)
-					readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.End-(gapRead.Length()-bestSplit), gapGenome.End)
+					// logrus.WithFields(logrus.Fields{
+					// 	"read":   readMatchResult.MatchedRead,
+					// 	"genome": readMatchResult.MatchedGenome,
+					// }).Debug("regions before")
 
-					// the read and genome sequences from the best split to the end of the gap (right)
-					readByte := (*read.Sequence)[gapRead.End-(gapRead.Length()-bestSplit) : gapRead.End]
-					genomeByte := (*genomeIndex.Sequences[readMatchResult.SequenceIndex])[gapGenome.End-(gapRead.Length()-bestSplit) : gapGenome.End]
+					// when bestSplit is 0 then there is nothing to be added to the left side of the gap
+					if bestSplit > 0 {
 
-					// add the mismatches to the readMatchResult
-					for i := 0; i < gapRead.Length()-bestSplit; i++ {
-						// add the mismatche to the readMatchResult
-						if readByte[i] != genomeByte[i] {
-							readMatchResult.MismatchesRead = append(readMatchResult.MismatchesRead, gapRead.End-(bestSplit-i))
+						// add the split to the readMatchResult
+						readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(gapRead.Start, gapRead.Start+bestSplit)
+						readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.Start+bestSplit)
+
+						// the read and genome sequences from the start of the gap to the best split (left)
+						readByte := (*read.Sequence)[gapRead.Start : gapRead.Start+bestSplit]
+						genomeByte := (*genomeIndex.Sequences[readMatchResult.SequenceIndex])[gapGenome.Start : gapGenome.Start+bestSplit]
+
+						// add the mismatches to the readMatchResult
+						for i := 0; i < bestSplit; i++ {
+							// add the mismatche to the readMatchResult
+							if readByte[i] != genomeByte[i] {
+								readMatchResult.MismatchesRead = append(readMatchResult.MismatchesRead, gapRead.Start+i)
+							}
+						}
+					}
+
+					// logrus.WithFields(logrus.Fields{
+					// 	"read":   readMatchResult.MatchedRead,
+					// 	"genome": readMatchResult.MatchedGenome,
+					// }).Debug("regions after left")
+
+					// when bestSplit is equal to the length of the gap then there is nothing
+					// to be added to the right side of the gap
+					if bestSplit < gapRead.Length() {
+
+						// logrus.WithFields(logrus.Fields{
+						// 	"gapReadEnd":    gapRead.End,
+						// 	"bestSplit":     bestSplit,
+						// 	"gapReadLength": gapRead.Length(),
+						// 	"left":          gapRead.End - (gapRead.Length() - bestSplit),
+						// 	"right":         gapRead.End,
+						// }).Debug("debug split right")
+
+						// add the split to the readMatchResult
+						readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(gapRead.End-(gapRead.Length()-bestSplit), gapRead.End)
+						readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.End-(gapRead.Length()-bestSplit), gapGenome.End)
+
+						// the read and genome sequences from the best split to the end of the gap (right)
+						readByte := (*read.Sequence)[gapRead.End-(gapRead.Length()-bestSplit) : gapRead.End]
+						genomeByte := (*genomeIndex.Sequences[readMatchResult.SequenceIndex])[gapGenome.End-(gapRead.Length()-bestSplit) : gapGenome.End]
+
+						// add the mismatches to the readMatchResult
+						for i := 0; i < gapRead.Length()-bestSplit; i++ {
+							// add the mismatche to the readMatchResult
+							if readByte[i] != genomeByte[i] {
+								readMatchResult.MismatchesRead = append(readMatchResult.MismatchesRead, gapRead.End-(bestSplit-i))
+							}
 						}
 					}
 				}
-
 			}
 		}
 	}
@@ -1059,8 +1058,9 @@ func incomplRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronS
 		regionToRemap := regionvector.Region{Start: mainAnchor.Start - mappingStart, End: mainAnchor.Start}
 		remapOptions := leftRemap(readMatchResult, targetSeqIntronSet, read, regionToRemap, mainAnchor, genomeIndex, mainAnchorRank, regionToRemap.Length())
 
-		firstRegionRead, _ := readMatchResult.MatchedRead.GetFirstRegion()
-		if remapOptions != nil && firstRegionRead.Start != 0 {
+		// firstRegionRead, _ := readMatchResult.MatchedRead.GetFirstRegion()
+		// if remapOptions != nil && firstRegionRead.Start != 0 {
+		if remapOptions != nil {
 			bestOption := chooseBestRemap(remapOptions)
 
 			// remove everything left of main anchor
@@ -1087,7 +1087,8 @@ func incomplRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronS
 
 		remapOptions := rightRemap(readMatchResult, targetSeqIntronSet, read, regionToRemap, mainAnchor, genomeIndex, mainAnchorRank, mappingEnd)
 		lastRegionGenome, _ := readMatchResult.MatchedGenome.GetLastRegion()
-		if remapOptions != nil && lastRegionGenome.End != len(*read.Sequence) {
+		// if remapOptions != nil && lastRegionGenome.End != len(*read.Sequence) {
+		if remapOptions != nil {
 			bestOption := chooseBestRemap(remapOptions)
 
 			// remove everything right of main anchor
