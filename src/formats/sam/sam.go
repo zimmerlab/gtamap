@@ -58,6 +58,7 @@ type Record struct {
 	Qual          string   // read quality
 	Tags          []string // optional tags (e.g. NM, XT, etc.)
 	TranscriptIds []int    // ids of the transcripts that this read was aligned to
+	IndexInSam    int      // index of the record in the SAM file
 }
 
 func (entry *Record) UniformCigar() string {
@@ -319,6 +320,7 @@ func ParseSAMFile(filename string) (*ParsedFile, error) {
 
 	scanner := bufio.NewScanner(file)
 	lineNum := 0
+	recordIndex := 0
 
 	for scanner.Scan() {
 		lineNum++
@@ -339,6 +341,8 @@ func ParseSAMFile(filename string) (*ParsedFile, error) {
 		} else {
 			// Parse alignment record
 			record, err := parseRecord(line)
+			record.IndexInSam = recordIndex
+			recordIndex++
 			if err != nil {
 				return nil, fmt.Errorf("error parsing record at line %d: %v", lineNum, err)
 			}
