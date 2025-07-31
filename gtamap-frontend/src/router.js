@@ -1,9 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
-import IndexPage from "./pages/IndexPage.vue";
-import OtherPage from "./pages/OtherPage.vue";
+// import IndexPage from "./pages/IndexPage.vue";
+// import OtherPage from "./pages/OtherPage.vue";
 import OverviewPage from "./pages/OverviewPage.vue";
-import TablePage from "./pages/TablePage.vue";
+// import TablePage from "./pages/TablePage.vue";
+import TestPage from "./pages/TestPage.vue";
 
 const router = createRouter({
     history: createWebHistory(),
@@ -17,7 +18,7 @@ const router = createRouter({
         {
             path: '/test',
             name: 'test',
-            component: TablePage
+            component: TestPage
         },
         // {
         //     path: '/overview',

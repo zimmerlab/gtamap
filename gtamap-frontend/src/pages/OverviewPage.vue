@@ -32,30 +32,28 @@
       </div>
     </div>
 
-    <div class="tw:flex tw:flex-row">
-      <div class="tw:flex-1"></div>
-      <MapperMultimappingHeatmap id="mapper-multimap-heatmap" class="tw:flex-1"></MapperMultimappingHeatmap>
-      <div class="tw:flex-1"></div>
-    </div>
-
-    <MapperMultimappingParallelPlot id="mapper-multimap-parallel"></MapperMultimappingParallelPlot>
-
-    <div class="tw:py-2 tw:flex tw:flex-row">
+<!--    <div class="tw:flex tw:flex-row">-->
 <!--      <div class="tw:flex-1"></div>-->
-<!--      <div id="upset-read-div" class="tw:flex-1"></div>-->
-      <div class="tw:flex-1"></div>
-      <div id="upset-recordpos-div" class="tw:flex-1"></div>
-      <div class="tw:flex-1"></div>
-    </div>
+<!--      <MapperMultimappingHeatmap id="mapper-multimap-heatmap" class="tw:flex-1"></MapperMultimappingHeatmap>-->
+<!--      <div class="tw:flex-1"></div>-->
+<!--    </div>-->
+
+<!--    <MapperMultimappingParallelPlot id="mapper-multimap-parallel"></MapperMultimappingParallelPlot>-->
 
     <div class="tw:py-2 tw:flex tw:flex-row">
       <div class="tw:flex-1"></div>
-      <div id="upset-recordposcigar-div" class="tw:flex-1"></div>
+      <UpsetPlotReadPos title="" url="/api/upsetDataRecordPos"></UpsetPlotReadPos>
       <div class="tw:flex-1"></div>
     </div>
+
+<!--    <div class="tw:py-2 tw:flex tw:flex-row">-->
+<!--      <div class="tw:flex-1"></div>-->
+<!--      <div id="upset-recordposcigar-div" class="tw:flex-1"></div>-->
+<!--      <div class="tw:flex-1"></div>-->
+<!--    </div>-->
 
     <div class="tw:flex tw:flex-row tw:px-20 tw:mb-10">
-      <ReadSummaryTable class="tw:flex-1"></ReadSummaryTable>
+      <ReadSummaryTable ref="readSummaryTableRef" class="tw:flex-1"></ReadSummaryTable>
     </div>
 
     <div class="tw:my-5 tw:mb-32">
@@ -77,10 +75,12 @@ import * as d3 from 'd3'
 import MapperMultimappingHeatmap from "../components/MapperMultimappingHeatmap.vue";
 import MapperMultimappingParallelPlot from "../components/MapperMultimappingParallelPlot.vue";
 import ReadSummaryTable from "../components/ReadSummaryTable.vue";
+import UpsetPlotReadPos from "../components/UpsetPlotReadPos.vue";
 
 export default {
   name: "OverviewPage",
   components: {
+    UpsetPlotReadPos,
     ReadSummaryTable,
     MapperMultimappingHeatmap,
     MapperMultimappingParallelPlot
@@ -92,58 +92,13 @@ export default {
     let igvInfo = ref({})
     let igvBrowser = ref(undefined)
 
-    const selectedRead = ref({});
-
-    const tableData = ref({
-      loading: true,
-      headers: [
-        {label: 'Read Name', key: 'qname'},
-        {label: 'Read Length', key: 'readLength'},
-        {label: 'Is Paired?', key: 'isPaired'},
-        {label: 'Number Mismatches', key: 'numMismatches'},
-        {label: 'Num Gaps', key: 'numGaps'},
-        {label: 'Num Insertions', key: 'numInsertions'},
-        {label: 'Num Matches GTAMap', key: 'numMatchesGtamap'},
-        {label: 'Num Other Mappers Used', key: 'numOtherMappersUsed'}
-      ],
-      pagination: {
-        itemsPerPage: 10,
-        total: 0,
-        itemsPerPageOptions: []
-      }
-    })
-    const readSummaryTableData = ref({items: []})
-
-    let getReadSummaryTableData = function() {
-
-      tableData.value.loading = true
-
-      ApiService.get("/api/readSummaryTable")
-          .then(response => {
-            if (response.status === 200) {
-
-              readSummaryTableData.value.items = response.data
-
-              tableData.value.pagination.total = response.data.length
-
-            } else {
-              console.error("Failed to fetch read summary table data")
-            }
-
-            tableData.value.loading = false
-
-          }).catch(err => {
-            console.log(err);
-          })
-    }
+    const readSummaryTableRef = ref(null);
 
     const getIgvConfig = function() {
 
       ApiService.get("/api/igvConfigTarget")
           .then((response) => {
             if (response.status === 200) {
-
-              console.log(response.data)
 
               igvInfo.value ={
                 genome: response.data.genomeConfig,
@@ -170,270 +125,55 @@ export default {
       }
 
       igv.createBrowser(igvDiv.value, options)
-          .then(function (browser) {
+        .then(function (browser) {
 
-            igvBrowser = ref(browser)
+          igvBrowser = ref(browser)
 
-            // initialize tracks by track config loaded from API
-            for (const trackConfig of igvInfo.value.tracks) {
-              browser.loadTrack(trackConfig)
-            }
-          })
-    }
+          // initialize tracks by track config loaded from API
+          for (const trackConfig of igvInfo.value.tracks) {
+            browser.loadTrack(trackConfig)
+          }
 
-    const upsetDataRead = ref({
-      sets: [],
-      combinations: []
-    });
+          browser.on('trackclick', function (track, popoverData) {
 
-    const getUpsetDataRead = function() {
+            if (track.type === "alignment" && popoverData && popoverData.length > 0) {
 
-      ApiService.get("/api/upsetDataRead")
-          .then(response => {
-            if (response.status === 200) {
-
-              const elems = response.data;
-              const { sets, combinations } = UpSetJS.extractCombinations(elems, { type: 'distinctIntersection' });
-
-              upsetDataRead.value.sets = sets;
-              upsetDataRead.value.combinations = combinations;
-
-              renderUpsetRead();
-
-            } else {
-              console.error("Failed to fetch upset data");
-            }
-          }).catch(err => {
-            console.log(err);
-          })
-    }
-
-    let selectionUpsetRead = ref(null);
-
-    function onHoverUpsetRead(set) {
-      selectionUpsetRead.value = set;
-      renderUpsetRead();
-    }
-
-    function renderUpsetRead() {
-      let sets = upsetDataRead.value.sets
-      let combinations = upsetDataRead.value.combinations
-
-      const dimensions = getChartDimensions(upsetReadContainer);
-
-      console.log(dimensions);
-
-      const props = {
-        sets,
-        combinations,
-        width: 400,
-        height: 300,
-        selection: selectionUpsetRead.value,
-        onHover: onHoverUpsetRead,
-        color: "darkorchid",
-        selectionColor: "#65cc32",
-        //hoverHintColor: "#cc9932",
-        //hasSelectionColor: "#cc9932",
-        //alternatingBackgroundColor: true,
-        //hasSelectionOpacity: 0.5,
-        title: "Reads Mapped",
-        // barPadding: 2,
-        fontSizes: {
-          barLabel: "8pt",
-          chartLabel: "8pt",
-          axisTick: "8pt",
-          setLabel: "8pt",
-          title: "11pt",
-        }
-      }
-      UpSetJS.render(document.getElementById("upset-read-div"), props);
-    }
-
-    const upsetDataRecordPos = ref({
-      sets: [],
-      combinations: []
-    });
-
-    const getUpsetDataRecordPos = function() {
-
-      ApiService.get("/api/upsetDataRecordPos")
-          .then(response => {
-            if (response.status === 200) {
-
-              const elems = response.data;
-
-              const sets = UpSetJS.extractSets(elems, elem => elem.sets);
-              const combinations = UpSetJS.generateCombinations(sets, {
-                type: 'distinctIntersection'
-              });
-
-              console.log("Sets and combinations extracted:")
-              console.log(elems)
-              console.log(sets)
-
-              // sort the combinations by cardinality (set size) and name
-              const nameToCombination = {};
-              for (const combination of combinations) {
-                nameToCombination[combination.name] = combination;
+              let readInfo = {
+                // the read name (qname) of the read
+                qname: "",
+                // the name of the mapper which produced this mapping
+                mapperName: "",
+                // the index of the mapping in the respective sam file
+                index: 0,
               }
-              const sortSets = (a, b) => {
-                const sizeA = nameToCombination[a.name] ? nameToCombination[a.name].cardinality : 0;
-                const sizeB = nameToCombination[b.name] ? nameToCombination[b.name].cardinality : 0;
-                const sizeDiff = sizeB - sizeA;
-                return sizeDiff !== 0 ? sizeDiff : a.name.localeCompare(b.name);
-              };
-              const sortCombinations = (a, b) => {
-                const sizeDiff = b.cardinality - a.cardinality;
-                return sizeDiff !== 0 ? sizeDiff : a.name.localeCompare(b.name);
-              };
-              sets.sort(sortSets);
-              combinations.sort(sortCombinations);
-              // end sort by cardinality and name
 
-              upsetDataRecordPos.value.sets = sets;
-              upsetDataRecordPos.value.combinations = combinations;
+              popoverData.forEach(item => {
+                switch (item.name) {
+                  case "Read Name":
+                    readInfo.qname = item.value;
+                    break;
+                  case "XM":
+                    readInfo.mapperName = item.value;
+                    break;
+                  case "XI":
+                    readInfo.index = item.value;
+                    break;
+                }
+              })
 
-              renderUpsetRecordPos();
-
-            } else {
-              console.error("Failed to fetch upset data");
+              handleReadClick(readInfo)
             }
-          }).catch(err => {
-        console.log(err);
-      })
+          });
+        })
     }
 
-    let selectionUpsetRecordPos = ref(null);
-
-    function onHoverUpsetRecordPos(set) {
-      selectionUpsetRecordPos.value = set;
-      renderUpsetRecordPos();
-    }
-
-    function onClickUpsetRecordPos(set) {
-      console.log("Clicked on upset set")
-      console.log(set)
-    }
-
-    function renderUpsetRecordPos() {
-      let sets = upsetDataRecordPos.value.sets
-      let combinations = upsetDataRecordPos.value.combinations
-      const props = {
-        sets,
-        combinations,
-        width: 800,
-        height: 300,
-        selection: selectionUpsetRecordPos.value,
-        onHover: onHoverUpsetRecordPos,
-        onClick: onClickUpsetRecordPos,
-        color: "darkorchid",
-        selectionColor: "#65cc32",
-        //hoverHintColor: "#cc9932",
-        //hasSelectionColor: "#cc9932",
-        //alternatingBackgroundColor: true,
-        //hasSelectionOpacity: 0.5,
-        title: "Record Position Assignment (qname + pos)",
-        fontSizes: {
-          barLabel: "8pt",
-          chartLabel: "8pt",
-          axisTick: "8pt",
-          setLabel: "8pt",
-          title: "11pt",
-        }
-      }
-      UpSetJS.render(document.getElementById("upset-recordpos-div"), props);
-    }
-
-    // UPSET READ+POS+CIGAR
-    const upsetDataRecordPosCigar = ref({
-      sets: [],
-      combinations: []
-    });
-
-    const getUpsetDataRecordPosCigar = function() {
-
-      ApiService.get("/api/upsetDataRecordPosCigar")
-          .then(response => {
-            if (response.status === 200) {
-
-              const elems = response.data;
-
-              const sets = UpSetJS.extractSets(elems, elem => elem.sets);
-              const combinations = UpSetJS.generateCombinations(sets, {
-                type: 'distinctIntersection'
-              });
-
-              // sort the combinations by cardinality (set size) and name
-              const nameToCombination = {};
-              for (const combination of combinations) {
-                nameToCombination[combination.name] = combination;
-              }
-              const sortSets = (a, b) => {
-                const sizeA = nameToCombination[a.name] ? nameToCombination[a.name].cardinality : 0;
-                const sizeB = nameToCombination[b.name] ? nameToCombination[b.name].cardinality : 0;
-                const sizeDiff = sizeB - sizeA;
-                return sizeDiff !== 0 ? sizeDiff : a.name.localeCompare(b.name);
-              };
-              const sortCombinations = (a, b) => {
-                const sizeDiff = b.cardinality - a.cardinality;
-                return sizeDiff !== 0 ? sizeDiff : a.name.localeCompare(b.name);
-              };
-              sets.sort(sortSets);
-              combinations.sort(sortCombinations);
-              // end sort by cardinality and name
-
-              upsetDataRecordPosCigar.value.sets = sets;
-              upsetDataRecordPosCigar.value.combinations = combinations;
-
-              renderUpsetRecordPosCigar();
-
-            } else {
-              console.error("Failed to fetch upset data");
-            }
-          }).catch(err => {
-        console.log(err);
-      })
-    }
-
-    let selectionUpsetRecordPosCigar = ref(null);
-
-    function onHoverUpsetRecordPosCigar(set) {
-      selectionUpsetRecordPosCigar.value = set;
-      renderUpsetRecordPos();
-    }
-
-    function onClickUpsetRecordPosCigar(set) {
-      console.log("Clicked on upset set read pos cigar")
-      console.log(set)
-    }
-
-    function renderUpsetRecordPosCigar() {
-      let sets = upsetDataRecordPosCigar.value.sets
-      let combinations = upsetDataRecordPosCigar.value.combinations
-      const props = {
-        sets,
-        combinations,
-        width: 800,
-        height: 300,
-        selection: selectionUpsetRecordPosCigar.value,
-        onHover: onHoverUpsetRecordPosCigar,
-        onClick: onClickUpsetRecordPosCigar,
-        color: "darkorchid",
-        selectionColor: "#65cc32",
-        //hoverHintColor: "#cc9932",
-        //hasSelectionColor: "#cc9932",
-        //alternatingBackgroundColor: true,
-        //hasSelectionOpacity: 0.5,
-        title: "Record Position Assignment (qname, pos, cigar)",
-        fontSizes: {
-          barLabel: "8pt",
-          chartLabel: "8pt",
-          axisTick: "8pt",
-          setLabel: "8pt",
-          title: "11pt",
-        }
-      }
-      UpSetJS.render(document.getElementById("upset-recordposcigar-div"), props);
+    /**
+     * Handle the click event on a read in the igv by sending the read information to the read summary table
+     * which brings this read into view and expands it to show all mapping locations.
+     * @param readInfo
+     */
+    const handleReadClick = function(readInfo) {
+      readSummaryTableRef.value.selectAndScrollToRead(readInfo)
     }
 
     // RIDGE
@@ -540,20 +280,9 @@ export default {
     return {
       getIgvConfig,
       initializeIgv,
-      getUpsetDataRead,
-      renderUpsetRead,
-      getUpsetDataRecordPos,
-      renderUpsetRecordPos,
-      selectionUpsetRecordPos,
-      getUpsetDataRecordPosCigar,
-      renderUpsetRecordPosCigar,
-      selectionUpsetRecordPosCigar,
-      getReadSummaryTableData,
-      readSummaryTableData,
-      tableData,
-      selectedRead,
       createChart,
-      chartContainer
+      chartContainer,
+      readSummaryTableRef
     }
   },
   mounted() {
