@@ -8,6 +8,16 @@ import (
 type AnalysisService struct {
 	MapperNames []string
 	MapperInfos map[string]*MapperInfo
+	TargetInfo  *TargetInfo // Information about the target region or gene
+}
+
+type TargetInfo struct {
+	Type   string // region | gene
+	Name   string // e.g. ENSG00000173585
+	Contig string // e.g. chr1
+	Start  int    // e.g. 1000
+	End    int    // e.g. 2000
+	Strand string // e.g. + or -
 }
 
 type MapperInfo struct {

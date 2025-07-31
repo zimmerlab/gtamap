@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/server"
 	"log"
 )
@@ -113,7 +114,7 @@ func loadNsun5(s *server.Server) {
 
 func main() {
 
-	server.LoadConfig()
+	config.LoadConfig()
 
 	s := server.NewServer()
 	s.LoadMapperResults()

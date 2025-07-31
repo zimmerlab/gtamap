@@ -139,7 +139,7 @@ export default {
 
     const getIgvConfig = function() {
 
-      ApiService.get("/api/genomeConfig")
+      ApiService.get("/api/igvConfigTarget")
           .then((response) => {
             if (response.status === 200) {
 

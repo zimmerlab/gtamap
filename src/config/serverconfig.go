@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"log"
@@ -12,6 +11,10 @@ type Config struct {
 		RunDir           string `mapstructure:"run_dir"`
 		TargetName       string `mapstructure:"target_name"`
 		TargetRegion     string `mapstructure:"target_region"`
+		TargetContig     string `mapstructure:"target_contig"`
+		TargetStart      int    `mapstructure:"target_start"`
+		TargetEnd        int    `mapstructure:"target_end"`
+		TargetStrand     string `mapstructure:"target_strand"`
 		TargetFasta      string `mapstructure:"target_fasta"`
 		TargetFastaIndex string `mapstructure:"target_fasta_index"`
 	} `mapstructure:"data"`
@@ -51,7 +54,6 @@ func GetRunDir() string {
 }
 
 func GetTargetName() string {
-	fmt.Printf(ServerConfig.Data.TargetName)
 	return ServerConfig.Data.TargetName
 }
 
@@ -59,8 +61,23 @@ func GetTargetRegion() string {
 	return ServerConfig.Data.TargetRegion
 }
 
+func GetTargetContig() string {
+	return ServerConfig.Data.TargetContig
+}
+
+func GetTargetStart() int {
+	return ServerConfig.Data.TargetStart
+}
+
+func GetTargetEnd() int {
+	return ServerConfig.Data.TargetEnd
+}
+
+func GetTargetStrand() string {
+	return ServerConfig.Data.TargetStrand
+}
+
 func GetTargetFasta() string {
-	fmt.Printf(ServerConfig.Data.TargetFasta)
 	return ServerConfig.Data.TargetFasta
 }
 

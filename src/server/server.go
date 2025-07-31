@@ -1,9 +1,11 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/KleinSamuel/gtamap/src/analysis"
+	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/formats/fasta"
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
 	"github.com/gorilla/mux"
@@ -13,6 +15,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -32,7 +35,7 @@ func (s *Server) InitRoutes() {
 	api.HandleFunc("/health", s.healthCheck).Methods("GET")
 
 	//api.HandleFunc("/genomeConfig", getTestGenomeConfig).Methods("GET")
-	api.HandleFunc("/genomeConfig", getTargetRegionIgvConfig).Methods("GET")
+	api.HandleFunc("/igvConfigTarget", getTargetRegionIgvConfig).Methods("GET")
 
 	api.HandleFunc("/readSummaryTable", s.getReadSummaryTable).Methods("GET")
 
@@ -61,6 +64,9 @@ func (s *Server) InitRoutes() {
 
 	download.HandleFunc("/targetRegion/fasta", serveTargetRegionFastaFile).Methods("GET")
 	download.HandleFunc("/targetRegion/fastaIndex", serveTargetRegionFastaIndexFile).Methods("GET")
+
+	download.HandleFunc("/targetRegion/combinedBam", s.serveTargetRegionCombinedMappingBam).Methods("GET")
+	download.HandleFunc("/targetRegion/combinedBamIndex", s.serveTargetRegionCombinedMappingBamIndex).Methods("GET")
 }
 
 func (s *Server) Start() {
@@ -711,19 +717,150 @@ func (s *Server) mapperDistances(w http.ResponseWriter, r *http.Request) {
 }
 
 func serveTargetRegionFastaFile(w http.ResponseWriter, r *http.Request) {
-	if _, err := os.Stat(GetTargetFasta()); os.IsNotExist(err) {
+	if _, err := os.Stat(config.GetTargetFasta()); os.IsNotExist(err) {
 		http.Error(w, "File not found", http.StatusNotFound)
 		return
 	}
-	http.ServeFile(w, r, GetTargetFasta())
+	http.ServeFile(w, r, config.GetTargetFasta())
 }
 
 func serveTargetRegionFastaIndexFile(w http.ResponseWriter, r *http.Request) {
-	if _, err := os.Stat(GetTargetFastaIndex()); os.IsNotExist(err) {
+	if _, err := os.Stat(config.GetTargetFastaIndex()); os.IsNotExist(err) {
 		http.Error(w, "File not found", http.StatusNotFound)
 		return
 	}
-	http.ServeFile(w, r, GetTargetFastaIndex())
+	http.ServeFile(w, r, config.GetTargetFastaIndex())
+}
+
+func (s *Server) serveTargetRegionCombinedMappingBam(w http.ResponseWriter, r *http.Request) {
+
+	var builder strings.Builder
+
+	builder.WriteString("@HD\tVN:1.6\tSO:unsorted\n")
+	builder.WriteString(fmt.Sprintf("@SQ\tSN:%s\tLN:%d\n", config.GetTargetContig(), config.GetTargetStart()-config.GetTargetEnd()))
+
+	for _, mapperName := range s.AnalysisService.MapperNames {
+		for _, records := range s.AnalysisService.MapperInfos[mapperName].RecordsByQname {
+			for _, record := range records {
+				builder.WriteString(record.StringWithMapperInfo(mapperName))
+				builder.WriteString("\n")
+			}
+		}
+	}
+
+	bamBytes, err := samToSortedBam(builder.String())
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error converting SAM to BAM: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Write(bamBytes)
+}
+
+func (s *Server) serveTargetRegionCombinedMappingBamIndex(w http.ResponseWriter, r *http.Request) {
+
+	var builder strings.Builder
+
+	builder.WriteString("@HD\tVN:1.6\tSO:unsorted\n")
+	builder.WriteString(fmt.Sprintf("@SQ\tSN:%s\tLN:%d\n", config.GetTargetContig(), config.GetTargetStart()-config.GetTargetEnd()))
+
+	for _, mapperName := range s.AnalysisService.MapperNames {
+		for _, records := range s.AnalysisService.MapperInfos[mapperName].RecordsByQname {
+			for _, record := range records {
+				builder.WriteString(record.StringWithMapperInfo(mapperName))
+				builder.WriteString("\n")
+			}
+		}
+	}
+
+	bamBytes, err := samToSortedBam(builder.String())
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error converting SAM to BAM: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	bamIndex, err := bamToBamIndex(bamBytes)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error creating BAM index: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "plain/text")
+	w.Write([]byte(bamIndex))
+}
+
+func samToSortedBam(samString string) ([]byte, error) {
+
+	cmd := exec.Command("samtools", "sort", "-o", "-", "-")
+
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = &stderrBuf
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, fmt.Errorf("error creating stdin pipe: %w, stderr: %s", err, stderrBuf.String())
+	}
+	var bamBuf bytes.Buffer
+	cmd.Stdout = &bamBuf
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("error starting samtools: %w, stderr: %s", err, stderrBuf.String())
+	}
+
+	_, err = stdin.Write([]byte(samString))
+	if err != nil {
+		stdin.Close()
+		return nil, fmt.Errorf("error writing to stdin: %w, stderr: %s", err, stderrBuf.String())
+	}
+	stdin.Close()
+
+	if err := cmd.Wait(); err != nil {
+		return nil, fmt.Errorf("samtools failed: %w, stderr: %s", err, stderrBuf.String())
+	}
+
+	if bamBuf.Len() == 0 {
+		return nil, fmt.Errorf("no output from samtools")
+	}
+
+	return bamBuf.Bytes(), nil
+}
+
+func bamToBamIndex(bamBytes []byte) (string, error) {
+
+	cmd := exec.Command("samtools", "index", "-o", "-", "-")
+
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = &stderrBuf
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return "", fmt.Errorf("error creating stdin pipe: %w, stderr: %s", err, stderrBuf.String())
+	}
+
+	var indexBuf bytes.Buffer
+	cmd.Stdout = &indexBuf
+
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("error starting samtools: %w, stderr: %s", err, stderrBuf.String())
+	}
+
+	_, err = stdin.Write(bamBytes)
+	if err != nil {
+		stdin.Close()
+		return "", fmt.Errorf("error writing to stdin: %w, stderr: %s", err, stderrBuf.String())
+	}
+	stdin.Close()
+
+	if err := cmd.Wait(); err != nil {
+		return "", fmt.Errorf("samtools failed: %w, stderr: %s", err, stderrBuf.String())
+	}
+
+	if indexBuf.Len() == 0 {
+		return "", fmt.Errorf("no output from samtools")
+	}
+
+	return indexBuf.String(), nil
 }
 
 func serveGenomeFastaFile(w http.ResponseWriter, r *http.Request) {
@@ -819,20 +956,20 @@ func getTargetRegionIgvConfig(w http.ResponseWriter, r *http.Request) {
 		IndexUrl: "http://localhost:8000/download/targetRegion/fastaIndex",
 	}
 
-	//track := IgvTrackConfig{
-	//	Name:        "TEST_TRACK",
-	//	Format:      "bam",
-	//	DisplayMode: "EXPANDED",
-	//	Url:         "http://localhost:8000/download/gtamap/bam",
-	//	IndexUrl:    "http://localhost:8000/download/gtamap/bamIndex",
-	//	Type:        "alignment",
-	//}
+	track := IgvTrackConfig{
+		Name:        "TEST_TRACK",
+		Format:      "sam",
+		DisplayMode: "EXPANDED",
+		Url:         "http://localhost:8000/download/targetRegion/combinedBam",
+		IndexUrl:    "http://localhost:8000/download/targetRegion/combinedBamIndex",
+		Type:        "alignment",
+	}
 
 	tracks := make([]IgvTrackConfig, 0)
-	//tracks = append(tracks, track)
+	tracks = append(tracks, track)
 
 	// convert global location to local location
-	targetRegionStr := GetTargetRegion()
+	targetRegionStr := config.GetTargetRegion()
 	startEnd := strings.Split(strings.Split(targetRegionStr, ":")[1], "-")
 	start, err := strconv.Atoi(startEnd[0])
 	if err != nil {
@@ -842,7 +979,7 @@ func getTargetRegionIgvConfig(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Invalid end position in target region", http.StatusBadRequest)
 	}
-	targetRegionStrLocal := fmt.Sprintf("%s:%d-%d", GetTargetName(), 1, end-start)
+	targetRegionStrLocal := fmt.Sprintf("%s:%d-%d", config.GetTargetName(), 1, end-start)
 
 	response := map[string]interface{}{
 		"genomeConfig": genomeConfig,
@@ -897,7 +1034,7 @@ func (s *Server) GetMapperResults() []MapperResult {
 
 	results := make([]MapperResult, 0)
 
-	files, err := os.ReadDir(GetRunDir())
+	files, err := os.ReadDir(config.GetRunDir())
 	if err != nil {
 		logrus.Error("Error reading output directory: ", err)
 		return results
@@ -914,7 +1051,7 @@ func (s *Server) GetMapperResults() []MapperResult {
 
 			result := MapperResult{
 				Name:   parts[1],
-				Path:   GetRunDir() + "/" + file.Name(),
+				Path:   config.GetRunDir() + "/" + file.Name(),
 				Target: parts[2],
 			}
 
