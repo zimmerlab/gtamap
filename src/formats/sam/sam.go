@@ -73,7 +73,9 @@ func (entry *Record) String() string {
 		return ""
 	}
 
-	alignmentLineString := fmt.Sprintf("%s\t%s\t%s\t%d\t%d\t%s\t%s\t%d\t%d\t%s\t%s", entry.Qname, entry.Flag.String(), entry.Rname, entry.Pos, entry.Mapq, entry.Cigar, entry.Rnext, entry.Pnext, entry.Tlen, entry.Seq, entry.Qual)
+	alignmentLineString := fmt.Sprintf("%s\t%s\t%s\t%d\t%d\t%s\t%s\t%d\t%d\t%s\t%s",
+		entry.Qname, entry.Flag.String(), entry.Rname, entry.Pos, entry.Mapq, entry.Cigar,
+		entry.Rnext, entry.Pnext, entry.Tlen, entry.Seq, entry.Qual)
 	// alignmentLineString += fmt.Sprintf("\tXT:Z:T%d", entry.TranscriptId)
 
 	for i, transcriptId := range entry.TranscriptIds {
@@ -82,6 +84,24 @@ func (entry *Record) String() string {
 		} else {
 			alignmentLineString += fmt.Sprintf(",T%d", transcriptId)
 		}
+	}
+
+	return alignmentLineString
+}
+
+func (entry *Record) StringWithMapperInfo(mapperName string) string {
+	if entry == nil {
+		return ""
+	}
+
+	alignmentLineString := fmt.Sprintf("%s\t%s\t%s\t%d\t%d\t%s\t%s\t%d\t%d\t%s\t%s",
+		entry.Qname, entry.Flag.String(), entry.Rname, entry.Pos, entry.Mapq, entry.Cigar,
+		entry.Rnext, entry.Pnext, entry.Tlen, entry.Seq, entry.Qual)
+
+	alignmentLineString += fmt.Sprintf("\tXI:I:%d", entry.IndexInSam)
+
+	if mapperName != "" {
+		alignmentLineString += fmt.Sprintf(",XM:Z:%s", mapperName)
 	}
 
 	return alignmentLineString
