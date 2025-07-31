@@ -312,9 +312,6 @@ func anchorGuidedRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIn
 				if correctedR != correctedL {
 
 					// startInRead := regionvector.GenomicCoordToReadCoord(readMatchResult.MatchedRead.GetFirstRegion().Start, weakAnchor.Start, readMatchResult.MatchedGenome.Regions)
-					if mainAnchorIndex+1 == len(readMatchResult.MatchedGenome.Regions) {
-						println()
-					}
 					startInRead := readMatchResult.MatchedRead.Regions[mainAnchorIndex+1].Start
 
 					// we check for padding if part of the main anchor is reaching into intron
