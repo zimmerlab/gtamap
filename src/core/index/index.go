@@ -845,8 +845,8 @@ func parseFastaHeader(header string) *gtf.GeneBasic {
 		logrus.Fatal("invalid header:", header)
 	}
 
-	geneId := headerParts[0]
-	contig := headerParts[1]
+	contig := headerParts[0]
+	geneId := headerParts[1]
 	isForwardStrand := headerParts[2] == "+"
 	startGenomicInt, err := strconv.Atoi(headerParts[3])
 	if err != nil {

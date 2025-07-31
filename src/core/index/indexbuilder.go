@@ -198,7 +198,7 @@ func AppendSequenceToFastaFile(name string, contig string, isForwardStrand bool,
 	}
 
 	_, errWrite := outFile.WriteString(fmt.Sprintf(">%s\t%s\t%s\t%d\t%d\n",
-		name, contig, strand, startGenomic, endGenomic))
+		contig, name, strand, startGenomic, endGenomic))
 
 	if errWrite != nil {
 		logrus.Fatal("Error writing to output file", errWrite)
@@ -231,7 +231,7 @@ func writeToFasta(gene *gtf.GeneBasic, outFile *os.File, fastaFile *os.File, fas
 	}
 
 	_, errWrite := outFile.WriteString(fmt.Sprintf(">%s\t%s\t%s\t%d\t%d\n%s\n",
-		gene.GeneId, gene.Contig, strand, gene.StartGenomic, gene.EndGenomic, seq))
+		gene.Contig, gene.GeneId, strand, gene.StartGenomic, gene.EndGenomic, seq))
 
 	if errWrite != nil {
 		logrus.Fatal("Error writing to output file", errWrite)
