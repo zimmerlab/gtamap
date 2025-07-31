@@ -1,6 +1,7 @@
 package secondpass
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/KleinSamuel/gtamap/src/config"
@@ -699,7 +700,7 @@ func rightRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet
 	regionReadEnd := len(*read.Sequence)
 
 	if regionReadEnd > len(*read.Sequence) {
-		logrus.Infof("Aborting left remap to prevent index error in %s, sinded %d", read.Header, readMatchResult.SequenceIndex)
+		logrus.Infof("Aborting right remap to prevent index error in %s, sindex=%d", read.Header, readMatchResult.SequenceIndex)
 		logrus.Infof("Anchor region end: %d", regionReadEnd)
 		fmt.Println(readMatchResult.MatchedGenome)
 		fmt.Println(readMatchResult.MatchedRead)
@@ -772,6 +773,13 @@ func leftRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet 
 	remapOptions := make(map[int]*RemapOption)
 
 	regionReadStart := 0 // remap entire read from 0 to end of weakAnchor
+	if regionReadEnd > len(*read.Sequence) {
+		logrus.Infof("Aborting left remap to prevent index error in %s, sindex=%d", read.Header, readMatchResult.SequenceIndex)
+		logrus.Infof("Anchor region end: %d", regionReadEnd)
+		fmt.Println(readMatchResult.MatchedGenome)
+		fmt.Println(readMatchResult.MatchedRead)
+		return nil
+	}
 
 	readSequenceToRemap := (*read.Sequence)[regionReadStart:regionReadEnd]
 	refSeq := genomeIndex.Sequences[readMatchResult.SequenceIndex]
