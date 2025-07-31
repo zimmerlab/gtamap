@@ -742,6 +742,10 @@ func (s *Server) serveTargetRegionCombinedMappingBam(w http.ResponseWriter, r *h
 	for _, mapperName := range s.AnalysisService.MapperNames {
 		for _, records := range s.AnalysisService.MapperInfos[mapperName].RecordsByQname {
 			for _, record := range records {
+
+				// adjust position to be relative to target region
+				record.Pos -= config.GetTargetStart()
+
 				builder.WriteString(record.StringWithMapperInfo(mapperName))
 				builder.WriteString("\n")
 			}
@@ -765,9 +769,14 @@ func (s *Server) serveTargetRegionCombinedMappingBamIndex(w http.ResponseWriter,
 	builder.WriteString("@HD\tVN:1.6\tSO:unsorted\n")
 	builder.WriteString(fmt.Sprintf("@SQ\tSN:%s\tLN:%d\n", config.GetTargetContig(), config.GetTargetStart()-config.GetTargetEnd()))
 
+	// TODO: extract duplicate code to a dedicated function after testing
 	for _, mapperName := range s.AnalysisService.MapperNames {
 		for _, records := range s.AnalysisService.MapperInfos[mapperName].RecordsByQname {
 			for _, record := range records {
+
+				// adjust position to be relative to target region
+				record.Pos -= config.GetTargetStart()
+
 				builder.WriteString(record.StringWithMapperInfo(mapperName))
 				builder.WriteString("\n")
 			}
