@@ -4,11 +4,11 @@
 
 <script>
 import UpsetPlot from "../components/UpsetPlot.vue";
-import UpsetPlotReadPos from "../components/UpsetPlotReadPos.vue";
+import UpsetPlotMapperAgreement from "../components/UpsetPlotMapperAgreement.vue";
 
 export default {
   name: 'TestPage',
-  components: {UpsetPlotReadPos, UpsetPlot},
+  components: {UpsetPlotReadPos: UpsetPlotMapperAgreement, UpsetPlot},
   setup() {
     // This is where you can set up your component logic
     // For example, you can import and use the UpsetPlot component here

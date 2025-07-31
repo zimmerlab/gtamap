@@ -157,6 +157,11 @@ func (s *Server) upsetDataRead(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) upsetDataRecordPos(w http.ResponseWriter, r *http.Request) {
 
+	onlyTargetRegion := false
+	if val := r.URL.Query().Get("onlyTargetRegion"); val == "true" {
+		onlyTargetRegion = true
+	}
+
 	data := make([]UpsetElement, 0)
 
 	recordPosMap := make(map[string]map[string]bool)
@@ -164,6 +169,10 @@ func (s *Server) upsetDataRecordPos(w http.ResponseWriter, r *http.Request) {
 	for mapperName, mapperInfo := range s.AnalysisService.MapperInfos {
 
 		for _, record := range mapperInfo.ParsedFile.Records {
+
+			if onlyTargetRegion && record.Rname != config.GetTargetContig() {
+				continue
+			}
 
 			id := record.Qname + "X" + strconv.Itoa(record.Pos)
 
@@ -196,6 +205,11 @@ func (s *Server) upsetDataRecordPos(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) upsetDataRecordPosCigar(w http.ResponseWriter, r *http.Request) {
 
+	onlyTargetRegion := false
+	if val := r.URL.Query().Get("onlyTargetRegion"); val == "true" {
+		onlyTargetRegion = true
+	}
+
 	data := make([]UpsetElement, 0)
 
 	recordPosMap := make(map[string]map[string]bool)
@@ -203,6 +217,10 @@ func (s *Server) upsetDataRecordPosCigar(w http.ResponseWriter, r *http.Request)
 	for mapperName, mapperInfo := range s.AnalysisService.MapperInfos {
 
 		for _, record := range mapperInfo.ParsedFile.Records {
+
+			if onlyTargetRegion && record.Rname != config.GetTargetContig() {
+				continue
+			}
 
 			id := record.Qname + "::" + strconv.Itoa(record.Pos) + "::" + record.UniformCigar()
 

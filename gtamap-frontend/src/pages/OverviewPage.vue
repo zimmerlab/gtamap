@@ -75,12 +75,12 @@ import * as d3 from 'd3'
 import MapperMultimappingHeatmap from "../components/MapperMultimappingHeatmap.vue";
 import MapperMultimappingParallelPlot from "../components/MapperMultimappingParallelPlot.vue";
 import ReadSummaryTable from "../components/ReadSummaryTable.vue";
-import UpsetPlotReadPos from "../components/UpsetPlotReadPos.vue";
+import UpsetPlotMapperAgreement from "../components/UpsetPlotMapperAgreement.vue";
 
 export default {
   name: "OverviewPage",
   components: {
-    UpsetPlotReadPos,
+    UpsetPlotReadPos: UpsetPlotMapperAgreement,
     ReadSummaryTable,
     MapperMultimappingHeatmap,
     MapperMultimappingParallelPlot
