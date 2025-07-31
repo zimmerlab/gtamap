@@ -698,6 +698,14 @@ func rightRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet
 
 	regionReadEnd := len(*read.Sequence)
 
+	if regionReadEnd > len(*read.Sequence) {
+		logrus.Infof("Aborting left remap to prevent index error in %s, sinded %d", read.Header, readMatchResult.SequenceIndex)
+		logrus.Infof("Anchor region end: %d", regionReadEnd)
+		fmt.Println(readMatchResult.MatchedGenome)
+		fmt.Println(readMatchResult.MatchedRead)
+		return nil
+	}
+
 	readSequenceToRemap := (*read.Sequence)[startInRead:regionReadEnd]
 
 	// get next intron
@@ -1108,6 +1116,13 @@ func incomplRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronS
 		readMatchResult.IncompleteMap = true
 	} else {
 		readMatchResult.IncompleteMap = false
+	}
+
+	if readMatchResult.MatchedRead.Regions[0].Start != 0 || readMatchResult.MatchedRead.Regions[len(readMatchResult.MatchedRead.Regions)-1].End != len(*read.Sequence) {
+		// combat reads like this
+		// Genome [[0, 60], [60, 66]]
+		// Read   [[10, 70], [70, 76]] -> first 10 bases cant be mapped since no more space left in genome
+		readMatchResult.IncompleteMap = true
 	}
 }
 
