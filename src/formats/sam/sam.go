@@ -89,19 +89,19 @@ func (entry *Record) String() string {
 	return alignmentLineString
 }
 
-func (entry *Record) StringWithMapperInfo(mapperName string) string {
+func (entry *Record) StringWithMapperInfo(relPos int, mapperName string) string {
 	if entry == nil {
 		return ""
 	}
 
 	alignmentLineString := fmt.Sprintf("%s\t%s\t%s\t%d\t%d\t%s\t%s\t%d\t%d\t%s\t%s",
-		entry.Qname, entry.Flag.String(), entry.Rname, entry.Pos, entry.Mapq, entry.Cigar,
+		entry.Qname, entry.Flag.String(), entry.Rname, entry.Pos-relPos, entry.Mapq, entry.Cigar,
 		entry.Rnext, entry.Pnext, entry.Tlen, entry.Seq, entry.Qual)
 
 	alignmentLineString += fmt.Sprintf("\tXI:I:%d", entry.IndexInSam)
 
 	if mapperName != "" {
-		alignmentLineString += fmt.Sprintf(",XM:Z:%s", mapperName)
+		alignmentLineString += fmt.Sprintf("\tXM:Z:%s", mapperName)
 	}
 
 	return alignmentLineString

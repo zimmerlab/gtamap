@@ -65,6 +65,7 @@ func (s *Server) InitRoutes() {
 	download.HandleFunc("/targetRegion/fasta", serveTargetRegionFastaFile).Methods("GET")
 	download.HandleFunc("/targetRegion/fastaIndex", serveTargetRegionFastaIndexFile).Methods("GET")
 
+	download.HandleFunc("/targetRegion/combinedSam", s.serveTargetRegionCombinedMappingSam).Methods("GET")
 	download.HandleFunc("/targetRegion/combinedBam", s.serveTargetRegionCombinedMappingBam).Methods("GET")
 	download.HandleFunc("/targetRegion/combinedBamIndex", s.serveTargetRegionCombinedMappingBamIndex).Methods("GET")
 }
@@ -732,27 +733,45 @@ func serveTargetRegionFastaIndexFile(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, config.GetTargetFastaIndex())
 }
 
-func (s *Server) serveTargetRegionCombinedMappingBam(w http.ResponseWriter, r *http.Request) {
-
+func (s *Server) getCombinedSam() string {
 	var builder strings.Builder
 
 	builder.WriteString("@HD\tVN:1.6\tSO:unsorted\n")
-	builder.WriteString(fmt.Sprintf("@SQ\tSN:%s\tLN:%d\n", config.GetTargetContig(), config.GetTargetStart()-config.GetTargetEnd()))
+	builder.WriteString(fmt.Sprintf("@SQ\tSN:%s\tLN:%d\n", config.GetTargetContig(), config.GetTargetEnd()-config.GetTargetStart()+1))
 
 	for _, mapperName := range s.AnalysisService.MapperNames {
 		for _, records := range s.AnalysisService.MapperInfos[mapperName].RecordsByQname {
 			for _, record := range records {
 
-				// adjust position to be relative to target region
-				record.Pos -= config.GetTargetStart()
+				// only include records that map to the target region
+				isOnTargetContig := record.Rname == config.GetTargetContig()
+				isInTargetRegion := record.Pos >= config.GetTargetStart() && record.Pos <= config.GetTargetEnd()
+				if !isOnTargetContig || !isInTargetRegion {
+					continue
+				}
 
-				builder.WriteString(record.StringWithMapperInfo(mapperName))
+				builder.WriteString(record.StringWithMapperInfo(config.GetTargetStart(), mapperName))
 				builder.WriteString("\n")
 			}
 		}
 	}
 
-	bamBytes, err := samToSortedBam(builder.String())
+	return builder.String()
+}
+
+func (s *Server) serveTargetRegionCombinedMappingSam(w http.ResponseWriter, r *http.Request) {
+
+	samString := s.getCombinedSam()
+
+	w.Header().Set("Content-Type", "plain/text")
+	w.Write([]byte(samString))
+}
+
+func (s *Server) serveTargetRegionCombinedMappingBam(w http.ResponseWriter, r *http.Request) {
+
+	samString := s.getCombinedSam()
+
+	bamBytes, err := samToSortedBam(samString)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error converting SAM to BAM: %v", err), http.StatusInternalServerError)
 		return
@@ -764,26 +783,9 @@ func (s *Server) serveTargetRegionCombinedMappingBam(w http.ResponseWriter, r *h
 
 func (s *Server) serveTargetRegionCombinedMappingBamIndex(w http.ResponseWriter, r *http.Request) {
 
-	var builder strings.Builder
+	samString := s.getCombinedSam()
 
-	builder.WriteString("@HD\tVN:1.6\tSO:unsorted\n")
-	builder.WriteString(fmt.Sprintf("@SQ\tSN:%s\tLN:%d\n", config.GetTargetContig(), config.GetTargetStart()-config.GetTargetEnd()))
-
-	// TODO: extract duplicate code to a dedicated function after testing
-	for _, mapperName := range s.AnalysisService.MapperNames {
-		for _, records := range s.AnalysisService.MapperInfos[mapperName].RecordsByQname {
-			for _, record := range records {
-
-				// adjust position to be relative to target region
-				record.Pos -= config.GetTargetStart()
-
-				builder.WriteString(record.StringWithMapperInfo(mapperName))
-				builder.WriteString("\n")
-			}
-		}
-	}
-
-	bamBytes, err := samToSortedBam(builder.String())
+	bamBytes, err := samToSortedBam(samString)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error converting SAM to BAM: %v", err), http.StatusInternalServerError)
 		return
@@ -978,17 +980,7 @@ func getTargetRegionIgvConfig(w http.ResponseWriter, r *http.Request) {
 	tracks = append(tracks, track)
 
 	// convert global location to local location
-	targetRegionStr := config.GetTargetRegion()
-	startEnd := strings.Split(strings.Split(targetRegionStr, ":")[1], "-")
-	start, err := strconv.Atoi(startEnd[0])
-	if err != nil {
-		http.Error(w, "Invalid start position in target region", http.StatusBadRequest)
-	}
-	end, err := strconv.Atoi(startEnd[1])
-	if err != nil {
-		http.Error(w, "Invalid end position in target region", http.StatusBadRequest)
-	}
-	targetRegionStrLocal := fmt.Sprintf("%s:%d-%d", config.GetTargetName(), 1, end-start)
+	targetRegionStrLocal := fmt.Sprintf("%s:%d-%d", config.GetTargetContig(), 1, config.GetTargetEnd()-config.GetTargetStart()+1)
 
 	response := map[string]interface{}{
 		"genomeConfig": genomeConfig,
