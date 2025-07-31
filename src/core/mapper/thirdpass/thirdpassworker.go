@@ -1,6 +1,7 @@
 package thirdpass
 
 import (
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -36,6 +37,8 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 			}
 			if task.TargetInfo.Fw[i].MatchedGenome.Length() != len(*task.TargetInfo.ReadPair.ReadR1.Sequence) && task.TargetInfo.Fw[i].MatchedRead.Length() != len(*task.TargetInfo.ReadPair.ReadR1.Sequence) {
 				logrus.Infof("Read labeled complete but not fully mapped: Fw Read %s matched genome length: %d", task.TargetInfo.ReadPair.ReadR1.Header, task.TargetInfo.Fw[i].MatchedGenome.Length())
+				fmt.Println(task.TargetInfo.Fw[i].MatchedGenome)
+				fmt.Println(task.TargetInfo.Fw[i].MatchedRead)
 				continue
 			}
 			for j := 0; j < len(task.TargetInfo.Rv); j++ {
@@ -44,8 +47,12 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 				}
 
 				// TODO: some reads still are not fully mapped sometimes...
-				if task.TargetInfo.Rv[j].MatchedGenome.Length() != len(*task.TargetInfo.ReadPair.ReadR1.Sequence) && task.TargetInfo.Rv[j].MatchedRead.Length() != len(*task.TargetInfo.ReadPair.ReadR1.Sequence) {
+				if task.TargetInfo.Rv[j].MatchedGenome.Length() != len(*task.TargetInfo.ReadPair.ReadR2.Sequence) && task.TargetInfo.Rv[j].MatchedRead.Length() != len(*task.TargetInfo.ReadPair.ReadR2.Sequence) {
 					logrus.Infof("Read labeled complete but not fully mapped: Rv Read %s matched genome length: %d", task.TargetInfo.ReadPair.ReadR2.Header, task.TargetInfo.Rv[j].MatchedGenome.Length())
+					fmt.Println(task.TargetInfo.Rv[j].MatchedGenome)
+					fmt.Println(task.TargetInfo.Rv[j].MatchedRead)
+					fmt.Println(task.TargetInfo.Rv[j].MismatchesRead)
+
 					continue
 				}
 
