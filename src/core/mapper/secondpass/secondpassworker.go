@@ -699,7 +699,7 @@ func rightRemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet
 
 	regionReadEnd := len(*read.Sequence)
 
-	if regionReadEnd > len(*read.Sequence) {
+	if regionReadEnd > len(*read.Sequence) || startInRead < 0 {
 		logrus.Infof("Aborting right remap to prevent index error in %s, sindex=%d", read.Header, readMatchResult.SequenceIndex)
 		logrus.Infof("Anchor region end: %d", regionReadEnd)
 		fmt.Println(readMatchResult.MatchedGenome)
