@@ -1,9 +1,10 @@
 package config
 
 import (
-	"github.com/sirupsen/logrus"
 	"os"
 	"path/filepath"
+
+	"github.com/sirupsen/logrus"
 )
 
 var env string = "development"
@@ -51,6 +52,11 @@ var (
 	MaxConfMm           int = 6  // how many mm is a conf map allowed to have
 	MinConfAnchorLength int = 20 // how long does each ali block in a conf map have to be to be considered conf
 )
+
+// by default, an intron cluster only absorbes an incoming gap (extending its reach) if the delta
+// of gap.start/stop and cluster.start/stop is less than 100. This allows overlapping introns but
+// also resolves intron coord confilct within close proximity
+var IntronClusterDelta int = 100
 
 func Env() string {
 	return env

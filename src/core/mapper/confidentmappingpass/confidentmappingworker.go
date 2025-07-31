@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
@@ -348,6 +349,10 @@ func clusterGaps(targetGaps map[regionvector.Gap]int) []*regionvector.Intron {
 	}
 	// sort by length s.t. we cluster bottom up
 	sort.Slice(sortedGaps, func(i, j int) bool {
+		if sortedGaps[i].Start == sortedGaps[j].Start || sortedGaps[i].End == sortedGaps[j].End {
+			return sortedGaps[i].Length() < sortedGaps[j].Length()
+		}
+
 		if sortedGaps[i].Length() != sortedGaps[j].Length() {
 			return sortedGaps[i].Start < sortedGaps[j].Start
 		}
@@ -378,11 +383,13 @@ func clusterGaps(targetGaps map[regionvector.Gap]int) []*regionvector.Intron {
 
 		for _, cluster := range clusters {
 			if currGap.End > cluster.lStart && currGap.Start < cluster.rStop {
-				if cluster.lStart > currGap.Start && cluster.lStart-currGap.Start < 1000 {
-					cluster.lStart = currGap.Start
+				// check if dist from gap start to cluster start is small enough to absorb
+				if cluster.lStart > currGap.Start && cluster.lStart-currGap.Start > config.IntronClusterDelta {
+					continue
 				}
-				if cluster.rStop < currGap.End && currGap.End-cluster.rStop < 1000 {
-					cluster.rStop = currGap.End
+				// check if dist from gap end to cluster end is small enough to absorb
+				if cluster.rStop < currGap.End && currGap.End-cluster.rStop > config.IntronClusterDelta {
+					continue
 				}
 				if cluster.maxEvidence < currGapEvidence {
 					cluster.maxEvidence = currGapEvidence
@@ -390,6 +397,9 @@ func clusterGaps(targetGaps map[regionvector.Gap]int) []*regionvector.Intron {
 					cluster.eStop = currGap.End
 					cluster.maxEvidenceFollowsSpliceSite = currGap.KnownSpliceSite
 				}
+				// grow cluster
+				cluster.rStop = currGap.End
+				cluster.lStart = currGap.Start
 				addedToExistingCluster = true
 				break
 			}
