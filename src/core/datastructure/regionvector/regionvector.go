@@ -37,11 +37,11 @@ func (i Intron) Contains(r Region) bool {
 }
 
 func (i Intron) LeftOverlap(r Region) bool {
-	return i.Start <= r.Start && i.Start <= r.End
+	return i.End >= r.Start && i.End < r.End
 }
 
 func (i Intron) RightOverlap(r Region) bool {
-	return i.End <= r.End && i.End >= r.Start
+	return i.Start <= r.End && i.End > r.End
 }
 
 func (r Region) Length() int {
@@ -550,7 +550,7 @@ func (rs *RegionSet) SpansIntron(region Region) []*Intron {
 	return spannedIntrons
 }
 
-func (t *TranscriptomeGraph) FindPathsRight(startPos int, length int) ([][]Region, *map[string]bool) {
+func (t *TranscriptomeGraph) FindPathsRight(startPos int, length int) [][]Region {
 	var results [][]Region
 	seen := make(map[string]bool)
 
@@ -559,10 +559,10 @@ func (t *TranscriptomeGraph) FindPathsRight(startPos int, length int) ([][]Regio
 			t.dfsRight(startNode, []Region{}, length, &results, startPos, seen)
 		}
 	}
-	return results, &seen
+	return results
 }
 
-func (t *TranscriptomeGraph) FindPathsLeft(startPos int, length int) ([][]Region, *map[string]bool) {
+func (t *TranscriptomeGraph) FindPathsLeft(startPos int, length int) [][]Region {
 	var results [][]Region
 	seen := make(map[string]bool)
 
@@ -571,7 +571,7 @@ func (t *TranscriptomeGraph) FindPathsLeft(startPos int, length int) ([][]Region
 			t.dfsLeft(startNode, []Region{}, length, &results, startPos, seen)
 		}
 	}
-	return results, &seen
+	return results
 }
 
 func LengthOfPath(regions []Region) int {
