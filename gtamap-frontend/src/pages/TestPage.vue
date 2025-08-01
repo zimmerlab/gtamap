@@ -1,17 +1,31 @@
 <template>
-  <UpsetPlotReadPos title="test title" url="/api/upsetDataRecordPosCigar"></UpsetPlotReadPos>
+  <div class="tw:m-20">
+    <CustomTag :level="1" size="sm"></CustomTag>
+  </div>
+  <div class="tw:m-20">
+    <CustomTag :level="2" size="xs"></CustomTag>
+  </div>
+  <div class="tw:m-20">
+    <CustomTag :level="3"></CustomTag>
+  </div>
+  <div class="tw:m-20">
+    <CustomTag :level="4"></CustomTag>
+  </div>
+  <div class="tw:m-20">
+    <CustomTag :level="5" size="xs"></CustomTag>
+    <CustomTag :level="5" size="sm"></CustomTag>
+    <CustomTag :level="5" size="md"></CustomTag>
+  </div>
 </template>
 
 <script>
-import UpsetPlot from "../components/UpsetPlot.vue";
-import UpsetPlotMapperAgreement from "../components/UpsetPlotMapperAgreement.vue";
+import CustomTag from "../components/CustomTag.vue";
 
 export default {
   name: 'TestPage',
-  components: {UpsetPlotReadPos: UpsetPlotMapperAgreement, UpsetPlot},
+  components: {CustomTag},
   setup() {
-    // This is where you can set up your component logic
-    // For example, you can import and use the UpsetPlot component here
+
   }
 }
 </script>

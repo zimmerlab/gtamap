@@ -18,6 +18,10 @@
       <w-button @click.stop="openReadDetails(item)" xs>view</w-button>
     </template>
 
+    <template #item-cell.confidence="{ item }">
+      <CustomTag :level="randomLevel()" size="xs"></CustomTag>
+    </template>
+
     <template #item-cell.mappedBy="{ item }">
         <span v-if="Array.isArray(item.mappedBy)">
           <w-tag
@@ -37,12 +41,6 @@
           :selected-rows="tableData.selectedRowsInExpanded"
           :items="readMappingTableData.items"
       >
-<!--      <w-table-->
-<!--        :headers="tableData.expandedHeaders"-->
-<!--        :selectable-rows="1"-->
-<!--        v-model:selected-rows="tableData.selectedRowInExpanded"-->
-<!--        @row-select="selectedReadMapping = $event"-->
-<!--        :items="item.locations">-->
 
         <template #item-cell.pairType="{ item }">
           <span v-if="item.pairType === 'first'">R1</span>
@@ -74,6 +72,7 @@
 <script setup>
 
 import {defineExpose, inject, nextTick, onMounted, ref} from 'vue'
+import CustomTag from "./CustomTag.vue";
 
 const ApiService = inject("http")
 
@@ -83,11 +82,14 @@ const pagination = ref({
   itemsPerPageOptions: [{value: 15}, {value: 30}],
 })
 
+const randomLevel = () => Math.floor(Math.random() * 5) + 1
+
 const tableData = ref({
   loading: true,
   sortKey: "+qname",
   headers: [
     {label: '', key: 'readDetails', sortable: false},
+    {label: 'Confidence', key: 'confidence', sortable: false},
     {label: 'Read Name', key: 'qname', sortable: true, type: 'string'},
     {label: 'Read Length', key: 'readLength', type: 'number'},
     {label: 'Num Locations', key: 'numLocations', type: 'number'},
@@ -140,9 +142,6 @@ const customSort = function() {
     }
   })
 }
-
-const selectedRead = ref({})
-const selectedReadMapping = ref({})
 
 const readSummaryTableData = ref({items: []})
 const readMappingTableData = ref({items: []})
@@ -206,22 +205,11 @@ const selectAndScrollToRead = async function(readInfo) {
   tableData.value.selectedRows = [targetRead._uid]
 
   expandRow(targetRead)
-
   await nextTick()
-
-  // tableData.value.expandedRows = [targetRead._uid]
-  // selectedRead.value = targetRead
-
-  console.log(readInfo)
-  console.log(targetRead.locations)
-
-  console.log(readMappingTableData.value)
 
   let selectedMappingRow = undefined
 
   for (const mapping of readMappingTableData.value.items) {
-
-    console.log("mapping: ", mapping)
 
     for (let i = 0; i < mapping.mappedBy.length; i++) {
       if (mapping.mappedBy[i] !== readInfo.mapperName) {

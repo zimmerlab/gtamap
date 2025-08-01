@@ -974,6 +974,8 @@ type IgvTrackConfig struct {
 	Url         string `json:"url"`
 	IndexUrl    string `json:"indexURL"`
 	Type        string `json:"type"`
+	Height      int    `json:"height,omitempty"`
+	MaxHeight   int    `json:"maxHeight,omitempty"`
 }
 
 func getTargetRegionIgvConfig(w http.ResponseWriter, r *http.Request) {
@@ -992,6 +994,8 @@ func getTargetRegionIgvConfig(w http.ResponseWriter, r *http.Request) {
 		Url:         "http://localhost:8000/download/targetRegion/combinedBam",
 		IndexUrl:    "http://localhost:8000/download/targetRegion/combinedBamIndex",
 		Type:        "alignment",
+		Height:      800,
+		MaxHeight:   1000,
 	}
 
 	tracks := make([]IgvTrackConfig, 0)
