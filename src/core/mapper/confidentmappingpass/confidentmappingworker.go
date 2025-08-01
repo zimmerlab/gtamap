@@ -38,6 +38,9 @@ func ConfidentMappingWorker(confidentChan *ConfidentPassChan, wgConfidentMapping
 		// get Introns per seqId
 		// NOTE: Introns are 0 based, start inclusive and end exclusive
 		annotation[targetId] = InferIntronsOfTarget(targetId, cMaps, index)
+		// build graphs
+		annotation[targetId].Introns[0].BuildTranscriptomeGraph(len(*index.Sequences[targetId]))
+		annotation[targetId].Introns[1].BuildTranscriptomeGraph(len(*index.Sequences[targetId]))
 		annotation[targetId].LogInfo()
 	}
 
