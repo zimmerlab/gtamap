@@ -174,7 +174,7 @@ func (s *Server) upsetDataRecordPos(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			id := record.Qname + "X" + strconv.Itoa(record.Pos)
+			id := record.Qname + "::" + strconv.Itoa(record.Pos)
 
 			if _, exists := recordPosMap[id]; !exists {
 				recordPosMap[id] = make(map[string]bool)
@@ -1154,20 +1154,21 @@ func (s *Server) ReadSummaryTableData() []ReadOverviewInfo {
 
 						// do not add the same mapper multiple times (could be because the same location is used
 						// for multiple read pairs, especially in the current 0.2 gtamap version)
-						for _, mappedBy := range location.MappedBy {
-							if mappedBy == mapperName {
-								found = true
-								break
-							}
-						}
-
-						if found {
-							break
-						}
+						// TODO: the same read is only mapped twice by gtamap currently because all combinations
+						// of pairs are made
+						//for _, mappedBy := range location.MappedBy {
+						//	if mappedBy == mapperName {
+						//		found = true
+						//		break
+						//	}
+						//}
+						//if found {
+						//	break
+						//}
 
 						location.MappedBy = append(location.MappedBy, mapperName)
 						location.ReadIndices = append(location.ReadIndices, record.IndexInSam)
-						location.NumMappedBy++
+						//location.NumMappedBy++
 						found = true
 						break
 					}
@@ -1206,7 +1207,21 @@ func (s *Server) ReadSummaryTableData() []ReadOverviewInfo {
 	reads := make([]ReadOverviewInfo, 0)
 
 	for _, readInfo := range readSummary {
-		readInfo.NumMappedBy = len(readInfo.MappedBy)
+
+		uniqueMappers := make(map[string]struct{})
+		for _, mapper := range readInfo.MappedBy {
+			uniqueMappers[mapper] = struct{}{}
+		}
+		readInfo.NumMappedBy = len(uniqueMappers)
+
+		for _, location := range readInfo.Locations {
+			uniqueMappers = make(map[string]struct{})
+			for _, mapper := range location.MappedBy {
+				uniqueMappers[mapper] = struct{}{}
+			}
+			location.NumMappedBy = len(uniqueMappers)
+		}
+
 		readInfo.NumLocations = len(readInfo.Locations)
 		reads = append(reads, *readInfo)
 	}

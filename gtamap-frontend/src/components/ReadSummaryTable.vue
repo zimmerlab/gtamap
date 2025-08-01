@@ -7,37 +7,12 @@
       :pagination="pagination"
       :selectable-rows="1"
       :selected-rows="tableData.selectedRows"
-      v-model:expanded-rows="tableData.expandedRows"
-      @row-select="selectedRead = $event"
+      :expanded-rows="tableData.expandedRows"
+      @row-expand="expandRowClickHandler"
       :sort="tableData.sortKey"
       :sort-function="customSort"
       class="tw:text-xs"
       expandable-rows>
-
-<!--    <template #item="{ item, index }">-->
-<!--      <tr :key="item.qname"-->
-<!--          :id="item.qname">-->
-<!--&lt;!&ndash;          :ref="el => rowRefs.value[index] = el">&ndash;&gt;-->
-<!--        <td>-->
-<!--          <w-button @click.stop="openReadDetails(item)" xs>view</w-button>-->
-<!--        </td>-->
-<!--        <td>{{ item.qname }}</td>-->
-<!--        <td>{{ item.readLength }}</td>-->
-<!--        <td>{{ item.numLocations }}</td>-->
-<!--        <td>{{ item.numMappedBy }}</td>-->
-<!--        <td>-->
-<!--        <span v-if="Array.isArray(item.mappedBy)">-->
-<!--          <w-tag-->
-<!--              v-for="(val, idx) in item.mappedBy"-->
-<!--              :key="idx"-->
-<!--              class="mr4"-->
-<!--              color="primary"-->
-<!--          >{{ val }}</w-tag>-->
-<!--        </span>-->
-<!--          <span v-else>{{ item.mappedBy }}</span>-->
-<!--        </td>-->
-<!--      </tr>-->
-<!--    </template>-->
 
     <template #item-cell.readDetails="{ item }">
       <w-button @click.stop="openReadDetails(item)" xs>view</w-button>
@@ -58,41 +33,38 @@
     <template #row-expansion="{ item }">
       <w-table
           :headers="tableData.expandedHeaders"
-          :items="item.locations">
+          :selectable-rows="1"
+          :selected-rows="tableData.selectedRowsInExpanded"
+          :items="readMappingTableData.items"
+      >
+<!--      <w-table-->
+<!--        :headers="tableData.expandedHeaders"-->
+<!--        :selectable-rows="1"-->
+<!--        v-model:selected-rows="tableData.selectedRowInExpanded"-->
+<!--        @row-select="selectedReadMapping = $event"-->
+<!--        :items="item.locations">-->
 
         <template #item-cell.pairType="{ item }">
-            <span
-                v-if="item.pairType === 'first'"
-            >R1</span>
-          <span
-              v-else-if="item.pairType === 'second'"
-          >R2</span>
-          <span
-              v-else
-          >NA</span>
+          <span v-if="item.pairType === 'first'">R1</span>
+          <span v-else-if="item.pairType === 'second'">R2</span>
+          <span v-else>NA</span>
         </template>
 
         <template #item-cell.isForwardStrand="{ item }">
-            <span
-                v-if="item.isForwardStrand"
-                color="primary"
-            >+</span>
-          <span
-              v-else
-              color="primary"
-          >-</span>
+          <span v-if="item.isForwardStrand">+</span>
+          <span v-else>-</span>
         </template>
 
         <template #item-cell.mappedBy="{ item }">
-            <span v-if="Array.isArray(item.mappedBy)">
-                <w-tag
-                    v-for="(val, idx) in item.mappedBy"
-                    :key="idx"
-                    class="mr4"
-                    color="primary"
-                >{{ val }}</w-tag>
-              </span>
-          <span v-else>{{ item.mappedBy }}</span>
+          <span v-if="Array.isArray(item.mappedBy)">
+            <w-tag
+              v-for="(val, idx) in Array.from(new Set(item.mappedBy))"
+              :key="idx"
+              class="mr4"
+              color="primary"
+            >{{ val }}</w-tag>
+          </span>
+        <span v-else>{{ item.mappedBy }}</span>
         </template>
       </w-table>
     </template>
@@ -104,6 +76,12 @@
 import {defineExpose, inject, nextTick, onMounted, ref} from 'vue'
 
 const ApiService = inject("http")
+
+const pagination = ref({
+  total: 0,
+  itemsPerPage: 30,
+  itemsPerPageOptions: [{value: 15}, {value: 30}],
+})
 
 const tableData = ref({
   loading: true,
@@ -129,6 +107,7 @@ const tableData = ref({
   ],
   selectedRows: [],
   expandedRows: [],
+  selectedRowsInExpanded: []
 })
 
 const customSort = function() {
@@ -162,15 +141,27 @@ const customSort = function() {
   })
 }
 
-const pagination = ref({
-  total: 0,
-  itemsPerPage: 30,
-  itemsPerPageOptions: [{value: 15}, {value: 30}],
-})
-
 const selectedRead = ref({})
+const selectedReadMapping = ref({})
 
 const readSummaryTableData = ref({items: []})
+const readMappingTableData = ref({items: []})
+
+const expandRowClickHandler = function(rowInfo) {
+
+  if (!rowInfo.expanded) {
+    tableData.value.expandedRows = []
+    readMappingTableData.value = []
+    return
+  }
+
+  expandRow(rowInfo.item)
+}
+
+const expandRow = function(rowItem) {
+  tableData.value.expandedRows = [rowItem._uid]
+  readMappingTableData.value.items = rowItem.locations.slice() || []
+}
 
 let getReadSummaryTableData = function() {
 
@@ -213,13 +204,49 @@ const selectAndScrollToRead = async function(readInfo) {
   pagination.value.page = Math.floor(targetRead._uid / pagination.value.itemsPerPage) + 1
 
   tableData.value.selectedRows = [targetRead._uid]
-  tableData.value.expandedRows = [targetRead._uid]
-  selectedRead.value = targetRead
 
-  // await nextTick()
+  expandRow(targetRead)
+
+  await nextTick()
+
+  // tableData.value.expandedRows = [targetRead._uid]
+  // selectedRead.value = targetRead
+
+  console.log(readInfo)
+  console.log(targetRead.locations)
+
+  console.log(readMappingTableData.value)
+
+  let selectedMappingRow = undefined
+
+  for (const mapping of readMappingTableData.value.items) {
+
+    console.log("mapping: ", mapping)
+
+    for (let i = 0; i < mapping.mappedBy.length; i++) {
+      if (mapping.mappedBy[i] !== readInfo.mapperName) {
+        continue
+      }
+      if (mapping.readIndices[i] !== readInfo.index) {
+        continue
+      }
+      if (selectedMappingRow !== undefined) {
+        console.warn("Multiple mappings found for the selected read, selecting the first one")
+        break
+      }
+      selectedMappingRow = mapping
+    }
+  }
+
+  if (!selectedMappingRow) {
+    console.warn("No matching mapping found for the selected read")
+    return
+  }
+
+  tableData.value.selectedRowsInExpanded = [selectedMappingRow._uid]
 }
 
-defineExpose({ selectAndScrollToRead})
+defineExpose({selectAndScrollToRead})
 
 onMounted(() => {
   getReadSummaryTableData()
