@@ -11,6 +11,7 @@
       @row-expand="expandRowClickHandler"
       :sort="tableData.sortKey"
       :sort-function="customSort"
+      @update:sort="handleSort"
       class="tw:text-xs"
       expandable-rows>
 
@@ -112,7 +113,16 @@ const tableData = ref({
   selectedRowsInExpanded: []
 })
 
+const handleSort = function(sortInfo) {
+  tableData.value.sortKey = sortInfo[0]
+  customSort()
+}
+
 const customSort = function() {
+
+  if (tableData.value.sortKey === "") {
+    return items
+  }
 
   const items = readSummaryTableData.value.items
   const desc = tableData.value.sortKey[0] === '-'
@@ -141,6 +151,8 @@ const customSort = function() {
       return sortLikeString(a, b) * (desc ? -1 : 1)
     }
   })
+  
+  return items
 }
 
 const readSummaryTableData = ref({items: []})
