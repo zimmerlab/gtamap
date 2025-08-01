@@ -68,16 +68,21 @@ func SecondpassMappingWorker(secondPassChan *SecondPassChannel, wgIncompleteMapp
 }
 
 func remapReadPair(readPairMapping *mapperutils.ReadPairMatchResults, annotationMap map[int]*mapperutils.TargetAnnotation, genomeIndex *index.GenomeIndex) {
+	fwRemaps := make([]*mapperutils.ReadMatchResult, 0)
 	for _, mapping := range readPairMapping.Fw {
 		mainSeqId := mapping.SequenceIndex / 2
 		remaps := remapRead(mapping, annotationMap[mainSeqId], readPairMapping.ReadPair.ReadR1, genomeIndex)
-		readPairMapping.Fw = remaps
+		fwRemaps = append(fwRemaps, remaps...)
 	}
+	readPairMapping.Fw = fwRemaps
+
+	rvRemaps := make([]*mapperutils.ReadMatchResult, 0)
 	for _, mapping := range readPairMapping.Rv {
 		mainSeqId := mapping.SequenceIndex / 2
 		remaps := remapRead(mapping, annotationMap[mainSeqId], readPairMapping.ReadPair.ReadR2, genomeIndex)
-		readPairMapping.Rv = remaps
+		rvRemaps = append(rvRemaps, remaps...)
 	}
+	readPairMapping.Rv = rvRemaps
 
 	// TODO: make mappings uniq
 }
@@ -968,6 +973,18 @@ func enhancedRNARemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 			missingBases := anchorToRemap.MainAnchorRead.Start
 			startPos := anchorToRemap.MainAnchorGenome.Start
 			leftPaths := targetSeqIntronSet.TranscriptomeGraph.FindPathsLeft(startPos, missingBases)
+			// we can also add the previously mapped region to possible leftPaths
+			if mainAnchorIndex != 0 {
+				path := make([]regionvector.Region, 0)
+				l := 0
+				for i := mainAnchorIndex - 1; i >= 0; i-- {
+					path = append(path, readMatchResult.MatchedGenome.Regions[i])
+					l += readMatchResult.MatchedGenome.Regions[i].Length()
+				}
+				if l == missingBases {
+					leftPaths = append(leftPaths, path)
+				}
+			}
 			if leftPaths != nil {
 				remapSectionsLeft := scoreLeftOptions(leftPaths, anchorToRemap.MainAnchorRead.Start, read.Sequence, genomeIndex.Sequences[remap.SequenceIndex])
 				anchorToRemap.LeftSections = remapSectionsLeft
