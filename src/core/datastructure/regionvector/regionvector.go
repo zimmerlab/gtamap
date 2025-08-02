@@ -716,9 +716,7 @@ func (t TranscriptomeNode) String() string {
 }
 
 func (i Intron) String() string {
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("%d: [%d, %d) Confident SpliceSite: [%t] Evidence: [%d]", i.Rank, i.Start, i.End, i.TrueSpliceSite, i.Evidence))
-	return sb.String()
+	return fmt.Sprintf("%d: [%d, %d) Confident SpliceSite: [%t] Evidence: [%d]", i.Rank, i.Start, i.End, i.TrueSpliceSite, i.Evidence)
 }
 
 func GenomicCoordToReadCoord(startInRead, genomeCoord int, genomeIntervals []Region) (int, error) {
