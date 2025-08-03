@@ -2,6 +2,7 @@ package mapperutils
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -318,6 +319,8 @@ func hasLongDiagonals(mapping *ReadMatchResult) bool {
 
 func (r *ReadMatchResult) GetCigar() (string, error) {
 	var builder strings.Builder
+	slices.Sort(r.MismatchesRead)
+	r.NormalizeRegions()
 
 	isForwardStrand := r.SequenceIndex == 0
 
@@ -338,8 +341,9 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 
 			// if this is the last match, add the number of matches
 			if i == len(r.MatchedGenome.Regions)-1 {
-				builder.WriteString(strconv.Itoa(numMatchesSum))
-				builder.WriteString("M")
+				// builder.WriteString(strconv.Itoa(numMatchesSum))
+				// builder.WriteString("M")
+				builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead))
 				break
 			}
 
@@ -359,8 +363,9 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 				continue
 			}
 
-			builder.WriteString(strconv.Itoa(numMatchesSum))
-			builder.WriteString("M")
+			// builder.WriteString(strconv.Itoa(numMatchesSum))
+			// builder.WriteString("M")
+			builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead))
 			numMatchesSum = 0
 
 			// intron or deletion
@@ -406,8 +411,9 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 
 			// if this is the last match, add the number of matches
 			if i == 0 {
-				builder.WriteString(strconv.Itoa(numMatchesSum))
-				builder.WriteString("M")
+				// builder.WriteString(strconv.Itoa(numMatchesSum))
+				// builder.WriteString("M")
+				builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead))
 				break
 			}
 
@@ -427,8 +433,9 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 				continue
 			}
 
-			builder.WriteString(strconv.Itoa(numMatchesSum))
-			builder.WriteString("M")
+			// builder.WriteString(strconv.Itoa(numMatchesSum))
+			// builder.WriteString("M")
+			builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead))
 			numMatchesSum = 0
 
 			// intron or deletion
@@ -454,7 +461,6 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 				builder.WriteString(strconv.Itoa(numSkipped))
 				builder.WriteString("I")
 			}
-
 		}
 	}
 
@@ -562,54 +568,33 @@ func (t TargetAnnotation) LogInfo() {
 	}
 }
 
-func (r ReadPairMatchResults) String() string {
+func ParseMatchedRegion(region regionvector.Region, mms []int) string {
 	var builder strings.Builder
-	builder.Write([]byte("ReadPairR1 Header: "))
-	builder.Write([]byte(r.ReadPair.ReadR1.Header))
-	builder.Write([]byte("\n"))
-	builder.Write([]byte("  <== FW MAPPINGS ==>"))
-	builder.Write([]byte("\n"))
-	for _, mapping := range r.Fw {
-		builder.Write([]byte("\t SeqIndex: "))
-		seqIndex := strconv.Itoa(mapping.SequenceIndex)
-		builder.WriteString(seqIndex)
-		builder.WriteString("\n")
-		builder.WriteString("\t GENOME -> ")
-		builder.WriteString(mapping.MatchedGenome.String())
-		builder.WriteString("\n")
-		builder.WriteString("\t READ   -> ")
-		builder.WriteString(mapping.MatchedRead.String())
-		builder.WriteString("\n")
-		builder.WriteString("\t MISMAT -> ")
-		ints := mapping.MismatchesRead
-		strs := make([]string, len(ints))
-		for i, v := range ints {
-			strs[i] = strconv.Itoa(v)
-		}
-		builder.WriteString(strings.Join(strs, ","))
-		builder.WriteString("\n")
+	if len(mms) == 0 {
+		builder.WriteString(fmt.Sprintf("%d=", region.Length()))
+		return builder.String()
 	}
-	builder.Write([]byte("  <== RV MAPPINGS ==>"))
-	builder.Write([]byte("\n"))
-	for _, mapping := range r.Rv {
-		builder.Write([]byte("\t SeqIndex: "))
-		seqIndex := strconv.Itoa(mapping.SequenceIndex)
-		builder.WriteString(seqIndex)
-		builder.WriteString("\n")
-		builder.WriteString("\t GENOME -> ")
-		builder.WriteString(mapping.MatchedGenome.String())
-		builder.WriteString("\n")
-		builder.WriteString("\t READ   -> ")
-		builder.WriteString(mapping.MatchedRead.String())
-		builder.WriteString("\n")
-		builder.WriteString("\t MISMAT -> ")
-		ints := mapping.MismatchesRead
-		strs := make([]string, len(ints))
-		for i, v := range ints {
-			strs[i] = strconv.Itoa(v)
+
+	lastStart := 0 // Start at 0 (relative to region start)
+
+	for _, mm := range mms {
+		if mm < region.Start || mm >= region.End {
+			continue
 		}
-		builder.WriteString(strings.Join(strs, ","))
-		builder.WriteString("\n")
+
+		// Convert global mismatch position to region-relative position
+		relativePos := mm - region.Start
+
+		if relativePos > lastStart {
+			builder.WriteString(fmt.Sprintf("%d=", relativePos-lastStart))
+		}
+		builder.WriteString("1X")
+		lastStart = relativePos + 1
 	}
+
+	if lastStart < region.Length() { // Compare to region length, not region.End
+		builder.WriteString(fmt.Sprintf("%d=", region.Length()-lastStart))
+	}
+
 	return builder.String()
 }
