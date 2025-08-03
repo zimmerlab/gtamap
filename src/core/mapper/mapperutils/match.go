@@ -343,7 +343,7 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 			if i == len(r.MatchedGenome.Regions)-1 {
 				// builder.WriteString(strconv.Itoa(numMatchesSum))
 				// builder.WriteString("M")
-				builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead))
+				builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead, false))
 				break
 			}
 
@@ -365,7 +365,7 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 
 			// builder.WriteString(strconv.Itoa(numMatchesSum))
 			// builder.WriteString("M")
-			builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead))
+			builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead, false))
 			numMatchesSum = 0
 
 			// intron or deletion
@@ -413,7 +413,7 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 			if i == 0 {
 				// builder.WriteString(strconv.Itoa(numMatchesSum))
 				// builder.WriteString("M")
-				builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead))
+				builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead, true))
 				break
 			}
 
@@ -435,7 +435,7 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 
 			// builder.WriteString(strconv.Itoa(numMatchesSum))
 			// builder.WriteString("M")
-			builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead))
+			builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead, true))
 			numMatchesSum = 0
 
 			// intron or deletion
@@ -568,7 +568,7 @@ func (t TargetAnnotation) LogInfo() {
 	}
 }
 
-func ParseMatchedRegion(region regionvector.Region, mms []int) string {
+func ParseMatchedRegion(region regionvector.Region, mms []int, isRev bool) string {
 	var builder strings.Builder
 	if len(mms) == 0 {
 		builder.WriteString(fmt.Sprintf("%d=", region.Length()))
@@ -577,19 +577,35 @@ func ParseMatchedRegion(region regionvector.Region, mms []int) string {
 
 	lastStart := 0 // Start at 0 (relative to region start)
 
-	for _, mm := range mms {
-		if mm < region.Start || mm >= region.End {
-			continue
-		}
+	if isRev {
+		for i := len(mms) - 1; i >= 0; i-- {
+			mm := mms[i]
 
-		// Convert global mismatch position to region-relative position
-		relativePos := mm - region.Start
+			if mm < region.Start || mm >= region.End {
+				continue
+			}
+			relativePos := region.End - mm - 1
 
-		if relativePos > lastStart {
-			builder.WriteString(fmt.Sprintf("%d=", relativePos-lastStart))
+			if relativePos > lastStart {
+				builder.WriteString(fmt.Sprintf("%d=", relativePos-lastStart))
+			}
+			builder.WriteString("1X")
+			lastStart = relativePos + 1
 		}
-		builder.WriteString("1X")
-		lastStart = relativePos + 1
+	} else {
+		for _, mm := range mms {
+			if mm < region.Start || mm >= region.End {
+				continue
+			}
+
+			relativePos := mm - region.Start
+
+			if relativePos > lastStart {
+				builder.WriteString(fmt.Sprintf("%d=", relativePos-lastStart))
+			}
+			builder.WriteString("1X")
+			lastStart = relativePos + 1
+		}
 	}
 
 	if lastStart < region.Length() { // Compare to region length, not region.End
