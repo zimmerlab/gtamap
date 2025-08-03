@@ -190,7 +190,6 @@ func (r *ReadMatchResult) NormalizeRegions() {
 		readOffset += blockLen
 		genomeOffset += blockLen
 
-		// Advance to next region when we've consumed the current one
 		if readOffset >= readRegion.Length() {
 			readIndex++
 			readOffset = 0
@@ -201,7 +200,6 @@ func (r *ReadMatchResult) NormalizeRegions() {
 		}
 	}
 
-	// Final assignment
 	r.MatchedRead.Regions = normalizedRead
 	r.MatchedGenome.Regions = normalizedGenome
 }
