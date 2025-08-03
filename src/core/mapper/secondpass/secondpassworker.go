@@ -995,7 +995,7 @@ func fixPointRNARemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 	for r := range rPaddings {
 		mainAnchor.End -= r
 		readMainAnchor.End -= r
-		mmMainAnchor = extractMMofAnchor(mainAnchor, mmMainAnchor)
+		mmMainAnchor = extractMMofAnchor(readMainAnchor, mmMainAnchor)
 	}
 
 	remap := Remap{
@@ -1229,7 +1229,7 @@ func scoreRightOptions(rightPaths [][]regionvector.Region, startInRead int, read
 
 			// score mm
 			for refPos := genomicRegion.Start; refPos < genomicRegion.End; refPos++ {
-				if (*refSeq)[refPos] != (*readSeq)[lastStart] {
+				if (*refSeq)[refPos] != (*readSeq)[lastStart] && lastStart != startInRead {
 					currSection.Mm = append(currSection.Mm, lastStart)
 				}
 				lastStart++
@@ -1260,9 +1260,9 @@ func scoreLeftOptions(leftPaths [][]regionvector.Region, startInRead int, readSe
 			}
 
 			// score mm
-			for refPos := genomicRegion.End; refPos >= genomicRegion.Start; refPos-- {
-				if (*refSeq)[refPos] != (*readSeq)[lastStart] {
-					currSection.Mm = append(currSection.Mm, lastStart)
+			for refPos := genomicRegion.End - 1; refPos >= genomicRegion.Start; refPos-- {
+				if (*refSeq)[refPos] != (*readSeq)[lastStart-1] && startInRead != lastStart {
+					currSection.Mm = append(currSection.Mm, lastStart-1)
 				}
 				lastStart--
 			}
@@ -1464,7 +1464,8 @@ func fillGaps(readMatchResult *mapperutils.ReadMatchResult, genomeIndex *index.G
 					for i := 0; i < gapRead.Length()-bestSplit; i++ {
 						// add the mismatche to the readMatchResult
 						if readByte[i] != genomeByte[i] {
-							mm = append(mm, gapRead.End-(bestSplit-i))
+							// mm = append(mm, gapRead.End-(bestSplit-i))
+							mm = append(mm, gapRead.Start+bestSplit+i) // NEW
 						}
 					}
 				}

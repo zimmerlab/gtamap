@@ -657,7 +657,8 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 						for i := 0; i < gapRead.Length()-bestSplit; i++ {
 							// add the mismatche to the result
 							if readByte[i] != genomeByte[i] {
-								result.MismatchesRead = append(result.MismatchesRead, gapRead.End-(bestSplit-i))
+								//result.MismatchesRead = append(result.MismatchesRead, gapRead.End-(bestSplit-i))
+								result.MismatchesRead = append(result.MismatchesRead, gapRead.Start+bestSplit+i)
 
 								// skip this match result if there are too many mismatches
 								if exceedsMismatchConstraint(read, result) {
