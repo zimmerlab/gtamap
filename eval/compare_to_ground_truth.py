@@ -153,7 +153,7 @@ def parse_sam_file(sam_path):
     for read in samfile:
         if read.is_reverse and read.is_read2:
             rv_dict[read.query_name].append(merge_blocks(read.get_blocks()))
-            mm = get_mismatches(read, False)
+            mm = get_mismatches(read, True)
             rv_dict_mm[read.query_name] = mm
         elif read.is_reverse and read.is_read1:
             fw_dict[read.query_name].append(merge_blocks(read.get_blocks()))
@@ -165,7 +165,7 @@ def parse_sam_file(sam_path):
             fw_dict_mm[read.query_name] = mm
         else:
             rv_dict[read.query_name].append(merge_blocks(read.get_blocks()))
-            mm = get_mismatches(read, True)
+            mm = get_mismatches(read, False)
             rv_dict_mm[read.query_name] = mm
 
     samfile.close()
@@ -573,6 +573,7 @@ def get_mismatches(read, flip_coords=False):
     if flip_coords:
         read_len = read.query_length
         mm = [read_len - 1 - pos for pos in mm]
+        mm.reverse()
 
     return mm
 
