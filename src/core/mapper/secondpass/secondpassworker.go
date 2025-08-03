@@ -84,7 +84,7 @@ func getUniqRemaps(r []*mapperutils.ReadMatchResult) []*mapperutils.ReadMatchRes
 	uniq := make([]*mapperutils.ReadMatchResult, 0)
 	seen := make(map[string]bool)
 	for _, remap := range r {
-		remap.SyncRegions()
+		remap.MergeRegions()
 		hash := createHash(remap)
 		if !seen[hash] {
 			seen[hash] = true
@@ -132,7 +132,8 @@ func remapRead(readMapping *mapperutils.ReadMatchResult, annotation *mapperutils
 	if readMapping.MatchedRead.Regions[0].Start == 0 && readMapping.MatchedRead.Regions[len(readMapping.MatchedRead.Regions)-1].End == len(*read.Sequence) && readMapping.MatchedRead.Length() != len(*read.Sequence) {
 		// before we do anyting, check if the missing part of the map is a gap in the mapping (lets say 10 bases are missing
 		// in the middle of the read). We want to use the already mapped part of the read before dicarding them in the remap
-		r := fillGaps(readMapping, genomeIndex, read)
+		r := readMapping.Copy()
+		fillGaps(r, genomeIndex, read)
 		alternativeReadMatchResults = append(alternativeReadMatchResults, r)
 	}
 
@@ -1293,9 +1294,9 @@ func extractMMofAnchor(anchor regionvector.Region, mms []int) []int {
 	return extracted
 }
 
-func fillGaps(readMatchResult *mapperutils.ReadMatchResult, genomeIndex *index.GenomeIndex, read *fastq.Read) *mapperutils.ReadMatchResult {
-	readVector := readMatchResult.MatchedRead.Copy()
-	genomeVector := readMatchResult.MatchedGenome.Copy()
+func fillGaps(readMatchResult *mapperutils.ReadMatchResult, genomeIndex *index.GenomeIndex, read *fastq.Read) {
+	readVector := readMatchResult.MatchedRead
+	genomeVector := readMatchResult.MatchedGenome
 	mm := readMatchResult.MismatchesRead
 
 	for i := 0; i < len(readVector.Regions)-1; i++ {
@@ -1370,7 +1371,11 @@ func fillGaps(readMatchResult *mapperutils.ReadMatchResult, genomeIndex *index.G
 					}
 				}
 			} else {
-				// we can try some stuff
+				if gapGenome.Length() == 0 {
+					// there's no gap at all in genome
+					return
+				}
+				// gap in genome smaller that read gap, we can minimize mm in that region
 				// genomeGapLen < readGapLen
 				seqIndex := readMatchResult.SequenceIndex
 				lErrors := make([]int, gapGenome.Length()+1)
@@ -1423,13 +1428,6 @@ func fillGaps(readMatchResult *mapperutils.ReadMatchResult, genomeIndex *index.G
 				}
 			}
 		}
-	}
-
-	return &mapperutils.ReadMatchResult{
-		SequenceIndex:  readMatchResult.SequenceIndex,
-		MatchedRead:    readVector,
-		MatchedGenome:  genomeVector,
-		MismatchesRead: mm,
 	}
 }
 
