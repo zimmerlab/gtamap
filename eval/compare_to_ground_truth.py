@@ -1,7 +1,5 @@
 # Version 2.0
 import argparse
-from numpy import argmin
-from numpy import argmax
 import polars as pl
 import pysam
 import os
@@ -11,7 +9,7 @@ import json
 from collections import defaultdict
 
 
-def compare_to_ground_truth(mapper_data, ground_truth_data, log_out):
+def compare_to_ground_truth(mapper_data, ground_truth_data):
     """
     Compare mapper data with ground truth data.
 
@@ -44,15 +42,19 @@ def compare_to_ground_truth(mapper_data, ground_truth_data, log_out):
         else 0
     )
 
-    fw_accuracy = positional_accuracy(
+    fw_accuracy, complient_fw = positional_accuracy(
         mapped_intervals_dict=mapper_data["fw"],
         true_intervals_dict=ground_truth_data["fw"],
-        log_out=log_out,
+        true_mm=ground_truth_data["fw_mut"],
+        mapped_mm=mapper_data["fw_mm"],
+        read_type="fw",
     )
-    rw_accuracy = positional_accuracy(
+    rw_accuracy, complient_rv = positional_accuracy(
         mapped_intervals_dict=mapper_data["rv"],
         true_intervals_dict=ground_truth_data["rv"],
-        log_out=log_out,
+        true_mm=ground_truth_data["rv_mut"],
+        mapped_mm=mapper_data["rv_mm"],
+        read_type="rv",
     )
 
     rv_level_two_recall = level_two_recall(
@@ -75,8 +77,8 @@ def compare_to_ground_truth(mapper_data, ground_truth_data, log_out):
         true_intervals_dict=ground_truth_data["fw"],
     )
 
-    fw_qual = calculate_avg_quality(mapper_data["fw_q"])
-    rw_qual = calculate_avg_quality(mapper_data["rv_q"])
+    # fw_qual = calculate_avg_quality(mapper_data["fw_q"])
+    # rw_qual = calculate_avg_quality(mapper_data["rv_q"])
 
     return {
         "true_positives": len(true_positives),
@@ -86,14 +88,14 @@ def compare_to_ground_truth(mapper_data, ground_truth_data, log_out):
         "precision": precision,
         "level_1_recall": recall,
         "f1_score": f1_score,
-        # "fw_qual": fw_qual,
-        # "rv_qual": rw_qual,
         "fw_accuracy": fw_accuracy,
         "rv_accuracy": rw_accuracy,
         "fw_level_2_recall": fw_level_two_recall,
         "rv_level_2_recall": rv_level_two_recall,
         "fw_level_3_recall": fw_level_three_recall,
         "rv_level_3_recall": rv_level_three_recall,
+        "perfect_matches_fw": complient_fw,
+        "perfect_matches_rv": complient_rv,
     }
 
 
@@ -145,26 +147,30 @@ def parse_sam_file(sam_path):
     samfile = pysam.AlignmentFile(sam_path, "r")
     fw_dict = defaultdict(list)
     rv_dict = defaultdict(list)
-    rv_dict_q = {}
-    fw_dict_q = {}
+    rv_dict_mm = {}
+    fw_dict_mm = {}
 
     for read in samfile:
         if read.is_reverse and read.is_read2:
-            rv_dict[read.query_name].append(read.get_blocks())
-            rv_dict_q[read.query_name] = read.mapping_quality
+            rv_dict[read.query_name].append(merge_blocks(read.get_blocks()))
+            mm = get_mismatches(read, False)
+            rv_dict_mm[read.query_name] = mm
         elif read.is_reverse and read.is_read1:
-            fw_dict[read.query_name].append(read.get_blocks())
-            fw_dict_q[read.query_name] = read.mapping_quality
+            fw_dict[read.query_name].append(merge_blocks(read.get_blocks()))
+            mm = get_mismatches(read, True)
+            fw_dict_mm[read.query_name] = mm
         elif read.is_forward and read.is_read1:
-            fw_dict[read.query_name].append(read.get_blocks())
-            fw_dict_q[read.query_name] = read.mapping_quality
+            fw_dict[read.query_name].append(merge_blocks(read.get_blocks()))
+            mm = get_mismatches(read, False)
+            fw_dict_mm[read.query_name] = mm
         else:
-            rv_dict[read.query_name].append(read.get_blocks())
-            rv_dict_q[read.query_name] = read.mapping_quality
+            rv_dict[read.query_name].append(merge_blocks(read.get_blocks()))
+            mm = get_mismatches(read, True)
+            rv_dict_mm[read.query_name] = mm
 
     samfile.close()
 
-    return {"fw": fw_dict, "rv": rv_dict, "fw_q": fw_dict_q, "rv_q": rv_dict_q}
+    return {"fw": fw_dict, "rv": rv_dict, "fw_mm": fw_dict_mm, "rv_mm": rv_dict_mm}
 
 
 def parse_ground_truth(gt_file: str, gene_id: str):
@@ -219,7 +225,16 @@ def parse_ground_truth(gt_file: str, gene_id: str):
             for row in filtered_df.iter_rows(named=True)
         }
 
-    return {"fw": fw_dict, "rv": rv_dict}, df.height
+    fw_mut = {row["readid"]: row["fw_mut"] for row in filtered_df.iter_rows(named=True)}
+
+    rv_mut = {row["readid"]: row["rw_mut"] for row in filtered_df.iter_rows(named=True)}
+
+    return {
+        "fw": fw_dict,
+        "rv": rv_dict,
+        "fw_mut": fw_mut,
+        "rv_mut": rv_mut,
+    }, df.height
 
 
 def parse_region(region: str, is_rev: bool):
@@ -242,7 +257,9 @@ def parse_region(region: str, is_rev: bool):
         ][::-1]
 
 
-def positional_accuracy(mapped_intervals_dict, true_intervals_dict, log_out):
+def positional_accuracy(
+    mapped_intervals_dict, true_intervals_dict, true_mm, mapped_mm, read_type
+):
     """
     Compute positional accuracy for each read and return the average accuracy.
 
@@ -251,7 +268,6 @@ def positional_accuracy(mapped_intervals_dict, true_intervals_dict, log_out):
     :return: Average positional accuracy across all reads.
     """
     accuracies = []
-    log = []
 
     number_of_complient_intervals = 0
     total = 0
@@ -293,35 +309,31 @@ def positional_accuracy(mapped_intervals_dict, true_intervals_dict, log_out):
                 # for i, o in enumerate(overlapping_bases_list):
                 #     if o != best_overlap:
                 #         missed_bases = total_true_bases - o
+                # print("[\033[33mALTERNATIVE MAP\033[0m]")
                 #         print(
                 #             f"alternative map for read {read_id} with diff of {missed_bases}:"
                 #         )
                 #         print(f"map {mapped_intervals[i]}")
                 #         print(f"ref {true_intervals}")
             else:
-                print(
-                    f"read {read_id} did not match 100% with ground truth interval, printing best alternative map"
-                )
                 for i, o in enumerate(overlapping_bases_list):
                     if o == best_overlap:
                         missed_bases = total_true_bases - o
                         accuracies.append(o / total_true_bases)
                         if accuracies[-1] < 1:
+                            print(
+                                f"[\033[31mINCOMPLETE MAP\033[0m] of {read_id} ({read_type}) with misatching {missed_bases} positions:"
+                            )
                             print(f"map {mapped_intervals[i]}")
                             print(f"ref {true_intervals}")
-                            print(f"missed pos {missed_bases}")
+                            print(f"map mm: {mapped_mm[read_id]}")
+                            print(f"ref mm: {true_mm[read_id]}")
 
-    print(
-        f"{number_of_complient_intervals} of a total of {total} true intervals matched 100% with ground truth"
+    return (
+        (sum(accuracies) / len(accuracies), number_of_complient_intervals)
+        if accuracies
+        else (0, 0)
     )
-    log.append(
-        f"{number_of_complient_intervals} of a total of {total} intervals matched 100% with ground truth"
-    )
-
-    with open(log_out, "w") as f:
-        f.writelines(log)
-
-    return sum(accuracies) / len(accuracies) if accuracies else 0
 
 
 def level_three_recall(pred_intervals_dict, true_intervals_dict):
@@ -517,6 +529,54 @@ def level_one_recall(pred_intervals_dict, true_intervals_dict):
     return len(TP) / len(set_one)
 
 
+def merge_blocks(regions):
+    """
+    Merge overlapping or adjacent regions into blocks.
+
+    Args:
+        regions: List of (start, end) tuples.
+
+    Returns:
+        List of merged (start, end) blocks.
+    """
+    if not regions:
+        return []
+
+    merged = []
+    current_start, current_end = regions[0]
+
+    for start, end in regions[1:]:
+        if start <= current_end:  # Overlapping or touching
+            current_end = max(current_end, end)
+        else:
+            merged.append((current_start, current_end))
+            current_start, current_end = start, end
+
+    merged.append((current_start, current_end))
+    return merged
+
+
+def get_mismatches(read, flip_coords=False):
+    cigar_tuples = read.cigartuples
+    mm = []
+    read_pos = 0
+
+    for op, length in cigar_tuples:
+        if op in [0, 7, 8]:
+            if op == 8:  # mismatch
+                mm.extend(range(read_pos, read_pos + length))
+            read_pos += length
+        elif op == 1:  # insertion
+            read_pos += length
+        # D, N, H, P don't consume read bases — ignore
+
+    if flip_coords:
+        read_len = read.query_length
+        mm = [read_len - 1 - pos for pos in mm]
+
+    return mm
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Compare RNA mapper outputs")
     parser.add_argument("--sam1", required=True, help="First SAM file (your mapper)")
@@ -542,15 +602,35 @@ if __name__ == "__main__":
         args.gene_id,
     )
 
-    results = compare_to_ground_truth(mapper1_data, ground_truth_data, log_out)
+    results = compare_to_ground_truth(mapper1_data, ground_truth_data)
     results["true_negatives"] = (
         N
         - results["true_positives"]
         - results["false_positives"]
         - results["false_negatives"]
     )
+
+    print_order = [
+        "perfect_matches_fw",
+        "perfect_matches_rv",
+        "true_positives",
+        "false_positives",
+        "false_negatives",
+        "false_negative_ids",
+        "precision",
+        "level_1_recall",
+        "f1_score",
+        "fw_accuracy",
+        "rv_accuracy",
+        "fw_level_2_recall",
+        "rv_level_2_recall",
+        "fw_level_3_recall",
+        "rv_level_3_recall",
+    ]
+
     with open(out_summary, "w") as f:
-        for key, val in results.items():
+        for key in print_order:
+            val = results[key]
             if key == "false_negative_ids":
                 print(
                     f"[\033[32mMETRIC\033[0m] {key} (30 examples) = {list(val)[0:30]}"
