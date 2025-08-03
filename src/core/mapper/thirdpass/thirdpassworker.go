@@ -25,12 +25,12 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 
 		task, ok := thirdPassChan.Receive()
 		if !ok {
+			logrus.Info("Done with second pass")
 			break
 		}
 		// logrus.Debugf("Third pass: %s", task.ReadPairId)
 
 		var builder strings.Builder
-
 		for i := 0; i < len(task.TargetInfo.Fw); i++ {
 			if task.TargetInfo.Fw[i].IncompleteMap {
 				continue
@@ -197,7 +197,6 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 		var errCigarFw error
 
 		cigarFw, errCigarFw = resFw.GetCigar()
-
 		if errCigarFw != nil {
 			logrus.WithFields(logrus.Fields{
 				"read":              readPair.ReadR1.Header,
@@ -215,7 +214,6 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 		var errCigarRv error
 
 		cigarRv, errCigarRv = resRv.GetCigar()
-
 		if errCigarRv != nil {
 			logrus.WithFields(logrus.Fields{
 				"read":              readPair.ReadR2.Header,
