@@ -32,7 +32,6 @@ func SecondpassMappingWorker(secondPassChan *SecondPassChannel, wgIncompleteMapp
 		task, ok := secondPassChan.Receive()
 
 		if !ok {
-			logrus.Info("Done with second pass")
 			break
 		}
 
@@ -1369,6 +1368,58 @@ func fillGaps(readMatchResult *mapperutils.ReadMatchResult, genomeIndex *index.G
 							mm = append(mm, gapRead.Start+bestSplit+i) // NEW
 						}
 					}
+				}
+			} else {
+				// we can try some stuff
+				// genomeGapLen < readGapLen
+				seqIndex := readMatchResult.SequenceIndex
+				lErrors := make([]int, gapGenome.Length()+1)
+				rErrors := make([]int, gapGenome.Length()+1)
+
+				lErrors[0] = 0
+				rErrors[0] = 0
+
+				for i := 1; i <= gapGenome.Length(); i++ {
+					lErrors[i] = lErrors[i-1]
+					if (*read.Sequence)[gapRead.Start+i-1] != (*genomeIndex.Sequences[seqIndex])[gapGenome.Start+i-1] {
+						lErrors[i]++
+					}
+
+					rErrors[i] = rErrors[i-1]
+					if (*read.Sequence)[gapRead.End-i] != (*genomeIndex.Sequences[seqIndex])[gapGenome.End-i] {
+						rErrors[i]++
+					}
+
+				}
+
+				minMM := gapGenome.Length() + 1
+				minSplit := -1
+
+				j := gapGenome.Length()
+				for i := 0; i <= gapGenome.Length(); i++ {
+					split := lErrors[i] + rErrors[j]
+					if split < minMM {
+						minMM = split
+						minSplit = i
+					}
+					j--
+
+				}
+				rSplit := gapGenome.Length() - minSplit
+				// lDonorSeq := string((*read.Sequence)[gapRead.Start : gapRead.Start+minSplit])
+				// rDonorSeq := string((*read.Sequence)[gapRead.End-rSplit : gapRead.End])
+
+				// close gap in genome
+				readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(gapGenomeStart, gapGenomeEnd)
+
+				// add left part of read
+				if minSplit > 0 {
+					readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(gapRead.Start, gapRead.Start+minSplit)
+				}
+
+				// add right part of read
+				if rSplit > 0 {
+					readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(gapRead.End-rSplit, gapRead.End)
 				}
 			}
 		}
