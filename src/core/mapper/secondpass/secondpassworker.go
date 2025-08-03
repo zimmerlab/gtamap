@@ -49,21 +49,6 @@ func SecondpassMappingWorker(secondPassChan *SecondPassChannel, wgIncompleteMapp
 				TargetInfo: task,
 			})
 		}(task)
-
-		// TODO: REMOVE DEBUG
-		// for _, mapping := range task.Fw {
-		// 	if mapping.IncompleteMap {
-		// 		continue
-		// 	}
-		// 	debugout.GenerateAlignmentView(genomeIndex, *mapping, task.ReadPair.ReadR1)
-		// }
-		// for _, mapping := range task.Rv {
-		// 	if mapping.IncompleteMap {
-		// 		continue
-		// 	}
-		// 	debugout.GenerateAlignmentView(genomeIndex, *mapping, task.ReadPair.ReadR2)
-		// }
-
 	}
 	wgRemap.Wait()
 }
@@ -93,8 +78,6 @@ func remapReadPair(readPairMapping *mapperutils.ReadPairMatchResults, annotation
 	if len(uniqRvRemaps) > 0 {
 		readPairMapping.Rv = uniqRvRemaps
 	}
-
-	// TODO: make mappings uniq
 }
 
 func getUniqRemaps(r []*mapperutils.ReadMatchResult) []*mapperutils.ReadMatchResult {
