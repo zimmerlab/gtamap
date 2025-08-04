@@ -137,6 +137,12 @@ func remapRead(readMapping *mapperutils.ReadMatchResult, annotation *mapperutils
 		alternativeReadMatchResults = append(alternativeReadMatchResults, r)
 	}
 
+	for _, alternativeMap := range alternativeReadMatchResults {
+		if alternativeMap.MatchedRead.Regions[0].Start == 0 && alternativeMap.MatchedRead.Regions[len(alternativeMap.MatchedRead.Regions)-1].End == len(*read.Sequence) && alternativeMap.MatchedRead.Length() != len(*read.Sequence) {
+			fillGaps(alternativeMap, genomeIndex, read)
+		}
+	}
+
 	return alternativeReadMatchResults
 }
 
