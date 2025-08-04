@@ -1341,10 +1341,10 @@ func fillGaps(readMatchResult *mapperutils.ReadMatchResult, genomeIndex *index.G
 					genomeByte := (*genomeIndex.Sequences[readMatchResult.SequenceIndex])[gapGenome.Start : gapGenome.Start+bestSplit]
 
 					// add the mismatches to the readMatchResult
-					for i := 0; i < bestSplit; i++ {
+					for j := 0; j < bestSplit; j++ {
 						// add the mismatche to the readMatchResult
-						if readByte[i] != genomeByte[i] {
-							mm = append(mm, gapRead.Start+i)
+						if readByte[j] != genomeByte[j] {
+							mm = append(mm, gapRead.Start+j)
 						}
 					}
 				}
@@ -1362,18 +1362,19 @@ func fillGaps(readMatchResult *mapperutils.ReadMatchResult, genomeIndex *index.G
 					genomeByte := (*genomeIndex.Sequences[readMatchResult.SequenceIndex])[gapGenome.End-(gapRead.Length()-bestSplit) : gapGenome.End]
 
 					// add the mismatches to the readMatchResult
-					for i := 0; i < gapRead.Length()-bestSplit; i++ {
+					for j := 0; j < gapRead.Length()-bestSplit; j++ {
 						// add the mismatche to the readMatchResult
-						if readByte[i] != genomeByte[i] {
+						if readByte[j] != genomeByte[j] {
 							// mm = append(mm, gapRead.End-(bestSplit-i))
-							mm = append(mm, gapRead.Start+bestSplit+i) // NEW
+							mm = append(mm, gapRead.Start+bestSplit+j) // NEW
 						}
 					}
+					readMatchResult.NormalizeRegions()
 				}
 			} else {
 				if gapGenome.Length() == 0 {
 					// there's no gap at all in genome
-					return
+					continue
 				}
 				// gap in genome smaller that read gap, we can minimize mm in that region
 				// genomeGapLen < readGapLen
@@ -1384,15 +1385,15 @@ func fillGaps(readMatchResult *mapperutils.ReadMatchResult, genomeIndex *index.G
 				lErrors[0] = 0
 				rErrors[0] = 0
 
-				for i := 1; i <= gapGenome.Length(); i++ {
-					lErrors[i] = lErrors[i-1]
-					if (*read.Sequence)[gapRead.Start+i-1] != (*genomeIndex.Sequences[seqIndex])[gapGenome.Start+i-1] {
-						lErrors[i]++
+				for j := 1; j <= gapGenome.Length(); j++ {
+					lErrors[j] = lErrors[j-1]
+					if (*read.Sequence)[gapRead.Start+j-1] != (*genomeIndex.Sequences[seqIndex])[gapGenome.Start+j-1] {
+						lErrors[j]++
 					}
 
-					rErrors[i] = rErrors[i-1]
-					if (*read.Sequence)[gapRead.End-i] != (*genomeIndex.Sequences[seqIndex])[gapGenome.End-i] {
-						rErrors[i]++
+					rErrors[j] = rErrors[j-1]
+					if (*read.Sequence)[gapRead.End-j] != (*genomeIndex.Sequences[seqIndex])[gapGenome.End-j] {
+						rErrors[j]++
 					}
 
 				}
@@ -1401,11 +1402,11 @@ func fillGaps(readMatchResult *mapperutils.ReadMatchResult, genomeIndex *index.G
 				minSplit := -1
 
 				j := gapGenome.Length()
-				for i := 0; i <= gapGenome.Length(); i++ {
-					split := lErrors[i] + rErrors[j]
+				for k := 0; k <= gapGenome.Length(); k++ {
+					split := lErrors[k] + rErrors[j]
 					if split < minMM {
 						minMM = split
-						minSplit = i
+						minSplit = k
 					}
 					j--
 
@@ -1426,6 +1427,7 @@ func fillGaps(readMatchResult *mapperutils.ReadMatchResult, genomeIndex *index.G
 				if rSplit > 0 {
 					readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(gapRead.End-rSplit, gapRead.End)
 				}
+				readMatchResult.NormalizeRegions()
 			}
 		}
 	}
