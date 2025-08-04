@@ -318,22 +318,48 @@ def positional_accuracy(
                 #         print(f"ref {true_intervals}")
             else:
                 # first get rv which best matches ground truth
-                print(f"[\033[31mINCOMPLETE MAP\033[0m] of {read_id} ({read_type}):")
+                # print(
+                #     f"[\033[31mINCOMPLETE MAP\033[0m] of {read_id} ({read_type}):"
+                # )
                 missed_bases = total_true_bases - best_overlap
                 accuracies.append(best_overlap / total_true_bases)
                 seen = set()
+                if not true_mm[read_id]:
+                    true_mm[read_id] = []
+
                 for i, interval in enumerate(mapped_intervals):
                     key = "|".join(str(x) for x in chain.from_iterable(interval))
                     if key not in seen:
                         seen.add(key)
                         missed_bases = total_true_bases - overlapping_bases_list[i]
-                        print(
-                            f"> [\033[34mALTERNATIVE\033[0m] Missaligned positions: ({missed_bases})"
-                        )
-                        print(f"> [   \033[33mMAP\033[0m]: {mapped_intervals[i]}")
-                        print(f"> [   \033[32mREF\033[0m]: {true_intervals}")
-                        print(f"> [\033[33mMM MAP\033[0m]: {mapped_mm[read_id][i]}")
-                        print(f"> [\033[32mMM REF\033[0m]: {true_mm[read_id]}")
+
+                        if len(mapped_mm[read_id][i]) > len(
+                            true_mm[read_id]
+                        ):  # comment out to see metter maps
+                            print(
+                                f"[\033[31mINCOMPLETE MAP\033[0m] of {read_id} ({read_type}):"
+                            )
+                            print(
+                                f"> [\033[34mALTERNATIVE\033[0m] Missaligned positions: ({missed_bases})"
+                            )
+                            if len(mapped_mm[read_id][i]) <= len(true_mm[read_id]):
+                                print(
+                                    f"> [   \033[35mMAP\033[0m]: {mapped_intervals[i]}"
+                                )
+                            else:
+                                print(
+                                    f"> [   \033[33mMAP\033[0m]: {mapped_intervals[i]}"
+                                )
+                            print(f"> [   \033[32mREF\033[0m]: {true_intervals}")
+                            if len(mapped_mm[read_id][i]) <= len(true_mm[read_id]):
+                                print(
+                                    f"> [\033[35mMM MAP\033[0m]: {mapped_mm[read_id][i]}"
+                                )
+                            else:
+                                print(
+                                    f"> [\033[33mMM MAP\033[0m]: {mapped_mm[read_id][i]}"
+                                )
+                            print(f"> [\033[32mMM REF\033[0m]: {true_mm[read_id]}")
 
     return (
         (sum(accuracies) / len(accuracies), number_of_complient_intervals)
@@ -563,6 +589,9 @@ def merge_blocks(regions):
 
 
 def get_mismatches(read, flip_coords=False):
+    if not read.cigartuples:
+        print(f"Had to skip extracting mm from {read.query_name} due to missing cigar")
+        return ["*"]
     cigar_tuples = read.cigartuples
     mm = []
     read_pos = 0
