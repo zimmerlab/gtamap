@@ -71,8 +71,8 @@ func remapReadPair(readPairMapping *mapperutils.ReadPairMatchResults, annotation
 	// all maps in fw/rvRemaps respect mm threshold but we can even be more strict
 
 	// make mappings uniq
-	uniqFwRemaps := getUniqRemaps(fwRemaps)
-	uniqRvRemaps := getUniqRemaps(rvRemaps)
+	uniqFwRemaps := getUniqRemaps(fwRemaps, len(*readPairMapping.ReadPair.ReadR1.Sequence))
+	uniqRvRemaps := getUniqRemaps(rvRemaps, len(*readPairMapping.ReadPair.ReadR2.Sequence))
 
 	if len(uniqFwRemaps) > 0 {
 		readPairMapping.Fw = uniqFwRemaps
@@ -82,10 +82,7 @@ func remapReadPair(readPairMapping *mapperutils.ReadPairMatchResults, annotation
 	}
 }
 
-func getUniqRemaps(r []*mapperutils.ReadMatchResult) []*mapperutils.ReadMatchResult {
-	if len(r) < 2 {
-		return r
-	}
+func getUniqRemaps(r []*mapperutils.ReadMatchResult, readLength int) []*mapperutils.ReadMatchResult {
 	uniq := make([]*mapperutils.ReadMatchResult, 0)
 	seen := make(map[string]bool)
 	for _, remap := range r {
@@ -93,7 +90,10 @@ func getUniqRemaps(r []*mapperutils.ReadMatchResult) []*mapperutils.ReadMatchRes
 		hash := createHash(remap)
 		if !seen[hash] {
 			seen[hash] = true
-			uniq = append(uniq, remap)
+			if remap.MatchedRead.Regions[0].Start == 0 && remap.MatchedRead.Regions[len(remap.MatchedRead.Regions)-1].End == readLength {
+				// only append complete remaps (remap can still be shorter than read length but only if insert)
+				uniq = append(uniq, remap)
+			}
 		}
 	}
 	return uniq
