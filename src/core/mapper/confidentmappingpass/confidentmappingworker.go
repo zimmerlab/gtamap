@@ -9,6 +9,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
+	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
 )
 
@@ -191,6 +192,62 @@ func getTotalCoverage(coverageFw, coverageRv []int) []int {
 	return totalCoverage
 }
 
+func repairIntrons(inferredIntrons []*regionvector.Intron, targetId int, genomeIndex *index.GenomeIndex) []*regionvector.Intron {
+	repairedIntrons := make([]*regionvector.Intron, 0)
+
+	// if IntronClusterRepairWindow == 10
+	// we go from -5 to 5 (starting at i.Start and i.End)
+	windowDelta := config.IntronClusterRepairWindow / 2
+	refSeq := genomeIndex.Sequences[targetId]
+	for _, intron := range inferredIntrons {
+		if intron.TrueSpliceSite {
+			continue
+		}
+
+		var lookOnPlusStrand bool
+		if genomeIndex.GetSequenceInfo(targetId).IsForwardStrand {
+			if genomeIndex.IsSequenceForward(targetId) {
+				lookOnPlusStrand = true
+			} else {
+				lookOnPlusStrand = false
+			}
+		} else {
+			if genomeIndex.IsSequenceForward(targetId) {
+				lookOnPlusStrand = false
+			} else {
+				lookOnPlusStrand = true
+			}
+		}
+
+		donorSiteStart := intron.Start
+		acceptorSiteStart := intron.End
+		for i := -windowDelta; i < windowDelta; i++ {
+			donorSiteSeq := (*refSeq)[donorSiteStart+i : donorSiteStart+i+2]
+			for j := -windowDelta; j < windowDelta; j++ {
+				acceptorSiteSeq := (*refSeq)[acceptorSiteStart+j-2 : acceptorSiteStart+j]
+
+				// if fw -> true else false
+				// this can be done more efficiently if i split method in two
+				_, isKnownSpliceSite := utils.ScoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
+					acceptorSiteSeq[0], acceptorSiteSeq[1], lookOnPlusStrand)
+				if isKnownSpliceSite {
+					repairedIntrons = append(repairedIntrons, &regionvector.Intron{
+						Start:          intron.Start + i,
+						End:            intron.End + j,
+						Evidence:       intron.Evidence,
+						Rank:           intron.Rank,
+						TrueSpliceSite: true,
+					})
+					break
+				}
+			}
+
+		}
+
+	}
+	return repairedIntrons
+}
+
 func InferIntronsOfTarget(targetId int, confMaps []*ConfidentTask, index *index.GenomeIndex) *mapperutils.TargetAnnotation {
 	// I. get all gaps of targetId in plus orientation
 	plusOrientatedGaps, plusEvidence, minusEvidence := getGapsPlusOrientation(targetId, confMaps, index) // map[int][]*interval.Interval
@@ -198,6 +255,11 @@ func InferIntronsOfTarget(targetId int, confMaps []*ConfidentTask, index *index.
 	countedGapsOfTarget := countGaps(plusOrientatedGaps)
 	// III. cluster plus oriented gaps and get start/stop with highest evidence (eStart|eStop)
 	plusOrientatedIntronsOfTarget := clusterGaps(countedGapsOfTarget)
+	// Check if some introns which don't follow splice sites would follow them by modifying start/end coords
+	repairedIntrons := repairIntrons(plusOrientatedIntronsOfTarget, targetId, index)
+	if repairedIntrons != nil {
+		plusOrientatedIntronsOfTarget = append(plusOrientatedIntronsOfTarget, repairedIntrons...)
+	}
 	// IV. now we mirror these plus orientated introns to get minus coords
 	minusOrientatedIntronsOfTarget := invertIntrons(targetId, plusOrientatedIntronsOfTarget, index)
 
