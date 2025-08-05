@@ -17,7 +17,6 @@ import (
 
 func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGroup, outputChan chan<- string, index *index.GenomeIndex) {
 	defer wgThirdPass.Done()
-	logrus.Info("Started third pass")
 	total := 0
 	mmTotal := 0
 
@@ -92,7 +91,7 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 		}
 
 	}
-	logrus.Info("Done with third pass")
+	logrus.Info("Done with output")
 	logrus.WithFields(logrus.Fields{
 		"Average MM":        float64(mmTotal) / float64(total),
 		"Aligned Positions": total,

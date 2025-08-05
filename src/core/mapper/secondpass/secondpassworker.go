@@ -26,6 +26,8 @@ func SecondpassMappingWorker(secondPassChan *SecondPassChannel, wgIncompleteMapp
 		// is only one object
 		annotation = annot
 	}
+	logrus.Info("Started second pass")
+	logrus.Info("Started output worker")
 
 	var wgRemap sync.WaitGroup
 
