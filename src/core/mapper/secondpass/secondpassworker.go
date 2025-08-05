@@ -11,6 +11,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/thirdpass"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
+	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
 )
 
@@ -64,6 +65,8 @@ func remapReadPair(readPairMapping *mapperutils.ReadPairMatchResults, annotation
 		remaps := remapRead(mapping, annotationMap[mainSeqId], readPairMapping.ReadPair.ReadR2, genomeIndex)
 		rvRemaps = append(rvRemaps, remaps...)
 	}
+
+	// all maps in fw/rvRemaps respect mm threshold but we can even be more strict
 
 	// make mappings uniq
 	uniqFwRemaps := getUniqRemaps(fwRemaps)
@@ -1519,15 +1522,9 @@ func determineBestSplit(
 		// add a penalty if the splice site is not canonical
 		// 2 means that there is no known splice site
 
-		spliceSitePenalty, _ := scoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
+		spliceSitePenalty, _ := utils.ScoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
 			acceptorSiteSeq[0], acceptorSiteSeq[1], lookOnPlusStrand)
 		numMismatches += spliceSitePenalty
-
-		// logrus.WithFields(logrus.Fields{
-		// 	"split":               i,
-		// 	"splice site penalty": spliceSitePenalty,
-		// 	"numMismatches":       numMismatches,
-		// }).Debug("possible split")
 
 		if numMismatches <= minErrors {
 			minErrors = numMismatches
@@ -1536,41 +1533,4 @@ func determineBestSplit(
 	}
 
 	return minSplit
-}
-
-func scoreSpliceSites(donorFirstBase byte, donorSecondBase byte, acceptorFirstBase byte,
-	acceptorSecondBase byte, isForwardStrand bool,
-) (int, bool) {
-	if isForwardStrand {
-		if donorFirstBase == byte('G') && donorSecondBase == byte('T') &&
-			acceptorFirstBase == byte('A') && acceptorSecondBase == byte('G') {
-			// canonical splice site GT/AG
-			return 0, true
-		} else if donorFirstBase == byte('G') && donorSecondBase == byte('C') &&
-			acceptorFirstBase == byte('A') && acceptorSecondBase == byte('G') {
-			// non-canonical splice site GC/AG
-			return 1, true
-		} else if donorFirstBase == byte('A') && donorSecondBase == byte('T') &&
-			acceptorFirstBase == byte('A') && acceptorSecondBase == byte('C') {
-			// non-canonical splice site AT/AC
-			return 1, true
-		}
-	} else {
-		if donorFirstBase == byte('C') && donorSecondBase == byte('T') &&
-			acceptorFirstBase == byte('A') && acceptorSecondBase == byte('C') {
-			// canonical splice site GT/AG on rev strand
-			return 0, true
-		} else if donorFirstBase == byte('C') && donorSecondBase == byte('T') &&
-			acceptorFirstBase == byte('G') && acceptorSecondBase == byte('C') {
-			// non-canonical splice site GC/AG on rev strand
-			return 1, true
-		} else if donorFirstBase == byte('G') && donorSecondBase == byte('T') &&
-			acceptorFirstBase == byte('A') && acceptorSecondBase == byte('T') {
-			// non-canonical splice site AT/AC on rev strand
-			return 1, true
-		}
-	}
-
-	// all other non-canonical splice sites
-	return 2, false
 }
