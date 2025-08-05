@@ -6,6 +6,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
+	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
 )
 
@@ -511,7 +512,7 @@ func annotateSpliceSites(read *fastq.Read, genomeIndex *index.GenomeIndex, resul
 			}
 		}
 
-		_, isKnownSpliceSite := scoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
+		_, isKnownSpliceSite := utils.ScoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
 			acceptorSiteSeq[0], acceptorSiteSeq[1], lookOnPlusStrand)
 
 		// annotate split with spliceSite info
@@ -657,7 +658,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 						for i := 0; i < gapRead.Length()-bestSplit; i++ {
 							// add the mismatche to the result
 							if readByte[i] != genomeByte[i] {
-								//result.MismatchesRead = append(result.MismatchesRead, gapRead.End-(bestSplit-i))
+								// result.MismatchesRead = append(result.MismatchesRead, gapRead.End-(bestSplit-i))
 								result.MismatchesRead = append(result.MismatchesRead, gapRead.Start+bestSplit+i)
 
 								// skip this match result if there are too many mismatches
@@ -948,7 +949,7 @@ func determineBestSplit(
 		// add a penalty if the splice site is not canonical
 		// 2 means that there is no known splice site
 
-		spliceSitePenalty, _ := scoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
+		spliceSitePenalty, _ := utils.ScoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
 			acceptorSiteSeq[0], acceptorSiteSeq[1], lookOnPlusStrand)
 		numMismatches += spliceSitePenalty
 
