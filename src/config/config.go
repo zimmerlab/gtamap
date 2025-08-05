@@ -56,7 +56,16 @@ var (
 // by default, an intron cluster only absorbes an incoming gap (extending its reach) if the delta
 // of gap.start/stop and cluster.start/stop is less than 100. This allows overlapping introns but
 // also resolves intron coord confilct within close proximity
-var IntronClusterDelta int = 100
+var (
+	IntronClusterDelta        int = 100
+	IntronClusterRepairWindow int = 5
+)
+
+// SAM options
+var (
+	IncludeMMinSAM     bool = true  // if set to true, CIGAR will include "=" and "X" runes instead of only "M"
+	IncludeAllPairings bool = false // if set to true, do all vs all in SAM out (we can later implement a method which does that by also looling at tlen, etc)
+)
 
 func Env() string {
 	return env
