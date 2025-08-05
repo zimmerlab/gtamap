@@ -430,9 +430,12 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 
 			// if this is the last match, add the number of matches
 			if i == len(r.MatchedGenome.Regions)-1 {
-				// builder.WriteString(strconv.Itoa(numMatchesSum))
-				// builder.WriteString("M")
-				builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead, false))
+				if config.IncludeMMinSAM {
+					builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead, false))
+				} else {
+					builder.WriteString(strconv.Itoa(numMatchesSum))
+					builder.WriteString("M")
+				}
 				break
 			}
 
@@ -452,9 +455,13 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 				continue
 			}
 
-			// builder.WriteString(strconv.Itoa(numMatchesSum))
-			// builder.WriteString("M")
-			builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead, false))
+			if config.IncludeMMinSAM {
+				builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead, false))
+			} else {
+				builder.WriteString(strconv.Itoa(numMatchesSum))
+				builder.WriteString("M")
+			}
+
 			numMatchesSum = 0
 
 			// intron or deletion
@@ -500,9 +507,12 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 
 			// if this is the last match, add the number of matches
 			if i == 0 {
-				// builder.WriteString(strconv.Itoa(numMatchesSum))
-				// builder.WriteString("M")
-				builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead, true))
+				if config.IncludeMMinSAM {
+					builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead, true))
+				} else {
+					builder.WriteString(strconv.Itoa(numMatchesSum))
+					builder.WriteString("M")
+				}
 				break
 			}
 
@@ -522,9 +532,13 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 				continue
 			}
 
-			// builder.WriteString(strconv.Itoa(numMatchesSum))
-			// builder.WriteString("M")
-			builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead, true))
+			if config.IncludeMMinSAM {
+				builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead, true))
+			} else {
+				builder.WriteString(strconv.Itoa(numMatchesSum))
+				builder.WriteString("M")
+			}
+
 			numMatchesSum = 0
 
 			// intron or deletion
@@ -664,21 +678,37 @@ func ParseMatchedRegion(region regionvector.Region, mms []int, isRev bool) strin
 		return builder.String()
 	}
 
-	lastStart := 0 // Start at 0 (relative to region start)
+	lastStart := 0      // relative to region start
+	var lastMM int = -2 // to track consecutive mismatches
+	count := 0          // count of consecutive mismatches
+
+	flushMismatch := func() {
+		if count > 0 {
+			builder.WriteString(fmt.Sprintf("%dX", count))
+			count = 0
+		}
+	}
 
 	if isRev {
 		for i := len(mms) - 1; i >= 0; i-- {
 			mm := mms[i]
-
 			if mm < region.Start || mm >= region.End {
 				continue
 			}
 			relativePos := region.End - mm - 1
 
 			if relativePos > lastStart {
+				flushMismatch()
 				builder.WriteString(fmt.Sprintf("%d=", relativePos-lastStart))
 			}
-			builder.WriteString("1X")
+
+			if lastMM == relativePos-1 {
+				count++
+			} else {
+				flushMismatch()
+				count = 1
+			}
+			lastMM = relativePos
 			lastStart = relativePos + 1
 		}
 	} else {
@@ -686,18 +716,27 @@ func ParseMatchedRegion(region regionvector.Region, mms []int, isRev bool) strin
 			if mm < region.Start || mm >= region.End {
 				continue
 			}
-
 			relativePos := mm - region.Start
 
 			if relativePos > lastStart {
+				flushMismatch()
 				builder.WriteString(fmt.Sprintf("%d=", relativePos-lastStart))
 			}
-			builder.WriteString("1X")
+
+			if lastMM == relativePos-1 {
+				count++
+			} else {
+				flushMismatch()
+				count = 1
+			}
+			lastMM = relativePos
 			lastStart = relativePos + 1
 		}
 	}
 
-	if lastStart < region.Length() { // Compare to region length, not region.End
+	flushMismatch()
+
+	if lastStart < region.Length() {
 		builder.WriteString(fmt.Sprintf("%d=", region.Length()-lastStart))
 	}
 
