@@ -651,8 +651,8 @@ func (t TargetAnnotation) LogInfo() {
 
 	logrus.WithFields(logrus.Fields{
 		"preferred strand": strand,
-		"confidence score": t.Confidence * 100,
-	}).Info("Done with Annotation")
+		"pct of reads pairs with preffered orientation": t.Confidence * 100,
+	}).Debug("Done with Annotation")
 
 	for orientation, introns := range t.Introns {
 		orientationLabel := "[+]"
@@ -661,12 +661,12 @@ func (t TargetAnnotation) LogInfo() {
 		}
 		logrus.WithFields(logrus.Fields{
 			"orientation": orientationLabel,
-		}).Info("Inferred Introns of")
+		}).Debug("Inferred Introns of")
 
 		for _, intron := range introns.Regions {
 			logrus.WithFields(logrus.Fields{
 				"Intron": intron.String(),
-			}).Info()
+			}).Debug()
 		}
 	}
 }
