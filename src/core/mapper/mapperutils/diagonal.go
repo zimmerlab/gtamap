@@ -26,10 +26,22 @@ func NewDiagonalHandlerWithData(m map[int][]*Match) *DiagonalHandler {
 func NewDiagonalHandlerWithDataCopy(m map[int][]*Match) *DiagonalHandler {
 	mapCopy := make(map[int][]*Match, len(m))
 
+	// for key, matches := range m {
+	// 	mapCopy[key] = make([]*Match, len(matches))
+	// 	for i, match := range matches {
+	// 		mapCopy[key][i] = &Match{
+	// 			FromRead:   match.FromRead,
+	// 			ToRead:     match.ToRead,
+	// 			FromGenome: match.FromGenome,
+	// 			ToGenome:   match.ToGenome,
+	// 			Used:       match.Used,
+	// 		}
+	// 	}
+	// }
 	for key, matches := range m {
-		mapCopy[key] = make([]*Match, len(matches))
+		copiedMatches := make([]*Match, len(matches))
 		for i, match := range matches {
-			mapCopy[key][i] = &Match{
+			copiedMatches[i] = &Match{
 				FromRead:   match.FromRead,
 				ToRead:     match.ToRead,
 				FromGenome: match.FromGenome,
@@ -37,6 +49,7 @@ func NewDiagonalHandlerWithDataCopy(m map[int][]*Match) *DiagonalHandler {
 				Used:       match.Used,
 			}
 		}
+		mapCopy[key] = copiedMatches
 	}
 
 	return &DiagonalHandler{
