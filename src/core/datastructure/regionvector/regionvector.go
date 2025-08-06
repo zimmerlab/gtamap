@@ -32,6 +32,18 @@ type Intron struct {
 	TrueSpliceSite bool
 }
 
+func (i Intron) Contains(r Region) bool {
+	return i.Start <= r.Start && i.End >= r.End
+}
+
+func (i Intron) LeftOverlap(r Region) bool {
+	return i.End >= r.Start && i.End < r.End
+}
+
+func (i Intron) RightOverlap(r Region) bool {
+	return i.Start <= r.End && i.End > r.End
+}
+
 func (r Region) Length() int {
 	return r.End - r.Start
 }
@@ -373,14 +385,338 @@ func (rv *RegionVector) GetRegionIndexContainingPosRelative(relPos int) (int, er
 }
 
 type RegionSet struct {
-	Regions []*Intron
-	Starts  []int
+	Regions            []*Intron
+	Starts             []int
+	TranscriptomeGraph *TranscriptomeGraph
+}
+
+func (t *TranscriptomeGraph) PropagateAll() {
+	// start with last exons (Nodes which have no next nodes and are exon)
+	for _, exon := range t.ExonNodes {
+		for _, intron := range t.IntronNodes {
+			if exon.Stop <= intron.Start {
+				if !contains(exon.Next, intron) {
+					exon.Next = append(exon.Next, intron)
+				}
+			}
+			if exon.Start >= intron.Stop {
+				if !contains(exon.Prev, intron) {
+					exon.Prev = append(exon.Prev, intron)
+				}
+			}
+		}
+	}
+}
+
+func contains(nodes []*TranscriptomeNode, target *TranscriptomeNode) bool {
+	for _, n := range nodes {
+		if n == target {
+			return true
+		}
+	}
+	return false
+}
+
+func serializePath(path []Region) string {
+	sb := strings.Builder{}
+	for _, r := range path {
+		sb.WriteString(fmt.Sprintf("%d-%d|", r.Start, r.End))
+	}
+	return sb.String()
+}
+
+type TranscriptomeGraph struct {
+	Length      int
+	IntronNodes []*TranscriptomeNode
+	ExonNodes   []*TranscriptomeNode
+}
+
+func (t *TranscriptomeGraph) InitEdges() {
+	for i, exonNode := range t.ExonNodes {
+		for j, intronNode := range t.IntronNodes {
+			// exon -> intron
+			if exonNode.Stop == intronNode.Start {
+				t.ExonNodes[i].addRightNode(t.IntronNodes[j])
+				t.IntronNodes[j].addLeftNode(t.ExonNodes[i])
+			}
+			//  intron -> exon
+			if intronNode.Stop == exonNode.Start {
+				t.IntronNodes[j].addRightNode(t.ExonNodes[i])
+				t.ExonNodes[i].addLeftNode(t.IntronNodes[j])
+			}
+		}
+	}
+	t.PropagateAll()
+}
+
+type TranscriptomeNode struct {
+	IsIntron int
+	Start    int
+	Stop     int
+	Next     []*TranscriptomeNode
+	Prev     []*TranscriptomeNode
+}
+
+func (tn *TranscriptomeNode) addRightNode(node *TranscriptomeNode) {
+	tn.Next = append(tn.Next, node)
+}
+
+func (tn *TranscriptomeNode) addLeftNode(node *TranscriptomeNode) {
+	tn.Prev = append(tn.Prev, node)
+}
+
+func (r *RegionSet) BuildTranscriptomeGraph(geneLength int) {
+	r.TranscriptomeGraph = &TranscriptomeGraph{Length: geneLength}
+	r.TranscriptomeGraph.IntronNodes = make([]*TranscriptomeNode, 0)
+	r.TranscriptomeGraph.ExonNodes = make([]*TranscriptomeNode, 0)
+
+	// init all intron nodes
+	for _, intron := range r.Regions {
+		r.TranscriptomeGraph.IntronNodes = append(r.TranscriptomeGraph.IntronNodes, &TranscriptomeNode{
+			IsIntron: 1,
+			Start:    intron.Start,
+			Stop:     intron.End,
+			Next:     make([]*TranscriptomeNode, 0),
+		})
+	}
+
+	// hanlde first exons and last exons
+	exons := make([]Region, 0)
+	seen := map[string]bool{}
+	for _, firstIntron := range r.FirstIntrons() {
+		key := fmt.Sprintf("%d-%d", 0, firstIntron.Start)
+		if !seen[key] {
+			seen[key] = true
+			exons = append(exons, Region{
+				Start: 0,
+				End:   firstIntron.Start,
+			})
+		}
+	}
+
+	for i := 0; i < len(r.Regions); i++ {
+		for j := 0; j < len(r.Regions); j++ {
+			start := r.Regions[i].End
+			end := r.Regions[j].Start
+			if start < end {
+				key := fmt.Sprintf("%d-%d", start, end)
+				if !seen[key] {
+					seen[key] = true
+					region := Region{Start: start, End: end}
+					intersect := r.SpansIntron(region)
+					if len(intersect) != 0 {
+						continue
+					}
+					exons = append(exons, region)
+				}
+			}
+		}
+	}
+
+	// append last exons
+	for _, intron := range r.Regions {
+		key := fmt.Sprintf("%d-%d", intron.End, geneLength)
+		if !seen[key] {
+			seen[key] = true
+			region := Region{Start: intron.End, End: geneLength}
+			intersect := r.SpansIntron(region)
+			if len(intersect) != 0 {
+				continue
+			}
+
+			exons = append(exons, region)
+		}
+	}
+
+	for _, exon := range exons {
+		r.TranscriptomeGraph.ExonNodes = append(r.TranscriptomeGraph.ExonNodes, &TranscriptomeNode{
+			IsIntron: 0,
+			Start:    exon.Start,
+			Stop:     exon.End,
+			Next:     make([]*TranscriptomeNode, 0),
+		})
+	}
+
+	r.TranscriptomeGraph.InitEdges()
+}
+
+func (rs *RegionSet) SpansIntron(region Region) []*Intron {
+	spannedIntrons := make([]*Intron, 0)
+	for _, i := range rs.Regions {
+		if i.Start >= region.Start && i.End <= region.End {
+			spannedIntrons = append(spannedIntrons, i)
+		}
+	}
+	return spannedIntrons
+}
+
+func (t *TranscriptomeGraph) FindPathsRight(startPos int, length int) [][]Region {
+	var results [][]Region
+	seen := make(map[string]bool)
+
+	foundStartNode := false
+	for _, startNode := range t.ExonNodes {
+		if startNode.Start <= startPos && startNode.Stop >= startPos {
+			foundStartNode = true
+			t.dfsRight(startNode, []Region{}, length, &results, startPos, seen)
+		}
+	}
+
+	if !foundStartNode {
+		// this means the main anchor is in a region which does not overlap with any exon region in graph
+		// 1. Add manual extension
+		defaultExtensionRight := make([]Region, 0)
+		defaultExtensionRight = append(defaultExtensionRight, Region{Start: startPos, End: startPos + length})
+		results = append(results, defaultExtensionRight)
+		// 2. Get all neighboring exons to the right by checking which introns are overlapping
+		for _, intronNode := range t.IntronNodes {
+			if intronNode.Start <= startPos && intronNode.Stop >= startPos {
+				t.dfsRight(intronNode, []Region{}, length, &results, intronNode.Stop, seen)
+			}
+		}
+	}
+
+	return results
+}
+
+func (t *TranscriptomeGraph) FindPathsLeft(startPos int, length int) [][]Region {
+	var results [][]Region
+	seen := make(map[string]bool)
+
+	foundStartNode := false
+	for _, startNode := range t.ExonNodes {
+		if startNode.Start <= startPos && startNode.Stop >= startPos {
+			foundStartNode = true
+			t.dfsLeft(startNode, []Region{}, length, &results, startPos, seen)
+		}
+	}
+
+	if !foundStartNode {
+		// this means the main anchor is in a region which does not overlap with any exon region in graph
+		// 1. Add manual extension
+		defaultExtensionLeft := make([]Region, 0)
+		defaultExtensionLeft = append(defaultExtensionLeft, Region{Start: startPos - length, End: startPos})
+		results = append(results, defaultExtensionLeft)
+		// 2. Get all neighboring exons to the right by checking which introns are overlapping
+		for _, intronNode := range t.IntronNodes {
+			if intronNode.Start <= startPos && intronNode.Stop >= startPos {
+				t.dfsLeft(intronNode, []Region{}, length, &results, intronNode.Start, seen)
+			}
+		}
+	}
+	return results
+}
+
+func LengthOfPath(regions []Region) int {
+	i := 0
+	for _, r := range regions {
+		i += r.Length()
+	}
+	return i
+}
+
+func (t *TranscriptomeGraph) dfsRight(node *TranscriptomeNode, path []Region, length int, results *[][]Region, start int, seen map[string]bool) {
+	if node.IsIntron == 1 {
+		for _, next := range node.Next {
+			t.dfsRight(next, path, length, results, next.Start, seen)
+		}
+		return
+	}
+
+	span := node.Stop - start
+	lengthOfCurrentPath := LengthOfPath(path)
+
+	if lengthOfCurrentPath == length {
+		key := serializePath(path)
+		if !seen[key] {
+			*results = append(*results, append([]Region{}, path...))
+			seen[key] = true
+		}
+		return
+	} else if lengthOfCurrentPath+span > length {
+		clipped := append(append([]Region{}, path...), Region{
+			Start: start,
+			End:   start + length - lengthOfCurrentPath,
+		})
+		key := serializePath(clipped)
+		if !seen[key] {
+			*results = append(*results, clipped)
+			seen[key] = true
+		}
+		return
+	} else if span == 0 {
+		for _, next := range node.Next {
+			t.dfsRight(next, path, length, results, node.Start, seen)
+		}
+		return
+	}
+
+	newPath := append(append([]Region{}, path...), Region{
+		Start: start,
+		End:   node.Stop,
+	})
+
+	for _, next := range node.Next {
+		t.dfsRight(next, newPath, length, results, node.Stop, seen)
+	}
+}
+
+func (t *TranscriptomeGraph) dfsLeft(node *TranscriptomeNode, path []Region, length int, results *[][]Region, end int, seen map[string]bool) {
+	if node.IsIntron == 1 {
+		for _, prev := range node.Prev {
+			t.dfsLeft(prev, path, length, results, prev.Stop, seen)
+		}
+		return
+	}
+
+	span := end - node.Start
+	lengthOfCurrentPath := LengthOfPath(path)
+
+	if lengthOfCurrentPath == length {
+		key := serializePath(path)
+		if !seen[key] {
+			*results = append(*results, append([]Region{}, path...))
+			seen[key] = true
+		}
+		return
+	} else if lengthOfCurrentPath+span > length {
+		clipped := append(append([]Region{}, path...), Region{
+			Start: end + lengthOfCurrentPath - length,
+			End:   end,
+		})
+		key := serializePath(clipped)
+		if !seen[key] {
+			*results = append(*results, clipped)
+			seen[key] = true
+		}
+		return
+	} else if span == 0 {
+		for _, prev := range node.Prev {
+			t.dfsLeft(prev, path, length, results, prev.Stop, seen)
+		}
+		return
+	}
+
+	newPath := append(append([]Region{}, path...), Region{
+		Start: node.Start,
+		End:   end,
+	})
+
+	for _, prev := range node.Prev {
+		t.dfsLeft(prev, newPath, length, results, node.Start, seen)
+	}
+}
+
+func (t *TranscriptomeNode) Length() int {
+	return t.Stop - t.Start
+}
+
+func (t TranscriptomeNode) String() string {
+	return fmt.Sprintf("%d: [%d, %d]", t.IsIntron, t.Start, t.Stop)
 }
 
 func (i Intron) String() string {
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("%d: [%d, %d) Confident SpliceSite: [%t] Evidence: [%d]", i.Rank, i.Start, i.End, i.TrueSpliceSite, i.Evidence))
-	return sb.String()
+	return fmt.Sprintf("%d: [%d, %d) Confident SpliceSite: [%t] Evidence: [%d]", i.Rank, i.Start, i.End, i.TrueSpliceSite, i.Evidence)
 }
 
 func GenomicCoordToReadCoord(startInRead, genomeCoord int, genomeIntervals []Region) (int, error) {
@@ -455,6 +791,17 @@ func (rs *RegionSet) GetNextIntron(pos int) *Intron {
 		i++
 	}
 	return nil
+}
+
+func (rs *RegionSet) LastIntrons() []*Intron {
+	i := len(rs.Regions) - 1
+	lastIntronRegion := Region{rs.Regions[i].Start, rs.Regions[i].End}
+	return rs.GetIntersectingIntrons(lastIntronRegion)
+}
+
+func (rs *RegionSet) FirstIntrons() []*Intron {
+	firstIntronRegion := Region{rs.Regions[0].Start, rs.Regions[0].End}
+	return rs.GetIntersectingIntrons(firstIntronRegion)
 }
 
 func (rs *RegionSet) GetPrevIntron(pos int) *Intron {
