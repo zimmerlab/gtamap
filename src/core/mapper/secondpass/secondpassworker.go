@@ -321,6 +321,7 @@ func refineMapping(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntron
 							// update mm
 							readMatchResult.MismatchesRead = remapOptions[bestOption].MismatchesRead
 						}
+						readMatchResult.NormalizeRegions()
 					}
 
 					mainAnchor = weakAnchor
@@ -401,6 +402,7 @@ func refineMapping(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntron
 
 							// update mm in readMatchResult
 							readMatchResult.MismatchesRead = remapOptions[bestOption].MismatchesRead
+							readMatchResult.NormalizeRegions()
 						}
 					}
 				} else {
@@ -480,6 +482,7 @@ func refineMapping(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntron
 							}
 
 							readMatchResult.MismatchesRead = remapOptions[bestOption].MismatchesRead
+							readMatchResult.NormalizeRegions()
 						}
 					}
 
@@ -562,6 +565,7 @@ func refineMapping(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntron
 							}
 							// update mm in readMatchResult
 							readMatchResult.MismatchesRead = remapOptions[bestOption].MismatchesRead
+							readMatchResult.NormalizeRegions()
 						}
 					}
 				} else {
@@ -595,7 +599,8 @@ func refineMapping(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntron
 
 	// in any case we want to reprocess the remapped read again in order to annotate splicesites and new mm (caused by padding)
 	mm := make([]int, 0)
-	readMatchResult.SyncRegions()
+	// readMatchResult.SyncRegions()
+	readMatchResult.NormalizeRegions()
 	for i := 0; i < len(readMatchResult.MatchedRead.Regions); i++ {
 		readRegion := readMatchResult.MatchedRead.Regions[i]
 		genomeRegion := readMatchResult.MatchedGenome.Regions[i]
