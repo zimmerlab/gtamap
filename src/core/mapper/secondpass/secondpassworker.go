@@ -461,7 +461,7 @@ func refineMapping(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntron
 					// }).Debug("Found deletion in read.")
 					// Just log / use for report later
 					// check if left or right diag can be extended
-					regionReadEnd, err := regionvector.GenomicCoordToReadCoord(0, weakAnchor.End, readMatchResult.MatchedGenome.Regions)
+					regionReadEnd, err := regionvector.GenomicCoordToReadCoord(0, weakAnchor.End, readMatchResult.MatchedGenome.Regions, len(*read.Sequence))
 					if err != nil {
 						println(read.Header)
 						logrus.Errorf("Error while converting genomic coord to read coord in read %s", read.Header)
@@ -543,7 +543,7 @@ func refineMapping(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntron
 
 					}
 
-					regionReadEnd, err := regionvector.GenomicCoordToReadCoord(0, weakAnchor.End, readMatchResult.MatchedGenome.Regions)
+					regionReadEnd, err := regionvector.GenomicCoordToReadCoord(0, weakAnchor.End, readMatchResult.MatchedGenome.Regions, len(*read.Sequence))
 					if err != nil {
 						println(read.Header)
 						logrus.Errorf("Error while converting genomic coord to read coord in read %s", read.Header)
@@ -667,7 +667,7 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 			readMatchResult.MatchedGenome.Regions[0].Start = lIntron.End
 			mainAnchorRank := lIntron.Rank + 1
 			readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(weakAnchor.Start, weakAnchor.End)
-			regionReadEnd, err := regionvector.GenomicCoordToReadCoord(0, weakAnchor.End, readMatchResult.MatchedGenome.Regions)
+			regionReadEnd, err := regionvector.GenomicCoordToReadCoord(0, weakAnchor.End, readMatchResult.MatchedGenome.Regions, len(*read.Sequence))
 			if err != nil {
 				println(read.Header)
 				logrus.Errorf("Error while converting genomic coord to read coord in read %s", read.Header)
@@ -716,9 +716,9 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 		readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(weakAnchor.Start, weakAnchor.End)            // add region to remap back as separate block
 
 		mainAnchorRank := rIntron.Rank - 1
-		lastRegionRead, _ := readMatchResult.MatchedRead.GetFirstRegion()
+		firstRegionRead, _ := readMatchResult.MatchedRead.GetFirstRegion()
 
-		startInRead, err := regionvector.GenomicCoordToReadCoord(lastRegionRead.Start, weakAnchor.Start, readMatchResult.MatchedGenome.Regions)
+		startInRead, err := regionvector.GenomicCoordToReadCoord(firstRegionRead.Start, weakAnchor.Start, readMatchResult.MatchedGenome.Regions, len(*read.Sequence))
 		if err != nil {
 			println(read.Header)
 			logrus.Errorf("Error while converting genomic coord to read coord")
