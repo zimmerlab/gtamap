@@ -178,7 +178,9 @@ func rightRemapAlignmentBlockFromPos(remapStart int, anchorRegion regionvector.R
 		//  (REF) +++++++****--------------------------####++>
 		//                  | boundary
 		if nextIntronFromAnchor != nil && refPos == nextIntronFromAnchor.Start {
-			remap = append(remap, &regionvector.Region{Start: remapStart, End: refPos})
+			if remapStart != refPos {
+				remap = append(remap, &regionvector.Region{Start: remapStart, End: refPos})
+			}
 
 			refPos = nextIntronFromAnchor.End
 			remapStart = nextIntronFromAnchor.End
@@ -232,7 +234,9 @@ func leftRemapAlignmentBlockFromPos(remapStart int, anchorRegion regionvector.Re
 		//  (REF) -####----------------****+++++++++++---->
 		//
 		if nextIntronFromAnchor != nil && refPos == nextIntronFromAnchor.End {
-			remap = append(remap, &regionvector.Region{Start: refPos, End: remapStart + 1})
+			if refPos != remapStart+1 {
+				remap = append(remap, &regionvector.Region{Start: refPos, End: remapStart + 1})
+			}
 
 			if readSequenceToRemap[j] != (*refSeq)[refPos] {
 				mm = append(mm, j)
@@ -980,14 +984,18 @@ func fixPointRNARemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 
 	// just in case there are more than one padding option each for l and r (but i doubt that happenes)
 	for l := range lPaddings {
-		mainAnchor.Start += l
-		readMainAnchor.Start += l
-		mmMainAnchor = extractMMofAnchor(readMainAnchor, mmMainAnchor)
+		if readMainAnchor.Start+l < readMainAnchor.End {
+			mainAnchor.Start += l
+			readMainAnchor.Start += l
+			mmMainAnchor = extractMMofAnchor(readMainAnchor, mmMainAnchor)
+		}
 	}
 	for r := range rPaddings {
-		mainAnchor.End -= r
-		readMainAnchor.End -= r
-		mmMainAnchor = extractMMofAnchor(readMainAnchor, mmMainAnchor)
+		if mainAnchor.End-r > mainAnchor.Start {
+			mainAnchor.End -= r
+			readMainAnchor.End -= r
+			mmMainAnchor = extractMMofAnchor(readMainAnchor, mmMainAnchor)
+		}
 	}
 
 	remap := Remap{
@@ -1328,7 +1336,7 @@ func fillGaps(readMatchResult *mapperutils.ReadMatchResult, genomeIndex *index.G
 			// [0,97], [113, 150] -> mid block is missing
 
 			// is there enough space in the genome gap to fill in the missing read portion
-			if gapEnd-gapStart <= gapGenome.End-gapGenome.Start {
+			if gapEnd-gapStart <= gapGenome.End-gapGenome.Start && gapRead.Length() > 0 {
 				// is insert
 				bestSplit := determineBestSplit(genomeIndex, read, readMatchResult.SequenceIndex, gapRead, gapGenome)
 
