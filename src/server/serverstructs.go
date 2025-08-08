@@ -160,6 +160,7 @@ type MapperInfo struct {
 }
 
 type ReadInfo struct {
+	Qname                string // name of the read
 	Index                int    // index in ReadNames
 	IsPaired             bool   // true if read is paired-end
 	SequenceFirstOfPair  string // sequence of the first read in the pair
@@ -170,6 +171,7 @@ type ReadInfo struct {
 
 func NewReadInfo() *ReadInfo {
 	return &ReadInfo{
+		Qname:                "",
 		Index:                -1,
 		IsPaired:             false,
 		SequenceFirstOfPair:  "",
@@ -289,7 +291,9 @@ func (h *MappingDataHandler) AddReadInfo(record sam.Record, mapperIndex int) *Re
 		}
 	} else {
 		readInfo = NewReadInfo()
-
+		h.ReadInfos = append(h.ReadInfos, readInfo)
+		h.ReadNamesMap[record.Qname] = readInfo
+		readInfo.Qname = record.Qname
 		readInfo.IsPaired = record.Flag.IsPaired()
 	}
 
@@ -409,6 +413,6 @@ func (h *MappingDataHandler) LoadMapperResults() {
 			"mapperName":        result.Name,
 			"mapperSamFilePath": result.Path,
 			"target":            result.Target,
-		}).Debug("added mapper result")
+		}).Info("added mapper result")
 	}
 }
