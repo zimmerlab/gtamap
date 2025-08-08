@@ -26,6 +26,15 @@ func printBanner() {
 }
 
 func main() {
+	// ff, errr := os.Create("cpu.pprof")
+	// if errr != nil {
+	// 	panic(errr)
+	// }
+	// defer ff.Close()
+	// if err := pprof.StartCPUProfile(ff); err != nil {
+	// 	panic(err)
+	// }
+	// defer pprof.StopCPUProfile()
 	parser := argparse.NewParser("gtamap", "Gene-centric spliced read mapping")
 
 	var cmdIndexPre *argparse.Command = parser.NewCommand("index-pre", "Extract gene sequences from genome.")
