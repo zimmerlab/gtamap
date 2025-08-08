@@ -185,15 +185,35 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 			return
 		}
 
-		*results = append(*results, result)
+		// INFO: DNA RNA MODE
+		// this result should already have a certain length before we append it to results
+		if !config.IsOriginRNA {
+			// for DNA reads we expect the raw result to already be of a certain length
+			if result.MatchedGenome.Length()*10 > len(*read.Sequence)*7 {
+				// fmt.Println(read.Header)
+				// fmt.Println(result.MatchedGenome.Length())
+				*results = append(*results, result)
+			}
+		} else {
+			*results = append(*results, result)
+		}
 
 		return
 	}
 
 	if len(result.MatchedRead.Regions) == 0 {
-		// check pot length of best initial diag is smaller than 30, if so, don't map read
+
+		// INFO: DNA RNA MODE
+		// here we can expect a larger length for initial diag of map
+
 		l := dh.Diagonals[diagonal][len(dh.Diagonals[diagonal])-1].ToRead - dh.Diagonals[diagonal][0].FromRead
-		if l < 30 {
+		if config.IsOriginRNA {
+			// RNA: check pot length of best initial diag is smaller than 30, if so, don't map read
+			if l < 30 {
+				return
+			}
+		} else if l < 50 {
+			// DNA: if potential l smaller than 50: return
 			return
 		}
 	}
@@ -212,7 +232,18 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 			return
 		}
 
-		*results = append(*results, result)
+		// INFO: DNA RNA MODE
+		// this result should already have a certain length before we append it to results
+		if !config.IsOriginRNA {
+			// for DNA reads we expect the raw result to already be of a certain length
+			if result.MatchedGenome.Length()*10 > len(*read.Sequence)*7 {
+				// fmt.Println(read.Header)
+				// fmt.Println(result.MatchedGenome.Length())
+				*results = append(*results, result)
+			}
+		} else {
+			*results = append(*results, result)
+		}
 
 		return
 	}
@@ -234,6 +265,7 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 
 	if keepMatch && *currDepth <= config.MaxBranchPoints {
 		// keep on extending the currently best diagonal
+		*currDepth++
 		applyPossibleDiagonals(read, genomeIndex, dhNew, resultNew, results, isGreedy, currDepth)
 	}
 
@@ -315,7 +347,7 @@ func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperu
 	for _, match := range dh.Diagonals[diagonal] {
 		// the region can not be part of another diagonal that is already used
 		if match.Used {
-			logrus.Warn("match.Used should not be happening anymore")
+			// logrus.Warn("match.Used should not be happening anymore")
 			continue
 		}
 		// add the match to the diagonal
@@ -562,10 +594,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 					// 	"gapGenome": gapGenome,
 					// }).Debug("found gap to be handled")
 
-					// TODO: handle insertions
-					// when the gap in the read is larger than the gap in the genome
-					// there is maybe an insertion in the read
-					// currently the assumption is that this is a non-mapping read
+					// This case is covered in remap read (fillGaps)
 					if gapRead.Length() > gapGenome.Length() {
 						// logrus.WithFields(logrus.Fields{
 						// 	"gapRead":   gapRead,
@@ -849,6 +878,8 @@ func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.Genome
 
 		extendDiagonals(read, genomeIndex, res)
 
+		// TODO: DNA RNA
+		// Only annotate if RNA
 		if res.MatchedGenome.HasGaps() {
 			annotateSpliceSites(read, genomeIndex, res)
 		}
@@ -948,6 +979,9 @@ func determineBestSplit(
 
 		// add a penalty if the splice site is not canonical
 		// 2 means that there is no known splice site
+
+		// INFO: DNA RNA MODE
+		// only score splicesites in RNA mode
 
 		spliceSitePenalty, _ := utils.ScoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
 			acceptorSiteSeq[0], acceptorSiteSeq[1], lookOnPlusStrand)
