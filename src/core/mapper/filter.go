@@ -7,7 +7,7 @@ import (
 
 // Filter the read
 // TODO: finalize the filter step as this is the most crucial step in terms of runtime
-func Filter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
+func GlobalFilter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
 	numMatching := 0
 
 	numMatchingFw := 0
@@ -45,15 +45,50 @@ func Filter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
 		}
 	}
 
-	//if numMatchingFw > 0 || numMatchingRw > 0 {
-	//	logrus.WithFields(logrus.Fields{
-	//		"numMatchingFw": numMatchingFw,
-	//		"numMatchingRv": numMatchingRw,
-	//	}).Info("Filtering result")
-	//}
+	// TODO: Needs to be dynamic based on read length
+	if config.IsOriginRNA {
+		return numMatchingFw >= 6 || numMatchingRv >= 6
+	} else {
+		return numMatchingFw >= 9 || numMatchingRv >= 9
+	}
+}
 
-	// fmt.Println("numMatchingFw: ", numMatchingFw)
-	// fmt.Println("numMatchingRw: ", numMatchingRw)
+func Filter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
+	if config.IsOriginRNA {
+		// TODO: Needs to be dynamic based on read length
+		return FilterWithBins(readSequence, genomeIndex, 80, 3)
+	} else {
+		// TODO: Needs to be dynamic based on read length
+		return FilterWithBins(readSequence, genomeIndex, 150, 7)
+	}
+}
 
-	return numMatchingFw >= 6 || numMatchingRv >= 6
+func FilterWithBins(readSequence *[]byte, genomeIndex *index.GenomeIndex, binSize int, kmerMatchThreshold int) bool {
+	kmerLen := int(config.KmerLength())
+	readLen := len(*readSequence)
+
+	if readLen < kmerLen || kmerLen != 10 {
+		return false
+	}
+
+	binCounts := make(map[int]int, 16)
+	readBytes := *readSequence
+
+	for i := 0; i <= readLen-kmerLen; i += kmerLen {
+		kmerKey := [10]byte{
+			readBytes[i], readBytes[i+1], readBytes[i+2], readBytes[i+3], readBytes[i+4],
+			readBytes[i+5], readBytes[i+6], readBytes[i+7], readBytes[i+8], readBytes[i+9],
+		}
+
+		matches := genomeIndex.GetKeywordFromMap(kmerKey)
+		for _, m := range matches {
+			binID := int(m.Position) / binSize
+			binCounts[binID]++
+			if binCounts[binID] >= kmerMatchThreshold {
+				return true
+			}
+		}
+	}
+
+	return false
 }
