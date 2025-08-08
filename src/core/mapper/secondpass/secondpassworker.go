@@ -55,9 +55,7 @@ func SecondpassMappingWorker(secondPassChan *SecondPassChannel, wgIncompleteMapp
 
 func remapReadPair(readPairMapping *mapperutils.ReadPairMatchResults, annotationMap map[int]*mapperutils.TargetAnnotation, genomeIndex *index.GenomeIndex) {
 	fwRemaps := make([]*mapperutils.ReadMatchResult, 0)
-	if readPairMapping.ReadPair.ReadR1.Header == "436042" {
-		fmt.Println("s")
-	}
+
 	for _, mapping := range readPairMapping.Fw {
 		mainSeqId := mapping.SequenceIndex / 2
 		remaps := remapRead(mapping, annotationMap[mainSeqId], readPairMapping.ReadPair.ReadR1, genomeIndex)
@@ -129,8 +127,8 @@ func remapRead(readMapping *mapperutils.ReadMatchResult, annotation *mapperutils
 			}
 			alternativeReadMatchResults = append(alternativeReadMatchResults, remaps...)
 		} else {
-			overhangCOrrected := correctOverhangs(readMapping, annotation.Introns[readMapping.SequenceIndex], read, genomeIndex)
-			alternativeReadMatchResults = append(alternativeReadMatchResults, overhangCOrrected...)
+			overhangCorrected := correctOverhangs(readMapping, annotation.Introns[readMapping.SequenceIndex], read, genomeIndex)
+			alternativeReadMatchResults = append(alternativeReadMatchResults, overhangCorrected...)
 		}
 	}
 
@@ -143,14 +141,14 @@ func remapRead(readMapping *mapperutils.ReadMatchResult, annotation *mapperutils
 
 	// fill gaps in original map
 	if readMapping.MatchedRead.Regions[0].Start == 0 && readMapping.MatchedRead.Regions[len(readMapping.MatchedRead.Regions)-1].End == len(*read.Sequence) && readMapping.MatchedRead.Length() != len(*read.Sequence) {
-		// before we do anyting, check if the missing part of the map is a gap in the mapping (lets say 10 bases are missing
+		// before we do anything, check if the missing part of the map is a gap in the mapping (lets say 10 bases are missing
 		// in the middle of the read). We want to use the already mapped part of the read before dicarding them in the remap
 		r := readMapping.Copy()
 		fillGaps(r, genomeIndex, read)
 		alternativeReadMatchResults = append(alternativeReadMatchResults, r)
 	}
 
-	if !readMapping.IncompleteMap {
+	if !readMapping.IncompleteMap && readMapping.MatchedRead.Length() == len(*read.Sequence) {
 		// after all remap work, append original readMapping if is was completed
 		alternativeReadMatchResults = append(alternativeReadMatchResults, readMapping)
 	}
