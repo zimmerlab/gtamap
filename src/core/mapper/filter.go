@@ -53,7 +53,7 @@ func GlobalFilter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
 	}
 }
 
-func Filter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
+func BinnedFilter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
 	if config.IsOriginRNA {
 		// TODO: Needs to be dynamic based on read length
 		return FilterWithBins(readSequence, genomeIndex, 80, 3)
@@ -63,7 +63,7 @@ func Filter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
 	}
 }
 
-func FilterWithBins(readSequence *[]byte, genomeIndex *index.GenomeIndex, binSize int, kmerMatchThreshold int) bool {
+func FilterWithBins(readSequence *[]byte, genomeIndex *index.GenomeIndex, binSize uint32, kmerMatchThreshold int) bool {
 	kmerLen := int(config.KmerLength())
 	readLen := len(*readSequence)
 
@@ -71,7 +71,7 @@ func FilterWithBins(readSequence *[]byte, genomeIndex *index.GenomeIndex, binSiz
 		return false
 	}
 
-	binCounts := make(map[int]int, 16)
+	binCounts := make(map[uint32]int, 16)
 	readBytes := *readSequence
 
 	for i := 0; i <= readLen-kmerLen; i += kmerLen {
@@ -82,7 +82,7 @@ func FilterWithBins(readSequence *[]byte, genomeIndex *index.GenomeIndex, binSiz
 
 		matches := genomeIndex.GetKeywordFromMap(kmerKey)
 		for _, m := range matches {
-			binID := int(m.Position) / binSize
+			binID := m.Position / binSize
 			binCounts[binID]++
 			if binCounts[binID] >= kmerMatchThreshold {
 				return true
