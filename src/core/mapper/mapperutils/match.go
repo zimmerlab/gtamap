@@ -374,9 +374,17 @@ func GetBestPossibleMappingCombination(fwMatches []*ReadMatchResult, rvMatches [
 // iterates over gaps and checks lengths of region before and after gaps
 func hasLongDiagonals(mapping *ReadMatchResult) bool {
 	mapping.NormalizeRegions()
+	// INFO: DNA RNA MODE
+	// For DNA, l and r regions of junction should be longer
 	for _, region := range mapping.MatchedGenome.Regions {
-		if region.Length() < config.MinConfAnchorLength {
-			return false
+		if config.IsOriginRNA {
+			if region.Length() < config.MinConfAnchorLengthRNA {
+				return false
+			}
+		} else {
+			if region.Length() < config.MinConfAnchorLengthDNA {
+				return false
+			}
 		}
 	}
 	return true
