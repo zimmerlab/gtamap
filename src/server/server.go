@@ -4,13 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/KleinSamuel/gtamap/src/analysis"
-	"github.com/KleinSamuel/gtamap/src/config"
-	"github.com/KleinSamuel/gtamap/src/formats/fasta"
-	"github.com/KleinSamuel/gtamap/src/formats/sam"
-	"github.com/gorilla/mux"
-	"github.com/rs/cors"
-	"github.com/sirupsen/logrus"
 	"log"
 	"math"
 	"net/http"
@@ -19,18 +12,24 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/KleinSamuel/gtamap/src/analysis"
+	"github.com/KleinSamuel/gtamap/src/config"
+	"github.com/KleinSamuel/gtamap/src/formats/fasta"
+	"github.com/KleinSamuel/gtamap/src/formats/sam"
+	"github.com/gorilla/mux"
+	"github.com/rs/cors"
 )
 
 type Server struct {
 	Router          *mux.Router
-	AnalysisService *analysis.AnalysisService
+	Handler         *MappingDataHandler
+	AnalysisService *analysis.AnalysisService // TODO: change all usages to Handler
 }
 
 func (s *Server) InitRoutes() {
 
 	api := s.Router.PathPrefix("/api").Subrouter()
-
-	api.HandleFunc("/test", s.test).Methods("GET")
 
 	api.HandleFunc("/health", s.healthCheck).Methods("GET")
 
@@ -68,6 +67,10 @@ func (s *Server) InitRoutes() {
 	download.HandleFunc("/targetRegion/combinedSam", s.serveTargetRegionCombinedMappingSam).Methods("GET")
 	download.HandleFunc("/targetRegion/combinedBam", s.serveTargetRegionCombinedMappingBam).Methods("GET")
 	download.HandleFunc("/targetRegion/combinedBamIndex", s.serveTargetRegionCombinedMappingBamIndex).Methods("GET")
+
+	readDetailsRouter := api.PathPrefix("/readDetails").Subrouter()
+
+	readDetailsRouter.HandleFunc("/readInfo", s.getReadDetailsInfo).Methods("GET")
 }
 
 func (s *Server) Start() {
@@ -81,6 +84,7 @@ func (s *Server) Start() {
 }
 
 func NewServer() *Server {
+
 	server := &Server{
 		Router:          mux.NewRouter(),
 		AnalysisService: analysis.NewAnalysisService(),
@@ -108,16 +112,12 @@ func (s *Server) healthCheck(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-func (s *Server) test(w http.ResponseWriter, r *http.Request) {
-
-	response := map[string]string{
-		"message":  "This is a test response from the server",
-		"gtamap":   strconv.Itoa(len(s.AnalysisService.MapperInfos["gtamap"].ParsedFile.Records)),
-		"minimap2": strconv.Itoa(len(s.AnalysisService.MapperInfos["minimap2"].ParsedFile.Records)),
+func (s *Server) InitMappingDataHandler(fastaFilePath string, fastaIndexFilePath string) {
+	handler, err := NewMappingDataHandler(fastaFilePath, fastaIndexFilePath)
+	if err != nil {
+		panic("could not create mapping data handler")
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	s.Handler = handler
 }
 
 type UpsetElement struct {
@@ -1045,64 +1045,6 @@ func getTestGenomeConfig(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-type MapperResult struct {
-	Name   string `json:"name"`
-	Path   string `json:"path"`
-	Target string `json:"target"`
-}
-
-// GetMapperResults retrieves the results of mappers from the output directory.
-// It assumes that the output directory contains files named in the format "mapperName.target.sam".
-func (s *Server) GetMapperResults() []MapperResult {
-
-	results := make([]MapperResult, 0)
-
-	files, err := os.ReadDir(config.GetRunDir())
-	if err != nil {
-		logrus.Error("Error reading output directory: ", err)
-		return results
-	}
-
-	for _, file := range files {
-		if strings.HasSuffix(file.Name(), ".sam") {
-			parts := strings.Split(file.Name(), ".")
-
-			if len(parts) < 3 {
-				logrus.Warn("Skipping mapper file: ", file.Name())
-				continue
-			}
-
-			result := MapperResult{
-				Name:   parts[1],
-				Path:   config.GetRunDir() + "/" + file.Name(),
-				Target: parts[2],
-			}
-
-			results = append(results, result)
-		}
-	}
-
-	return results
-}
-
-func (s *Server) LoadMapperResults() {
-
-	results := s.GetMapperResults()
-
-	for _, result := range results {
-
-		if err := s.AnalysisService.AddMapperInfo(result.Name, result.Path, result.Target); err != nil {
-			log.Fatalf("Error initializing analysis service: %v", err)
-		}
-
-		logrus.WithFields(logrus.Fields{
-			"mapperName":        result.Name,
-			"mapperSamFilePath": result.Path,
-			"target":            result.Target,
-		}).Debug("added mapper result")
-	}
-}
-
 type ReadOverviewInfo struct {
 	Qname        string              `json:"qname"`
 	Length       int                 `json:"readLength"`
@@ -1231,4 +1173,83 @@ func (s *Server) ReadSummaryTableData() []ReadOverviewInfo {
 	}
 
 	return reads
+}
+
+type RecordWithMapperInfo struct {
+	Record *sam.Record `json:"record"`
+	Mapper string      `json:"mapper"`
+}
+
+type Interval struct {
+	Contig string `json:"contig"`
+	Start  int    `json:"start"`
+	End    int    `json:"end"`
+}
+
+type Cluster struct {
+	Interval      Interval `json:"interval"`
+	RecordIndices []int    `json:"recordIndices"`
+}
+
+type ReadDetailsInfo struct {
+	Records []RecordWithMapperInfo `json:"records"`
+	Cluster []Cluster              `json:"cluster"`
+}
+
+func (s *Server) getReadDetailsInfo(w http.ResponseWriter, r *http.Request) {
+
+	qname := r.URL.Query().Get("qname")
+
+	if qname == "" {
+		http.Error(w, "Missing qname parameter", http.StatusBadRequest)
+		return
+	}
+
+	readDetails := ReadDetailsInfo{
+		Records: make([]RecordWithMapperInfo, 0),
+		Cluster: make([]Cluster, 0),
+	}
+
+	for _, mapperName := range s.AnalysisService.MapperNames {
+
+		for _, record := range s.AnalysisService.MapperInfos[mapperName].RecordsByQname[qname] {
+
+			recordWithMapperInfo := RecordWithMapperInfo{
+				Record: record,
+				Mapper: mapperName,
+			}
+
+			readDetails.Records = append(readDetails.Records, recordWithMapperInfo)
+
+			foundCluster := false
+			for _, cluster := range readDetails.Cluster {
+
+				if cluster.Interval.Contig == record.Rname && cluster.Interval.Start <= record.Pos && cluster.Interval.End >= record.Pos {
+					foundCluster = true
+
+					readDetails.Records = append(readDetails.Records, recordWithMapperInfo)
+					// add the record index to the cluster
+					cluster.RecordIndices = append(cluster.RecordIndices, len(readDetails.Records)-1)
+					break
+				}
+			}
+
+			if !foundCluster {
+				// create a new cluster for this record
+				newCluster := Cluster{
+					Interval: Interval{
+						Contig: record.Rname,
+						Start:  record.Pos,
+						End:    record.Pos + len(record.Seq) - 1,
+					},
+					RecordIndices: []int{len(readDetails.Records) - 1},
+				}
+				readDetails.Cluster = append(readDetails.Cluster, newCluster)
+			}
+		}
+
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(readDetails)
 }

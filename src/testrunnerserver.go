@@ -1,9 +1,10 @@
 package main
 
 import (
+	"log"
+
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/server"
-	"log"
 )
 
 func loadCcr9(s *server.Server) {
@@ -116,8 +117,19 @@ func main() {
 
 	config.LoadConfig()
 
+	// s := server.NewServer()
+	// s.LoadMapperResults()
+	//
+	// s.Start()
+
+	fastaFilePath := "/home/sam/Data/reference-genomes/ensembl/113/homo_sapiens/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+	fastaIndexFilePath := "/home/sam/Data/reference-genomes/ensembl/113/homo_sapiens/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai"
+	// gtamapSamFilePath := "/home/sam/Data/gtamap/output/3c2c2757/92f24301/664d462a/ENSG00000173585.gtamap.target.sam"
+
 	s := server.NewServer()
-	s.LoadMapperResults()
+	s.InitMappingDataHandler(fastaFilePath, fastaIndexFilePath)
+
+	s.Handler.LoadMapperResults()
 
 	s.Start()
 }
