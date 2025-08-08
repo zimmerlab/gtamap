@@ -72,8 +72,10 @@
 
 <script setup>
 
-import {defineExpose, inject, nextTick, onMounted, ref} from 'vue'
+import {defineExpose, inject, nextTick, onMounted, ref, defineEmits} from 'vue'
 import CustomTag from "./CustomTag.vue";
+
+const emit = defineEmits(['open-read-details'])
 
 const ApiService = inject("http")
 
@@ -114,17 +116,18 @@ const tableData = ref({
 })
 
 const handleSort = function(sortInfo) {
-  tableData.value.sortKey = sortInfo[0]
+  tableData.value.sortKey = sortInfo[0] ? sortInfo[0] : ""
   customSort()
 }
 
 const customSort = function() {
 
-  if (tableData.value.sortKey === "") {
+  const items = readSummaryTableData.value.items
+
+  if (!tableData.value.sortKey || tableData.value.sortKey === "") {
     return items
   }
 
-  const items = readSummaryTableData.value.items
   const desc = tableData.value.sortKey[0] === '-'
   const key = tableData.value.sortKey.slice(1)
 
@@ -160,9 +163,12 @@ const readMappingTableData = ref({items: []})
 
 const expandRowClickHandler = function(rowInfo) {
 
+  tableData.value.selectedRows = []
+  tableData.value.selectedRowsInExpanded = []
+
   if (!rowInfo.expanded) {
     tableData.value.expandedRows = []
-    readMappingTableData.value = []
+    readMappingTableData.value.items = []
     return
   }
 
@@ -201,7 +207,7 @@ let getReadSummaryTableData = function() {
 }
 
 let openReadDetails = function(readItem) {
-  console.log("Opening read details for:", readItem)
+  emit("open-read-details", readItem)
 }
 
 const selectAndScrollToRead = async function(readInfo) {

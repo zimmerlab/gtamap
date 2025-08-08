@@ -31,8 +31,8 @@
                     route: "/"
                 },
                 {
-                    label: "Other Page",
-                    route: "/other"
+                    label: "Test",
+                    route: "/test"
                 },
             ])
 

@@ -25,7 +25,6 @@ export default {
   name: 'TestPage',
   components: {CustomTag},
   setup() {
-
   }
 }
 </script>

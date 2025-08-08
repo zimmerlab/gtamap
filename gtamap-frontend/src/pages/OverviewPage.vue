@@ -53,7 +53,8 @@
 <!--    </div>-->
 
     <div class="tw:flex tw:flex-row tw:px-20 tw:mb-10">
-      <ReadSummaryTable ref="readSummaryTableRef" class="tw:flex-1"></ReadSummaryTable>
+      <ReadSummaryTable ref="readSummaryTableRef" class="tw:flex-1"
+        @open-read-details="openReadDetailsPage"></ReadSummaryTable>
     </div>
 
     <div class="tw:my-5 tw:mb-32">
@@ -65,6 +66,7 @@
 
 <script>
 import {ref, inject} from "vue";
+import { useRouter } from "vue-router"
 
 import igv from "../js/igv/dist/igv.esm.js"
 
@@ -88,6 +90,7 @@ export default {
   setup() {
 
     const ApiService = inject("http")
+    const router = useRouter()
 
     let igvInfo = ref({})
     let igvBrowser = ref(undefined)
@@ -146,7 +149,7 @@ export default {
                 // the index of the mapping in the respective sam file
                 index: 0,
               }
-
+             
               popoverData.forEach(item => {
                 switch (item.name) {
                   case "Read Name":
@@ -160,6 +163,9 @@ export default {
                     break;
                 }
               })
+              
+              track.alignmentTrack.setHighlightedReads([readInfo.qname], "#0000ff")
+              track.updateViews()
 
               handleReadClick(readInfo)
             }
@@ -277,12 +283,22 @@ export default {
       }
     }
 
+    const openReadDetailsPage = function(readItem) {
+      router.push({
+        name: 'readDetailsPage',
+        query: {
+          readId: readItem.qname
+        }
+      })
+    }
+
     return {
       getIgvConfig,
       initializeIgv,
       createChart,
       chartContainer,
-      readSummaryTableRef
+      readSummaryTableRef,
+      openReadDetailsPage,
     }
   },
   mounted() {
