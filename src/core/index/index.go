@@ -1,9 +1,7 @@
 package index
 
 import (
-	"bufio"
 	"encoding/gob"
-	"fmt"
 	"io/fs"
 	"log"
 	"math"
@@ -554,7 +552,9 @@ type GenomeIndex struct {
 	KeywordTree     *keywordtreebyte.KeywordTree // the keyword tree containing all kmers of both genome sequences
 	KeywordMap      map[[10]byte][]*keywordtreebyte.Position
 	KeywordMapSmall map[[5]byte][]*keywordtreebyte.Position
-	ParalogRegions  map[string]*GenomeIndex // additional index per target region of paralog regions
+	// ParalogRegions  map[string]*GenomeIndex // additional index per target region of paralog regions
+	Blacklist     map[int]*datastructure.INTree  // interval tree used to store repeat regions. Tree at 0 -> for target region 0 etc...
+	RepeatRegions map[int][]datastructure.Bounds // interval tree used to store repeat regions. Tree at 0 -> for target region 0 etc...
 }
 
 func (i *GenomeIndex) AddKeywordToMap(keyword [10]byte, sequenceIndex uint8, position uint32) {
@@ -567,35 +567,35 @@ func (i *GenomeIndex) AddKeywordToMap(keyword [10]byte, sequenceIndex uint8, pos
 	})
 }
 
-func (i *GenomeIndex) LoadParalogs(paralogFile *os.File) {
-	// init map to store paralog regions per target sequence
-	// let's say we have target sequence X and Y
-	// then i.ParalogRegions will have X and Y as key and store
-	// one paralogIndex per target seq
-	// i.ParalogRegions[X] -> *genomeIndex (which will contain all kmers of paralog seqs of X in one map)
-	i.ParalogRegions = make(map[string]*GenomeIndex)
-	scanner := bufio.NewScanner(paralogFile)
-	for scanner.Scan() {
-		line := scanner.Text()
-		contentParts := strings.Split(line, ",")
-		if len(contentParts) != 2 {
-			logrus.Fatal("Error parsing paralog file. Wrong format!")
-		}
-		targetRegion := contentParts[0]
-		pathToParalogIndex := contentParts[1]
-		paralogIndex := ReadGenomeIndexByPath(pathToParalogIndex)
-		i.AddParalogRegionIndex(targetRegion, paralogIndex)
-	}
-}
+// func (i *GenomeIndex) LoadParalogs(paralogFile *os.File) {
+// 	// init map to store paralog regions per target sequence
+// 	// let's say we have target sequence X and Y
+// 	// then i.ParalogRegions will have X and Y as key and store
+// 	// one paralogIndex per target seq
+// 	// i.ParalogRegions[X] -> *genomeIndex (which will contain all kmers of paralog seqs of X in one map)
+// 	i.ParalogRegions = make(map[string]*GenomeIndex)
+// 	scanner := bufio.NewScanner(paralogFile)
+// 	for scanner.Scan() {
+// 		line := scanner.Text()
+// 		contentParts := strings.Split(line, ",")
+// 		if len(contentParts) != 2 {
+// 			logrus.Fatal("Error parsing paralog file. Wrong format!")
+// 		}
+// 		targetRegion := contentParts[0]
+// 		pathToParalogIndex := contentParts[1]
+// 		paralogIndex := ReadGenomeIndexByPath(pathToParalogIndex)
+// 		i.AddParalogRegionIndex(targetRegion, paralogIndex)
+// 	}
+// }
 
-func (i *GenomeIndex) AddParalogRegionIndex(seqId string, index *GenomeIndex) {
-	_, exists := i.ParalogRegions[seqId]
-	if !exists {
-		i.ParalogRegions[seqId] = index
-	} else {
-		i.ParalogRegions[seqId].ExtendParalogRegionIndex(seqId, index)
-	}
-}
+// func (i *GenomeIndex) AddParalogRegionIndex(seqId string, index *GenomeIndex) {
+// 	_, exists := i.ParalogRegions[seqId]
+// 	if !exists {
+// 		i.ParalogRegions[seqId] = index
+// 	} else {
+// 		i.ParalogRegions[seqId].ExtendParalogRegionIndex(seqId, index)
+// 	}
+// }
 
 func (i *GenomeIndex) ExtendParalogRegionIndex(targetGene string, indexExtension *GenomeIndex) {
 	// since the indices we add to our main index i are mainly paralog indices with only
@@ -805,13 +805,15 @@ func (i *GenomeIndex) NumSequences() int {
 	return len(i.SequenceHeaders)
 }
 
-func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry) *GenomeIndex {
+func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry, blackListFile string) *GenomeIndex {
 	index := GenomeIndex{
 		SequenceHeaders: make([]string, len(fastaEntries)),
 		SequenceInfo:    make([]*gtf.GeneBasic, len(fastaEntries)),
 		Sequences:       make([]*[]byte, len(fastaEntries)*2),
 		KeywordMap:      make(map[[10]byte][]*keywordtreebyte.Position, int(math.Pow(4, 10))),
 		KeywordMapSmall: make(map[[5]byte][]*keywordtreebyte.Position, int(math.Pow(4, 5))),
+		Blacklist:       make(map[int]*datastructure.INTree),
+		RepeatRegions:   make(map[int][]datastructure.Bounds),
 	}
 
 	for i, entry := range fastaEntries {
@@ -828,6 +830,13 @@ func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry) *GenomeIndex {
 
 		index.Sequences[i*2] = &sequence
 		index.Sequences[i*2+1] = &sequenceRevComp
+		tree, repeats, err := BuildBlacklistInTree(info.StartGenomic, info.EndGenomic, info.Contig, blackListFile)
+		logrus.Debugf("Loaded %d annotated repeats into index.\n", len(repeats))
+		if err != nil {
+			logrus.Fatal("Error loading balcklist into interval tree", err)
+		}
+		index.Blacklist[i] = tree
+		index.RepeatRegions[i] = repeats
 	}
 
 	for i, seq := range index.Sequences {
@@ -872,6 +881,7 @@ func WriteGenomeIndex(genomeIndex *GenomeIndex, outputFile *os.File) {
 	timerStart := time.Now()
 
 	enc := gob.NewEncoder(outputFile)
+	gob.Register(&datastructure.RepeatRegion{})
 
 	if err := enc.Encode(genomeIndex); err != nil {
 		log.Fatal("encode error:", err)
@@ -899,6 +909,7 @@ func ReadGenomeIndexByFile(indexFile *os.File) *GenomeIndex {
 
 	// create a decoder and deserialize the person struct from the file
 	decoder := gob.NewDecoder(indexFile)
+	gob.Register(&datastructure.RepeatRegion{})
 
 	var genomeIndex GenomeIndex
 
@@ -913,7 +924,7 @@ func ReadGenomeIndexByFile(indexFile *os.File) *GenomeIndex {
 	return &genomeIndex
 }
 
-func BuildAndSerializeGenomeIndex(fastaFile *os.File, outputFile *os.File) {
+func BuildAndSerializeGenomeIndex(fastaFile *os.File, blackListFile string, outputFile *os.File) {
 	fastaEntries, err := dataloader.ReadFasta(fastaFile)
 	if err != nil {
 		logrus.Fatal("Error extracting sequence from fasta file", err)
@@ -930,9 +941,58 @@ func BuildAndSerializeGenomeIndex(fastaFile *os.File, outputFile *os.File) {
 		}).Info("Added sequence #" + strconv.Itoa(i+1))
 	}
 
-	genomeIndex := BuildGenomeIndex(fastaEntries)
+	genomeIndex := BuildGenomeIndex(fastaEntries, blackListFile)
 
 	WriteGenomeIndex(genomeIndex, outputFile)
+}
+
+func BuildBlacklistInTree(start, end uint32, contig string, blackList string) (*datastructure.INTree, []datastructure.Bounds, error) {
+	repeatRegions := make([]datastructure.Bounds, 0)
+
+	scanner, err := dataloader.OpenBlacklistScanner(blackList)
+	if err != nil {
+		logrus.Fatal(err)
+	}
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		chr := extractFieldFromBlacklist(4, line)
+		if strings.Contains(chr, "chr") {
+			chr = strings.Trim(chr, "chr")
+		}
+		if chr != contig {
+			continue
+		}
+
+		regionStart, err := strconv.ParseUint(extractFieldFromBlacklist(5, line), 10, 32)
+		if err != nil {
+			logrus.Fatal(err)
+		}
+		regionEnd, err := strconv.ParseUint(extractFieldFromBlacklist(6, line), 10, 32)
+		if err != nil {
+			logrus.Fatal(err)
+		}
+		// append relative coords to gene
+		regionStartConv := uint32(regionStart)
+		regionEndConv := uint32(regionEnd)
+		if regionStartConv >= start && regionEndConv <= end {
+			repeatRegions = append(repeatRegions, &datastructure.RepeatRegion{Lower: float64(regionStartConv - start), Upper: float64(regionEndConv - start)})
+		}
+		if regionStartConv > end && regionEndConv > end {
+			return datastructure.NewINTree(repeatRegions), repeatRegions, nil
+		}
+
+	}
+
+	return datastructure.NewINTree(repeatRegions), repeatRegions, nil
+}
+
+func extractFieldFromBlacklist(field int, line string) string {
+	parts := strings.Fields(line)
+	if field >= 0 && field < len(parts) {
+		return parts[field]
+	}
+	return ""
 }
 
 func OptimizeFastaExtraction(targetParalogs map[string]map[string]struct{}, fastaDirParalogPre *string) map[string]map[string]struct{} {
@@ -1031,28 +1091,29 @@ func OptimizeIndexSerialisation(targetParalogs map[string]map[string]struct{}, i
 	return paralogsToSerialize
 }
 
-func BuildAndSerializeAll(paralogsToSerialize map[string]map[string]struct{}, indexDirParalogPre *string, fastaDirParalogPre *string) {
-	for target, paralogs := range paralogsToSerialize {
-		for paralog := range paralogs {
-			// create and format index file
-			paralogIndexName := fmt.Sprintf("%s.gtai", paralog)
-			logrus.Infof("Creating index for paralog %s of target region %s in: %s ", paralog, target, paralogIndexName)
-			paralogIndexPath := filepath.Join(*indexDirParalogPre, paralogIndexName)
-			paralogIndexFile, err := os.Create(paralogIndexPath)
-			if err != nil {
-				logrus.Fatalf("Error creating paralog index file: %s: %s", paralogIndexPath, err)
-			}
-
-			// open fa file
-			paralogFastaName := fmt.Sprintf("%s.fa", paralog)
-			paralogFastaPath := filepath.Join(*fastaDirParalogPre, paralogFastaName)
-			paralogFastaFile, err := os.Open(paralogFastaPath)
-			if err != nil {
-				fmt.Println(err)
-				logrus.Fatalf("Error reading paralog fa file: %s", paralogFastaPath)
-			}
-
-			BuildAndSerializeGenomeIndex(paralogFastaFile, paralogIndexFile)
-		}
-	}
-}
+// OLD PARALOG LOGIC (NOT NEEDED ANYMORE)
+// func BuildAndSerializeAll(paralogsToSerialize map[string]map[string]struct{}, indexDirParalogPre *string, fastaDirParalogPre *string) {
+// 	for target, paralogs := range paralogsToSerialize {
+// 		for paralog := range paralogs {
+// 			// create and format index file
+// 			paralogIndexName := fmt.Sprintf("%s.gtai", paralog)
+// 			logrus.Infof("Creating index for paralog %s of target region %s in: %s ", paralog, target, paralogIndexName)
+// 			paralogIndexPath := filepath.Join(*indexDirParalogPre, paralogIndexName)
+// 			paralogIndexFile, err := os.Create(paralogIndexPath)
+// 			if err != nil {
+// 				logrus.Fatalf("Error creating paralog index file: %s: %s", paralogIndexPath, err)
+// 			}
+//
+// 			// open fa file
+// 			paralogFastaName := fmt.Sprintf("%s.fa", paralog)
+// 			paralogFastaPath := filepath.Join(*fastaDirParalogPre, paralogFastaName)
+// 			paralogFastaFile, err := os.Open(paralogFastaPath)
+// 			if err != nil {
+// 				fmt.Println(err)
+// 				logrus.Fatalf("Error reading paralog fa file: %s", paralogFastaPath)
+// 			}
+//
+// 			BuildAndSerializeGenomeIndex(paralogFastaFile, paralogIndexFile)
+// 		}
+// 	}
+// }
