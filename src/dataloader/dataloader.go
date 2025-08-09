@@ -3,16 +3,20 @@ package dataloader
 import (
 	"bufio"
 	"bytes"
-	"github.com/KleinSamuel/gtamap/src/formats/fasta"
-	"github.com/KleinSamuel/gtamap/src/formats/gtf"
-	"github.com/sirupsen/logrus"
+	"compress/gzip"
+	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/KleinSamuel/gtamap/src/formats/fasta"
+	"github.com/KleinSamuel/gtamap/src/formats/gtf"
+	"github.com/geozelot/intree"
+	"github.com/sirupsen/logrus"
 )
 
 func panicIfFilesAreMissing(pathGtf string, pathFasta string, pathFastaIndex string) {
-
 	// checks if the fasta index file exists
 	_, errGtf := os.Stat(pathGtf)
 	if os.IsNotExist(errGtf) {
@@ -39,7 +43,6 @@ func ExitIfFastaIndexIsMissing(pathFastaIndex string) {
 }
 
 func GenerateInputForIndexFromFile(gtfFilePath string, fastaFilePath string, fastaIndexFilePath string) *gtf.Annotation {
-
 	panicIfFilesAreMissing(gtfFilePath, fastaFilePath, fastaIndexFilePath)
 
 	gtfFile, errGtf := os.Open(gtfFilePath)
@@ -63,7 +66,6 @@ func GenerateInputForIndexFromFile(gtfFilePath string, fastaFilePath string, fas
 // GenerateInputForIndex reads in the genome annotation from given gtf file,
 // reads the fasta index (required) and extracts the dna sequence for every transcript
 func GenerateInputForIndex(gtfFile *os.File, fastaFile *os.File, fastaIndexFile *os.File) *gtf.Annotation {
-
 	logrus.WithFields(logrus.Fields{
 		"gtfFile":        gtfFile.Name(),
 		"fastaFile":      fastaFile.Name(),
@@ -79,7 +81,7 @@ func GenerateInputForIndex(gtfFile *os.File, fastaFile *os.File, fastaIndexFile 
 			"geneIdEnsembl": gene.GeneIdEnsembl,
 		}).Info("Process gene")
 
-		//index := fastaIndex.Entries[gene.Chromosome]
+		// index := fastaIndex.Entries[gene.Chromosome]
 
 		for _, trans := range gene.Transcripts {
 
@@ -119,13 +121,32 @@ func GenerateInputForIndex(gtfFile *os.File, fastaFile *os.File, fastaIndexFile 
 	return annotation
 }
 
+func OpenBlacklistScanner(blackList string) (*bufio.Scanner, error) {
+	ext := strings.ToLower(filepath.Ext(blackList))
+	file, err := os.Open(blackList)
+	if err != nil {
+		return nil, err
+	}
+
+	if ext == ".gz" {
+		gzReader, err := gzip.NewReader(file)
+		if err != nil {
+			file.Close()
+			return nil, err
+		}
+		// Scanner over gzip stream
+		return bufio.NewScanner(gzReader), nil
+	}
+
+	return bufio.NewScanner(file), nil
+}
+
 type FastaEntry struct {
 	Header   string
 	Sequence []byte
 }
 
 func ReadFasta(fastaFile *os.File) ([]*FastaEntry, error) {
-
 	scanner := bufio.NewScanner(fastaFile)
 
 	entries := make([]*FastaEntry, 0)
@@ -168,8 +189,8 @@ func ReadFasta(fastaFile *os.File) ([]*FastaEntry, error) {
 }
 
 func ExtractSequenceAsStringFromFastaUsingPath(fastaPath string, fastaIndex *fasta.Index, chromosome string,
-	startGenomic uint32, endGenomic uint32) (string, error) {
-
+	startGenomic uint32, endGenomic uint32,
+) (string, error) {
 	fastaFile, err := os.Open(fastaPath)
 	if err != nil {
 		return "", err
@@ -180,15 +201,45 @@ func ExtractSequenceAsStringFromFastaUsingPath(fastaPath string, fastaIndex *fas
 }
 
 func ExtractSequenceAsStringFromFasta(fastaFile *os.File, fastaIndex *fasta.Index, chromosome string,
-	startGenomic uint32, endGenomic uint32) string {
-
+	startGenomic uint32, endGenomic uint32,
+) string {
 	buffer := ExtractSequenceAsBytesFromFasta(fastaFile, fastaIndex, chromosome, startGenomic, endGenomic)
 	return strings.ReplaceAll(string(buffer), "\n", "")
 }
 
-func ExtractSequenceAsBytesFromFastaUsingPath(fastaPath string, fastaIndex *fasta.Index, chromosome string,
-	startGenomic uint32, endGenomic uint32) ([]byte, error) {
+func ExtractBlacklistRegions(start, end int, contig string, blackList string) ([]*intree.Bounds, error) {
+	bounds := make([]*intree.Bounds, 0)
 
+	blackListFile, err := os.Open(blackList)
+	if err != nil {
+		return nil, err
+	}
+	defer blackListFile.Close()
+	scanner := bufio.NewScanner(blackListFile)
+
+	buf := make([]byte, 1000)
+	scanner.Buffer(buf, 1000)
+
+	for scanner.Scan() {
+		line := scanner.Bytes()
+
+		if len(line) == 0 {
+			continue
+		}
+		fmt.Println(line)
+
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return bounds, nil
+}
+
+func ExtractSequenceAsBytesFromFastaUsingPath(fastaPath string, fastaIndex *fasta.Index, chromosome string,
+	startGenomic uint32, endGenomic uint32,
+) ([]byte, error) {
 	fastaFile, err := os.Open(fastaPath)
 	if err != nil {
 		return nil, err
@@ -199,8 +250,8 @@ func ExtractSequenceAsBytesFromFastaUsingPath(fastaPath string, fastaIndex *fast
 }
 
 func ExtractSequenceAsBytesFromFasta(fastaFile *os.File, fastaIndex *fasta.Index, chromosome string,
-	startGenomic uint32, endGenomic uint32) []byte {
-
+	startGenomic uint32, endGenomic uint32,
+) []byte {
 	index := fastaIndex.Entries[chromosome]
 
 	// the start position of the transcript relative to its chromosome
