@@ -23,6 +23,11 @@ func GlobalFilter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
 		okFw := false
 		okRv := false
 		for _, m := range matches {
+			repeat := genomeIndex.Blacklist[int(m.SequenceIndex)/2].Including(float64(m.Position))
+			if len(repeat) != 0 {
+				// dont cont this kmer at all
+				break
+			}
 			if m.SequenceIndex == 0 {
 				okFw = true
 			} else {
