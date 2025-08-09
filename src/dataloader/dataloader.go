@@ -10,9 +10,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/formats/fasta"
 	"github.com/KleinSamuel/gtamap/src/formats/gtf"
-	"github.com/geozelot/intree"
 	"github.com/sirupsen/logrus"
 )
 
@@ -207,8 +207,8 @@ func ExtractSequenceAsStringFromFasta(fastaFile *os.File, fastaIndex *fasta.Inde
 	return strings.ReplaceAll(string(buffer), "\n", "")
 }
 
-func ExtractBlacklistRegions(start, end int, contig string, blackList string) ([]*intree.Bounds, error) {
-	bounds := make([]*intree.Bounds, 0)
+func ExtractBlacklistRegions(start, end int, contig string, blackList string) ([]*datastructure.Bounds, error) {
+	bounds := make([]*datastructure.Bounds, 0)
 
 	blackListFile, err := os.Open(blackList)
 	if err != nil {
