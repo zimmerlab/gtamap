@@ -56,6 +56,7 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 		} else {
 			// here we do not pair any reads, we just output single sam entries
 			// FW
+			numRecordsR1 := 0
 			for i := 0; i < len(task.TargetInfo.Fw); i++ {
 				if task.TargetInfo.Fw[i].IncompleteMap {
 					continue
@@ -70,13 +71,12 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 					continue
 				}
 				builder.WriteString(s)
-			}
-			// write read mate as unmapped to sam
-			if len(task.TargetInfo.Fw) == 0 {
-				builder.WriteString(unmappedReadMateToSamString(task.TargetInfo.ReadPair, true))
+
+				numRecordsR1++
 			}
 
 			// RV
+			numRecordsR2 := 0
 			for j := 0; j < len(task.TargetInfo.Rv); j++ {
 				if task.TargetInfo.Rv[j].IncompleteMap {
 					continue
@@ -91,11 +91,19 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 					continue
 				}
 				builder.WriteString(s)
+
+				numRecordsR2++
 			}
+
+			if numRecordsR1 == 0 && numRecordsR2 == 0 {
+				continue
+			}
+			if numRecordsR1 > 0 && numRecordsR2 > 0 {
+				continue
+			}
+			// one mate is unmapped
 			// write read mate as unmapped to sam
-			if len(task.TargetInfo.Rv) == 0 {
-				builder.WriteString(unmappedReadMateToSamString(task.TargetInfo.ReadPair, false))
-			}
+			builder.WriteString(unmappedReadMateToSamString(task.TargetInfo.ReadPair, numRecordsR1 == 0))
 		}
 
 		outputChan <- builder.String()
