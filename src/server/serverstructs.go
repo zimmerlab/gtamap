@@ -22,7 +22,7 @@ type EnhancedRecord struct {
 	MappedGenome *regionvector.RegionVector // the matched intervals in the genome (mis- + matches (M, =, X in cigar))
 	MappedRead   *regionvector.RegionVector // the matched intervals in the read (matches (M, =, X) in cigar)
 	Mismatches   []int                      // the positions of the mismatches in the read sequence (min = 0, max = read length)
-	Cigar        *cigar.Object
+	CigarObj     *cigar.Object
 }
 
 func (h *MappingDataHandler) NewEnhancedRecord(record sam.Record, mapperIndex int) (*EnhancedRecord, error) {
@@ -149,7 +149,7 @@ func (h *MappingDataHandler) NewEnhancedRecord(record sam.Record, mapperIndex in
 		MappedGenome: genomicRegionsMapped,
 		MappedRead:   readRegionsMapped,
 		Mismatches:   make([]int, 0),
-		Cigar:        &cigar.Object{Elements: detailedCigarElements},
+		CigarObj:     &cigar.Object{Elements: detailedCigarElements},
 	}, nil
 }
 

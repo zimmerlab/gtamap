@@ -1047,7 +1047,8 @@ func getTestGenomeConfig(w http.ResponseWriter, r *http.Request) {
 
 type ReadOverviewInfo struct {
 	Qname        string              `json:"qname"`
-	Length       int                 `json:"readLength"`
+	ReadLengthR1 int                 `json:"readLengthR1"`
+	ReadLengthR2 int                 `json:"readLengthR2"`
 	NumMappedBy  int                 `json:"numMappedBy"`
 	MappedBy     []string            `json:"mappedBy"`
 	NumLocations int                 `json:"numLocations"`
@@ -1059,7 +1060,8 @@ type ReadLocationInfo struct {
 	Contig        string   `json:"contigName"`
 	Strand        bool     `json:"isForwardStrand"` // true for forward strand, false for reverse strand
 	Position      int      `json:"position"`
-	CigarString   string   `json:"cigarString"`
+	Cigar         string   `json:"cigar"`
+	CigarDetailed string   `json:"cigarDetailed,omitempty"` // optional, for detailed CIGAR representation
 	NumMismatches int      `json:"numMismatches"`
 	NumGaps       int      `json:"numGaps"`
 	NumMappedBy   int      `json:"numMappedBy"`
@@ -1075,7 +1077,8 @@ func (s *Server) ReadSummaryTableData() []ReadOverviewInfo {
 
 		readInfoDto := &ReadOverviewInfo{
 			Qname:        readInfo.Qname,
-			Length:       0,
+			ReadLengthR1: len(readInfo.SequenceFirstOfPair),
+			ReadLengthR2: len(readInfo.SequenceSecondOfPair),
 			NumMappedBy:  0,
 			MappedBy:     make([]string, 0),
 			NumLocations: 0,
@@ -1104,12 +1107,33 @@ func (s *Server) ReadSummaryTableData() []ReadOverviewInfo {
 					pair = "second"
 				}
 
+				found := false
+				for _, o := range readInfoDto.Locations {
+
+					sameContig := o.Contig == record.Rname
+					sameStand := o.Strand == !record.Flag.IsReverseStrand()
+					samePosition := o.Position == record.Pos
+					sameCigar := o.CigarDetailed == record.CigarObj.String()
+
+					if sameContig && sameStand && samePosition && sameCigar {
+						o.MappedBy = append(o.MappedBy, mapperName)
+						o.ReadIndices = append(o.ReadIndices, record.IndexInSam)
+						found = true
+						break
+					}
+				}
+
+				if found {
+					continue
+				}
+
 				locationInfo := ReadLocationInfo{
 					Pair:          pair,
 					Contig:        record.Rname,
 					Strand:        !record.Flag.IsReverseStrand(),
 					Position:      record.Pos,
-					CigarString:   record.UniformCigar(),
+					Cigar:         record.UniformCigar(),
+					CigarDetailed: record.CigarObj.String(),
 					NumMismatches: -1,
 					NumGaps:       -1,
 					NumMappedBy:   1,
