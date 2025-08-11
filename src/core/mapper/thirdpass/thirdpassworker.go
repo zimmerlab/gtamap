@@ -1,12 +1,12 @@
 package thirdpass
 
 import (
-	"fmt"
 	"math"
 	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
@@ -17,7 +17,6 @@ import (
 
 func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGroup, outputChan chan<- string, index *index.GenomeIndex) {
 	defer wgThirdPass.Done()
-	logrus.Info("Started third pass")
 	total := 0
 	mmTotal := 0
 
@@ -25,53 +24,74 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 
 		task, ok := thirdPassChan.Receive()
 		if !ok {
+			logrus.Info("Done with second pass")
 			break
 		}
 		// logrus.Debugf("Third pass: %s", task.ReadPairId)
 
 		var builder strings.Builder
-
-		for i := 0; i < len(task.TargetInfo.Fw); i++ {
-			if task.TargetInfo.Fw[i].IncompleteMap {
-				continue
-			}
-			if task.TargetInfo.Fw[i].MatchedGenome.Length() != len(*task.TargetInfo.ReadPair.ReadR1.Sequence) && task.TargetInfo.Fw[i].MatchedRead.Length() != len(*task.TargetInfo.ReadPair.ReadR1.Sequence) {
-				logrus.Infof("Read labeled complete but not fully mapped: Fw Read %s matched genome length: %d", task.TargetInfo.ReadPair.ReadR1.Header, task.TargetInfo.Fw[i].MatchedGenome.Length())
-				fmt.Println(task.TargetInfo.Fw[i].MatchedGenome)
-				fmt.Println(task.TargetInfo.Fw[i].MatchedRead)
-				continue
-			}
-			for j := 0; j < len(task.TargetInfo.Rv); j++ {
-				if task.TargetInfo.Rv[j].IncompleteMap {
+		if config.IncludeAllPairings {
+			for i := 0; i < len(task.TargetInfo.Fw); i++ {
+				if task.TargetInfo.Fw[i].IncompleteMap {
 					continue
 				}
+				for j := 0; j < len(task.TargetInfo.Rv); j++ {
+					if task.TargetInfo.Rv[j].IncompleteMap {
+						continue
+					}
 
-				// TODO: some reads still are not fully mapped sometimes...
-				if task.TargetInfo.Rv[j].MatchedGenome.Length() != len(*task.TargetInfo.ReadPair.ReadR2.Sequence) && task.TargetInfo.Rv[j].MatchedRead.Length() != len(*task.TargetInfo.ReadPair.ReadR2.Sequence) {
-					logrus.Infof("Read labeled complete but not fully mapped: Rv Read %s matched genome length: %d", task.TargetInfo.ReadPair.ReadR2.Header, task.TargetInfo.Rv[j].MatchedGenome.Length())
-					fmt.Println(task.TargetInfo.Rv[j].MatchedGenome)
-					fmt.Println(task.TargetInfo.Rv[j].MatchedRead)
-					fmt.Println(task.TargetInfo.Rv[j].MismatchesRead)
+					total += len(*task.TargetInfo.ReadPair.ReadR1.Sequence)
+					mmTotal += len(task.TargetInfo.Fw[i].MismatchesRead)
+					total += len(*task.TargetInfo.ReadPair.ReadR1.Sequence)
+					mmTotal += len(task.TargetInfo.Rv[j].MismatchesRead)
 
+					s, isOk := readPairResultToSamString(index, task.TargetInfo.ReadPair, task.TargetInfo.Fw[i], task.TargetInfo.Rv[j])
+					if !isOk {
+						continue
+					}
+					builder.WriteString(s)
+					outputChan <- builder.String()
+				}
+			}
+		} else {
+			// here we do not pair any reads, we just output single sam entries
+			// FW
+			for i := 0; i < len(task.TargetInfo.Fw); i++ {
+				if task.TargetInfo.Fw[i].IncompleteMap {
 					continue
 				}
 
 				total += len(*task.TargetInfo.ReadPair.ReadR1.Sequence)
 				mmTotal += len(task.TargetInfo.Fw[i].MismatchesRead)
-				total += len(*task.TargetInfo.ReadPair.ReadR1.Sequence)
-				mmTotal += len(task.TargetInfo.Rv[j].MismatchesRead)
 
-				s, isOk := readPairResultToSamString(index, task.TargetInfo.ReadPair, task.TargetInfo.Fw[i], task.TargetInfo.Rv[j])
+				s, isOk := readPairResultToSamString(index, task.TargetInfo.ReadPair, task.TargetInfo.Fw[i], nil)
 				if !isOk {
 					continue
 				}
 				builder.WriteString(s)
+				outputChan <- builder.String()
 			}
 
+			// RV
+			for j := 0; j < len(task.TargetInfo.Rv); j++ {
+				if task.TargetInfo.Rv[j].IncompleteMap {
+					continue
+				}
+
+				total += len(*task.TargetInfo.ReadPair.ReadR2.Sequence)
+				mmTotal += len(task.TargetInfo.Rv[j].MismatchesRead)
+
+				s, isOk := readPairResultToSamString(index, task.TargetInfo.ReadPair, nil, task.TargetInfo.Rv[j])
+				if !isOk {
+					continue
+				}
+				builder.WriteString(s)
+				outputChan <- builder.String()
+			}
 		}
-		outputChan <- builder.String()
+
 	}
-	logrus.Info("Done with third pass")
+	logrus.Info("Done with output")
 	logrus.WithFields(logrus.Fields{
 		"Average MM":        float64(mmTotal) / float64(total),
 		"Aligned Positions": total,
@@ -116,11 +136,12 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 	}
 
 	geneStartRelativeToContig := -1
+	geneEndRelativeToContig := -1
 	if resFw != nil {
 		geneStartRelativeToContig = int(genomeIndex.GetSequenceInfo(resFw.SequenceIndex).StartGenomic)
-	}
-	geneEndRelativeToContig := -1
-	if resRv != nil {
+		geneEndRelativeToContig = int(genomeIndex.GetSequenceInfo(resFw.SequenceIndex).EndGenomic)
+	} else if resRv != nil {
+		geneStartRelativeToContig = int(genomeIndex.GetSequenceInfo(resRv.SequenceIndex).StartGenomic)
 		geneEndRelativeToContig = int(genomeIndex.GetSequenceInfo(resRv.SequenceIndex).EndGenomic)
 	}
 
@@ -197,7 +218,6 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 		var errCigarFw error
 
 		cigarFw, errCigarFw = resFw.GetCigar()
-
 		if errCigarFw != nil {
 			logrus.WithFields(logrus.Fields{
 				"read":              readPair.ReadR1.Header,
@@ -215,7 +235,6 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 		var errCigarRv error
 
 		cigarRv, errCigarRv = resRv.GetCigar()
-
 		if errCigarRv != nil {
 			logrus.WithFields(logrus.Fields{
 				"read":              readPair.ReadR2.Header,
@@ -232,10 +251,22 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 	// RNEXT
 	rnextFw := rname
 	rnextRv := rname
+	if resRv == nil {
+		rnextFw = "*"
+	}
+	if resFw == nil {
+		rnextRv = "*"
+	}
 
 	// PNEXT
 	pnextFw := startGenomeRv
 	pnextRv := startGenomeFw
+	if resFw == nil {
+		pnextRv = 0
+	}
+	if resRv == nil {
+		pnextFw = 0
+	}
 
 	// TLEN
 	// signed observed Template LENgth. For primary reads where the primary alignments of all reads
@@ -305,75 +336,80 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 
 	var builder strings.Builder
 
-	// QNAME
-	builder.WriteString(headerFw)
-	builder.WriteString("\t")
-	// FLAG
-	builder.WriteString(flagFwStr)
-	builder.WriteString("\t")
-	// RNAME
-	builder.WriteString(rname)
-	builder.WriteString("\t")
-	// POS
-	builder.WriteString(strconv.Itoa(startGenomeFw))
-	builder.WriteString("\t")
-	// MAPQ
-	builder.WriteString(strconv.Itoa(mapqFw))
-	builder.WriteString("\t")
-	// CIGAR
-	builder.WriteString(cigarFw)
-	builder.WriteString("\t")
-	// RNEXT
-	builder.WriteString(rnextFw)
-	builder.WriteString("\t")
-	// PNEXT
-	builder.WriteString(strconv.Itoa(pnextFw))
-	builder.WriteString("\t")
-	// TLEN
-	builder.WriteString(strconv.Itoa(tlenFw))
-	builder.WriteString("\t")
-	// SEQ
-	builder.WriteString(seqFw)
-	builder.WriteString("\t")
-	// QUAL
-	builder.WriteString(qualFw)
-	builder.WriteString("\n")
+	// R1 READ
+	if resFw != nil {
+		// QNAME
+		builder.WriteString(headerFw)
+		builder.WriteString("\t")
+		// FLAG
+		builder.WriteString(flagFwStr)
+		builder.WriteString("\t")
+		// RNAME
+		builder.WriteString(rname)
+		builder.WriteString("\t")
+		// POS
+		builder.WriteString(strconv.Itoa(startGenomeFw))
+		builder.WriteString("\t")
+		// MAPQ
+		builder.WriteString(strconv.Itoa(mapqFw))
+		builder.WriteString("\t")
+		// CIGAR
+		builder.WriteString(cigarFw)
+		builder.WriteString("\t")
+		// RNEXT
+		builder.WriteString(rnextFw)
+		builder.WriteString("\t")
+		// PNEXT
+		builder.WriteString(strconv.Itoa(pnextFw))
+		builder.WriteString("\t")
+		// TLEN
+		builder.WriteString(strconv.Itoa(tlenFw))
+		builder.WriteString("\t")
+		// SEQ
+		builder.WriteString(seqFw)
+		builder.WriteString("\t")
+		// QUAL
+		builder.WriteString(qualFw)
+		builder.WriteString("\n")
+
+	}
 
 	// R2 READ
-
-	// QNAME
-	builder.WriteString(headerRv)
-	builder.WriteString("\t")
-	// FLAG
-	builder.WriteString(flagRvStr)
-	builder.WriteString("\t")
-	// RNAME
-	builder.WriteString(rname)
-	builder.WriteString("\t")
-	// POS
-	builder.WriteString(strconv.Itoa(startGenomeRv))
-	builder.WriteString("\t")
-	// MAPQ
-	builder.WriteString(strconv.Itoa(mapqRv))
-	builder.WriteString("\t")
-	// CIGAR
-	builder.WriteString(cigarRv)
-	builder.WriteString("\t")
-	// RNEXT
-	builder.WriteString(rnextRv)
-	builder.WriteString("\t")
-	// PNEXT
-	builder.WriteString(strconv.Itoa(pnextRv))
-	builder.WriteString("\t")
-	// TLEN
-	builder.WriteString(strconv.Itoa(tlenRv))
-	builder.WriteString("\t")
-	// SEQ
-	builder.WriteString(seqRv)
-	builder.WriteString("\t")
-	// QUAL
-	builder.WriteString(qualRv)
-	builder.WriteString("\n")
+	if resRv != nil {
+		// QNAME
+		builder.WriteString(headerRv)
+		builder.WriteString("\t")
+		// FLAG
+		builder.WriteString(flagRvStr)
+		builder.WriteString("\t")
+		// RNAME
+		builder.WriteString(rname)
+		builder.WriteString("\t")
+		// POS
+		builder.WriteString(strconv.Itoa(startGenomeRv))
+		builder.WriteString("\t")
+		// MAPQ
+		builder.WriteString(strconv.Itoa(mapqRv))
+		builder.WriteString("\t")
+		// CIGAR
+		builder.WriteString(cigarRv)
+		builder.WriteString("\t")
+		// RNEXT
+		builder.WriteString(rnextRv)
+		builder.WriteString("\t")
+		// PNEXT
+		builder.WriteString(strconv.Itoa(pnextRv))
+		builder.WriteString("\t")
+		// TLEN
+		builder.WriteString(strconv.Itoa(tlenRv))
+		builder.WriteString("\t")
+		// SEQ
+		builder.WriteString(seqRv)
+		builder.WriteString("\t")
+		// QUAL
+		builder.WriteString(qualRv)
+		builder.WriteString("\n")
+	}
 
 	return builder.String(), true
 }
