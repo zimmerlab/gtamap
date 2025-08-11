@@ -50,7 +50,6 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 						continue
 					}
 					builder.WriteString(s)
-					outputChan <- builder.String()
 				}
 			}
 		} else {
@@ -69,7 +68,6 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 					continue
 				}
 				builder.WriteString(s)
-				outputChan <- builder.String()
 			}
 
 			// RV
@@ -86,10 +84,10 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 					continue
 				}
 				builder.WriteString(s)
-				outputChan <- builder.String()
 			}
 		}
 
+		outputChan <- builder.String()
 	}
 	logrus.Info("Done with output")
 	logrus.WithFields(logrus.Fields{
