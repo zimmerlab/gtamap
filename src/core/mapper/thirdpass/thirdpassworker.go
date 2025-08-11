@@ -95,15 +95,11 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 				numRecordsR2++
 			}
 
-			if numRecordsR1 == 0 && numRecordsR2 == 0 {
-				continue
+			if (numRecordsR1 == 0 && numRecordsR2 != 0) || (numRecordsR1 != 0 && numRecordsR2 == 0) {
+				// one mate is unmapped
+				// write read mate as unmapped to sam
+				builder.WriteString(unmappedReadMateToSamString(task.TargetInfo.ReadPair, numRecordsR1 == 0))
 			}
-			if numRecordsR1 > 0 && numRecordsR2 > 0 {
-				continue
-			}
-			// one mate is unmapped
-			// write read mate as unmapped to sam
-			builder.WriteString(unmappedReadMateToSamString(task.TargetInfo.ReadPair, numRecordsR1 == 0))
 		}
 
 		outputChan <- builder.String()
