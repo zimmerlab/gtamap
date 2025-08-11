@@ -54,6 +54,14 @@
           <span v-else>-</span>
         </template>
 
+        <template #item-cell.numMismatches="{ item }">
+          {{ item.numMismatches !== undefined ? item.numMismatches : 'N/A' }}
+        </template>
+
+        <template #item-cell.numGaps="{ item }">
+          {{ item.numGaps !== undefined ? item.numGaps : 'N/A' }}
+        </template>
+
         <template #item-cell.mappedBy="{ item }">
           <span v-if="Array.isArray(item.mappedBy)">
             <w-tag
@@ -104,8 +112,8 @@ const tableData = ref({
     {label: 'Strand', key: 'isForwardStrand'},
     {label: 'Position', key: 'position'},
     {label: 'Cigar String', key: 'cigar'},
-    {label: 'Num Mismatches', key: 'numMismatches'},
-    {label: 'Num Gaps', key: 'numGaps'},
+    {label: 'Num Mismatches', key: 'numMismatches', type: 'number'},
+    {label: 'Num Gaps', key: 'numGaps', type: 'number'},
     {label: 'Num Mapped By', key: 'numMappedBy'},
     {label: 'Mapped By', key: 'mappedBy', sortable: false},
   ],
