@@ -127,20 +127,38 @@ type UpsetElement struct {
 
 func (s *Server) upsetDataRead(w http.ResponseWriter, r *http.Request) {
 
-	data := make([]UpsetElement, 0)
-
-	qnames := make([]string, 0, len(s.AnalysisService.MapperInfos["gtamap"].RecordsByQname))
-	for qname := range s.AnalysisService.MapperInfos["gtamap"].RecordsByQname {
-		qnames = append(qnames, qname)
+	onlyTargetRegion := false
+	if val := r.URL.Query().Get("onlyTargetRegion"); val == "true" {
+		onlyTargetRegion = true
 	}
 
-	for _, qname := range qnames {
+	data := make([]UpsetElement, 0)
+
+	for _, readInfo := range s.Handler.ReadInfos {
+		qname := readInfo.Qname
 
 		sets := make([]string, 0)
-		for mapperName, mapperInfo := range s.AnalysisService.MapperInfos {
-			if _, exists := mapperInfo.RecordsByQname[qname]; exists {
-				sets = append(sets, mapperName)
+
+		for i, qnameMap := range s.Handler.QnamesByMapper {
+			if _, exists := qnameMap[qname]; !exists {
+				continue
 			}
+			if onlyTargetRegion {
+				found := false
+				for _, record := range qnameMap[qname] {
+					if record.Rname != config.GetTargetContig() {
+						continue
+					}
+					if record.MappedGenome.Overlaps(config.GetTargetStart(), config.GetTargetEnd()) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					continue
+				}
+			}
+			sets = append(sets, s.Handler.MapperInfos[i].MapperName)
 		}
 
 		elem := UpsetElement{
