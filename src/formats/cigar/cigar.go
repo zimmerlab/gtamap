@@ -77,6 +77,27 @@ func (c *Object) String() string {
 	return sb.String()
 }
 
+func (c *Object) StringUniform() string {
+	var sb strings.Builder
+	currentLen := 0
+	for _, elem := range c.Elements {
+		if elem.Type == "M" || elem.Type == "X" || elem.Type == "=" {
+			currentLen += elem.Length
+			continue
+		}
+		if currentLen > 0 {
+			sb.WriteString(fmt.Sprintf("%d%s", currentLen, "M"))
+			currentLen = 0
+		}
+		sb.WriteString(fmt.Sprintf("%d%s", elem.Length, elem.Type))
+	}
+	if currentLen > 0 {
+		sb.WriteString(fmt.Sprintf("%d%s", currentLen, "M"))
+	}
+
+	return sb.String()
+}
+
 func (c *Object) GetLengthOfMatched() int {
 	length := 0
 
@@ -87,4 +108,35 @@ func (c *Object) GetLengthOfMatched() int {
 	}
 
 	return length
+}
+
+func (c *Object) GetNumMismatches() int {
+	num := 0
+	for _, elem := range c.Elements {
+		if elem.Type == "X" {
+			num += elem.Length
+		}
+	}
+	return num
+}
+
+func (c *Object) GetGapLength() int {
+	num := 0
+	for _, elem := range c.Elements {
+		if elem.Type == "D" || elem.Type == "N" {
+			num += elem.Length
+		}
+	}
+	return num
+}
+
+func (c *Object) GetNumGaps() int {
+	num := 0
+	for _, elem := range c.Elements {
+		// deletions (D) and skipped regions (N) should not be consecutive
+		if elem.Type == "D" || elem.Type == "N" {
+			num++
+		}
+	}
+	return num
 }

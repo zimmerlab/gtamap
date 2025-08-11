@@ -1110,12 +1110,13 @@ func (s *Server) ReadSummaryTableData() []ReadOverviewInfo {
 				found := false
 				for _, o := range readInfoDto.Locations {
 
+					sameReadMate := o.Pair == pair
 					sameContig := o.Contig == record.Rname
 					sameStand := o.Strand == !record.Flag.IsReverseStrand()
 					samePosition := o.Position == record.Pos
 					sameCigar := o.CigarDetailed == record.CigarObj.String()
 
-					if sameContig && sameStand && samePosition && sameCigar {
+					if sameReadMate && sameContig && sameStand && samePosition && sameCigar {
 						o.MappedBy = append(o.MappedBy, mapperName)
 						o.ReadIndices = append(o.ReadIndices, record.IndexInSam)
 						found = true
@@ -1132,10 +1133,10 @@ func (s *Server) ReadSummaryTableData() []ReadOverviewInfo {
 					Contig:        record.Rname,
 					Strand:        !record.Flag.IsReverseStrand(),
 					Position:      record.Pos,
-					Cigar:         record.UniformCigar(),
+					Cigar:         record.CigarObj.StringUniform(),
 					CigarDetailed: record.CigarObj.String(),
-					NumMismatches: -1,
-					NumGaps:       -1,
+					NumMismatches: record.CigarObj.GetNumMismatches(),
+					NumGaps:       record.CigarObj.GetNumGaps(),
 					NumMappedBy:   1,
 					MappedBy:      []string{mapperName},
 					ReadIndices:   make([]int, 0),

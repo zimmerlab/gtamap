@@ -137,6 +137,9 @@ func (h *MappingDataHandler) NewEnhancedRecord(record sam.Record, mapperIndex in
 				Type:   typeChar,
 			})
 
+			posInRead += elem.Length
+			posInGenome += elem.Length
+
 			continue
 		}
 
