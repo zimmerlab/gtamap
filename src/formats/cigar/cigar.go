@@ -28,8 +28,12 @@ func (ce *Element) IsMatch() bool {
 	return ce.Type == "M" || ce.Type == "X" || ce.Type == "="
 }
 
-func (ce *Element) IsReadBasesSkipped() bool {
-	return ce.Type == "I" || ce.Type == "S" || ce.Type == "H"
+func (ce *Element) ConsumesRead() bool {
+	return ce.Type == "M" || ce.Type == "I" || ce.Type == "S" || ce.Type == "=" || ce.Type == "X"
+}
+
+func (ce *Element) ConsumesReference() bool {
+	return ce.Type == "M" || ce.Type == "D" || ce.Type == "N" || ce.Type == "=" || ce.Type == "X"
 }
 
 type Object struct {

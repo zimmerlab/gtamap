@@ -35,14 +35,32 @@ func (h *MappingDataHandler) NewEnhancedRecord(record sam.Record, mapperIndex in
 	genomicRegionsMapped := regionvector.NewRegionVector()
 	readRegionsMapped := regionvector.NewRegionVector()
 	start := record.Pos - 1 // SAM format is 1-based, convert to 0-based
+	startRead := 0
 	for _, elem := range cigarObj.Elements {
 		if elem.IsMatch() {
 			genomicRegionsMapped.AddRegion(start, start+elem.Length)
+			readRegionsMapped.AddRegion(startRead, startRead+elem.Length)
 		}
-		if !elem.IsReadBasesSkipped() {
-			readRegionsMapped.AddRegion(start, start+elem.Length)
+		if elem.ConsumesRead() {
+			startRead += elem.Length
 		}
-		start += elem.Length
+		if elem.ConsumesReference() {
+			start += elem.Length
+		}
+	}
+
+	// number of genomic and read regions should be the same
+	if genomicRegionsMapped.NumRegions() != readRegionsMapped.NumRegions() {
+		logrus.Errorf("number of genomic regions (%d) does not match number of read regions (%d) in record %s", genomicRegionsMapped.NumRegions(), readRegionsMapped.NumRegions(), record.Qname)
+	}
+
+	genomicCombined, readCombined, errCombine := regionvector.CombineRegionVectorsConsecutiveInBoth(genomicRegionsMapped, readRegionsMapped)
+	if errCombine != nil {
+		fmt.Println(cigarObj.String())
+		logrus.Errorf("error combining genomic and read regions: %v", errCombine)
+		logrus.Errorf("record: %s for mapper index %d", record.Qname, mapperIndex)
+		logrus.Errorf("genomic regions: %s", genomicRegionsMapped)
+		logrus.Errorf("read regions: %s", readRegionsMapped)
 	}
 
 	// calculate mismatches based on inferred genome sequence, read sequence
@@ -149,8 +167,8 @@ func (h *MappingDataHandler) NewEnhancedRecord(record sam.Record, mapperIndex in
 	return &EnhancedRecord{
 		Record:       record,
 		MapperIndex:  mapperIndex,
-		MappedGenome: genomicRegionsMapped,
-		MappedRead:   readRegionsMapped,
+		MappedGenome: genomicCombined,
+		MappedRead:   readCombined,
 		Mismatches:   make([]int, 0),
 		CigarObj:     &cigar.Object{Elements: detailedCigarElements},
 	}, nil
@@ -202,6 +220,24 @@ type MappingDataHandler struct {
 	ReadNamesMap    map[string]*ReadInfo           // map has key = read name, value = read info
 	RecordsByMapper [][]*EnhancedRecord            // outer array = mappers by order of MapperNames, inner array = records for each mapper
 	QnamesByMapper  []map[string][]*EnhancedRecord // outer array = mappers by order of MapperNames, map has key = qname, value = enhanced record
+	QnameCluster    map[string]*QnameCluster       // map has key = qname, value = cluster of records with this qname
+}
+
+type QnameCluster struct {
+	Qname         string
+	MapperPresent []bool     // boolean array indicating which mappers have this qname
+	ClusterR1     *ClusterR1 // cluster of records for the first read in the pair (R1)
+	ClusterR2     *ClusterR2 // cluster of records for the second read in the pair (R2)
+}
+
+type ClusterR1 struct {
+	Records   []*EnhancedRecord // records of the first read in the pair (R1)
+	Distances [][]float64       // distances between each pair of R1 records
+}
+
+type ClusterR2 struct {
+	Records   []*EnhancedRecord // records of the second read in the pair (R2)
+	Distances [][]float64       // distances between each pair of R2 records
 }
 
 func NewMappingDataHandler(fastaFilePath string, fastaIndexFilePath string) (*MappingDataHandler, error) {
@@ -225,6 +261,7 @@ func NewMappingDataHandler(fastaFilePath string, fastaIndexFilePath string) (*Ma
 		ReadNamesMap:    make(map[string]*ReadInfo),
 		RecordsByMapper: make([][]*EnhancedRecord, 0),
 		QnamesByMapper:  make([]map[string][]*EnhancedRecord, 0),
+		QnameCluster:    make(map[string]*QnameCluster),
 	}
 
 	seqFw, err := h.ExtractSequence(config.GetTargetContig(), config.GetTargetStart(), config.GetTargetEnd())
@@ -341,6 +378,10 @@ func (h *MappingDataHandler) AddMapperInfo(mapperName string, mapperSamFilePath 
 
 		h.AddReadInfo(record, mapperInfo.Index)
 
+		if record.Rname == "*" {
+			continue // skip records that are unmapped
+		}
+
 		enhancedRecord, errRecord := h.NewEnhancedRecord(record, mapperInfo.Index)
 		if errRecord != nil {
 			return fmt.Errorf("error creating enhanced record: %w", errRecord)
@@ -352,12 +393,84 @@ func (h *MappingDataHandler) AddMapperInfo(mapperName string, mapperSamFilePath 
 			qnameMap[record.Qname] = make([]*EnhancedRecord, 0)
 		}
 		qnameMap[record.Qname] = append(qnameMap[record.Qname], enhancedRecord)
+
+		if _, exists := h.QnameCluster[record.Qname]; !exists {
+			h.QnameCluster[record.Qname] = &QnameCluster{
+				Qname: record.Qname,
+				ClusterR1: &ClusterR1{
+					Records: make([]*EnhancedRecord, 0),
+				},
+				ClusterR2: &ClusterR2{
+					Records: make([]*EnhancedRecord, 0),
+				},
+			}
+		}
+		qnameCluster := h.QnameCluster[record.Qname]
+
+		if enhancedRecord.Flag.IsFirstInPair() {
+			qnameCluster.ClusterR1.Records = append(qnameCluster.ClusterR1.Records, enhancedRecord)
+		} else {
+			qnameCluster.ClusterR2.Records = append(qnameCluster.ClusterR2.Records, enhancedRecord)
+		}
 	}
 
 	h.RecordsByMapper = append(h.RecordsByMapper, recordsByMapper)
 	h.QnamesByMapper = append(h.QnamesByMapper, qnameMap)
 
 	return nil
+}
+
+func (h *MappingDataHandler) ComputeQnameClusters() {
+
+	for _, readInfo := range h.ReadInfos {
+
+		if readInfo.Qname != "11" {
+			continue
+		}
+
+		qnameCluster := h.QnameCluster[readInfo.Qname]
+
+		fmt.Println("cluster: ", qnameCluster.Qname, " = ", len(qnameCluster.ClusterR1.Records), ",", len(qnameCluster.ClusterR2.Records))
+
+		// compute distances R1
+
+		for i := 0; i < len(qnameCluster.ClusterR1.Records); i++ {
+			for j := i + 1; j < len(qnameCluster.ClusterR1.Records); j++ {
+				dist, err := ComputeDistance(qnameCluster.ClusterR1.Records[i], qnameCluster.ClusterR1.Records[j])
+				if err != nil {
+					logrus.Errorf("error computing distance between records: %v", err)
+					continue
+				}
+				fmt.Println(dist)
+			}
+		}
+	}
+}
+
+func ComputeDistance(recordA *EnhancedRecord, recordB *EnhancedRecord) (float64, error) {
+
+	fmt.Println(recordA.MapperIndex, recordA.Qname, recordA.Rname, recordA.Pos, recordA.Cigar)
+	fmt.Println(recordB.MapperIndex, recordB.Qname, recordB.Rname, recordB.Pos, recordB.Cigar)
+
+	if recordA == nil || recordB == nil {
+		return 0, fmt.Errorf("one of the records is nil")
+	}
+
+	// records on different contigs have maximum distance
+	if recordA.Rname != recordB.Rname {
+		return 1, nil
+	}
+
+	// records on the same contig have a distance based on the overlap of their
+	// mapped regions
+	fmt.Println(recordA.MappedGenome)
+	fmt.Println(recordA.MappedRead)
+	fmt.Println(recordB.MappedGenome)
+	fmt.Println(recordB.MappedRead)
+
+	os.Exit(2)
+
+	return 0.0, nil
 }
 
 type MapperResult struct {
@@ -418,4 +531,6 @@ func (h *MappingDataHandler) LoadMapperResults() {
 			"target":            result.Target,
 		}).Info("added mapper result")
 	}
+
+	h.ComputeQnameClusters()
 }

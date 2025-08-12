@@ -1169,88 +1169,15 @@ func (s *Server) ReadSummaryTableData() []ReadOverviewInfo {
 		readSummary[readInfo.Qname] = readInfoDto
 	}
 
-	// for mapperName, info := range s.AnalysisService.MapperInfos {
-	//
-	// 	for qname, records := range info.RecordsByQname {
-	//
-	// 		if _, exists := readSummary[qname]; !exists {
-	// 			readSummary[qname] = &ReadOverviewInfo{
-	// 				Qname:        qname,
-	// 				Length:       len(records[0].Seq),
-	// 				NumMappedBy:  0,
-	// 				MappedBy:     make([]string, 0),
-	// 				NumLocations: 0,
-	// 				Locations:    make([]*ReadLocationInfo, 0),
-	// 			}
-	// 		}
-	//
-	// 		readInfo := readSummary[qname]
-	// 		readInfo.MappedBy = append(readInfo.MappedBy, mapperName)
-	//
-	// 		for _, record := range records {
-	//
-	// 			found := false
-	// 			for _, location := range readInfo.Locations {
-	// 				if location.Strand == !record.Flag.IsReverseStrand() &&
-	// 					location.Contig == record.Rname &&
-	// 					location.Position == record.Pos &&
-	// 					location.CigarString == record.UniformCigar() {
-	//
-	// 					// do not add the same mapper multiple times (could be because the same location is used
-	// 					// for multiple read pairs, especially in the current 0.2 gtamap version)
-	// 					// TODO: the same read is only mapped twice by gtamap currently because all combinations
-	// 					// of pairs are made
-	// 					//for _, mappedBy := range location.MappedBy {
-	// 					//	if mappedBy == mapperName {
-	// 					//		found = true
-	// 					//		break
-	// 					//	}
-	// 					//}
-	// 					//if found {
-	// 					//	break
-	// 					//}
-	//
-	// 					location.MappedBy = append(location.MappedBy, mapperName)
-	// 					location.ReadIndices = append(location.ReadIndices, record.IndexInSam)
-	// 					//location.NumMappedBy++
-	// 					found = true
-	// 					break
-	// 				}
-	// 			}
-	//
-	// 			if found {
-	// 				continue
-	// 			}
-	//
-	// 			pair := "none"
-	// 			if record.Flag.IsFirstInPair() {
-	// 				pair = "first"
-	// 			} else if record.Flag.IsSecondInPair() {
-	// 				pair = "second"
-	// 			}
-	//
-	// 			locationInfo := ReadLocationInfo{
-	// 				Pair:          pair,
-	// 				Contig:        record.Rname,
-	// 				Strand:        !record.Flag.IsReverseStrand(),
-	// 				Position:      record.Pos,
-	// 				CigarString:   record.UniformCigar(),
-	// 				NumMismatches: -1,
-	// 				NumGaps:       -1,
-	// 				NumMappedBy:   1,
-	// 				MappedBy:      []string{mapperName},
-	// 				ReadIndices:   make([]int, 0),
-	// 			}
-	//
-	// 			readInfo.Locations = append(readInfo.Locations, &locationInfo)
-	// 			locationInfo.ReadIndices = append(locationInfo.ReadIndices, record.IndexInSam)
-	// 		}
-	// 	}
-	// }
-
 	reads := make([]ReadOverviewInfo, 0)
 
 	for _, readInfo := range readSummary {
+
+		// fmt.Println(readInfo.Qname, ":", len(readInfo.Locations))
+		//
+		// for _, location := range readInfo.Locations {
+		// 	fmt.Println(location.Pair, location.Contig, location.Position)
+		// }
 
 		uniqueMappers := make(map[string]struct{})
 		for _, mapper := range readInfo.MappedBy {
