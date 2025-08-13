@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -805,7 +806,7 @@ func (i *GenomeIndex) NumSequences() int {
 	return len(i.SequenceHeaders)
 }
 
-func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry, blackListFile string) *GenomeIndex {
+func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry, blackListFile *string) *GenomeIndex {
 	index := GenomeIndex{
 		SequenceHeaders: make([]string, len(fastaEntries)),
 		SequenceInfo:    make([]*gtf.GeneBasic, len(fastaEntries)),
@@ -830,13 +831,18 @@ func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry, blackListFile strin
 
 		index.Sequences[i*2] = &sequence
 		index.Sequences[i*2+1] = &sequenceRevComp
-		tree, repeats, err := BuildBlacklistInTree(info.StartGenomic, info.EndGenomic, info.Contig, blackListFile)
-		logrus.Debugf("Loaded %d annotated repeats into index.\n", len(repeats))
-		if err != nil {
-			logrus.Fatal("Error loading balcklist into interval tree", err)
+		if blackListFile != nil {
+			tree, treeRv, repeats, repeatsRv, err := BuildBlacklistInTree(info.StartGenomic, info.EndGenomic, info.Contig, *blackListFile)
+			logrus.Debugf("Loaded %d annotated repeats into index.\n", len(repeats))
+			if err != nil {
+				logrus.Fatal("Error loading balcklist into interval tree", err)
+			}
+			index.Blacklist[i*2] = tree
+			index.RepeatRegions[i*2] = repeats
+			index.Blacklist[i*2+1] = treeRv
+			index.RepeatRegions[i*2+1] = repeatsRv
+
 		}
-		index.Blacklist[i] = tree
-		index.RepeatRegions[i] = repeats
 	}
 
 	for i, seq := range index.Sequences {
@@ -924,7 +930,7 @@ func ReadGenomeIndexByFile(indexFile *os.File) *GenomeIndex {
 	return &genomeIndex
 }
 
-func BuildAndSerializeGenomeIndex(fastaFile *os.File, blackListFile string, outputFile *os.File) {
+func BuildAndSerializeGenomeIndex(fastaFile *os.File, blackListFile *string, outputFile *os.File) {
 	fastaEntries, err := dataloader.ReadFasta(fastaFile)
 	if err != nil {
 		logrus.Fatal("Error extracting sequence from fasta file", err)
@@ -946,8 +952,10 @@ func BuildAndSerializeGenomeIndex(fastaFile *os.File, blackListFile string, outp
 	WriteGenomeIndex(genomeIndex, outputFile)
 }
 
-func BuildBlacklistInTree(start, end uint32, contig string, blackList string) (*datastructure.INTree, []datastructure.Bounds, error) {
+func BuildBlacklistInTree(start, end uint32, contig string, blackList string) (*datastructure.INTree, *datastructure.INTree, []datastructure.Bounds, []datastructure.Bounds, error) {
 	repeatRegions := make([]datastructure.Bounds, 0)
+	repeatRegionsRev := make([]datastructure.Bounds, 0)
+	regionLength := end - start
 
 	scanner, err := dataloader.OpenBlacklistScanner(blackList)
 	if err != nil {
@@ -977,14 +985,16 @@ func BuildBlacklistInTree(start, end uint32, contig string, blackList string) (*
 		regionEndConv := uint32(regionEnd)
 		if regionStartConv >= start && regionEndConv <= end {
 			repeatRegions = append(repeatRegions, &datastructure.RepeatRegion{Lower: float64(regionStartConv - start), Upper: float64(regionEndConv - start)})
+			repeatRegionsRev = append(repeatRegionsRev, &datastructure.RepeatRegion{Lower: float64(regionLength - (regionEndConv - start)), Upper: float64(regionLength - (regionStartConv - start))})
 		}
 		if regionStartConv > end && regionEndConv > end {
-			return datastructure.NewINTree(repeatRegions), repeatRegions, nil
+			return datastructure.NewINTree(repeatRegions), datastructure.NewINTree(repeatRegionsRev), repeatRegions, repeatRegionsRev, nil
 		}
 
 	}
 
-	return datastructure.NewINTree(repeatRegions), repeatRegions, nil
+	slices.Reverse(repeatRegionsRev)
+	return datastructure.NewINTree(repeatRegions), datastructure.NewINTree(repeatRegionsRev), repeatRegions, repeatRegionsRev, nil
 }
 
 func extractFieldFromBlacklist(field int, line string) string {
