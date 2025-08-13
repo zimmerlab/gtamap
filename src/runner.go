@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -127,9 +128,9 @@ func main() {
 		Help:     "Output SAM file (file extension: .sam).",
 		Default:  "",
 	})
-	var isDNA *bool = cmdMap.Flag("", "dna", &argparse.Options{
-		Help:    "Specify read type.",
-		Default: false,
+	var readType *string = cmdMap.String("", "read-type", &argparse.Options{
+		Required: true,
+		Help:     "Specify read type (DNA or RNA).",
 	})
 	var logLevelMap *string = cmdMap.Selector("", "loglevel", []string{"ERROR", "INFO", "DEBUG"}, &argparse.Options{
 		Required: false,
@@ -276,7 +277,11 @@ func main() {
 		level, _ := logrus.ParseLevel(*logLevelMap)
 		logrus.SetLevel(level)
 
-		config.IsOriginRNA = !*isDNA // set read type in config
+		if *readType != "DNA" && *readType != "RNA" {
+			log.Fatalf("Invalid read type: %s. Must be DNA or RNA.", *readType)
+		}
+
+		config.IsOriginRNA = *readType == "RNA"
 
 		printBanner()
 		logrus.Info("Mapping reads to given index")
