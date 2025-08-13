@@ -232,18 +232,7 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 			return
 		}
 
-		// INFO: DNA RNA MODE
-		// this result should already have a certain length before we append it to results
-		if !config.IsOriginRNA {
-			// for DNA reads we expect the raw result to already be of a certain length
-			if result.MatchedGenome.Length()*10 > len(*read.Sequence)*7 {
-				// fmt.Println(read.Header)
-				// fmt.Println(result.MatchedGenome.Length())
-				*results = append(*results, result)
-			}
-		} else {
-			*results = append(*results, result)
-		}
+		*results = append(*results, result)
 
 		return
 	}
@@ -878,16 +867,49 @@ func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.Genome
 
 		extendDiagonals(read, genomeIndex, res)
 
-		// TODO: DNA RNA
+		// INFO: DNA RNA
 		// Only annotate if RNA
 		if res.MatchedGenome.HasGaps() {
 			annotateSpliceSites(read, genomeIndex, res)
 		}
 
-		finalResults = append(finalResults, res)
+		// INFO: DNA RNA MODE
+		if !config.IsOriginRNA {
+			// for DNA reads we expect the raw result to already be of a certain length
+			if res.MatchedGenome.Length()*10 < len(*read.Sequence)*7 {
+				// skip this map if the final length is less than 70 precent of read length
+				continue
+			}
+		}
+
+		// INFO: Now apply blacklist
+		// If res in a repeat region, only append to finalResults when low mm
+		isInRepeat := isPartOfRepeat(res, genomeIndex)
+		if isInRepeat {
+			if len(res.MismatchesRead) < 4 {
+				finalResults = append(finalResults, res)
+			}
+		} else {
+			finalResults = append(finalResults, res)
+		}
+
 	}
 
 	return finalResults
+}
+
+func isPartOfRepeat(res *mapperutils.ReadMatchResult, genomeIndex *index.GenomeIndex) bool {
+	if len(genomeIndex.Blacklist) == 0 {
+		return false // no blacklist provided
+	}
+
+	for _, genomicRegion := range res.MatchedGenome.Regions {
+		repeats := genomeIndex.Blacklist[res.SequenceIndex].Including(float64(genomicRegion.Start))
+		if len(repeats) != 0 && genomicRegion.Length() > 70 {
+			return true
+		}
+	}
+	return false
 }
 
 // exceedsMismatchConstraint checks if the number of mismatches exceeds the maximum allowed percentage
