@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"strings"
 
@@ -174,6 +175,19 @@ func (h *MappingDataHandler) NewEnhancedRecord(record sam.Record, mapperIndex in
 	}, nil
 }
 
+func (r *EnhancedRecord) IsEqual(other *EnhancedRecord) bool {
+	if r == nil || other == nil {
+		return false
+	}
+	if r.Qname != other.Qname || r.Rname != other.Rname || r.Pos != other.Pos {
+		return false
+	}
+	if r.CigarObj.String() != other.CigarObj.String() {
+		return false
+	}
+	return true
+}
+
 type MapperInfo struct {
 	Index      int // index in MapperNames
 	MapperName string
@@ -224,18 +238,21 @@ type MappingDataHandler struct {
 }
 
 type QnameCluster struct {
-	Qname         string
-	MapperPresent []bool       // boolean array indicating which mappers have this qname
-	ClusterR1     *ReadCluster // cluster of records for the first read in the pair (R1)
-	ClusterR2     *ReadCluster // cluster of records for the second read in the pair (R2)
+	Qname           string
+	MapperPresent   []bool       // boolean array indicating which mappers have this qname
+	ClusterR1       *ReadCluster // cluster of records for the first read in the pair (R1)
+	ClusterR2       *ReadCluster // cluster of records for the second read in the pair (R2)
+	ConfidenceLevel int
 }
 
 type ReadCluster struct {
-	Records            []*EnhancedRecord // records of the first read in the pair (R1)
+	Records            []*EnhancedRecord // records of the first read in the pair
 	Distances          [][]float64       // distances between each pair of R1 records
 	DistancesMapper    [][]float64       // distances between each pair of mapper
 	MapperDistanceMean float64
 	RecordDistanceMean float64
+	ConfidenceLevel    int
+	SimilarRecords     [][]*EnhancedRecord // similar records for the first read in the pair
 }
 
 func NewMappingDataHandler(fastaFilePath string, fastaIndexFilePath string) (*MappingDataHandler, error) {
@@ -385,6 +402,21 @@ func (h *MappingDataHandler) AddMapperInfo(mapperName string, mapperSamFilePath 
 			return fmt.Errorf("error creating enhanced record: %w", errRecord)
 		}
 
+		// check records for duplicates
+		if len(recordsByMapper) > 0 {
+			duplicateFound := false
+			for _, existingRecord := range recordsByMapper {
+				if existingRecord.IsEqual(enhancedRecord) {
+					duplicateFound = true
+					break
+				}
+			}
+			if duplicateFound {
+				logrus.Warn("duplicate record found: ", record.Qname, " in mapper: ", mapperName)
+				continue // skip duplicate records
+			}
+		}
+
 		recordsByMapper = append(recordsByMapper, enhancedRecord)
 
 		if _, exists := qnameMap[record.Qname]; !exists {
@@ -397,11 +429,13 @@ func (h *MappingDataHandler) AddMapperInfo(mapperName string, mapperSamFilePath 
 				Qname: record.Qname,
 				ClusterR1: &ReadCluster{
 					Records:         make([]*EnhancedRecord, 0),
+					SimilarRecords:  make([][]*EnhancedRecord, 0),
 					Distances:       make([][]float64, 0),
 					DistancesMapper: make([][]float64, 0),
 				},
 				ClusterR2: &ReadCluster{
 					Records:         make([]*EnhancedRecord, 0),
+					SimilarRecords:  make([][]*EnhancedRecord, 0),
 					Distances:       make([][]float64, 0),
 					DistancesMapper: make([][]float64, 0),
 				},
@@ -436,6 +470,8 @@ func (h *MappingDataHandler) ComputeQnameClusters() {
 
 		h.ComputeReadClusters(cluster.ClusterR1, true)
 		h.ComputeReadClusters(cluster.ClusterR2, false)
+
+		cluster.ConfidenceLevel = int(math.Min(float64(cluster.ClusterR1.ConfidenceLevel), float64(cluster.ClusterR2.ConfidenceLevel)))
 
 		// PrintMatrix2D(cluster.ClusterR1.Distances)
 		// PrintMatrix2D(cluster.ClusterR1.DistancesMapper)
@@ -507,6 +543,87 @@ func (h *MappingDataHandler) ComputeReadClusters(cluster *ReadCluster, isR1 bool
 		}
 	}
 	cluster.MapperDistanceMean = sumDistMapper / float64(len(h.MapperInfos)*(len(h.MapperInfos)-1)/2)
+
+	// fmt.Println("---")
+	// for i, r := range cluster.Records {
+	// 	fmt.Println(i, r.MappedRead, r.MappedGenome)
+	// }
+	// PrintMatrix2D(cluster.Distances)
+
+	// find same records
+	visited := make(map[int]bool)
+
+	for i := 0; i < len(cluster.Records); i++ {
+
+		if visited[i] {
+			continue
+		}
+
+		// do dfs to find connected component with record at index i
+		toVisit := make([]int, 0)
+		toVisit = append(toVisit, i)
+		toVisitIndex := 0
+
+		for toVisitIndex < len(toVisit) {
+			j := toVisit[toVisitIndex]
+			visited[j] = true
+
+			for k := 0; k < len(cluster.Records); k++ {
+				if k == j || visited[k] || cluster.Distances[j][k] > 0 {
+					continue
+				}
+				toVisit = append(toVisit, k)
+				break
+			}
+			toVisitIndex++
+		}
+
+		// fmt.Println(toVisit)
+
+		simRecords := make([]*EnhancedRecord, 0)
+		for _, idx := range toVisit {
+			simRecords = append(simRecords, cluster.Records[idx])
+		}
+		cluster.SimilarRecords = append(cluster.SimilarRecords, simRecords)
+	}
+
+	// compute confidence level
+	// 5 = all mappers produce exactly one record which is shared
+	// 4 = all mappers produce multiple records which are all shared
+	// 3 = all mappers produce one shared record but also have others
+	// 2 = there is a shared record by multiple mappers
+	// 1 = there are no shared records between any mapper
+
+	minLenCluster := len(h.MapperInfos)
+	maxLenCluster := 0
+	for _, simRecords := range cluster.SimilarRecords {
+		if len(simRecords) > maxLenCluster {
+			maxLenCluster = len(simRecords)
+		}
+		if len(simRecords) < minLenCluster {
+			minLenCluster = len(simRecords)
+		}
+	}
+
+	if maxLenCluster == len(h.MapperInfos) {
+		// there is a record that is shared by all mappers
+		if len(cluster.SimilarRecords) == 1 {
+			// all mappers produce exactly one record which is shared
+			cluster.ConfidenceLevel = 5
+		} else if minLenCluster == len(h.MapperInfos) {
+			// all mappers produce multiple records which are all shared
+			cluster.ConfidenceLevel = 4
+		} else {
+			// all mappers produce one shared record but also have others
+			cluster.ConfidenceLevel = 3
+		}
+	} else if maxLenCluster > 1 {
+		// there is a shared record by multiple mappers, but not all
+		cluster.ConfidenceLevel = 2
+	} else {
+		// there is no shared record
+		cluster.ConfidenceLevel = 1
+	}
 }
 
 func PrintMatrix2D(matrix [][]float64) {
@@ -521,7 +638,7 @@ func PrintMatrix2D(matrix [][]float64) {
 
 func (h *MappingDataHandler) ComputeDistance(recordA *EnhancedRecord, recordB *EnhancedRecord, isR1 bool) (float64, error) {
 
-	weightMappedDifferent := 0.2
+	weightMappedDifferent := 0.5
 	weightMappedSame := 1.0
 	weightGapBounds := 0.5
 
@@ -666,7 +783,7 @@ func (h *MappingDataHandler) ComputeDistance(recordA *EnhancedRecord, recordB *E
 		}
 	}
 
-	percentGapBoundsSame := 0.0
+	percentGapBoundsSame := 1.0
 	if (numGapsA + numGapsB) > 0 {
 		percentGapBoundsSame = float64(numGapStartsSame+numGapEndsSame) / float64(numGapsA+numGapsB)
 	}
