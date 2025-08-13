@@ -68,7 +68,7 @@ var (
 )
 
 // RNA/DNA Flag
-var IsOriginRNA bool = false
+var IsOriginRNA bool = true
 
 func Env() string {
 	return env
