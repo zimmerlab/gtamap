@@ -20,7 +20,7 @@
     </template>
 
     <template #item-cell.confidence="{ item }">
-      <CustomTag :level="randomLevel()" size="xs"></CustomTag>
+      <CustomTag :level="item.confidenceLevel" size="xs"></CustomTag>
     </template>
 
     <template #item-cell.mappedBy="{ item }">
@@ -100,7 +100,7 @@ const tableData = ref({
   sortKey: "+qname",
   headers: [
     {label: '', key: 'readDetails', sortable: false},
-    {label: 'Confidence', key: 'confidence', sortable: false},
+    {label: 'Confidence', key: 'confidence', sortable: true, type: 'number'},
     {label: 'Read Name', key: 'qname', sortable: true, type: 'string'},
     {label: 'Num Locations', key: 'numLocations', type: 'number'},
     {label: 'Num Mapped By', key: 'numMappedBy', type: 'number'},
