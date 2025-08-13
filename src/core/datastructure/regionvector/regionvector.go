@@ -719,7 +719,7 @@ func (i Intron) String() string {
 	return fmt.Sprintf("%d: [%d, %d) Confident SpliceSite: [%t] Evidence: [%d]", i.Rank, i.Start, i.End, i.TrueSpliceSite, i.Evidence)
 }
 
-func GenomicCoordToReadCoord(startInRead, genomeCoord int, genomeIntervals []Region) (int, error) {
+func GenomicCoordToReadCoord(startInRead, genomeCoord int, genomeIntervals []Region, totalReadLength int) (int, error) {
 	pos := 0
 	totalLength := 0
 	for _, genomicRegion := range genomeIntervals {
@@ -734,7 +734,7 @@ func GenomicCoordToReadCoord(startInRead, genomeCoord int, genomeIntervals []Reg
 			break
 		}
 	}
-	if pos+startInRead > 151 {
+	if pos+startInRead > totalReadLength {
 		fmt.Println(totalLength)
 		fmt.Println(genomeIntervals)
 		return -1, fmt.Errorf("projected read pos larger than total length of map: total length=%d read pos=%d", totalLength, pos)

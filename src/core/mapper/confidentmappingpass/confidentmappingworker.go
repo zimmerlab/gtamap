@@ -39,10 +39,15 @@ func ConfidentMappingWorker(confidentChan *ConfidentPassChan, wgConfidentMapping
 		// get Introns per seqId
 		// NOTE: Introns are 0 based, start inclusive and end exclusive
 		annotation[targetId] = InferIntronsOfTarget(targetId, cMaps, index)
-		// build graphs
-		annotation[targetId].Introns[0].BuildTranscriptomeGraph(len(*index.Sequences[targetId]))
-		annotation[targetId].Introns[1].BuildTranscriptomeGraph(len(*index.Sequences[targetId]))
-		annotation[targetId].LogInfo()
+
+		if len(annotation[targetId].Introns[0].Regions) == 0 {
+			annotation[targetId] = nil // if no junctions in conf maps, no introns can be inferred and no graph can be ctreated
+		} else {
+			// build graphs
+			annotation[targetId].Introns[0].BuildTranscriptomeGraph(len(*index.Sequences[targetId]))
+			annotation[targetId].Introns[1].BuildTranscriptomeGraph(len(*index.Sequences[targetId]))
+			annotation[targetId].LogInfo()
+		}
 	}
 
 	annotationChan <- annotation
@@ -201,6 +206,7 @@ func repairIntrons(inferredIntrons []*regionvector.Intron, targetId int, genomeI
 	refSeq := genomeIndex.Sequences[targetId]
 	for _, intron := range inferredIntrons {
 		if intron.TrueSpliceSite {
+			repairedIntrons = append(repairedIntrons, intron)
 			continue
 		}
 
@@ -219,6 +225,7 @@ func repairIntrons(inferredIntrons []*regionvector.Intron, targetId int, genomeI
 			}
 		}
 
+		repaired := false
 		donorSiteStart := intron.Start
 		acceptorSiteStart := intron.End
 		for i := -windowDelta; i < windowDelta; i++ {
@@ -238,10 +245,15 @@ func repairIntrons(inferredIntrons []*regionvector.Intron, targetId int, genomeI
 						Rank:           intron.Rank,
 						TrueSpliceSite: true,
 					})
+					repaired = true
 					break
 				}
 			}
 
+		}
+		// we checked all postitons but could not repair intron: append unrepaired intron
+		if !repaired {
+			repairedIntrons = append(repairedIntrons, intron)
 		}
 
 	}
@@ -256,9 +268,11 @@ func InferIntronsOfTarget(targetId int, confMaps []*ConfidentTask, index *index.
 	// III. cluster plus oriented gaps and get start/stop with highest evidence (eStart|eStop)
 	plusOrientatedIntronsOfTarget := clusterGaps(countedGapsOfTarget)
 	// Check if some introns which don't follow splice sites would follow them by modifying start/end coords
-	repairedIntrons := repairIntrons(plusOrientatedIntronsOfTarget, targetId, index)
-	if repairedIntrons != nil {
-		plusOrientatedIntronsOfTarget = append(plusOrientatedIntronsOfTarget, repairedIntrons...)
+	if config.IsOriginRNA {
+		repairedIntrons := repairIntrons(plusOrientatedIntronsOfTarget, targetId, index)
+		if repairedIntrons != nil {
+			plusOrientatedIntronsOfTarget = repairedIntrons
+		}
 	}
 	// IV. now we mirror these plus orientated introns to get minus coords
 	minusOrientatedIntronsOfTarget := invertIntrons(targetId, plusOrientatedIntronsOfTarget, index)
@@ -330,7 +344,11 @@ func getGapsPlusOrientation(sId int, cMapsPerSeq []*ConfidentTask, index *index.
 		for i := 0; i < len(confMap.ResultFw.MatchedGenome.Regions)-1; i++ {
 			lStop := confMap.ResultFw.MatchedGenome.Regions[i].End
 			rStart := confMap.ResultFw.MatchedGenome.Regions[i+1].Start
-			knownSpliceSite := confMap.ResultFw.SpliceSitesInfo[i]
+
+			var knownSpliceSite bool = false
+			if config.IsOriginRNA {
+				knownSpliceSite = confMap.ResultFw.SpliceSitesInfo[i]
+			}
 			if rStart > lStop {
 				if confMap.ResultFw.SequenceIndex%2 == 0 {
 					plusOrientatedGapsPerMainSeqId = append(plusOrientatedGapsPerMainSeqId, &regionvector.Gap{
@@ -352,7 +370,11 @@ func getGapsPlusOrientation(sId int, cMapsPerSeq []*ConfidentTask, index *index.
 		for i := 0; i < len(confMap.ResultRv.MatchedGenome.Regions)-1; i++ {
 			lStop := confMap.ResultRv.MatchedGenome.Regions[i].End
 			rStart := confMap.ResultRv.MatchedGenome.Regions[i+1].Start
-			knownSpliceSite := confMap.ResultRv.SpliceSitesInfo[i]
+
+			var knownSpliceSite bool = false
+			if config.IsOriginRNA {
+				knownSpliceSite = confMap.ResultRv.SpliceSitesInfo[i]
+			}
 			if rStart > lStop {
 				if confMap.ResultRv.SequenceIndex%2 == 0 {
 					plusOrientatedGapsPerMainSeqId = append(plusOrientatedGapsPerMainSeqId, &regionvector.Gap{

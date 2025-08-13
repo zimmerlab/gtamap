@@ -11,9 +11,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-//var considered int = 0
-//var keepAfterFilter int = 0
-
+// var considered int = 0
+// var keepAfterFilter int = 0
 func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	secondpassChan *secondpass.SecondPassChannel,
 	confidentMatchesChan *confidentmappingpass.ConfidentPassChan,
@@ -22,8 +21,10 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	progressStats *ProgressStats,
 	// paralogMappingChan chan<- *mapperutils.ReadPairMatchResults,
 ) {
-	keepFw := Filter(readPair.ReadR1.Sequence, genomeIndex)
-	keepRw := Filter(readPair.ReadR2.Sequence, genomeIndex)
+	keepFw := GlobalFilter(readPair.ReadR1.Sequence, genomeIndex)
+	keepRw := GlobalFilter(readPair.ReadR2.Sequence, genomeIndex)
+	// keepFw := BinnedFilter(readPair.ReadR1.Sequence, genomeIndex)
+	// keepRw := BinnedFilter(readPair.ReadR2.Sequence, genomeIndex)
 
 	// logrus.WithFields(logrus.Fields{
 	// 	"keepFw": keepFw,

@@ -26,10 +26,22 @@ func NewDiagonalHandlerWithData(m map[int][]*Match) *DiagonalHandler {
 func NewDiagonalHandlerWithDataCopy(m map[int][]*Match) *DiagonalHandler {
 	mapCopy := make(map[int][]*Match, len(m))
 
+	// for key, matches := range m {
+	// 	mapCopy[key] = make([]*Match, len(matches))
+	// 	for i, match := range matches {
+	// 		mapCopy[key][i] = &Match{
+	// 			FromRead:   match.FromRead,
+	// 			ToRead:     match.ToRead,
+	// 			FromGenome: match.FromGenome,
+	// 			ToGenome:   match.ToGenome,
+	// 			Used:       match.Used,
+	// 		}
+	// 	}
+	// }
 	for key, matches := range m {
-		mapCopy[key] = make([]*Match, len(matches))
+		copiedMatches := make([]*Match, len(matches))
 		for i, match := range matches {
-			mapCopy[key][i] = &Match{
+			copiedMatches[i] = &Match{
 				FromRead:   match.FromRead,
 				ToRead:     match.ToRead,
 				FromGenome: match.FromGenome,
@@ -37,6 +49,7 @@ func NewDiagonalHandlerWithDataCopy(m map[int][]*Match) *DiagonalHandler {
 				Used:       match.Used,
 			}
 		}
+		mapCopy[key] = copiedMatches
 	}
 
 	return &DiagonalHandler{
@@ -88,9 +101,7 @@ func (dh *DiagonalHandler) GetAvailableDiagonals() []int {
 	}
 
 	// sort the keys in ascending order
-	sort.Slice(diagonalKeys, func(i, j int) bool {
-		return diagonalKeys[i] < diagonalKeys[j]
-	})
+	sort.Ints(diagonalKeys)
 
 	return diagonalKeys
 }
@@ -122,7 +133,7 @@ func (dh *DiagonalHandler) RemoveDiagonal(diagonal int) {
 	delete(dh.Diagonals, diagonal)
 }
 
-func (dh *DiagonalHandler) ConsumeKmer(kmerStart int, kmerStop int, kmerStartGenome int, kmerStopGenome int) {
+func (dh *DiagonalHandler) _ConsumeKmer(kmerStart int, kmerStop int, kmerStartGenome int, kmerStopGenome int) {
 	// logrus.WithFields(logrus.Fields{
 	// 	"kmerStart": kmerStart,
 	// 	"kmerStop":  kmerStop,
@@ -130,6 +141,26 @@ func (dh *DiagonalHandler) ConsumeKmer(kmerStart int, kmerStop int, kmerStartGen
 
 	dh.ConsumeRegionRead(kmerStart, kmerStop)
 	dh.ConsumeRegionGenome(kmerStartGenome, kmerStopGenome)
+}
+
+func (dh *DiagonalHandler) ConsumeKmer(kmerStart, kmerStop, kmerStartGenome, kmerStopGenome int) {
+	for _, matches := range dh.Diagonals {
+		for _, match := range matches {
+			if match.Used {
+				continue
+			}
+
+			overlapsRead := (match.FromRead >= kmerStart && match.FromRead < kmerStop) ||
+				(match.ToRead > kmerStart && match.ToRead <= kmerStop)
+
+			overlapsGenome := (match.FromGenome >= kmerStartGenome && match.FromGenome < kmerStopGenome) ||
+				(match.ToGenome > kmerStartGenome && match.ToGenome <= kmerStopGenome)
+
+			if overlapsRead || overlapsGenome {
+				match.Used = true
+			}
+		}
+	}
 }
 
 func (dh *DiagonalHandler) RemovedConsumedRegionsAndDiagonals() {
