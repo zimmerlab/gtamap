@@ -153,7 +153,7 @@ func remapRead(readMapping *mapperutils.ReadMatchResult, annotation *mapperutils
 		alternativeReadMatchResults = append(alternativeReadMatchResults, readMapping)
 	}
 
-	if config.IsOriginRNA {
+	if config.IsOriginRNA && annotation != nil {
 		for _, alternative := range alternativeReadMatchResults {
 			symIntronCorrected := correctSymmetricIntronErrors(alternative, annotation.Introns[readMapping.SequenceIndex], read, genomeIndex)
 			if symIntronCorrected != nil {
@@ -748,7 +748,7 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 
 		lastRegion := readMatchResult.MatchedGenome.Regions[len(readMatchResult.MatchedGenome.Regions)-1]
 		lastRegionRead := readMatchResult.MatchedRead.Regions[len(readMatchResult.MatchedRead.Regions)-1]
-		mmLastRegion := extractMMofAnchor(lastRegion, readMatchResult.MismatchesRead)
+		mmLastRegion := extractMMofAnchor(lastRegionRead, readMatchResult.MismatchesRead)
 
 		// here we need to do it manually
 		lPaddings, _ := getPadding(firstRegion, targetSeqIntronSet)
