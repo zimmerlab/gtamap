@@ -97,8 +97,7 @@ func main() {
 		Help:     "Nucleotide sequences (FASTA) file.",
 	})
 	var blacklistFileName *string = cmdIndex.String("", "blacklist", &argparse.Options{
-		Required: true,
-		Help:     "Genome wide repeat annotation.",
+		Help: "Genome wide repeat annotation file used to combat signal regions (optional).",
 	})
 	var outputFileName *string = cmdIndex.String("", "output", &argparse.Options{
 		Required: true,
@@ -127,6 +126,10 @@ func main() {
 		Required: true,
 		Help:     "Output SAM file (file extension: .sam).",
 		Default:  "",
+	})
+	var isDNA *bool = cmdMap.Flag("", "dna", &argparse.Options{
+		Help:    "Specify read type.",
+		Default: false,
 	})
 	var logLevelMap *string = cmdMap.Selector("", "loglevel", []string{"ERROR", "INFO", "DEBUG"}, &argparse.Options{
 		Required: false,
@@ -266,12 +269,14 @@ func main() {
 			logrus.Fatalf("Could not open output sam file: %v", err)
 		}
 
-		index.BuildAndSerializeGenomeIndex(fastaFile, *blacklistFileName, outputFileIndex)
+		index.BuildAndSerializeGenomeIndex(fastaFile, blacklistFileName, outputFileIndex)
 
 	} else if cmdMap.Happened() {
 
 		level, _ := logrus.ParseLevel(*logLevelMap)
 		logrus.SetLevel(level)
+
+		config.IsOriginRNA = !*isDNA // set read type in config
 
 		printBanner()
 		logrus.Info("Mapping reads to given index")
