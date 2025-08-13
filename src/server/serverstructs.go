@@ -225,19 +225,17 @@ type MappingDataHandler struct {
 
 type QnameCluster struct {
 	Qname         string
-	MapperPresent []bool     // boolean array indicating which mappers have this qname
-	ClusterR1     *ClusterR1 // cluster of records for the first read in the pair (R1)
-	ClusterR2     *ClusterR2 // cluster of records for the second read in the pair (R2)
+	MapperPresent []bool       // boolean array indicating which mappers have this qname
+	ClusterR1     *ReadCluster // cluster of records for the first read in the pair (R1)
+	ClusterR2     *ReadCluster // cluster of records for the second read in the pair (R2)
 }
 
-type ClusterR1 struct {
-	Records   []*EnhancedRecord // records of the first read in the pair (R1)
-	Distances [][]float64       // distances between each pair of R1 records
-}
-
-type ClusterR2 struct {
-	Records   []*EnhancedRecord // records of the second read in the pair (R2)
-	Distances [][]float64       // distances between each pair of R2 records
+type ReadCluster struct {
+	Records            []*EnhancedRecord // records of the first read in the pair (R1)
+	Distances          [][]float64       // distances between each pair of R1 records
+	DistancesMapper    [][]float64       // distances between each pair of mapper
+	MapperDistanceMean float64
+	RecordDistanceMean float64
 }
 
 func NewMappingDataHandler(fastaFilePath string, fastaIndexFilePath string) (*MappingDataHandler, error) {
@@ -397,11 +395,15 @@ func (h *MappingDataHandler) AddMapperInfo(mapperName string, mapperSamFilePath 
 		if _, exists := h.QnameCluster[record.Qname]; !exists {
 			h.QnameCluster[record.Qname] = &QnameCluster{
 				Qname: record.Qname,
-				ClusterR1: &ClusterR1{
-					Records: make([]*EnhancedRecord, 0),
+				ClusterR1: &ReadCluster{
+					Records:         make([]*EnhancedRecord, 0),
+					Distances:       make([][]float64, 0),
+					DistancesMapper: make([][]float64, 0),
 				},
-				ClusterR2: &ClusterR2{
-					Records: make([]*EnhancedRecord, 0),
+				ClusterR2: &ReadCluster{
+					Records:         make([]*EnhancedRecord, 0),
+					Distances:       make([][]float64, 0),
+					DistancesMapper: make([][]float64, 0),
 				},
 			}
 		}
@@ -424,33 +426,107 @@ func (h *MappingDataHandler) ComputeQnameClusters() {
 
 	for _, readInfo := range h.ReadInfos {
 
-		if readInfo.Qname != "11" {
-			continue
-		}
+		// if readInfo.Qname != "11" {
+		// 	continue
+		// }
 
-		qnameCluster := h.QnameCluster[readInfo.Qname]
+		cluster := h.QnameCluster[readInfo.Qname]
 
-		fmt.Println("cluster: ", qnameCluster.Qname, " = ", len(qnameCluster.ClusterR1.Records), ",", len(qnameCluster.ClusterR2.Records))
+		// fmt.Println("cluster: ", cluster.Qname, " = ", len(cluster.ClusterR1.Records), ",", len(cluster.ClusterR2.Records))
 
-		// compute distances R1
+		h.ComputeReadClusters(cluster.ClusterR1, true)
+		h.ComputeReadClusters(cluster.ClusterR2, false)
 
-		for i := 0; i < len(qnameCluster.ClusterR1.Records); i++ {
-			for j := i + 1; j < len(qnameCluster.ClusterR1.Records); j++ {
-				dist, err := ComputeDistance(qnameCluster.ClusterR1.Records[i], qnameCluster.ClusterR1.Records[j])
-				if err != nil {
-					logrus.Errorf("error computing distance between records: %v", err)
-					continue
-				}
-				fmt.Println(dist)
-			}
-		}
+		// PrintMatrix2D(cluster.ClusterR1.Distances)
+		// PrintMatrix2D(cluster.ClusterR1.DistancesMapper)
+		// fmt.Println("score: ", cluster.ClusterR1.RecordDistanceMean)
+		// fmt.Println("record distance mean: ", cluster.ClusterR1.MapperDistanceMean)
+
+		// PrintMatrix2D(cluster.ClusterR2.Distances)
+		// PrintMatrix2D(cluster.ClusterR2.DistancesMapper)
+		// fmt.Println("score: ", cluster.ClusterR2.RecordDistanceMean)
+		// fmt.Println("record distance mean: ", cluster.ClusterR2.MapperDistanceMean)
+
+		// fmt.Println(cluster.ClusterR1.RecordDistanceMean, cluster.ClusterR2.RecordDistanceMean, (cluster.ClusterR1.RecordDistanceMean+cluster.ClusterR2.RecordDistanceMean)/2)
+
 	}
 }
 
-func ComputeDistance(recordA *EnhancedRecord, recordB *EnhancedRecord) (float64, error) {
+func (h *MappingDataHandler) ComputeReadClusters(cluster *ReadCluster, isR1 bool) {
 
-	fmt.Println(recordA.MapperIndex, recordA.Qname, recordA.Rname, recordA.Pos, recordA.Cigar)
-	fmt.Println(recordB.MapperIndex, recordB.Qname, recordB.Rname, recordB.Pos, recordB.Cigar)
+	for i := 0; i < len(cluster.Records); i++ {
+		cluster.Distances = append(cluster.Distances, make([]float64, len(cluster.Records)))
+	}
+
+	// distances between mappers
+	for i := 0; i < len(h.MapperInfos); i++ {
+		cluster.DistancesMapper = append(cluster.DistancesMapper, make([]float64, len(h.MapperInfos)))
+	}
+	for i := 0; i < len(h.MapperInfos); i++ {
+		for j := i + 1; j < len(h.MapperInfos); j++ {
+			cluster.DistancesMapper[i][j] = 1.0
+			cluster.DistancesMapper[j][i] = 1.0
+		}
+	}
+
+	for i := 0; i < len(cluster.Records); i++ {
+		for j := i + 1; j < len(cluster.Records); j++ {
+			dist, err := h.ComputeDistance(cluster.Records[i], cluster.Records[j], isR1)
+			if err != nil {
+				logrus.Errorf("error computing distance between records: %v", err)
+				continue
+			}
+
+			cluster.Distances[i][j] = dist
+			cluster.Distances[j][i] = dist
+
+			mIndexA := cluster.Records[i].MapperIndex
+			mIndexB := cluster.Records[j].MapperIndex
+
+			if mIndexA != mIndexB {
+				if cluster.DistancesMapper[mIndexA][mIndexB] > dist {
+					cluster.DistancesMapper[mIndexA][mIndexB] = dist
+					cluster.DistancesMapper[mIndexB][mIndexA] = dist
+				}
+			}
+		}
+	}
+
+	sumDistRecord := 0.0
+	for i := 0; i < len(cluster.Records); i++ {
+		for j := i + 1; j < len(cluster.Records); j++ {
+			sumDistRecord += cluster.Distances[i][j]
+		}
+	}
+	cluster.RecordDistanceMean = sumDistRecord / float64(len(cluster.Records)*(len(cluster.Records)-1)/2)
+
+	sumDistMapper := 0.0
+	for i := 0; i < len(h.MapperInfos); i++ {
+		for j := i + 1; j < len(h.MapperInfos); j++ {
+			sumDistMapper += cluster.DistancesMapper[i][j]
+		}
+	}
+	cluster.MapperDistanceMean = sumDistMapper / float64(len(h.MapperInfos)*(len(h.MapperInfos)-1)/2)
+}
+
+func PrintMatrix2D(matrix [][]float64) {
+	for _, row := range matrix {
+		for _, val := range row {
+			// Format to 2 decimal places and add a tab
+			fmt.Printf("%.2f\t", val)
+		}
+		fmt.Println()
+	}
+}
+
+func (h *MappingDataHandler) ComputeDistance(recordA *EnhancedRecord, recordB *EnhancedRecord, isR1 bool) (float64, error) {
+
+	weightMappedDifferent := 0.2
+	weightMappedSame := 1.0
+	weightGapBounds := 0.5
+
+	// fmt.Println(recordA.MapperIndex, recordA.Qname, recordA.Rname, recordA.Pos, recordA.Cigar)
+	// fmt.Println(recordB.MapperIndex, recordB.Qname, recordB.Rname, recordB.Pos, recordB.Cigar)
 
 	if recordA == nil || recordB == nil {
 		return 0, fmt.Errorf("one of the records is nil")
@@ -461,16 +537,150 @@ func ComputeDistance(recordA *EnhancedRecord, recordB *EnhancedRecord) (float64,
 		return 1, nil
 	}
 
+	// fmt.Println(recordA.MappedGenome.Regions)
+	// fmt.Println(recordA.MappedRead.Regions)
+	// fmt.Println(recordB.MappedGenome.Regions)
+	// fmt.Println(recordB.MappedRead.Regions)
+
 	// records on the same contig have a distance based on the overlap of their
 	// mapped regions
-	fmt.Println(recordA.MappedGenome)
-	fmt.Println(recordA.MappedRead)
-	fmt.Println(recordB.MappedGenome)
-	fmt.Println(recordB.MappedRead)
+	var readLength int
+	if isR1 {
+		readLength = len(h.ReadNamesMap[recordA.Qname].SequenceFirstOfPair)
+	} else {
+		readLength = len(h.ReadNamesMap[recordA.Qname].SequenceSecondOfPair)
+	}
 
-	os.Exit(2)
+	regionIndexA := 0
+	subIndexA := 0
+	regionIndexB := 0
+	subIndexB := 0
 
-	return 0.0, nil
+	numMappedOnlyA := 0
+	numMappedOnlyB := 0
+	// number of positions in the read that were mapped in both records
+	numMappedBoth := 0
+	// number of positions that were mapped in both records and to the same
+	// genomic position
+	numMappedSame := 0
+
+	doneA := false
+	doneB := false
+
+	for i := 0; i < readLength; i++ {
+
+		for !doneA && recordA.MappedRead.Regions[regionIndexA].Start+subIndexA < i {
+			subIndexA++
+			if subIndexA >= recordA.MappedRead.Regions[regionIndexA].Length() {
+				subIndexA = 0
+				regionIndexA++
+			}
+			if regionIndexA >= len(recordA.MappedRead.Regions) {
+				doneA = true
+				break
+			}
+		}
+
+		isMappedA := !doneA && recordA.MappedRead.Regions[regionIndexA].Start+subIndexA == i
+		// if !isMappedA {
+		// 	continue
+		// }
+
+		for !doneB && recordB.MappedRead.Regions[regionIndexB].Start+subIndexB < i {
+			subIndexB++
+			if subIndexB >= recordB.MappedRead.Regions[regionIndexB].Length() {
+				subIndexB = 0
+				regionIndexB++
+			}
+			if regionIndexB >= len(recordB.MappedRead.Regions) {
+				doneB = true
+				break
+			}
+		}
+
+		isMappedB := !doneB && recordB.MappedRead.Regions[regionIndexB].Start+subIndexB == i
+		// if !isMappedB {
+		// 	continue
+		// }
+
+		// if done {
+		// 	break
+		// }
+
+		if !isMappedA && !isMappedB {
+			continue
+		}
+
+		if isMappedA && !isMappedB {
+			numMappedOnlyA++
+		} else if !isMappedA && isMappedB {
+			numMappedOnlyB++
+		} else {
+
+			genomePosA := recordA.MappedGenome.Regions[regionIndexA].Start + subIndexA
+			genomePosB := recordB.MappedGenome.Regions[regionIndexB].Start + subIndexB
+
+			numMappedBoth++
+			if genomePosA == genomePosB {
+				numMappedSame++
+			}
+		}
+	}
+
+	percentMappedOnlyOne := float64(numMappedOnlyA+numMappedOnlyB) / float64(readLength)
+
+	percentMappedBoth := 0.0
+	if numMappedBoth > 0 {
+		percentMappedBoth = float64(numMappedSame) / float64(numMappedBoth)
+	}
+
+	impliedGapsA := recordA.MappedGenome.GetGaps()
+	impliedGapsA.SortInPlace()
+	impliedGapsB := recordB.MappedGenome.GetGaps()
+	impliedGapsB.SortInPlace()
+
+	// fmt.Println("implied gaps A:", impliedGapsA)
+	// fmt.Println("implied gaps B:", impliedGapsB)
+
+	numGapsA := len(impliedGapsA.Regions)
+	numGapsB := len(impliedGapsB.Regions)
+
+	numGapStartsSame := 0
+	numGapEndsSame := 0
+
+	for _, gapA := range impliedGapsA.Regions {
+		startOk := false
+		endOk := false
+		for _, gapB := range impliedGapsB.Regions {
+			if !startOk && gapA.Start == gapB.Start {
+				numGapStartsSame++
+				startOk = true
+			}
+			if !endOk && gapA.End == gapB.End {
+				numGapEndsSame++
+				endOk = true
+			}
+			if startOk && endOk {
+				break
+			}
+		}
+	}
+
+	percentGapBoundsSame := 0.0
+	if (numGapsA + numGapsB) > 0 {
+		percentGapBoundsSame = float64(numGapStartsSame+numGapEndsSame) / float64(numGapsA+numGapsB)
+	}
+
+	// fmt.Println("percent mapped only one:", percentMappedOnlyOne)
+	// fmt.Println("both same:", percentMappedBoth)
+	// fmt.Println("percent gaps", percentGapBoundsSame)
+
+	dist := ((percentMappedOnlyOne * weightMappedDifferent) +
+		((1 - percentMappedBoth) * weightMappedSame) +
+		((1 - percentGapBoundsSame) * weightGapBounds)) /
+		3.0
+
+	return dist, nil
 }
 
 type MapperResult struct {

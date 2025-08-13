@@ -1255,7 +1255,6 @@ func (s *Server) getReadDetailsInfo(w http.ResponseWriter, r *http.Request) {
 					readDetails.Records = append(readDetails.Records, recordWithMapperInfo)
 					// add the record index to the cluster
 					cluster.RecordIndices = append(cluster.RecordIndices, len(readDetails.Records)-1)
-					break
 				}
 			}
 
@@ -1271,6 +1270,7 @@ func (s *Server) getReadDetailsInfo(w http.ResponseWriter, r *http.Request) {
 				}
 				readDetails.Cluster = append(readDetails.Cluster, newCluster)
 			}
+
 		}
 
 	}

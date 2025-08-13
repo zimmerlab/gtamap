@@ -62,6 +62,13 @@ func NewRegionVector() *RegionVector {
 	}
 }
 
+// SortInPlace sorts the regions in ascending order based on their start position
+func (rv *RegionVector) SortInPlace() {
+	sort.Slice(rv.Regions, func(i, j int) bool {
+		return rv.Regions[i].Start < rv.Regions[j].Start
+	})
+}
+
 // HasGaps checks if the region vector has any gaps between the regions.
 // A gap is defined as a region where the end of one region does not equal the start of the next region.
 // Only works if:
@@ -243,6 +250,16 @@ func (rv *RegionVector) GetGapAfterRegionIndex(regionIndex int) (Region, bool) {
 	}
 
 	return gap, true
+}
+
+func (rv *RegionVector) GetGaps() *RegionVector {
+	gaps := NewRegionVector()
+
+	for i := 0; i < len(rv.Regions)-1; i++ {
+		gaps.AddRegion(rv.Regions[i].End, rv.Regions[i+1].Start)
+	}
+
+	return gaps
 }
 
 func (rv *RegionVector) GetGap(num int) (Region, bool) {
