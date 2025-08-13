@@ -1,6 +1,6 @@
 package datastructure
 
-// M. Weyrich: Crating hard copy of this interval tree in order to export fields, making it serializable
+// M. Weyrich: Creating hard copy of this interval tree in order to export fields, making it serializable
 
 // MIT License
 //
