@@ -23,6 +23,8 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 ) {
 	keepFw := GlobalFilter(readPair.ReadR1.Sequence, genomeIndex)
 	keepRw := GlobalFilter(readPair.ReadR2.Sequence, genomeIndex)
+	// keepFw := BinnedFilter(readPair.ReadR1.Sequence, genomeIndex)
+	// keepRw := BinnedFilter(readPair.ReadR2.Sequence, genomeIndex)
 
 	// logrus.WithFields(logrus.Fields{
 	// 	"keepFw": keepFw,
