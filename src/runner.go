@@ -97,9 +97,13 @@ func main() {
 		Required: true,
 		Help:     "Nucleotide sequences (FASTA) file.",
 	})
-	var blacklistFileName *string = cmdIndex.String("", "blacklist", &argparse.Options{
-		Help: "Genome wide repeat annotation file used to combat signal regions (optional).",
-	})
+	repeatMaskerFile := cmdIndex.File(
+		"", "repeatmask",
+		os.O_RDONLY, 0o600,
+		&argparse.Options{
+			Required: false,
+			Help:     "Path to genome wide repeatmasker file (hg38.fa.out).",
+		})
 	var outputFileName *string = cmdIndex.String("", "output", &argparse.Options{
 		Required: true,
 		Help:     "Output file (file extension: .gtai).",
@@ -270,7 +274,11 @@ func main() {
 			logrus.Fatalf("Could not open output sam file: %v", err)
 		}
 
-		index.BuildAndSerializeGenomeIndex(fastaFile, blacklistFileName, outputFileIndex)
+		if *repeatMaskerFile == (os.File{}) {
+			repeatMaskerFile = nil
+		}
+
+		index.BuildAndSerializeGenomeIndex(fastaFile, repeatMaskerFile, outputFileIndex)
 
 	} else if cmdMap.Happened() {
 

@@ -806,7 +806,7 @@ func (i *GenomeIndex) NumSequences() int {
 	return len(i.SequenceHeaders)
 }
 
-func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry, blackListFile *string) *GenomeIndex {
+func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry, repeatMaskerFile *os.File) *GenomeIndex {
 	index := GenomeIndex{
 		SequenceHeaders: make([]string, len(fastaEntries)),
 		SequenceInfo:    make([]*gtf.GeneBasic, len(fastaEntries)),
@@ -831,17 +831,25 @@ func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry, blackListFile *stri
 
 		index.Sequences[i*2] = &sequence
 		index.Sequences[i*2+1] = &sequenceRevComp
-		if blackListFile != nil {
-			tree, treeRv, repeats, repeatsRv, err := BuildBlacklistInTree(info.StartGenomic, info.EndGenomic, info.Contig, *blackListFile)
+
+		if repeatMaskerFile != nil {
+
+			logrus.WithFields(logrus.Fields{
+				"file": repeatMaskerFile.Name(),
+			}).Info("Using repeatmasker file")
+
+			tree, treeRv, repeats, repeatsRv, err := BuildBlacklistInTree(info.StartGenomic, info.EndGenomic, info.Contig, repeatMaskerFile)
 			logrus.Debugf("Loaded %d annotated repeats into index.\n", len(repeats))
 			if err != nil {
 				logrus.Fatal("Error loading balcklist into interval tree", err)
+				panic(err)
 			}
 			index.Blacklist[i*2] = tree
 			index.RepeatRegions[i*2] = repeats
 			index.Blacklist[i*2+1] = treeRv
 			index.RepeatRegions[i*2+1] = repeatsRv
-
+		} else {
+			logrus.Info("No repeatmasker file provided, repeat regions are not detected")
 		}
 	}
 
@@ -930,7 +938,7 @@ func ReadGenomeIndexByFile(indexFile *os.File) *GenomeIndex {
 	return &genomeIndex
 }
 
-func BuildAndSerializeGenomeIndex(fastaFile *os.File, blackListFile *string, outputFile *os.File) {
+func BuildAndSerializeGenomeIndex(fastaFile *os.File, blackListFile *os.File, outputFile *os.File) {
 	fastaEntries, err := dataloader.ReadFasta(fastaFile)
 	if err != nil {
 		logrus.Fatal("Error extracting sequence from fasta file", err)
@@ -952,12 +960,12 @@ func BuildAndSerializeGenomeIndex(fastaFile *os.File, blackListFile *string, out
 	WriteGenomeIndex(genomeIndex, outputFile)
 }
 
-func BuildBlacklistInTree(start, end uint32, contig string, blackList string) (*datastructure.INTree, *datastructure.INTree, []datastructure.Bounds, []datastructure.Bounds, error) {
+func BuildBlacklistInTree(start, end uint32, contig string, blackListFile *os.File) (*datastructure.INTree, *datastructure.INTree, []datastructure.Bounds, []datastructure.Bounds, error) {
 	repeatRegions := make([]datastructure.Bounds, 0)
 	repeatRegionsRev := make([]datastructure.Bounds, 0)
 	regionLength := end - start
 
-	scanner, err := dataloader.OpenBlacklistScanner(blackList)
+	scanner, err := dataloader.OpenFileScanner(blackListFile)
 	if err != nil {
 		logrus.Fatal(err)
 	}
