@@ -8,9 +8,20 @@ import (
 type AnalysisService struct {
 	MapperNames []string
 	MapperInfos map[string]*MapperInfo
+	TargetInfo  *TargetInfo // Information about the target region or gene
+}
+
+type TargetInfo struct {
+	Type   string // region | gene
+	Name   string // e.g. ENSG00000173585
+	Contig string // e.g. chr1
+	Start  int    // e.g. 1000
+	End    int    // e.g. 2000
+	Strand string // e.g. + or -
 }
 
 type MapperInfo struct {
+	Target         string // target | genome
 	ParsedFile     *sam.ParsedFile
 	RecordsByQname map[string][]*sam.Record
 }
@@ -22,7 +33,7 @@ func NewAnalysisService() *AnalysisService {
 	}
 }
 
-func (service *AnalysisService) AddMapperInfo(mapperName string, mapperSamFilePath string) error {
+func (service *AnalysisService) AddMapperInfo(mapperName string, mapperSamFilePath string, target string) error {
 
 	parsedFile, err := sam.ParseSAMFile(mapperSamFilePath)
 	if err != nil {
@@ -34,6 +45,7 @@ func (service *AnalysisService) AddMapperInfo(mapperName string, mapperSamFilePa
 		service.MapperInfos[mapperName] = &MapperInfo{
 			ParsedFile:     parsedFile,
 			RecordsByQname: make(map[string][]*sam.Record),
+			Target:         target,
 		}
 	}
 

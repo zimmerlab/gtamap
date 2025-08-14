@@ -45,8 +45,9 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 					total += len(*task.TargetInfo.ReadPair.ReadR1.Sequence)
 					mmTotal += len(task.TargetInfo.Rv[j].MismatchesRead)
 
-					s, isOk := readPairResultToSamString(index, task.TargetInfo.ReadPair, task.TargetInfo.Fw[i], task.TargetInfo.Rv[j])
-					if !isOk {
+					s, err := readPairResultToSamString(index, task.TargetInfo.ReadPair, task.TargetInfo.Fw[i], task.TargetInfo.Rv[j])
+					if err != nil {
+						logrus.Error("Error converting read pair result to SAM string: ", err)
 						continue
 					}
 					builder.WriteString(s)
@@ -55,6 +56,7 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 		} else {
 			// here we do not pair any reads, we just output single sam entries
 			// FW
+			numRecordsR1 := 0
 			for i := 0; i < len(task.TargetInfo.Fw); i++ {
 				if task.TargetInfo.Fw[i].IncompleteMap {
 					continue
@@ -63,14 +65,18 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 				total += len(*task.TargetInfo.ReadPair.ReadR1.Sequence)
 				mmTotal += len(task.TargetInfo.Fw[i].MismatchesRead)
 
-				s, isOk := readPairResultToSamString(index, task.TargetInfo.ReadPair, task.TargetInfo.Fw[i], nil)
-				if !isOk {
+				s, err := readPairResultToSamString(index, task.TargetInfo.ReadPair, task.TargetInfo.Fw[i], nil)
+				if err != nil {
+					logrus.Error("Error converting read pair result to SAM string: ", err)
 					continue
 				}
 				builder.WriteString(s)
+
+				numRecordsR1++
 			}
 
 			// RV
+			numRecordsR2 := 0
 			for j := 0; j < len(task.TargetInfo.Rv); j++ {
 				if task.TargetInfo.Rv[j].IncompleteMap {
 					continue
@@ -79,11 +85,20 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 				total += len(*task.TargetInfo.ReadPair.ReadR2.Sequence)
 				mmTotal += len(task.TargetInfo.Rv[j].MismatchesRead)
 
-				s, isOk := readPairResultToSamString(index, task.TargetInfo.ReadPair, nil, task.TargetInfo.Rv[j])
-				if !isOk {
+				s, err := readPairResultToSamString(index, task.TargetInfo.ReadPair, nil, task.TargetInfo.Rv[j])
+				if err != nil {
+					logrus.Error("Error converting read pair result to SAM string: ", err)
 					continue
 				}
 				builder.WriteString(s)
+
+				numRecordsR2++
+			}
+
+			if (numRecordsR1 == 0 && numRecordsR2 != 0) || (numRecordsR1 != 0 && numRecordsR2 == 0) {
+				// one mate is unmapped
+				// write read mate as unmapped to sam
+				builder.WriteString(unmappedReadMateToSamString(task.TargetInfo.ReadPair, numRecordsR1 == 0))
 			}
 		}
 
@@ -97,9 +112,70 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 	}).Info("Stats")
 }
 
+func unmappedReadMateToSamString(readPair *fastq.ReadPair, isR1 bool) string {
+	flag := sam.Flag{}
+
+	flag.SetUnmapped()
+	flag.SetPaired()
+
+	var header string
+	var seq string
+	var qual string
+
+	if isR1 {
+		flag.SetFirstInPair()
+		header = strings.Split(readPair.ReadR1.Header, " ")[0]
+		seq = string(*readPair.ReadR1.Sequence)
+		qual = string(*readPair.ReadR1.Quality)
+	} else {
+		flag.SetSecondInPair()
+		header = strings.Split(readPair.ReadR2.Header, " ")[0]
+		seq = string(*readPair.ReadR2.Sequence)
+		qual = string(*readPair.ReadR2.Quality)
+	}
+
+	var builder strings.Builder
+
+	// QNAME
+	builder.WriteString(header)
+	builder.WriteString("\t")
+	// FLAG
+	builder.WriteString(flag.String())
+	builder.WriteString("\t")
+	// RNAME
+	builder.WriteString("*")
+	builder.WriteString("\t")
+	// POS
+	builder.WriteString("0")
+	builder.WriteString("\t")
+	// MAPQ
+	builder.WriteString("0")
+	builder.WriteString("\t")
+	// CIGAR
+	builder.WriteString("*")
+	builder.WriteString("\t")
+	// RNEXT
+	builder.WriteString("*")
+	builder.WriteString("\t")
+	// PNEXT
+	builder.WriteString("0")
+	builder.WriteString("\t")
+	// TLEN
+	builder.WriteString("0")
+	builder.WriteString("\t")
+	// SEQ
+	builder.WriteString(seq)
+	builder.WriteString("\t")
+	// QUAL
+	builder.WriteString(qual)
+	builder.WriteString("\n")
+
+	return builder.String()
+}
+
 func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.ReadPair,
 	resFw *mapperutils.ReadMatchResult, resRv *mapperutils.ReadMatchResult,
-) (string, bool) {
+) (string, error) {
 	flagFw := sam.Flag{}
 	flagRv := sam.Flag{}
 
@@ -302,7 +378,7 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 			logrus.WithFields(logrus.Fields{
 				"read": readPair.ReadR1.Header,
 			}).Error("Error reversing complementing sequence", revCompSeqErr)
-			return "", false
+			return "", revCompSeqErr
 		}
 		seqFw = string(revCompSeq)
 	}
@@ -314,7 +390,7 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 			logrus.WithFields(logrus.Fields{
 				"read": readPair.ReadR2.Header,
 			}).Error("Error reversing complementing sequence", revCompSeqErr)
-			return "", false
+			return "", revCompSeqErr
 		}
 		seqRv = string(revCompSeq)
 	}
@@ -409,5 +485,5 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 		builder.WriteString("\n")
 	}
 
-	return builder.String(), true
+	return builder.String(), nil
 }

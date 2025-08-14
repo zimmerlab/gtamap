@@ -62,6 +62,13 @@ func NewRegionVector() *RegionVector {
 	}
 }
 
+// SortInPlace sorts the regions in ascending order based on their start position
+func (rv *RegionVector) SortInPlace() {
+	sort.Slice(rv.Regions, func(i, j int) bool {
+		return rv.Regions[i].Start < rv.Regions[j].Start
+	})
+}
+
 // HasGaps checks if the region vector has any gaps between the regions.
 // A gap is defined as a region where the end of one region does not equal the start of the next region.
 // Only works if:
@@ -218,6 +225,10 @@ func (rv *RegionVector) Length() int {
 	return length
 }
 
+func (rv *RegionVector) NumRegions() int {
+	return len(rv.Regions)
+}
+
 func (rv *RegionVector) GetFirstGap() (Region, bool) {
 	return rv.GetGap(0)
 }
@@ -239,6 +250,16 @@ func (rv *RegionVector) GetGapAfterRegionIndex(regionIndex int) (Region, bool) {
 	}
 
 	return gap, true
+}
+
+func (rv *RegionVector) GetGaps() *RegionVector {
+	gaps := NewRegionVector()
+
+	for i := 0; i < len(rv.Regions)-1; i++ {
+		gaps.AddRegion(rv.Regions[i].End, rv.Regions[i+1].Start)
+	}
+
+	return gaps
 }
 
 func (rv *RegionVector) GetGap(num int) (Region, bool) {
@@ -321,6 +342,20 @@ func (rv *RegionVector) GetLastRegion() (Region, bool) {
 		return Region{}, false
 	}
 	return rv.Regions[len(rv.Regions)-1], true
+}
+
+func (rv *RegionVector) FirstRegion() *Region {
+	if len(rv.Regions) == 0 {
+		return nil
+	}
+	return &rv.Regions[0]
+}
+
+func (rv *RegionVector) LastRegion() *Region {
+	if len(rv.Regions) == 0 {
+		return nil
+	}
+	return &rv.Regions[len(rv.Regions)-1]
 }
 
 // GetSizeLeftIncluding returns the size of all regions in the region vector that come before the
@@ -1194,4 +1229,59 @@ func (rv *RegionVector) _RemoveRegion(start int, end int) { // optimized
 		}
 	}
 	rv.Regions = newRegions
+}
+
+// CombineRegionVectorsConsecutiveInBoth combines two region vectors that
+// have consecutive regions at the same index.
+// New objects are returned and the input objects are not altered.
+// If and only if both regions at the same index in both region vectors are
+// consecutive, they will be combined into a single region in the resulting
+// region vectors.
+// Therefore the resulting vectors will have the same length.
+// An error is returned if the input vectors are empty or of different length.
+// Example:
+// If rv1 contains the regions [0, 10], [10, 20], [20, 30]
+// and rv2 contains the regions [0, 5], [5, 15], [16, 26],
+// the resulting region vectors will be:
+// c1: [0, 20], [20, 30]
+// c2: [0, 15], [16, 26]
+func CombineRegionVectorsConsecutiveInBoth(rv1 *RegionVector, rv2 *RegionVector) (*RegionVector, *RegionVector, error) {
+
+	if rv1.NumRegions() != rv2.NumRegions() {
+		return nil, nil, fmt.Errorf("region vectors must have the same number of regions to combine overlapping regions")
+	}
+	if rv1.NumRegions() == 0 {
+		return nil, nil, fmt.Errorf("region vectors are empty")
+	}
+
+	c1 := NewRegionVector()
+	c2 := NewRegionVector()
+
+	c1.AddRegion(rv1.FirstRegion().Start, rv1.FirstRegion().End)
+	c2.AddRegion(rv2.FirstRegion().Start, rv2.FirstRegion().End)
+
+	index := 1
+
+	for index < rv1.NumRegions() {
+
+		r1 := rv1.Regions[index]
+		r2 := rv2.Regions[index]
+
+		consecutive1 := c1.LastRegion().End == r1.Start
+		consecutive2 := c2.LastRegion().End == r2.Start
+
+		if consecutive1 && consecutive2 {
+			// combine regions
+			c1.LastRegion().End = r1.End
+			c2.LastRegion().End = r2.End
+		} else {
+			// add new regions
+			c1.AddRegion(r1.Start, r1.End)
+			c2.AddRegion(r2.Start, r2.End)
+		}
+
+		index++
+	}
+
+	return c1, c2, nil
 }

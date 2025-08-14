@@ -1,38 +1,43 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/KleinSamuel/gtamap/src/analysis"
-	"github.com/KleinSamuel/gtamap/src/formats/fasta"
-	"github.com/KleinSamuel/gtamap/src/formats/sam"
-	"github.com/gorilla/mux"
-	"github.com/rs/cors"
 	"log"
 	"math"
 	"net/http"
 	"os"
+	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/KleinSamuel/gtamap/src/analysis"
+	"github.com/KleinSamuel/gtamap/src/config"
+	"github.com/KleinSamuel/gtamap/src/formats/fasta"
+	"github.com/KleinSamuel/gtamap/src/formats/sam"
+	"github.com/gorilla/mux"
+	"github.com/rs/cors"
 )
 
 type Server struct {
 	Router          *mux.Router
-	AnalysisService *analysis.AnalysisService
+	Handler         *MappingDataHandler
+	AnalysisService *analysis.AnalysisService // TODO: change all usages to Handler
 }
 
 func (s *Server) InitRoutes() {
 
 	api := s.Router.PathPrefix("/api").Subrouter()
 
-	api.HandleFunc("/test", s.test).Methods("GET")
-
 	api.HandleFunc("/health", s.healthCheck).Methods("GET")
 
-	api.HandleFunc("/genomeConfig", getTestGenomeConfig).Methods("GET")
+	//api.HandleFunc("/genomeConfig", getTestGenomeConfig).Methods("GET")
+	api.HandleFunc("/igvConfigTarget", getTargetRegionIgvConfig).Methods("GET")
 
-	api.HandleFunc("/readSummaryTable", getReadInfo).Methods("GET")
+	api.HandleFunc("/readSummaryTable", s.getReadSummaryTable).Methods("GET")
 
 	api.HandleFunc("/upsetDataRead", s.upsetDataRead).Methods("GET")
 	api.HandleFunc("/upsetDataRecordPos", s.upsetDataRecordPos).Methods("GET")
@@ -52,9 +57,21 @@ func (s *Server) InitRoutes() {
 
 	download.HandleFunc("/genome/fasta", serveGenomeFastaFile).Methods("GET")
 	download.HandleFunc("/genome/fastaIndex", serveGenomeFastaIndexFile).Methods("GET")
+
 	download.HandleFunc("/genome/gtf", serveGenomeAnnotationFile).Methods("GET")
 	download.HandleFunc("/gtamap/bam", serveBamFile).Methods("GET")
 	download.HandleFunc("/gtamap/bamIndex", serveBamIndexFile).Methods("GET")
+
+	download.HandleFunc("/targetRegion/fasta", serveTargetRegionFastaFile).Methods("GET")
+	download.HandleFunc("/targetRegion/fastaIndex", serveTargetRegionFastaIndexFile).Methods("GET")
+
+	download.HandleFunc("/targetRegion/combinedSam", s.serveTargetRegionCombinedMappingSam).Methods("GET")
+	download.HandleFunc("/targetRegion/combinedBam", s.serveTargetRegionCombinedMappingBam).Methods("GET")
+	download.HandleFunc("/targetRegion/combinedBamIndex", s.serveTargetRegionCombinedMappingBamIndex).Methods("GET")
+
+	readDetailsRouter := api.PathPrefix("/readDetails").Subrouter()
+
+	readDetailsRouter.HandleFunc("/readInfo", s.getReadDetailsInfo).Methods("GET")
 }
 
 func (s *Server) Start() {
@@ -68,6 +85,7 @@ func (s *Server) Start() {
 }
 
 func NewServer() *Server {
+
 	server := &Server{
 		Router:          mux.NewRouter(),
 		AnalysisService: analysis.NewAnalysisService(),
@@ -95,16 +113,12 @@ func (s *Server) healthCheck(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-func (s *Server) test(w http.ResponseWriter, r *http.Request) {
-
-	response := map[string]string{
-		"message":  "This is a test response from the server",
-		"gtamap":   strconv.Itoa(len(s.AnalysisService.MapperInfos["gtamap"].ParsedFile.Records)),
-		"minimap2": strconv.Itoa(len(s.AnalysisService.MapperInfos["minimap2"].ParsedFile.Records)),
+func (s *Server) InitMappingDataHandler(fastaFilePath string, fastaIndexFilePath string) {
+	handler, err := NewMappingDataHandler(fastaFilePath, fastaIndexFilePath)
+	if err != nil {
+		panic("could not create mapping data handler")
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	s.Handler = handler
 }
 
 type UpsetElement struct {
@@ -114,20 +128,38 @@ type UpsetElement struct {
 
 func (s *Server) upsetDataRead(w http.ResponseWriter, r *http.Request) {
 
-	data := make([]UpsetElement, 0)
-
-	qnames := make([]string, 0, len(s.AnalysisService.MapperInfos["gtamap"].RecordsByQname))
-	for qname := range s.AnalysisService.MapperInfos["gtamap"].RecordsByQname {
-		qnames = append(qnames, qname)
+	onlyTargetRegion := false
+	if val := r.URL.Query().Get("onlyTargetRegion"); val == "true" {
+		onlyTargetRegion = true
 	}
 
-	for _, qname := range qnames {
+	data := make([]UpsetElement, 0)
+
+	for _, readInfo := range s.Handler.ReadInfos {
+		qname := readInfo.Qname
 
 		sets := make([]string, 0)
-		for mapperName, mapperInfo := range s.AnalysisService.MapperInfos {
-			if _, exists := mapperInfo.RecordsByQname[qname]; exists {
-				sets = append(sets, mapperName)
+
+		for i, qnameMap := range s.Handler.QnamesByMapper {
+			if _, exists := qnameMap[qname]; !exists {
+				continue
 			}
+			if onlyTargetRegion {
+				found := false
+				for _, record := range qnameMap[qname] {
+					if record.Rname != config.GetTargetContig() {
+						continue
+					}
+					if record.MappedGenome.Overlaps(config.GetTargetStart(), config.GetTargetEnd()) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					continue
+				}
+			}
+			sets = append(sets, s.Handler.MapperInfos[i].MapperName)
 		}
 
 		elem := UpsetElement{
@@ -144,6 +176,11 @@ func (s *Server) upsetDataRead(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) upsetDataRecordPos(w http.ResponseWriter, r *http.Request) {
 
+	onlyTargetRegion := false
+	if val := r.URL.Query().Get("onlyTargetRegion"); val == "true" {
+		onlyTargetRegion = true
+	}
+
 	data := make([]UpsetElement, 0)
 
 	recordPosMap := make(map[string]map[string]bool)
@@ -152,7 +189,11 @@ func (s *Server) upsetDataRecordPos(w http.ResponseWriter, r *http.Request) {
 
 		for _, record := range mapperInfo.ParsedFile.Records {
 
-			id := record.Qname + "X" + strconv.Itoa(record.Pos)
+			if onlyTargetRegion && record.Rname != config.GetTargetContig() {
+				continue
+			}
+
+			id := record.Qname + "::" + strconv.Itoa(record.Pos)
 
 			if _, exists := recordPosMap[id]; !exists {
 				recordPosMap[id] = make(map[string]bool)
@@ -183,6 +224,11 @@ func (s *Server) upsetDataRecordPos(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) upsetDataRecordPosCigar(w http.ResponseWriter, r *http.Request) {
 
+	onlyTargetRegion := false
+	if val := r.URL.Query().Get("onlyTargetRegion"); val == "true" {
+		onlyTargetRegion = true
+	}
+
 	data := make([]UpsetElement, 0)
 
 	recordPosMap := make(map[string]map[string]bool)
@@ -190,6 +236,10 @@ func (s *Server) upsetDataRecordPosCigar(w http.ResponseWriter, r *http.Request)
 	for mapperName, mapperInfo := range s.AnalysisService.MapperInfos {
 
 		for _, record := range mapperInfo.ParsedFile.Records {
+
+			if onlyTargetRegion && record.Rname != config.GetTargetContig() {
+				continue
+			}
 
 			id := record.Qname + "::" + strconv.Itoa(record.Pos) + "::" + record.UniformCigar()
 
@@ -704,6 +754,163 @@ func (s *Server) mapperDistances(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
+func serveTargetRegionFastaFile(w http.ResponseWriter, r *http.Request) {
+	if _, err := os.Stat(config.GetTargetFasta()); os.IsNotExist(err) {
+		http.Error(w, "File not found", http.StatusNotFound)
+		return
+	}
+	http.ServeFile(w, r, config.GetTargetFasta())
+}
+
+func serveTargetRegionFastaIndexFile(w http.ResponseWriter, r *http.Request) {
+	if _, err := os.Stat(config.GetTargetFastaIndex()); os.IsNotExist(err) {
+		http.Error(w, "File not found", http.StatusNotFound)
+		return
+	}
+	http.ServeFile(w, r, config.GetTargetFastaIndex())
+}
+
+func (s *Server) getCombinedSam() string {
+	var builder strings.Builder
+
+	builder.WriteString("@HD\tVN:1.6\tSO:unsorted\n")
+	builder.WriteString(fmt.Sprintf("@SQ\tSN:%s\tLN:%d\n", config.GetTargetContig(), config.GetTargetEnd()-config.GetTargetStart()+1))
+
+	for _, mapperName := range s.AnalysisService.MapperNames {
+		for _, records := range s.AnalysisService.MapperInfos[mapperName].RecordsByQname {
+			for _, record := range records {
+
+				// only include records that map to the target region
+				isOnTargetContig := record.Rname == config.GetTargetContig()
+				isInTargetRegion := record.Pos >= config.GetTargetStart() && record.Pos <= config.GetTargetEnd()
+				if !isOnTargetContig || !isInTargetRegion {
+					continue
+				}
+
+				builder.WriteString(record.StringWithMapperInfo(config.GetTargetStart(), mapperName))
+				builder.WriteString("\n")
+			}
+		}
+	}
+
+	return builder.String()
+}
+
+func (s *Server) serveTargetRegionCombinedMappingSam(w http.ResponseWriter, r *http.Request) {
+
+	samString := s.getCombinedSam()
+
+	w.Header().Set("Content-Type", "plain/text")
+	w.Write([]byte(samString))
+}
+
+func (s *Server) serveTargetRegionCombinedMappingBam(w http.ResponseWriter, r *http.Request) {
+
+	samString := s.getCombinedSam()
+
+	bamBytes, err := samToSortedBam(samString)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error converting SAM to BAM: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Write(bamBytes)
+}
+
+func (s *Server) serveTargetRegionCombinedMappingBamIndex(w http.ResponseWriter, r *http.Request) {
+
+	samString := s.getCombinedSam()
+
+	bamBytes, err := samToSortedBam(samString)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error converting SAM to BAM: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	bamIndex, err := bamToBamIndex(bamBytes)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error creating BAM index: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "plain/text")
+	w.Write([]byte(bamIndex))
+}
+
+func samToSortedBam(samString string) ([]byte, error) {
+
+	cmd := exec.Command("samtools", "sort", "-o", "-", "-")
+
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = &stderrBuf
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, fmt.Errorf("error creating stdin pipe: %w, stderr: %s", err, stderrBuf.String())
+	}
+	var bamBuf bytes.Buffer
+	cmd.Stdout = &bamBuf
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("error starting samtools: %w, stderr: %s", err, stderrBuf.String())
+	}
+
+	_, err = stdin.Write([]byte(samString))
+	if err != nil {
+		stdin.Close()
+		return nil, fmt.Errorf("error writing to stdin: %w, stderr: %s", err, stderrBuf.String())
+	}
+	stdin.Close()
+
+	if err := cmd.Wait(); err != nil {
+		return nil, fmt.Errorf("samtools failed: %w, stderr: %s", err, stderrBuf.String())
+	}
+
+	if bamBuf.Len() == 0 {
+		return nil, fmt.Errorf("no output from samtools")
+	}
+
+	return bamBuf.Bytes(), nil
+}
+
+func bamToBamIndex(bamBytes []byte) (string, error) {
+
+	cmd := exec.Command("samtools", "index", "-o", "-", "-")
+
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = &stderrBuf
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return "", fmt.Errorf("error creating stdin pipe: %w, stderr: %s", err, stderrBuf.String())
+	}
+
+	var indexBuf bytes.Buffer
+	cmd.Stdout = &indexBuf
+
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("error starting samtools: %w, stderr: %s", err, stderrBuf.String())
+	}
+
+	_, err = stdin.Write(bamBytes)
+	if err != nil {
+		stdin.Close()
+		return "", fmt.Errorf("error writing to stdin: %w, stderr: %s", err, stderrBuf.String())
+	}
+	stdin.Close()
+
+	if err := cmd.Wait(); err != nil {
+		return "", fmt.Errorf("samtools failed: %w, stderr: %s", err, stderrBuf.String())
+	}
+
+	if indexBuf.Len() == 0 {
+		return "", fmt.Errorf("no output from samtools")
+	}
+
+	return indexBuf.String(), nil
+}
+
 func serveGenomeFastaFile(w http.ResponseWriter, r *http.Request) {
 
 	filePath := "/home/sam/Projects/gtamap-paper/pipeline/input/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
@@ -764,9 +971,9 @@ func serveBamIndexFile(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, filePath)
 }
 
-func getReadInfo(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getReadSummaryTable(w http.ResponseWriter, r *http.Request) {
 
-	response := analysis.ReadInfoTable()
+	response := s.ReadSummaryTableData()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
@@ -786,6 +993,45 @@ type IgvTrackConfig struct {
 	Url         string `json:"url"`
 	IndexUrl    string `json:"indexURL"`
 	Type        string `json:"type"`
+	Height      int    `json:"height,omitempty"`
+	MaxHeight   int    `json:"maxHeight,omitempty"`
+}
+
+func getTargetRegionIgvConfig(w http.ResponseWriter, r *http.Request) {
+
+	genomeConfig := IgvGenomeConfig{
+		Id:       "Target Region (chr3:123456-789012)",
+		Label:    "BASE_GENOME_LABEL",
+		FastaUrl: "http://localhost:8000/download/targetRegion/fasta",
+		IndexUrl: "http://localhost:8000/download/targetRegion/fastaIndex",
+	}
+
+	track := IgvTrackConfig{
+		Name:        "TEST_TRACK",
+		Format:      "sam",
+		DisplayMode: "EXPANDED",
+		Url:         "http://localhost:8000/download/targetRegion/combinedBam",
+		IndexUrl:    "http://localhost:8000/download/targetRegion/combinedBamIndex",
+		Type:        "alignment",
+		Height:      800,
+		MaxHeight:   1000,
+	}
+
+	tracks := make([]IgvTrackConfig, 0)
+	tracks = append(tracks, track)
+
+	// convert global location to local location
+	targetRegionStrLocal := fmt.Sprintf("%s:%d-%d", config.GetTargetContig(), 1, config.GetTargetEnd()-config.GetTargetStart()+1)
+
+	response := map[string]interface{}{
+		"genomeConfig": genomeConfig,
+		"tracks":       tracks,
+		"location":     targetRegionStrLocal,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+
 }
 
 func getTestGenomeConfig(w http.ResponseWriter, r *http.Request) {
@@ -816,4 +1062,320 @@ func getTestGenomeConfig(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+type ReadOverviewInfo struct {
+	Qname           string              `json:"qname"`
+	ReadLengthR1    int                 `json:"readLengthR1"`
+	ReadLengthR2    int                 `json:"readLengthR2"`
+	NumMappedBy     int                 `json:"numMappedBy"`
+	MappedBy        []string            `json:"mappedBy"`
+	NumLocations    int                 `json:"numLocations"`
+	Locations       []*ReadLocationInfo `json:"locations"`
+	DistanceScore   float64             `json:"distanceScore,omitempty"`   // optional, for distance score
+	ConfidenceLevel int                 `json:"confidenceLevel,omitempty"` // optional, for confidence level
+}
+
+type ReadLocationInfo struct {
+	Pair          string   `json:"pairType"` // "first" or "second"
+	Contig        string   `json:"contigName"`
+	Strand        bool     `json:"isForwardStrand"` // true for forward strand, false for reverse strand
+	Position      int      `json:"position"`
+	Cigar         string   `json:"cigar"`
+	CigarDetailed string   `json:"cigarDetailed,omitempty"` // optional, for detailed CIGAR representation
+	NumMismatches int      `json:"numMismatches"`
+	NumGaps       int      `json:"numGaps"`
+	NumMappedBy   int      `json:"numMappedBy"`
+	MappedBy      []string `json:"mappedBy"`
+	ReadIndices   []int    `json:"readIndices"`
+}
+
+func (s *Server) ReadSummaryTableData() []ReadOverviewInfo {
+
+	readSummary := make(map[string]*ReadOverviewInfo)
+
+	for _, readInfo := range s.Handler.ReadInfos {
+
+		readInfoDto := &ReadOverviewInfo{
+			Qname:        readInfo.Qname,
+			ReadLengthR1: len(readInfo.SequenceFirstOfPair),
+			ReadLengthR2: len(readInfo.SequenceSecondOfPair),
+			NumMappedBy:  0,
+			MappedBy:     make([]string, 0),
+			NumLocations: 0,
+			Locations:    make([]*ReadLocationInfo, 0),
+		}
+
+		for mapperIndex, qnameMap := range s.Handler.QnamesByMapper {
+
+			mapperName := s.Handler.MapperInfos[mapperIndex].MapperName
+
+			// check if the read is mapped by this mapper
+			if _, exists := qnameMap[readInfo.Qname]; !exists {
+				continue
+			}
+
+			records := qnameMap[readInfo.Qname]
+
+			readInfoDto.MappedBy = append(readInfoDto.MappedBy, mapperName)
+
+			for _, record := range records {
+
+				pair := "none"
+				if record.Flag.IsFirstInPair() {
+					pair = "first"
+				} else if record.Flag.IsSecondInPair() {
+					pair = "second"
+				}
+
+				found := false
+				for _, o := range readInfoDto.Locations {
+
+					sameReadMate := o.Pair == pair
+					sameContig := o.Contig == record.Rname
+					sameStand := o.Strand == !record.Flag.IsReverseStrand()
+					samePosition := o.Position == record.Pos
+					sameCigar := o.CigarDetailed == record.CigarObj.String()
+
+					if sameReadMate && sameContig && sameStand && samePosition && sameCigar {
+						o.MappedBy = append(o.MappedBy, mapperName)
+						o.ReadIndices = append(o.ReadIndices, record.IndexInSam)
+						found = true
+						break
+					}
+				}
+
+				if found {
+					continue
+				}
+
+				locationInfo := ReadLocationInfo{
+					Pair:          pair,
+					Contig:        record.Rname,
+					Strand:        !record.Flag.IsReverseStrand(),
+					Position:      record.Pos,
+					Cigar:         record.CigarObj.StringUniform(),
+					CigarDetailed: record.CigarObj.String(),
+					NumMismatches: record.CigarObj.GetNumMismatches(),
+					NumGaps:       record.CigarObj.GetNumGaps(),
+					NumMappedBy:   1,
+					MappedBy:      []string{mapperName},
+					ReadIndices:   make([]int, 0),
+				}
+
+				readInfoDto.Locations = append(readInfoDto.Locations, &locationInfo)
+				locationInfo.ReadIndices = append(locationInfo.ReadIndices, record.IndexInSam)
+			}
+
+		}
+
+		readSummary[readInfo.Qname] = readInfoDto
+	}
+
+	reads := make([]ReadOverviewInfo, 0)
+
+	for _, readInfo := range readSummary {
+
+		// fmt.Println(readInfo.Qname, ":", len(readInfo.Locations))
+		//
+		// for _, location := range readInfo.Locations {
+		// 	fmt.Println(location.Pair, location.Contig, location.Position)
+		// }
+
+		uniqueMappers := make(map[string]struct{})
+		for _, mapper := range readInfo.MappedBy {
+			uniqueMappers[mapper] = struct{}{}
+		}
+		readInfo.NumMappedBy = len(uniqueMappers)
+
+		for _, location := range readInfo.Locations {
+			uniqueMappers = make(map[string]struct{})
+			for _, mapper := range location.MappedBy {
+				uniqueMappers[mapper] = struct{}{}
+			}
+			location.NumMappedBy = len(uniqueMappers)
+		}
+
+		readInfo.NumLocations = len(readInfo.Locations)
+		reads = append(reads, *readInfo)
+	}
+
+	reads = make([]ReadOverviewInfo, 0, len(s.Handler.ReadInfos))
+
+	for _, readInfo := range s.Handler.ReadInfos {
+
+		qnameCluster := s.Handler.QnameCluster[readInfo.Qname]
+
+		numClusterR1 := len(qnameCluster.ClusterR1.SimilarRecords)
+		numClusterR2 := len(qnameCluster.ClusterR2.SimilarRecords)
+
+		locations := make([]*ReadLocationInfo, 0, numClusterR1+numClusterR2)
+
+		mappedBy := make(map[string]bool)
+
+		for _, cR1 := range qnameCluster.ClusterR1.SimilarRecords {
+
+			mappedByCluster := make(map[string]bool)
+			for _, r := range cR1 {
+				mappedBy[s.Handler.MapperInfos[r.MapperIndex].MapperName] = true
+				mappedByCluster[s.Handler.MapperInfos[r.MapperIndex].MapperName] = true
+			}
+			mappedByClusterList := make([]string, 0, len(mappedByCluster))
+			for mapperName := range mappedByCluster {
+				mappedByClusterList = append(mappedByClusterList, mapperName)
+			}
+			slices.Sort(mappedByClusterList)
+
+			locationInfo := ReadLocationInfo{
+				Pair:          "first",
+				Contig:        cR1[0].Rname,
+				Strand:        !cR1[0].Flag.IsReverseStrand(),
+				Position:      cR1[0].Pos,
+				Cigar:         cR1[0].CigarObj.StringUniform(),
+				CigarDetailed: cR1[0].CigarObj.String(),
+				NumMismatches: cR1[0].CigarObj.GetNumMismatches(),
+				NumGaps:       cR1[0].CigarObj.GetNumGaps(),
+				NumMappedBy:   len(mappedByCluster),
+				MappedBy:      mappedByClusterList,
+				ReadIndices:   make([]int, 0),
+			}
+
+			// TODO: add read indices
+			locations = append(locations, &locationInfo)
+		}
+
+		for _, cR2 := range qnameCluster.ClusterR2.SimilarRecords {
+
+			mappedByCluster := make(map[string]bool)
+			for _, r := range cR2 {
+				mappedBy[s.Handler.MapperInfos[r.MapperIndex].MapperName] = true
+				mappedByCluster[s.Handler.MapperInfos[r.MapperIndex].MapperName] = true
+			}
+			mappedByClusterList := make([]string, 0, len(mappedByCluster))
+			for mapperName := range mappedByCluster {
+				mappedByClusterList = append(mappedByClusterList, mapperName)
+			}
+			slices.Sort(mappedByClusterList)
+
+			locationInfo := ReadLocationInfo{
+				Pair:          "second",
+				Contig:        cR2[0].Rname,
+				Strand:        !cR2[0].Flag.IsReverseStrand(),
+				Position:      cR2[0].Pos,
+				Cigar:         cR2[0].CigarObj.StringUniform(),
+				CigarDetailed: cR2[0].CigarObj.String(),
+				NumMismatches: cR2[0].CigarObj.GetNumMismatches(),
+				NumGaps:       cR2[0].CigarObj.GetNumGaps(),
+				NumMappedBy:   len(mappedByCluster),
+				MappedBy:      mappedByClusterList,
+				ReadIndices:   make([]int, 0),
+			}
+
+			// TODO: add read indices
+			locations = append(locations, &locationInfo)
+		}
+
+		mappedByList := make([]string, 0, len(mappedBy))
+		for mapperName := range mappedBy {
+			mappedByList = append(mappedByList, mapperName)
+		}
+		slices.Sort(mappedByList)
+
+		distanceMean := (qnameCluster.ClusterR1.RecordDistanceMean + qnameCluster.ClusterR2.RecordDistanceMean) / 2.0
+
+		readOverviewInfo := ReadOverviewInfo{
+			Qname:           readInfo.Qname,
+			ReadLengthR1:    len(readInfo.SequenceFirstOfPair),
+			ReadLengthR2:    len(readInfo.SequenceSecondOfPair),
+			NumMappedBy:     len(mappedBy),
+			MappedBy:        mappedByList,
+			NumLocations:    len(locations),
+			Locations:       locations,
+			DistanceScore:   distanceMean,
+			ConfidenceLevel: qnameCluster.ConfidenceLevel,
+		}
+
+		reads = append(reads, readOverviewInfo)
+	}
+
+	return reads
+}
+
+type RecordWithMapperInfo struct {
+	Record *sam.Record `json:"record"`
+	Mapper string      `json:"mapper"`
+}
+
+type Interval struct {
+	Contig string `json:"contig"`
+	Start  int    `json:"start"`
+	End    int    `json:"end"`
+}
+
+type Cluster struct {
+	Interval      Interval `json:"interval"`
+	RecordIndices []int    `json:"recordIndices"`
+}
+
+type ReadDetailsInfo struct {
+	Records []RecordWithMapperInfo `json:"records"`
+	Cluster []Cluster              `json:"cluster"`
+}
+
+func (s *Server) getReadDetailsInfo(w http.ResponseWriter, r *http.Request) {
+
+	qname := r.URL.Query().Get("qname")
+
+	if qname == "" {
+		http.Error(w, "Missing qname parameter", http.StatusBadRequest)
+		return
+	}
+
+	readDetails := ReadDetailsInfo{
+		Records: make([]RecordWithMapperInfo, 0),
+		Cluster: make([]Cluster, 0),
+	}
+
+	for _, mapperName := range s.AnalysisService.MapperNames {
+
+		for _, record := range s.AnalysisService.MapperInfos[mapperName].RecordsByQname[qname] {
+
+			recordWithMapperInfo := RecordWithMapperInfo{
+				Record: record,
+				Mapper: mapperName,
+			}
+
+			readDetails.Records = append(readDetails.Records, recordWithMapperInfo)
+
+			foundCluster := false
+			for _, cluster := range readDetails.Cluster {
+
+				if cluster.Interval.Contig == record.Rname && cluster.Interval.Start <= record.Pos && cluster.Interval.End >= record.Pos {
+					foundCluster = true
+
+					readDetails.Records = append(readDetails.Records, recordWithMapperInfo)
+					// add the record index to the cluster
+					cluster.RecordIndices = append(cluster.RecordIndices, len(readDetails.Records)-1)
+				}
+			}
+
+			if !foundCluster {
+				// create a new cluster for this record
+				newCluster := Cluster{
+					Interval: Interval{
+						Contig: record.Rname,
+						Start:  record.Pos,
+						End:    record.Pos + len(record.Seq) - 1,
+					},
+					RecordIndices: []int{len(readDetails.Records) - 1},
+				}
+				readDetails.Cluster = append(readDetails.Cluster, newCluster)
+			}
+
+		}
+
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(readDetails)
 }

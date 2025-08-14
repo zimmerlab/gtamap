@@ -11,8 +11,8 @@ const ApiService = {
     getBaseUrl: function () {
         return this.baseUrl
     },
-    get: function (url) {
-        return axios.get(url)
+    get: function (url, params = {}) {
+        return axios.get(url, params)
     },
     post: function (url, body) {
         return axios.post(url, body)
