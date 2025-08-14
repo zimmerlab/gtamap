@@ -121,6 +121,26 @@ func GenerateInputForIndex(gtfFile *os.File, fastaFile *os.File, fastaIndexFile 
 	return annotation
 }
 
+func OpenFileScanner(file *os.File) (*bufio.Scanner, error) {
+	ext := strings.ToLower(filepath.Ext(file.Name()))
+
+	// check if file is accessible
+	if _, err := file.Stat(); err != nil {
+		return nil, fmt.Errorf("file not accessible: %w", err)
+	}
+
+	if ext == ".gz" {
+		gzReader, err := gzip.NewReader(file)
+		if err != nil {
+			file.Close()
+			return nil, err
+		}
+		return bufio.NewScanner(gzReader), nil
+	}
+
+	return bufio.NewScanner(file), nil
+}
+
 func OpenBlacklistScanner(blackList string) (*bufio.Scanner, error) {
 	ext := strings.ToLower(filepath.Ext(blackList))
 	file, err := os.Open(blackList)
