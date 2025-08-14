@@ -374,35 +374,20 @@ func GetBestPossibleMappingCombination(fwMatches []*ReadMatchResult, rvMatches [
 // iterates over gaps and checks lengths of region before and after gaps
 func hasLongDiagonals(mapping *ReadMatchResult) bool {
 	mapping.NormalizeRegions()
+	// INFO: DNA RNA MODE
+	// For DNA, l and r regions of junction should be longer
 	for _, region := range mapping.MatchedGenome.Regions {
-		if region.Length() < config.MinConfAnchorLength {
-			return false
+		if config.IsOriginRNA {
+			if region.Length() < config.MinConfAnchorLengthRNA {
+				return false
+			}
+		} else {
+			if region.Length() < config.MinConfAnchorLengthDNA {
+				return false
+			}
 		}
 	}
 	return true
-	// // used to keep track of the read position for the next gap
-	// readGapPos := 0
-	// // returns the index of the first region after which a gap occurs (-1 if no gap)
-	// indexRegionBeforeGap := mapping.MatchedGenome.GetGapIndexAfterPos(readGapPos)
-	//
-	// startIndex := 0
-	//
-	// // loop through all gaps in the read (-1 means there is no more gap)
-	// for indexRegionBeforeGap > -1 {
-	// 	if mapping.MatchedGenome.Regions[indexRegionBeforeGap].End-mapping.MatchedGenome.Regions[startIndex].Start < config.MinConfAnchorLength {
-	// 		return false
-	// 	}
-	// 	startIndex = indexRegionBeforeGap + 1
-	// 	readGapPos = mapping.MatchedGenome.Regions[indexRegionBeforeGap].End + 1
-	// 	indexRegionBeforeGap = mapping.MatchedGenome.GetGapIndexAfterPos(readGapPos)
-	// }
-	//
-	// if indexRegionBeforeGap == -1 && startIndex != 0 {
-	// 	if mapping.MatchedGenome.GetLastRegion().End-mapping.MatchedGenome.Regions[startIndex].Start < config.MinConfAnchorLength {
-	// 		return false
-	// 	}
-	// }
-	// return true
 }
 
 func (r *ReadMatchResult) GetCigar() (string, error) {
@@ -419,7 +404,8 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 		numMatchesSum := 0
 
 		if len(r.MatchedGenome.Regions) != len(r.MatchedRead.Regions) {
-			r.SyncRegions()
+			// r.SyncRegions()
+			r.NormalizeRegions()
 		}
 
 		// the regions in MatchedGenome and MatchedRead have the same dimensions
@@ -497,7 +483,8 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 		numMatchesSum := 0
 
 		if len(r.MatchedGenome.Regions) != len(r.MatchedRead.Regions) {
-			r.SyncRegions()
+			// r.SyncRegions()
+			r.NormalizeRegions()
 		}
 
 		// the regions in MatchedGenome and MatchedRead have the same dimensions
@@ -576,26 +563,26 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 // now the dimensions don't always add up -> we have to normalize the readRegions to match the genomeRegions
 // E.g if genomeRegions contains three regions (with a total length of 150), the read regions also should only
 // contain 3 regions
-func (r *ReadMatchResult) SyncRegions() {
-	adaptedReadRegions := make([]regionvector.Region, len(r.MatchedGenome.Regions))
-	originalStart, ok := r.MatchedRead.GetFirstRegion()
-	if ok {
-		for i, region := range r.MatchedGenome.Regions {
-			startRead, err := regionvector.GenomicCoordToReadCoord(originalStart.Start, region.Start, r.MatchedGenome.Regions)
-			if err != nil {
-				logrus.Errorf("Error while converting genomic coord to read coord")
-				logrus.Fatal(err)
-			}
-			stopRead, err := regionvector.GenomicCoordToReadCoord(originalStart.Start, region.End, r.MatchedGenome.Regions)
-			if err != nil {
-				logrus.Errorf("Error while converting genomic coord to read coord")
-				logrus.Fatal(err)
-			}
-			adaptedReadRegions[i] = regionvector.Region{Start: startRead, End: stopRead}
-		}
-		r.MatchedRead.Regions = adaptedReadRegions
-	}
-}
+// func (r *ReadMatchResult) SyncRegions() {
+// 	adaptedReadRegions := make([]regionvector.Region, len(r.MatchedGenome.Regions))
+// 	originalStart, ok := r.MatchedRead.GetFirstRegion()
+// 	if ok {
+// 		for i, region := range r.MatchedGenome.Regions {
+// 			startRead, err := regionvector.GenomicCoordToReadCoord(originalStart.Start, region.Start, r.MatchedGenome.Regions)
+// 			if err != nil {
+// 				logrus.Errorf("Error while converting genomic coord to read coord")
+// 				logrus.Fatal(err)
+// 			}
+// 			stopRead, err := regionvector.GenomicCoordToReadCoord(originalStart.Start, region.End, r.MatchedGenome.Regions)
+// 			if err != nil {
+// 				logrus.Errorf("Error while converting genomic coord to read coord")
+// 				logrus.Fatal(err)
+// 			}
+// 			adaptedReadRegions[i] = regionvector.Region{Start: startRead, End: stopRead}
+// 		}
+// 		r.MatchedRead.Regions = adaptedReadRegions
+// 	}
+// }
 
 // holds all relevant mapping information of potentially several hits per readpair
 // bundled into one type

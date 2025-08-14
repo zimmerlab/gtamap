@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/KleinSamuel/gtamap/src/config"
-	"github.com/KleinSamuel/gtamap/src/core/extraction"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper"
 	"github.com/KleinSamuel/gtamap/src/datawriter"
@@ -26,6 +26,15 @@ func printBanner() {
 }
 
 func main() {
+	// ff, errr := os.Create("cpu.pprof")
+	// if errr != nil {
+	// 	panic(errr)
+	// }
+	// defer ff.Close()
+	// if err := pprof.StartCPUProfile(ff); err != nil {
+	// 	panic(err)
+	// }
+	// defer pprof.StopCPUProfile()
 	parser := argparse.NewParser("gtamap", "Gene-centric spliced read mapping")
 
 	var cmdIndexPre *argparse.Command = parser.NewCommand("index-pre", "Extract gene sequences from genome.")
@@ -88,6 +97,9 @@ func main() {
 		Required: true,
 		Help:     "Nucleotide sequences (FASTA) file.",
 	})
+	var blacklistFileName *string = cmdIndex.String("", "blacklist", &argparse.Options{
+		Help: "Genome wide repeat annotation file used to combat signal regions (optional).",
+	})
 	var outputFileName *string = cmdIndex.String("", "output", &argparse.Options{
 		Required: true,
 		Help:     "Output file (file extension: .gtai).",
@@ -116,6 +128,10 @@ func main() {
 		Help:     "Output SAM file (file extension: .sam).",
 		Default:  "",
 	})
+	var readType *string = cmdMap.String("", "read-type", &argparse.Options{
+		Required: true,
+		Help:     "Specify read type (DNA or RNA).",
+	})
 	var logLevelMap *string = cmdMap.Selector("", "loglevel", []string{"ERROR", "INFO", "DEBUG"}, &argparse.Options{
 		Required: false,
 		Help:     "log output level",
@@ -126,51 +142,51 @@ func main() {
 		Help:     "Number of threads to use (default: all)",
 		Default:  -1,
 	})
-	var paralogFilePathMap *string = cmdMap.String("", "paralogs", &argparse.Options{
-		Required: false,
-		Help:     "Paralog region meta file for target regions.",
-		Default:  "",
-	})
+	// var paralogFilePathMap *string = cmdMap.String("", "paralogs", &argparse.Options{
+	// 	Required: false,
+	// 	Help:     "Paralog region meta file for target regions.",
+	// 	Default:  "",
+	// })
 
-	// paralog mode
-	var cmdParalogPre *argparse.Command = parser.NewCommand("paralog", "Extract known paralog genes from ENSEMBL Database and prepare paralog.csv for main target index extension.")
-	var geneIdsParalogPre *string = cmdParalogPre.String("", "geneids", &argparse.Options{
-		Required: false,
-		Help:     "Query Gene IDs for extracting paralog genes from DB (comma-separated).",
-	})
-	var indexDirParalogPre *string = cmdParalogPre.String("", "indexdir", &argparse.Options{
-		Required: false,
-		Help:     "Target directory for .gai index files of paralog genes.",
-		Default:  "index",
-	})
-	var fastaDirParalogPre *string = cmdParalogPre.String("", "fastadir", &argparse.Options{
-		Required: false,
-		Help:     "Target directory for .fa files of paralog genes.",
-		Default:  "fasta_in",
-	})
-	var speciesParalogPre *string = cmdParalogPre.String("", "species", &argparse.Options{
-		Required: false,
-		Help:     "Corresponding species of target genes. Species name needs to exist in https://www.ensembl.org/index.html",
-		Default:  "human",
-	})
-	var fastaFileParalogPre *string = cmdParalogPre.String("", "fasta", &argparse.Options{
-		Required: true,
-		Help:     "Nucleotide sequences (FASTA) file (currently only non-compressed). Note: A corresponding .fai file needs to be in the same dir as the genome.fa file.",
-	})
-	var gtfFileParalogPre *string = cmdParalogPre.String("", "gtf", &argparse.Options{
-		Required: true,
-		Help:     "Genome annotation (GTF) file (currently only non-compressed).",
-	})
-	var paralogMetaOutParalogPre *string = cmdParalogPre.String("", "meta", &argparse.Options{
-		Required: false,
-		Help:     "Prefix of paralog csv file.",
-		Default:  "paralogs",
-	})
-	var logLevelParalogPre *string = cmdParalogPre.Selector("", "loglevel", []string{"ERROR", "INFO", "DEBUG"}, &argparse.Options{
-		Required: false,
-		Help:     "Log output level.",
-		Default:  "INFO",
-	})
+	// OLD paralog mode (currently not used anymore)
+	// var cmdParalogPre *argparse.Command = parser.NewCommand("paralog", "Extract known paralog genes from ENSEMBL Database and prepare paralog.csv for main target index extension.")
+	// var geneIdsParalogPre *string = cmdParalogPre.String("", "geneids", &argparse.Options{
+	// 	Required: false,
+	// 	Help:     "Query Gene IDs for extracting paralog genes from DB (comma-separated).",
+	// })
+	// var indexDirParalogPre *string = cmdParalogPre.String("", "indexdir", &argparse.Options{
+	// 	Required: false,
+	// 	Help:     "Target directory for .gai index files of paralog genes.",
+	// 	Default:  "index",
+	// })
+	// var fastaDirParalogPre *string = cmdParalogPre.String("", "fastadir", &argparse.Options{
+	// 	Required: false,
+	// 	Help:     "Target directory for .fa files of paralog genes.",
+	// 	Default:  "fasta_in",
+	// })
+	// var speciesParalogPre *string = cmdParalogPre.String("", "species", &argparse.Options{
+	// 	Required: false,
+	// 	Help:     "Corresponding species of target genes. Species name needs to exist in https://www.ensembl.org/index.html",
+	// 	Default:  "human",
+	// })
+	// var fastaFileParalogPre *string = cmdParalogPre.String("", "fasta", &argparse.Options{
+	// 	Required: true,
+	// 	Help:     "Nucleotide sequences (FASTA) file (currently only non-compressed). Note: A corresponding .fai file needs to be in the same dir as the genome.fa file.",
+	// })
+	// var gtfFileParalogPre *string = cmdParalogPre.String("", "gtf", &argparse.Options{
+	// 	Required: true,
+	// 	Help:     "Genome annotation (GTF) file (currently only non-compressed).",
+	// })
+	// var paralogMetaOutParalogPre *string = cmdParalogPre.String("", "meta", &argparse.Options{
+	// 	Required: false,
+	// 	Help:     "Prefix of paralog csv file.",
+	// 	Default:  "paralogs",
+	// })
+	// var logLevelParalogPre *string = cmdParalogPre.Selector("", "loglevel", []string{"ERROR", "INFO", "DEBUG"}, &argparse.Options{
+	// 	Required: false,
+	// 	Help:     "Log output level.",
+	// 	Default:  "INFO",
+	// })
 
 	err := parser.Parse(os.Args)
 	if err != nil {
@@ -254,12 +270,18 @@ func main() {
 			logrus.Fatalf("Could not open output sam file: %v", err)
 		}
 
-		index.BuildAndSerializeGenomeIndex(fastaFile, outputFileIndex)
+		index.BuildAndSerializeGenomeIndex(fastaFile, blacklistFileName, outputFileIndex)
 
 	} else if cmdMap.Happened() {
 
 		level, _ := logrus.ParseLevel(*logLevelMap)
 		logrus.SetLevel(level)
+
+		if *readType != "DNA" && *readType != "RNA" {
+			log.Fatalf("Invalid read type: %s. Must be DNA or RNA.", *readType)
+		}
+
+		config.IsOriginRNA = *readType == "RNA"
 
 		printBanner()
 		logrus.Info("Mapping reads to given index")
@@ -273,76 +295,76 @@ func main() {
 
 		writer := datawriter.InitFromPath(*outputFileMap)
 
-		if *paralogFilePathMap != "" {
-			logrus.Info("Found paralog file. Reading in paralog indices.")
-			paralogFileMap, err := os.Open(*paralogFilePathMap)
-			if err != nil {
-				panic("Error reading provided paralog file. Make sure it exists")
-			}
-			genomeIndex.LoadParalogs(paralogFileMap)
-		}
+		// Old paralog logic where main index is extended by using paralog indices
+		// if *paralogFilePathMap != "" {
+		// 	logrus.Info("Found paralog file. Reading in paralog indices.")
+		// 	paralogFileMap, err := os.Open(*paralogFilePathMap)
+		// 	if err != nil {
+		// 		panic("Error reading provided paralog file. Make sure it exists")
+		// 	}
+		// 	genomeIndex.LoadParalogs(paralogFileMap)
+		// }
 
 		mapper.MapAll(genomeIndex, reader, writer, numThreads)
-
-	} else if cmdParalogPre.Happened() {
-		level, _ := logrus.ParseLevel(*logLevelParalogPre)
-		logrus.SetLevel(level)
-
-		printBanner()
-		logrus.Info("Scanning DB for paralogs of specified target IDs.")
-
-		// make output dirs if non existent
-		err := os.MkdirAll(*indexDirParalogPre, 0o755)
-		if err != nil {
-			logrus.Fatalf("Something went wrong creating dir %s: %s", *indexDirParalogPre, err)
-		}
-
-		err = os.MkdirAll(*fastaDirParalogPre, 0o755)
-		if err != nil {
-			logrus.Fatalf("Something went wrong creating dir %s: %s", *indexDirParalogPre, err)
-		}
-
-		// parsing gene ids from cmd parser arg
-		targetGeneIds := make([]string, 0)
-		if *geneIdsParalogPre != "" {
-			genes := strings.Split(*geneIdsParalogPre, ",")
-			for _, gene := range genes {
-				targetGeneIds = append(targetGeneIds, gene)
-			}
-		}
-
-		// I. get paralog seqs per target gene (a map where each target region has a set of paralog ids)
-		targetParalogs := extraction.GetParalogs(targetGeneIds, *speciesParalogPre)
-
-		// II. check if some of the gene ids are already present in --fastadir
-		paralogsToExtractSeq := index.OptimizeFastaExtraction(targetParalogs, fastaDirParalogPre)
-
-		// III. extract all identified non-existent paralogs into separate .fa files in '--fastadir'
-		for target, paralogs := range paralogsToExtractSeq {
-			if len(paralogs) > 0 {
-				logrus.Infof("Extracting %s paralog sequences of target region %s into %s", strconv.Itoa(len(paralogs)), target, *fastaDirParalogPre)
-				index.ExtractGeneSequenceFromGtfAndFastaForIndex(*gtfFileParalogPre, *fastaFileParalogPre,
-					*fastaDirParalogPre, paralogs, 0, 0, true)
-				logrus.Infof("Finished extracting %s paralog sequences of target region %s into %s", strconv.Itoa(len(paralogs)), target, *fastaDirParalogPre)
-			}
-		}
-
-		// IV. get only ids where index non-existent in --indexdir
-		paralogsToSerialize := index.OptimizeIndexSerialisation(targetParalogs, indexDirParalogPre)
-
-		// V. read in all seqs in '--fastadir' and serialize index into '--indexdir' for each paralog seq
-		index.BuildAndSerializeAll(paralogsToSerialize, indexDirParalogPre, fastaDirParalogPre)
-
-		// VI. gather abs paths to indices into map[target][]paralogIndexPaths
-		indexPaths := extraction.GetAbsPathsPerTarget(targetParalogs, indexDirParalogPre)
-
-		// VI. write paralogs.csv
-		metaOut := fmt.Sprintf("%s.csv", *paralogMetaOutParalogPre)
-		extraction.WriteParalogsPre(metaOut, indexPaths)
-		logrus.Infof("Wrote target to paralog mapping to destination file: %s", metaOut)
 
 	} else {
 		fmt.Println(parser.Usage("no valid command supplied"))
 		return
 	}
+	// else if cmdParalogPre.Happened() {
+	// 	level, _ := logrus.ParseLevel(*logLevelParalogPre)
+	// 	logrus.SetLevel(level)
+	//
+	// 	printBanner()
+	// 	logrus.Info("Scanning DB for paralogs of specified target IDs.")
+	//
+	// 	// make output dirs if non existent
+	// 	err := os.MkdirAll(*indexDirParalogPre, 0o755)
+	// 	if err != nil {
+	// 		logrus.Fatalf("Something went wrong creating dir %s: %s", *indexDirParalogPre, err)
+	// 	}
+	//
+	// 	err = os.MkdirAll(*fastaDirParalogPre, 0o755)
+	// 	if err != nil {
+	// 		logrus.Fatalf("Something went wrong creating dir %s: %s", *indexDirParalogPre, err)
+	// 	}
+	//
+	// 	// parsing gene ids from cmd parser arg
+	// 	targetGeneIds := make([]string, 0)
+	// 	if *geneIdsParalogPre != "" {
+	// 		genes := strings.Split(*geneIdsParalogPre, ",")
+	// 		for _, gene := range genes {
+	// 			targetGeneIds = append(targetGeneIds, gene)
+	// 		}
+	// 	}
+	//
+	// 	// I. get paralog seqs per target gene (a map where each target region has a set of paralog ids)
+	// 	targetParalogs := extraction.GetParalogs(targetGeneIds, *speciesParalogPre)
+	//
+	// 	// II. check if some of the gene ids are already present in --fastadir
+	// 	paralogsToExtractSeq := index.OptimizeFastaExtraction(targetParalogs, fastaDirParalogPre)
+	//
+	// 	// III. extract all identified non-existent paralogs into separate .fa files in '--fastadir'
+	// 	for target, paralogs := range paralogsToExtractSeq {
+	// 		if len(paralogs) > 0 {
+	// 			logrus.Infof("Extracting %s paralog sequences of target region %s into %s", strconv.Itoa(len(paralogs)), target, *fastaDirParalogPre)
+	// 			index.ExtractGeneSequenceFromGtfAndFastaForIndex(*gtfFileParalogPre, *fastaFileParalogPre,
+	// 				*fastaDirParalogPre, paralogs, 0, 0, true)
+	// 			logrus.Infof("Finished extracting %s paralog sequences of target region %s into %s", strconv.Itoa(len(paralogs)), target, *fastaDirParalogPre)
+	// 		}
+	// 	}
+	//
+	// 	// IV. get only ids where index non-existent in --indexdir
+	// 	paralogsToSerialize := index.OptimizeIndexSerialisation(targetParalogs, indexDirParalogPre)
+	//
+	// 	// V. read in all seqs in '--fastadir' and serialize index into '--indexdir' for each paralog seq
+	// 	index.BuildAndSerializeAll(paralogsToSerialize, indexDirParalogPre, fastaDirParalogPre)
+	//
+	// 	// VI. gather abs paths to indices into map[target][]paralogIndexPaths
+	// 	indexPaths := extraction.GetAbsPathsPerTarget(targetParalogs, indexDirParalogPre)
+	//
+	// 	// VI. write paralogs.csv
+	// 	metaOut := fmt.Sprintf("%s.csv", *paralogMetaOutParalogPre)
+	// 	extraction.WriteParalogsPre(metaOut, indexPaths)
+	// 	logrus.Infof("Wrote target to paralog mapping to destination file: %s", metaOut)
 }

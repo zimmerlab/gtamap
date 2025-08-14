@@ -24,6 +24,13 @@ var complementMap = map[string]string{
 	"C": "G",
 }
 
+func Abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
 func ScoreSpliceSites(donorFirstBase byte, donorSecondBase byte, acceptorFirstBase byte,
 	acceptorSecondBase byte, isForwardStrand bool,
 ) (int, bool) {
