@@ -76,12 +76,8 @@ func remapReadPair(readPairMapping *mapperutils.ReadPairMatchResults, annotation
 	uniqFwRemaps := getUniqRemaps(fwRemaps, len(*readPairMapping.ReadPair.ReadR1.Sequence))
 	uniqRvRemaps := getUniqRemaps(rvRemaps, len(*readPairMapping.ReadPair.ReadR2.Sequence))
 
-	if len(uniqFwRemaps) > 0 {
-		readPairMapping.Fw = uniqFwRemaps
-	}
-	if len(uniqRvRemaps) > 0 {
-		readPairMapping.Rv = uniqRvRemaps
-	}
+	readPairMapping.Fw = uniqFwRemaps
+	readPairMapping.Rv = uniqRvRemaps
 }
 
 func getUniqRemaps(r []*mapperutils.ReadMatchResult, readLength int) []*mapperutils.ReadMatchResult {
@@ -1501,6 +1497,7 @@ func getBestCandidateSections(sections []*RemapSection) []*RemapSection {
 
 func scoreRightOptions(rightPaths [][]regionvector.Region, startInRead int, readSeq *[]byte, refSeq *[]byte) []*RemapSection {
 	remapSectionsRight := make([]*RemapSection, 0)
+PathLoop:
 	for _, path := range rightPaths {
 		currSection := RemapSection{
 			MatchedGenome: path,
@@ -1516,6 +1513,9 @@ func scoreRightOptions(rightPaths [][]regionvector.Region, startInRead int, read
 
 			// score mm
 			for refPos := genomicRegion.Start; refPos < genomicRegion.End; refPos++ {
+				if refPos >= len(*refSeq) || lastStart >= len(*readSeq) || lastStart < 0 {
+					continue PathLoop // dont append this path to remapSectionsRight since remap path is out of gene bounds
+				}
 				if (*refSeq)[refPos] != (*readSeq)[lastStart] && lastStart != startInRead {
 					currSection.Mm = append(currSection.Mm, lastStart)
 				}
@@ -1532,6 +1532,7 @@ func scoreRightOptions(rightPaths [][]regionvector.Region, startInRead int, read
 
 func scoreLeftOptions(leftPaths [][]regionvector.Region, startInRead int, readSeq *[]byte, refSeq *[]byte) []*RemapSection {
 	remapSectionsLeft := make([]*RemapSection, 0)
+PathLoop:
 	for _, path := range leftPaths {
 		// WARN: left pasths are inverted ;)
 		currSection := RemapSection{
@@ -1548,6 +1549,9 @@ func scoreLeftOptions(leftPaths [][]regionvector.Region, startInRead int, readSe
 
 			// score mm
 			for refPos := genomicRegion.End - 1; refPos >= genomicRegion.Start; refPos-- {
+				if refPos < 0 || lastStart >= len(*readSeq) || lastStart < 0 {
+					continue PathLoop // skip this path and don't append to remapSectionsLeft since out of gene bounds
+				}
 				if (*refSeq)[refPos] != (*readSeq)[lastStart-1] && startInRead != lastStart {
 					currSection.Mm = append(currSection.Mm, lastStart-1)
 				}
@@ -1596,36 +1600,30 @@ func extractMMofAnchor(anchor regionvector.Region, mms []int) []int {
 }
 
 func fillGaps(readMatchResult *mapperutils.ReadMatchResult, genomeIndex *index.GenomeIndex, read *fastq.Read) {
-	readVector := readMatchResult.MatchedRead
-	genomeVector := readMatchResult.MatchedGenome
 	mm := readMatchResult.MismatchesRead
+	// used to keep track of the read position for the next gap
+	readGapPos := 0
+	// returns the index of the first region after which a gap occurs (-1 if no gap)
+	indexRegionBeforeGap := readMatchResult.MatchedRead.GetGapIndexAfterPos(readGapPos)
 
-	for i := 0; i < len(readVector.Regions)-1; i++ {
-		gapStart := readVector.Regions[i].End
-		gapEnd := readVector.Regions[i+1].Start
-		gapGenomeStart := genomeVector.Regions[i].End
-		gapGenomeEnd := genomeVector.Regions[i+1].Start
-		gapRead := &regionvector.Region{
-			Start: gapStart,
-			End:   gapEnd,
-		}
-		gapGenome := &regionvector.Region{
-			Start: gapGenomeStart,
-			End:   gapGenomeEnd,
-		}
-		if gapStart != gapEnd {
+	// loop through all gaps in the read (-1 means there is no more gap)
+	for indexRegionBeforeGap > -1 {
+
+		gapRead, _ := readMatchResult.MatchedRead.GetGapAfterRegionIndex(indexRegionBeforeGap)
+		gapGenome, _ := readMatchResult.MatchedGenome.GetGapAfterRegionIndex(indexRegionBeforeGap)
+		gapStart := gapRead.Start
+		gapEnd := gapRead.End
+		gapGenomeStart := gapGenome.Start
+		gapGenomeEnd := gapGenome.End
+
+		if gapRead.Start != gapRead.End {
 			// if we end up in here, it means our map looks like this
 			// [0,97], [113, 150] -> mid block is missing
 
 			// is there enough space in the genome gap to fill in the missing read portion
-			if gapRead.Length() <= 0 {
-				// fmt.Println(readMatchResult.MatchedGenome.Regions)
-				// fmt.Println(readMatchResult.MatchedRead.Regions)
-				// fmt.Println(read.Header)
-			}
 			if gapEnd-gapStart <= gapGenome.End-gapGenome.Start && gapRead.Length() > 0 {
 				// is insert
-				bestSplit := determineBestSplit(genomeIndex, read, readMatchResult.SequenceIndex, gapRead, gapGenome)
+				bestSplit := determineBestSplit(genomeIndex, read, readMatchResult.SequenceIndex, &gapRead, &gapGenome)
 
 				if bestSplit == -1 {
 					// this should not happen because a split should be found every time
@@ -1639,8 +1637,8 @@ func fillGaps(readMatchResult *mapperutils.ReadMatchResult, genomeIndex *index.G
 				if bestSplit > 0 {
 
 					// add the split to the readMatchResult
-					readVector.AddRegionNonOverlappingPanic(gapRead.Start, gapRead.Start+bestSplit)
-					genomeVector.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.Start+bestSplit)
+					readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(gapRead.Start, gapRead.Start+bestSplit)
+					readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.Start+bestSplit)
 
 					// the read and genome sequences from the start of the gap to the best split (left)
 					readByte := (*read.Sequence)[gapRead.Start : gapRead.Start+bestSplit]
@@ -1660,8 +1658,8 @@ func fillGaps(readMatchResult *mapperutils.ReadMatchResult, genomeIndex *index.G
 				if bestSplit < gapRead.Length() {
 
 					// add the split to the readMatchResult
-					readVector.AddRegionNonOverlappingPanic(gapRead.End-(gapRead.Length()-bestSplit), gapRead.End)
-					genomeVector.AddRegionNonOverlappingPanic(gapGenome.End-(gapRead.Length()-bestSplit), gapGenome.End)
+					readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(gapRead.End-(gapRead.Length()-bestSplit), gapRead.End)
+					readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.End-(gapRead.Length()-bestSplit), gapGenome.End)
 
 					// the read and genome sequences from the best split to the end of the gap (right)
 					readByte := (*read.Sequence)[gapRead.End-(gapRead.Length()-bestSplit) : gapRead.End]
@@ -1680,6 +1678,7 @@ func fillGaps(readMatchResult *mapperutils.ReadMatchResult, genomeIndex *index.G
 			} else {
 				if gapGenome.Length() == 0 {
 					// there's no gap at all in genome
+					indexRegionBeforeGap = readMatchResult.MatchedRead.GetGapIndexAfterPos(gapRead.End + 1)
 					continue
 				}
 				// gap in genome smaller that read gap, we can minimize mm in that region
@@ -1743,6 +1742,7 @@ func fillGaps(readMatchResult *mapperutils.ReadMatchResult, genomeIndex *index.G
 				readMatchResult.NormalizeRegions()
 			}
 		}
+		indexRegionBeforeGap = readMatchResult.MatchedRead.GetGapIndexAfterPos(gapRead.End + 1)
 	}
 }
 

@@ -870,6 +870,7 @@ func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.Genome
 		// INFO: DNA RNA
 		// Only annotate if RNA
 		if res.MatchedGenome.HasGaps() {
+			res.NormalizeRegions()
 			annotateSpliceSites(read, genomeIndex, res)
 		}
 
