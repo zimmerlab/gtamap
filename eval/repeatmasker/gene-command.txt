@@ -1,0 +1,1 @@
+grep -vP "^#" Homo_sapiens.GRCh38.114.gtf | awk '$3=="gene" && ($1 < 23 || $1=="X" || $1=="Y" || $1=="MT") {chr=($1 < 23 || $1 =="X" || $1=="Y" ? "chr"$1 : ($1=="MT" ? "chrM" : "chr"$1)); if (match($0, /(ENSG[0-9]+)/, a)) print chr","$4","$5","a[1]}' > ~/test/py-test/genes.csv
