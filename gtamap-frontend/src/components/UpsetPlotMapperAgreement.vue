@@ -36,7 +36,7 @@ import UpsetPlot from "./UpsetPlot.vue";
 const props = defineProps({
   url: {
     type: String,
-    default: "/api/upsetDataRecordPos"
+    default: "/api/upsetData"
   },
   title: {
     type: String,
@@ -57,16 +57,6 @@ const checkboxes = ref({
   targetRegion: false
 })
 
-const computedUrl = computed(() => {
-  if (checkboxes.value.cigar) {
-    return "/api/upsetDataRecordPosCigar"
-  }
-  if (checkboxes.value.contigPos) {
-    return "/api/upsetDataRecordPos"
-  }
-  return "/api/upsetDataRead"
-})
-
 const computedTitle = computed(() => {
   const parts = []
   
@@ -74,13 +64,16 @@ const computedTitle = computed(() => {
   if (checkboxes.value.contigPos) parts.push("Contig + Position")
   if (checkboxes.value.cigar) parts.push("CIGAR")
   
-  return "Mapper Agreement (" + parts.join(" + ") + ")"
+  // return "Mapper Agreement (" + parts.join(" + ") + ")"
+  return ""
 })
 
-const fetchData = function() {
-  ApiService.get(computedUrl.value, {
+const fetchData = function(url) {
+  ApiService.get(props.url, {
     params: {
-      onlyTargetRegion: checkboxes.value.targetRegion
+      onlyTargetRegion: checkboxes.value.targetRegion,
+      usePosition: checkboxes.value.contigPos,
+      useCigar: checkboxes.value.cigar
     }
   })
     .then(response => {
@@ -96,7 +89,9 @@ const fetchData = function() {
     })
 }
 
-watch([computedUrl, () => checkboxes.value.targetRegion], () => {
+watch([() => checkboxes.value.targetRegion,
+  () => checkboxes.value.contigPos,
+  () => checkboxes.value.cigar], () => {
   fetchData()
 })
 

@@ -39,12 +39,12 @@ func (s *Server) InitRoutes() {
 
 	api.HandleFunc("/readSummaryTable", s.getReadSummaryTable).Methods("GET")
 
-	api.HandleFunc("/upsetDataRead", s.upsetDataRead).Methods("GET")
-	api.HandleFunc("/upsetDataRecordPos", s.upsetDataRecordPos).Methods("GET")
-	api.HandleFunc("/upsetDataRecordPosCigar", s.upsetDataRecordPosCigar).Methods("GET")
+	api.HandleFunc("/upsetData", s.upsetData).Methods("GET")
+	// api.HandleFunc("/upsetDataRecordPos", s.upsetDataRecordPos).Methods("GET")
+	// api.HandleFunc("/upsetDataRecordPosCigar", s.upsetDataRecordPosCigar).Methods("GET")
 
-	api.HandleFunc("/getRecordXMapperByUpsetElementName", s.getRecordXMapperByUpsetElementName).Methods("GET")
-	api.HandleFunc("/getRecordXMapperByUpsetElementNames", s.getRecordXMapperByUpsetElementNames).Methods("POST")
+	// api.HandleFunc("/getRecordXMapperByUpsetElementName", s.getRecordXMapperByUpsetElementName).Methods("GET")
+	// api.HandleFunc("/getRecordXMapperByUpsetElementNames", s.getRecordXMapperByUpsetElementNames).Methods("POST")
 
 	//api.HandleFunc("/readNumMatchesDistribution", s.readNumMatchesDistribution).Methods("GET")
 	api.HandleFunc("/readMultimappingDensityData", s.readMultimappingDensityData).Methods("GET")
@@ -126,148 +126,78 @@ type UpsetElement struct {
 	Sets []string `json:"sets"`
 }
 
-func (s *Server) upsetDataRead(w http.ResponseWriter, r *http.Request) {
+func (s *Server) upsetData(w http.ResponseWriter, r *http.Request) {
 
 	onlyTargetRegion := false
 	if val := r.URL.Query().Get("onlyTargetRegion"); val == "true" {
 		onlyTargetRegion = true
 	}
+	usePosition := false
+	if val := r.URL.Query().Get("usePosition"); val == "true" {
+		usePosition = true
+	}
+	useCigar := false
+	if val := r.URL.Query().Get("useCigar"); val == "true" {
+		useCigar = true
+	}
 
 	data := make([]UpsetElement, 0)
 
-	for _, readInfo := range s.Handler.ReadInfos {
-		qname := readInfo.Qname
+	for _, qnameClust := range s.Handler.QnameCluster {
 
-		sets := make([]string, 0)
+		set := make(map[string][]string)
 
-		for i, qnameMap := range s.Handler.QnamesByMapper {
-			if _, exists := qnameMap[qname]; !exists {
+		for _, c1 := range qnameClust.ClusterR1.Records {
+
+			// skip reads that do not map to the target region of flag is set
+			if onlyTargetRegion && (c1.Rname != config.GetTargetContig() ||
+				!c1.MappedGenome.Overlaps(config.GetTargetStart(), config.GetTargetEnd())) {
 				continue
 			}
-			if onlyTargetRegion {
-				found := false
-				for _, record := range qnameMap[qname] {
-					if record.Rname != config.GetTargetContig() {
-						continue
-					}
-					if record.MappedGenome.Overlaps(config.GetTargetStart(), config.GetTargetEnd()) {
-						found = true
-						break
-					}
-				}
-				if !found {
-					continue
-				}
+
+			readKey := getReadKey(c1, "R1", usePosition, useCigar)
+
+			if _, exists := set[readKey]; !exists {
+				set[readKey] = make([]string, 0)
 			}
-			sets = append(sets, s.Handler.MapperInfos[i].MapperName)
+			set[readKey] = append(set[readKey], s.Handler.MapperInfos[c1.MapperIndex].MapperName)
+		}
+		for _, c2 := range qnameClust.ClusterR2.Records {
+			// skip reads that do not map to the target region of flag is set
+			if onlyTargetRegion && (c2.Rname != config.GetTargetContig() ||
+				!c2.MappedGenome.Overlaps(config.GetTargetStart(), config.GetTargetEnd())) {
+				continue
+			}
+
+			readKey := getReadKey(c2, "R2", usePosition, useCigar)
+
+			if _, exists := set[readKey]; !exists {
+				set[readKey] = make([]string, 0)
+			}
+			set[readKey] = append(set[readKey], s.Handler.MapperInfos[c2.MapperIndex].MapperName)
 		}
 
-		elem := UpsetElement{
-			Name: qname,
-			Sets: sets,
+		for qname, mapperNames := range set {
+			data = append(data, UpsetElement{
+				Name: qname,
+				Sets: mapperNames,
+			})
 		}
-
-		data = append(data, elem)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(data)
 }
 
-func (s *Server) upsetDataRecordPos(w http.ResponseWriter, r *http.Request) {
-
-	onlyTargetRegion := false
-	if val := r.URL.Query().Get("onlyTargetRegion"); val == "true" {
-		onlyTargetRegion = true
+func getReadKey(record *EnhancedRecord, prefix string, usePosition bool, useCigar bool) string {
+	readKey := prefix + "::" + record.Qname
+	if usePosition {
+		readKey += "::" + strconv.Itoa(record.Pos)
 	}
-
-	data := make([]UpsetElement, 0)
-
-	recordPosMap := make(map[string]map[string]bool)
-
-	for mapperName, mapperInfo := range s.AnalysisService.MapperInfos {
-
-		for _, record := range mapperInfo.ParsedFile.Records {
-
-			if onlyTargetRegion && record.Rname != config.GetTargetContig() {
-				continue
-			}
-
-			id := record.Qname + "::" + strconv.Itoa(record.Pos)
-
-			if _, exists := recordPosMap[id]; !exists {
-				recordPosMap[id] = make(map[string]bool)
-			}
-
-			recordPosMap[id][mapperName] = true
-		}
+	if useCigar {
+		readKey += "::" + record.UniformCigar()
 	}
-
-	for id, mappers := range recordPosMap {
-
-		mapperList := make([]string, 0, len(mappers))
-		for mapperName := range mappers {
-			mapperList = append(mapperList, mapperName)
-		}
-
-		elem := UpsetElement{
-			Name: id,
-			Sets: mapperList,
-		}
-
-		data = append(data, elem)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
-}
-
-func (s *Server) upsetDataRecordPosCigar(w http.ResponseWriter, r *http.Request) {
-
-	onlyTargetRegion := false
-	if val := r.URL.Query().Get("onlyTargetRegion"); val == "true" {
-		onlyTargetRegion = true
-	}
-
-	data := make([]UpsetElement, 0)
-
-	recordPosMap := make(map[string]map[string]bool)
-
-	for mapperName, mapperInfo := range s.AnalysisService.MapperInfos {
-
-		for _, record := range mapperInfo.ParsedFile.Records {
-
-			if onlyTargetRegion && record.Rname != config.GetTargetContig() {
-				continue
-			}
-
-			id := record.Qname + "::" + strconv.Itoa(record.Pos) + "::" + record.UniformCigar()
-
-			if _, exists := recordPosMap[id]; !exists {
-				recordPosMap[id] = make(map[string]bool)
-			}
-
-			recordPosMap[id][mapperName] = true
-		}
-	}
-
-	for id, mappers := range recordPosMap {
-
-		mapperList := make([]string, 0, len(mappers))
-		for mapperName := range mappers {
-			mapperList = append(mapperList, mapperName)
-		}
-
-		elem := UpsetElement{
-			Name: id,
-			Sets: mapperList,
-		}
-
-		data = append(data, elem)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
+	return readKey
 }
 
 type UpsetElementNamesDto struct {
@@ -286,59 +216,55 @@ func (s *Server) getRecordXMapperByUpsetElementNames(w http.ResponseWriter, r *h
 	fmt.Println("len names:", len(dto.Names))
 }
 
-func testRecords(names []string) {
-
-}
-
-func (s *Server) getRecordXMapperByUpsetElementName(w http.ResponseWriter, r *http.Request) {
-
-	name := r.URL.Query().Get("name")
-
-	fmt.Println("upset element name:", name)
-
-	parts := strings.Split(name, "::")
-
-	if len(parts) < 1 || len(parts) > 3 {
-		http.Error(w, "Invalid name format", http.StatusBadRequest)
-		return
-	}
-
-	qname := parts[0]
-	pos, err := strconv.Atoi(parts[1])
-	if err != nil {
-		http.Error(w, "Invalid position in name", http.StatusBadRequest)
-		return
-	}
-	cigar := ""
-	if len(parts) == 3 {
-		cigar = parts[2]
-	}
-
-	mapperToRecord := make(map[string][]sam.Record)
-
-	for mapperName, mapperInfo := range s.AnalysisService.MapperInfos {
-
-		for _, record := range mapperInfo.ParsedFile.Records {
-
-			qnameMatches := record.Qname == qname
-			posMatches := record.Pos == pos
-			cigarMatches := true
-			if len(parts) == 3 {
-				cigarMatches = record.UniformCigar() == cigar
-			}
-
-			if qnameMatches && posMatches && cigarMatches {
-				if _, exists := mapperToRecord[mapperName]; !exists {
-					mapperToRecord[mapperName] = make([]sam.Record, 0)
-				}
-				mapperToRecord[mapperName] = append(mapperToRecord[mapperName], record)
-			}
-		}
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(mapperToRecord)
-}
+// func (s *Server) getRecordXMapperByUpsetElementName(w http.ResponseWriter, r *http.Request) {
+//
+// 	name := r.URL.Query().Get("name")
+//
+// 	fmt.Println("upset element name:", name)
+//
+// 	parts := strings.Split(name, "::")
+//
+// 	if len(parts) < 1 || len(parts) > 3 {
+// 		http.Error(w, "Invalid name format", http.StatusBadRequest)
+// 		return
+// 	}
+//
+// 	qname := parts[0]
+// 	pos, err := strconv.Atoi(parts[1])
+// 	if err != nil {
+// 		http.Error(w, "Invalid position in name", http.StatusBadRequest)
+// 		return
+// 	}
+// 	cigar := ""
+// 	if len(parts) == 3 {
+// 		cigar = parts[2]
+// 	}
+//
+// 	mapperToRecord := make(map[string][]sam.Record)
+//
+// 	for mapperName, mapperInfo := range s.AnalysisService.MapperInfos {
+//
+// 		for _, record := range mapperInfo.ParsedFile.Records {
+//
+// 			qnameMatches := record.Qname == qname
+// 			posMatches := record.Pos == pos
+// 			cigarMatches := true
+// 			if len(parts) == 3 {
+// 				cigarMatches = record.UniformCigar() == cigar
+// 			}
+//
+// 			if qnameMatches && posMatches && cigarMatches {
+// 				if _, exists := mapperToRecord[mapperName]; !exists {
+// 					mapperToRecord[mapperName] = make([]sam.Record, 0)
+// 				}
+// 				mapperToRecord[mapperName] = append(mapperToRecord[mapperName], record)
+// 			}
+// 		}
+// 	}
+//
+// 	w.Header().Set("Content-Type", "application/json")
+// 	json.NewEncoder(w).Encode(mapperToRecord)
+// }
 
 //func (s *Server) readNumMatchesDistribution(w http.ResponseWriter, r *http.Request) {
 //
@@ -776,20 +702,17 @@ func (s *Server) getCombinedSam() string {
 	builder.WriteString("@HD\tVN:1.6\tSO:unsorted\n")
 	builder.WriteString(fmt.Sprintf("@SQ\tSN:%s\tLN:%d\n", config.GetTargetContig(), config.GetTargetEnd()-config.GetTargetStart()+1))
 
-	for _, mapperName := range s.AnalysisService.MapperNames {
-		for _, records := range s.AnalysisService.MapperInfos[mapperName].RecordsByQname {
-			for _, record := range records {
-
-				// only include records that map to the target region
-				isOnTargetContig := record.Rname == config.GetTargetContig()
-				isInTargetRegion := record.Pos >= config.GetTargetStart() && record.Pos <= config.GetTargetEnd()
-				if !isOnTargetContig || !isInTargetRegion {
-					continue
-				}
-
-				builder.WriteString(record.StringWithMapperInfo(config.GetTargetStart(), mapperName))
-				builder.WriteString("\n")
+	for mIndex, mapperInfo := range s.Handler.MapperInfos {
+		for _, record := range s.Handler.RecordsByMapper[mIndex] {
+			// only include records that map to the target region
+			isOnTargetContig := record.Rname == config.GetTargetContig()
+			isInTargetRegion := record.Pos >= config.GetTargetStart() && record.Pos <= config.GetTargetEnd()
+			if !isOnTargetContig || !isInTargetRegion {
+				continue
 			}
+
+			builder.WriteString(record.StringWithMapperInfo(config.GetTargetStart(), mapperInfo.MapperName))
+			builder.WriteString("\n")
 		}
 	}
 
@@ -1175,12 +1098,6 @@ func (s *Server) ReadSummaryTableData() []ReadOverviewInfo {
 	reads := make([]ReadOverviewInfo, 0)
 
 	for _, readInfo := range readSummary {
-
-		// fmt.Println(readInfo.Qname, ":", len(readInfo.Locations))
-		//
-		// for _, location := range readInfo.Locations {
-		// 	fmt.Println(location.Pair, location.Contig, location.Position)
-		// }
 
 		uniqueMappers := make(map[string]struct{})
 		for _, mapper := range readInfo.MappedBy {

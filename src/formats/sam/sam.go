@@ -6,6 +6,9 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/KleinSamuel/gtamap/src/formats/cigar"
+	"github.com/sirupsen/logrus"
 )
 
 const Version string = "1.6"
@@ -62,10 +65,12 @@ type Record struct {
 }
 
 func (entry *Record) UniformCigar() string {
-	// replace all occurrences of "X" and "=" in the CIGAR string with "M"
-	cigar := strings.ReplaceAll(entry.Cigar, "X", "M")
-	cigar = strings.ReplaceAll(cigar, "=", "M")
-	return cigar
+	cigar, err := cigar.NewCigarFromString(entry.Cigar)
+	if err != nil {
+		logrus.Error("Error creating CIGAR from string:", err)
+		return "NA"
+	}
+	return cigar.StringUniform()
 }
 
 func (entry *Record) String() string {

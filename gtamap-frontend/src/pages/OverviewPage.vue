@@ -42,7 +42,7 @@
 
     <div class="tw:py-2 tw:flex tw:flex-row">
       <div class="tw:flex-1"></div>
-      <UpsetPlotReadPos title="" url="/api/upsetDataRecordPos"></UpsetPlotReadPos>
+      <UpsetPlotReadPos title="" url="/api/upsetData"></UpsetPlotReadPos>
       <div class="tw:flex-1"></div>
     </div>
 
