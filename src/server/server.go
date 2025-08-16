@@ -1015,109 +1015,7 @@ type ReadLocationInfo struct {
 
 func (s *Server) ReadSummaryTableData() []ReadOverviewInfo {
 
-	readSummary := make(map[string]*ReadOverviewInfo)
-
-	for _, readInfo := range s.Handler.ReadInfos {
-
-		readInfoDto := &ReadOverviewInfo{
-			Qname:        readInfo.Qname,
-			ReadLengthR1: len(readInfo.SequenceFirstOfPair),
-			ReadLengthR2: len(readInfo.SequenceSecondOfPair),
-			NumMappedBy:  0,
-			MappedBy:     make([]string, 0),
-			NumLocations: 0,
-			Locations:    make([]*ReadLocationInfo, 0),
-		}
-
-		for mapperIndex, qnameMap := range s.Handler.QnamesByMapper {
-
-			mapperName := s.Handler.MapperInfos[mapperIndex].MapperName
-
-			// check if the read is mapped by this mapper
-			if _, exists := qnameMap[readInfo.Qname]; !exists {
-				continue
-			}
-
-			records := qnameMap[readInfo.Qname]
-
-			readInfoDto.MappedBy = append(readInfoDto.MappedBy, mapperName)
-
-			for _, record := range records {
-
-				pair := "none"
-				if record.Flag.IsFirstInPair() {
-					pair = "first"
-				} else if record.Flag.IsSecondInPair() {
-					pair = "second"
-				}
-
-				found := false
-				for _, o := range readInfoDto.Locations {
-
-					sameReadMate := o.Pair == pair
-					sameContig := o.Contig == record.Rname
-					sameStand := o.Strand == !record.Flag.IsReverseStrand()
-					samePosition := o.Position == record.Pos
-					sameCigar := o.CigarDetailed == record.CigarObj.String()
-
-					if sameReadMate && sameContig && sameStand && samePosition && sameCigar {
-						o.MappedBy = append(o.MappedBy, mapperName)
-						o.ReadIndices = append(o.ReadIndices, record.IndexInSam)
-						found = true
-						break
-					}
-				}
-
-				if found {
-					continue
-				}
-
-				locationInfo := ReadLocationInfo{
-					Pair:          pair,
-					Contig:        record.Rname,
-					Strand:        !record.Flag.IsReverseStrand(),
-					Position:      record.Pos,
-					Cigar:         record.CigarObj.StringUniform(),
-					CigarDetailed: record.CigarObj.String(),
-					NumMismatches: record.CigarObj.GetNumMismatches(),
-					NumGaps:       record.CigarObj.GetNumGaps(),
-					NumMappedBy:   1,
-					MappedBy:      []string{mapperName},
-					ReadIndices:   make([]int, 0),
-				}
-
-				readInfoDto.Locations = append(readInfoDto.Locations, &locationInfo)
-				locationInfo.ReadIndices = append(locationInfo.ReadIndices, record.IndexInSam)
-			}
-
-		}
-
-		readSummary[readInfo.Qname] = readInfoDto
-	}
-
-	reads := make([]ReadOverviewInfo, 0)
-
-	for _, readInfo := range readSummary {
-
-		uniqueMappers := make(map[string]struct{})
-		for _, mapper := range readInfo.MappedBy {
-			uniqueMappers[mapper] = struct{}{}
-		}
-		readInfo.NumMappedBy = len(uniqueMappers)
-
-		for _, location := range readInfo.Locations {
-			uniqueMappers = make(map[string]struct{})
-			for _, mapper := range location.MappedBy {
-				uniqueMappers[mapper] = struct{}{}
-			}
-			location.NumMappedBy = len(uniqueMappers)
-		}
-
-		readInfo.NumLocations = len(readInfo.Locations)
-		reads = append(reads, *readInfo)
-	}
-
-	reads = make([]ReadOverviewInfo, 0, len(s.Handler.ReadInfos))
+	reads := make([]ReadOverviewInfo, 0, len(s.Handler.ReadInfos))
 
 	for _, readInfo := range s.Handler.ReadInfos {
 
@@ -1157,7 +1055,10 @@ func (s *Server) ReadSummaryTableData() []ReadOverviewInfo {
 				ReadIndices:   make([]int, 0),
 			}
 
-			// TODO: add read indices
+			for _, r := range cR1 {
+				locationInfo.ReadIndices = append(locationInfo.ReadIndices, r.IndexInSam)
+			}
+
 			locations = append(locations, &locationInfo)
 		}
 
@@ -1188,7 +1089,10 @@ func (s *Server) ReadSummaryTableData() []ReadOverviewInfo {
 				ReadIndices:   make([]int, 0),
 			}
 
-			// TODO: add read indices
+			for _, r := range cR2 {
+				locationInfo.ReadIndices = append(locationInfo.ReadIndices, r.IndexInSam)
+			}
+
 			locations = append(locations, &locationInfo)
 		}
 
