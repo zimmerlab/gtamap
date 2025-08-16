@@ -40,10 +40,13 @@
 
 <!--    <MapperMultimappingParallelPlot id="mapper-multimap-parallel"></MapperMultimappingParallelPlot>-->
 
-    <div class="tw:py-2 tw:flex tw:flex-row">
-      <div class="tw:flex-1"></div>
-      <UpsetPlotReadPos title="" url="/api/upsetData"></UpsetPlotReadPos>
-      <div class="tw:flex-1"></div>
+    <div class="tw:px-12 tw:mb-6">
+      <div class="tw:border tw:border-gray-300 tw:rounded tw:p-4">
+        <h3 class="tw:text-lg tw:font-bold tw:mb-4 tw:text-center">Mapper Agreement Analysis</h3>
+        <div class="tw:flex tw:justify-center">
+          <UpsetPlotReadPos title="" url="/api/upsetData"></UpsetPlotReadPos>
+        </div>
+      </div>
     </div>
 
 <!--    <div class="tw:py-2 tw:flex tw:flex-row">-->
@@ -52,7 +55,7 @@
 <!--      <div class="tw:flex-1"></div>-->
 <!--    </div>-->
 
-    <div class="tw:flex tw:flex-row tw:px-20 tw:mb-10">
+    <div class="tw:flex tw:flex-row tw:px-12 tw:mb-10">
       <ReadSummaryTable ref="readSummaryTableRef" class="tw:flex-1"
         @open-read-details="openReadDetailsPage"></ReadSummaryTable>
     </div>
@@ -284,12 +287,22 @@ export default {
     }
 
     const openReadDetailsPage = function(readItem) {
-      router.push({
+      const url = router.resolve({
         name: 'readDetailsPage',
         query: {
           readId: readItem.qname
         }
-      })
+      }).href
+
+      window.open(url, '_blank')
+    
+      // INFO: this is used to open in the same tab
+      // router.push({
+      //   name: 'readDetailsPage',
+      //   query: {
+      //     readId: readItem.qname
+      //   }
+      // })
     }
 
     return {
