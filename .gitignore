@@ -3,6 +3,7 @@
 #
 
 out/
+eval/repeatmasker/*.png
 gtamap
 
 .idea/
