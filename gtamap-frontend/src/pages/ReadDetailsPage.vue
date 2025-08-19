@@ -37,8 +37,13 @@
     <!-- Table Container -->
     <div class="tw:px-6 tw:mb-6">
       <!-- Table placeholder -->
-      <div class="tw:border tw:border-gray-300 tw:rounded-lg tw:p-4 tw:bg-gray-50">
-        <div class="tw:text-gray-500">Table placeholder - mapping details will go here</div>
+      <div class="tw:border tw:border-gray-300 tw:rounded-lg tw:p-4">
+        <ReadSummaryTable
+          ref="readSummaryTableRef"
+          class="tw:flex-1"
+          :url="'/api/readDetails/table?qname='+readId"
+          @open-read-details="openReadDetailsPage">
+        </ReadSummaryTable>
       </div>
     </div>
 
@@ -58,6 +63,8 @@
 
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+
+import ReadSummaryTable from '../components/ReadSummaryTable.vue'
 
 import igv from "../js/igv/dist/igv.esm.js"
 
@@ -167,6 +174,9 @@ export default {
     return {
       readId
     }
+  },
+  components: {
+    ReadSummaryTable
   },
 }
 
