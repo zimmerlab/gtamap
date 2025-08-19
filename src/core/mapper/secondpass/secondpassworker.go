@@ -76,8 +76,12 @@ func remapReadPair(readPairMapping *mapperutils.ReadPairMatchResults, annotation
 	uniqFwRemaps := getUniqRemaps(fwRemaps, len(*readPairMapping.ReadPair.ReadR1.Sequence))
 	uniqRvRemaps := getUniqRemaps(rvRemaps, len(*readPairMapping.ReadPair.ReadR2.Sequence))
 
-	readPairMapping.Fw = uniqFwRemaps
-	readPairMapping.Rv = uniqRvRemaps
+	if len(uniqFwRemaps) > 0 {
+		readPairMapping.Fw = uniqFwRemaps
+	}
+	if len(uniqRvRemaps) > 0 {
+		readPairMapping.Rv = uniqRvRemaps
+	}
 }
 
 func getUniqRemaps(r []*mapperutils.ReadMatchResult, readLength int) []*mapperutils.ReadMatchResult {
