@@ -1,8 +1,20 @@
 <template>
+  <!-- Filtering Options Section -->
+  <div class="filter-section tw:mb-4 tw:p-4 tw:border tw:border-gray-300 tw:rounded-lg tw:bg-gray-50">
+    <h3 class="tw:text-lg tw:font-medium tw:mb-3">Table Filters</h3>
+    <div class="tw:flex tw:items-center tw:gap-4">
+      <w-checkbox
+        v-model="filterOptions.hideAcceptedRecords"
+        label="Hide accepted records"
+        @change="applyFilters"
+      />
+    </div>
+  </div>
+
   <w-table
       :loading="tableData.loading"
       :headers="tableData.headers"
-      :items="readSummaryTableData.items"
+      :items="filteredItems"
       fixed-headers
       :pagination="pagination"
       :selectable-rows="1"
@@ -17,6 +29,13 @@
 
     <template #item-cell.readDetails="{ item }">
       <w-button @click.stop="openReadDetails(item)" xs>view</w-button>
+    </template>
+
+    <template #item-cell.isAccepted="{ item }">
+      <w-checkbox
+        :model-value="item.isAccepted"
+        disabled
+      />
     </template>
 
     <template #item-cell.confidence="{ item }">
@@ -43,6 +62,13 @@
           :items="readMappingTableData.items"
       >
 
+        <template #item-cell.isAccepted="{ item }">
+          <w-checkbox
+            :model-value="item.isAccepted"
+            @update:model-value="(value) => updateItemAcceptance(item, value)"
+          />
+        </template>
+
         <template #item-cell.pairType="{ item }">
           <span v-if="item.pairType === 'first'">R1</span>
           <span v-else-if="item.pairType === 'second'">R2</span>
@@ -60,6 +86,13 @@
 
         <template #item-cell.numGaps="{ item }">
           {{ item.numGaps !== undefined ? item.numGaps : 'N/A' }}
+        </template>
+
+        <template #item-cell.select="{ item }">
+          <w-checkbox
+            :model-value="isItemSelected(item)"
+            @update:model-value="(value) => updateItemAcceptance(item, value)"
+          />
         </template>
 
         <template #item-cell.mappedBy="{ item }">
@@ -80,17 +113,18 @@
 
 <script setup>
 
-import {defineExpose, inject, nextTick, onMounted, ref, defineEmits} from 'vue'
-import CustomTag from "./CustomTag.vue";
+import CustomTag from "./CustomTag.vue"
 
-const emit = defineEmits(['open-read-details'])
+import {defineExpose, inject, nextTick, onMounted, ref, defineEmits, computed} from 'vue'
+
+const emit = defineEmits(['open-read-details', 'content-changed'])
 
 const ApiService = inject("http")
 
 const props = defineProps({
   url: {
     type: String,
-    default: ''
+    required: true
   }
 })
 
@@ -100,13 +134,12 @@ const pagination = ref({
   itemsPerPageOptions: [{value: 15}, {value: 30}],
 })
 
-const randomLevel = () => Math.floor(Math.random() * 5) + 1
-
 const tableData = ref({
   loading: true,
   sortKey: "+qname",
   headers: [
     {label: '', key: 'readDetails', sortable: false},
+    {label: 'Accepted', key: 'isAccepted', sortable: false},
     {label: 'Confidence', key: 'confidence', sortable: true, type: 'number'},
     {label: 'Read Name', key: 'qname', sortable: true, type: 'string'},
     {label: 'Locations', key: 'numLocations', type: 'number'},
@@ -114,6 +147,7 @@ const tableData = ref({
     {label: 'Mapped By', key: 'mappedBy', sortable: false},
   ],
   expandedHeaders: [
+    {label: 'Accepted', key: 'isAccepted', sortable: false},
     {label: 'Pair Type', key: 'pairType'},
     {label: 'Contig', key: 'contigName'},
     {label: 'Strand', key: 'isForwardStrand'},
@@ -126,7 +160,8 @@ const tableData = ref({
   ],
   selectedRows: [],
   expandedRows: [],
-  selectedRowsInExpanded: []
+  selectedRowsInExpanded: [],
+  customSelectedItems: []
 })
 
 const handleSort = function(sortInfo) {
@@ -175,6 +210,25 @@ const customSort = function() {
 const readSummaryTableData = ref({items: []})
 const readMappingTableData = ref({items: []})
 
+const filterOptions = ref({
+  hideAcceptedRecords: false
+})
+
+const filteredItems = computed(() => {
+  let items = readSummaryTableData.value.items
+
+  if (filterOptions.value.hideAcceptedRecords) {
+    items = items.filter(item => !item.isAccepted)
+  }
+
+  return items
+})
+
+const applyFilters = function() {
+  // Filters are applied automatically through the computed property
+  // This function can be used for additional filter logic if needed
+}
+
 const expandRowClickHandler = function(rowInfo) {
 
   tableData.value.selectedRows = []
@@ -204,8 +258,15 @@ let getReadSummaryTableData = function() {
         if (response.status === 200) {
 
           readSummaryTableData.value.items = response.data
-          pagination.value.total = response.data.length
+          pagination.value.total = filteredItems.value.length
           pagination.value.itemsPerPage = 15
+
+          // add parent information to each location
+          for (const item of readSummaryTableData.value.items) {
+            for (const l of item.locations) {
+              l.parent = item
+            }
+          }
 
           customSort()
 
@@ -264,6 +325,72 @@ const selectAndScrollToRead = async function(readInfo) {
   }
 
   tableData.value.selectedRowsInExpanded = [selectedMappingRow._uid]
+}
+
+const isItemSelected = function(item) {
+  return tableData.value.customSelectedItems.includes(item._uid)
+}
+
+const acceptRecord = function(item) {
+  ApiService.post("/api/acceptRecords", {
+    recordIds: item.readIndices
+  }).then(response => {
+      console.log(response)
+  }).catch(err => {
+    console.error("Error accepting record:", err)
+  })
+}
+
+const unacceptRecord = function(item) {
+  ApiService.post("/api/unacceptRecords", {
+    recordIds: item.readIndices
+  }).then(response => {
+      console.log(response)
+  }).catch(err => {
+    console.error("Error unaccepting record:", err)
+  })
+}
+
+const updateItemAcceptance = function(item, isAccepted) {
+
+  for (const o of item.parent.locations) {
+    console.log(o)
+    if (o.pairType !== item.pairType) {
+      continue
+    }
+    if (!o.isAccepted) {
+      continue
+    }
+    o.isAccepted = false
+    unacceptRecord(o)
+  }
+  
+  if (isAccepted) {
+    item.isAccepted = isAccepted
+    acceptRecord(item)
+  }
+
+  // check if the parent record should be accepted if both r1 and r2 records are accepted
+  let acceptR1 = false
+  let acceptR2 = false
+
+  for (const o of item.parent.locations) {
+    if (!o.isAccepted) {
+      continue
+    }
+    if (o.pairType === "first") {
+      acceptR1 = true
+    } else if (o.pairType === "second") {
+      acceptR2 = true
+    }
+    if (acceptR1 && acceptR2) {
+      break
+    }
+  }
+
+  item.parent.isAccepted = acceptR1 && acceptR2
+
+  emit("content-changed", {})
 }
 
 defineExpose({selectAndScrollToRead})

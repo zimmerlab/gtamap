@@ -54,6 +54,8 @@ func (s *Server) InitRoutes() {
 	api.HandleFunc("/mapperDistances", s.mapperDistances).Methods("GET")
 
 	api.HandleFunc("/acceptRecord", s.acceptRecord).Methods("GET")
+	api.HandleFunc("/acceptRecords", s.acceptRecords).Methods("POST")
+	api.HandleFunc("/unacceptRecords", s.unacceptRecords).Methods("POST")
 
 	summary := s.Router.PathPrefix("/summary").Subrouter()
 	summary.HandleFunc("/table", s.getReadSummaryTable).Methods("GET")
@@ -61,8 +63,10 @@ func (s *Server) InitRoutes() {
 
 	accepted := api.PathPrefix("/accepted").Subrouter()
 	// sel.HandleFunc("/table", s.getReadSelectionTable).Methods("GET")
-	accepted.HandleFunc("/igvConfig", getTargetRegionIgvConfig).Methods("GET")
+	accepted.HandleFunc("/igvConfig", s.getAcceptedRecordsIgvConfig).Methods("GET")
 	accepted.HandleFunc("/sam", s.serveAcceptedRecordsSam).Methods("GET")
+	accepted.HandleFunc("/bam", s.serveAcceptedRecordsBam).Methods("GET")
+	accepted.HandleFunc("/bamIndex", s.serveAcceptedRecordsBamIndex).Methods("GET")
 
 	download := s.Router.PathPrefix("/download").Subrouter()
 
@@ -958,7 +962,44 @@ func getTargetRegionIgvConfig(w http.ResponseWriter, r *http.Request) {
 	// convert global location to local location
 	targetRegionStrLocal := fmt.Sprintf("%s:%d-%d", config.GetTargetContig(), 1, config.GetTargetEnd()-config.GetTargetStart()+1)
 
-	response := map[string]interface{}{
+	response := map[string]any{
+		"genomeConfig": genomeConfig,
+		"tracks":       tracks,
+		"location":     targetRegionStrLocal,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+
+}
+
+func (s *Server) getAcceptedRecordsIgvConfig(w http.ResponseWriter, r *http.Request) {
+
+	genomeConfig := IgvGenomeConfig{
+		Id:       "Target Region",
+		Label:    "BASE_GENOME_LABEL",
+		FastaUrl: "http://localhost:8000/download/targetRegion/fasta",
+		IndexUrl: "http://localhost:8000/download/targetRegion/fastaIndex",
+	}
+
+	track := IgvTrackConfig{
+		Name:        "Accepted Reads",
+		Format:      "sam",
+		DisplayMode: "EXPANDED",
+		Url:         "http://localhost:8000/api/accepted/bam",
+		IndexUrl:    "http://localhost:8000/api/accepted/bamIndex",
+		Type:        "alignment",
+		Height:      800,
+		MaxHeight:   1000,
+	}
+
+	tracks := make([]IgvTrackConfig, 0)
+	tracks = append(tracks, track)
+
+	// convert global location to local location
+	targetRegionStrLocal := fmt.Sprintf("%s:%d-%d", config.GetTargetContig(), 1, config.GetTargetEnd()-config.GetTargetStart()+1)
+
+	response := map[string]any{
 		"genomeConfig": genomeConfig,
 		"tracks":       tracks,
 		"location":     targetRegionStrLocal,
@@ -1009,6 +1050,7 @@ type ReadOverviewInfo struct {
 	Locations       []*ReadLocationInfo `json:"locations"`
 	DistanceScore   float64             `json:"distanceScore,omitempty"`   // optional, for distance score
 	ConfidenceLevel int                 `json:"confidenceLevel,omitempty"` // optional, for confidence level
+	IsAccepted      bool                `json:"isAccepted"`
 }
 
 type ReadLocationInfo struct {
@@ -1024,6 +1066,7 @@ type ReadLocationInfo struct {
 	MappedBy             []string `json:"mappedBy"`
 	ReadIndices          []int    `json:"readIndices"`          // index in the global list of records
 	ReadIndicesInMappers []int    `json:"readIndicesInMappers"` // index in the sam of the respective mapper
+	IsAccepted           bool     `json:"isAccepted"`
 }
 
 type RecordWithMapperInfo struct {
@@ -1120,6 +1163,92 @@ func (s *Server) serveAcceptedRecordsSam(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "plain/text")
 	w.Write([]byte(samString))
+}
+
+func (s *Server) serveAcceptedRecordsBam(w http.ResponseWriter, r *http.Request) {
+
+	samString := s.Handler.GetAcceptedRecordsSam(true)
+
+	bamBytes, err := samToSortedBam(samString)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error converting SAM to BAM: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Write(bamBytes)
+}
+
+func (s *Server) serveAcceptedRecordsBamIndex(w http.ResponseWriter, r *http.Request) {
+
+	samString := s.Handler.GetAcceptedRecordsSam(true)
+
+	bamBytes, err := samToSortedBam(samString)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error converting SAM to BAM: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	bamIndex, err := bamToBamIndex(bamBytes)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error creating BAM index: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "plain/text")
+	w.Write([]byte(bamIndex))
+}
+
+type acceptRecordsDto struct {
+	RecordIds []int `json:"recordIds"`
+}
+
+func (s *Server) acceptRecords(w http.ResponseWriter, r *http.Request) {
+
+	var p acceptRecordsDto
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	for _, recordId := range p.RecordIds {
+		if recordId < 0 || recordId >= len(s.Handler.Records) {
+			http.Error(w, fmt.Sprintf("Invalid recordId: %d", recordId), http.StatusBadRequest)
+			return
+		}
+	}
+
+	for _, recordId := range p.RecordIds {
+		r := s.Handler.Records[recordId]
+		s.Handler.AcceptRecord(r)
+	}
+
+	w.Write([]byte("Records accepted successfully"))
+}
+
+func (s *Server) unacceptRecords(w http.ResponseWriter, r *http.Request) {
+
+	var p acceptRecordsDto
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	for _, recordId := range p.RecordIds {
+		if recordId < 0 || recordId >= len(s.Handler.Records) {
+			http.Error(w, fmt.Sprintf("Invalid recordId: %d", recordId), http.StatusBadRequest)
+			return
+		}
+	}
+
+	for _, recordId := range p.RecordIds {
+		r := s.Handler.Records[recordId]
+		s.Handler.UnacceptRecord(r)
+	}
+
+	w.Write([]byte("Records unaccepted successfully"))
 }
 
 func (s *Server) acceptRecord(w http.ResponseWriter, r *http.Request) {

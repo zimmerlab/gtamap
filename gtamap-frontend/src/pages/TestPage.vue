@@ -1,29 +1,15 @@
 <template>
-  <div class="tw:m-20">
-    <CustomTag :level="1" size="sm"></CustomTag>
-  </div>
-  <div class="tw:m-20">
-    <CustomTag :level="2" size="xs"></CustomTag>
-  </div>
-  <div class="tw:m-20">
-    <CustomTag :level="3"></CustomTag>
-  </div>
-  <div class="tw:m-20">
-    <CustomTag :level="4"></CustomTag>
-  </div>
-  <div class="tw:m-20">
-    <CustomTag :level="5" size="xs"></CustomTag>
-    <CustomTag :level="5" size="sm"></CustomTag>
-    <CustomTag :level="5" size="md"></CustomTag>
-  </div>
+  <Igv></Igv>
+  <div>Hello World</div>
 </template>
 
 <script>
-import CustomTag from "../components/CustomTag.vue";
+
+import Igv from '../components/Igv.vue'
 
 export default {
   name: 'TestPage',
-  components: {CustomTag},
+  components: {Igv},
   setup() {
   }
 }

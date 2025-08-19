@@ -732,6 +732,22 @@ func (h *MappingDataHandler) AcceptRecord(r *EnhancedRecord) {
 	}
 }
 
+func (h *MappingDataHandler) UnacceptRecord(r *EnhancedRecord) {
+
+	logrus.WithFields(logrus.Fields{
+		"qname": r.Qname,
+		"index": r.Index,
+	}).Info("unaccepting record")
+
+	r.IsAccepted = false
+
+	if r.Flag.IsFirstInPair() {
+		r.QnameCluster.ClusterR1.AcceptedRecord = nil
+	} else {
+		r.QnameCluster.ClusterR2.AcceptedRecord = nil
+	}
+}
+
 func (h *MappingDataHandler) GetSimilarRecordsInCluster(r *EnhancedRecord) []*EnhancedRecord {
 
 	var clust *ReadCluster

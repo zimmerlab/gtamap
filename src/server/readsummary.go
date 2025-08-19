@@ -17,6 +17,9 @@ func (h *MappingDataHandler) GetReadSummaryTableData() []ReadOverviewInfo {
 
 		mappedBy := make(map[string]bool)
 
+		isAcceptedR1 := false
+		isAcceptedR2 := false
+
 		for _, cR1 := range qnameCluster.ClusterR1.SimilarRecords {
 
 			mappedByCluster := make(map[string]bool)
@@ -43,6 +46,11 @@ func (h *MappingDataHandler) GetReadSummaryTableData() []ReadOverviewInfo {
 				MappedBy:             mappedByClusterList,
 				ReadIndices:          make([]int, 0),
 				ReadIndicesInMappers: make([]int, 0),
+				IsAccepted:           cR1[0].IsAccepted,
+			}
+
+			if cR1[0].IsAccepted {
+				isAcceptedR1 = true
 			}
 
 			for _, r := range cR1 {
@@ -79,6 +87,11 @@ func (h *MappingDataHandler) GetReadSummaryTableData() []ReadOverviewInfo {
 				MappedBy:             mappedByClusterList,
 				ReadIndices:          make([]int, 0),
 				ReadIndicesInMappers: make([]int, 0),
+				IsAccepted:           cR2[0].IsAccepted,
+			}
+
+			if cR2[0].IsAccepted {
+				isAcceptedR2 = true
 			}
 
 			for _, r := range cR2 {
@@ -107,6 +120,7 @@ func (h *MappingDataHandler) GetReadSummaryTableData() []ReadOverviewInfo {
 			Locations:       locations,
 			DistanceScore:   distanceMean,
 			ConfidenceLevel: qnameCluster.ConfidenceLevel,
+			IsAccepted:      isAcceptedR1 && isAcceptedR2,
 		}
 
 		reads = append(reads, readOverviewInfo)

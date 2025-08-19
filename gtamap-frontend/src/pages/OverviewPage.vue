@@ -55,14 +55,36 @@
 <!--      <div class="tw:flex-1"></div>-->
 <!--    </div>-->
 
-    <div class="tw:flex tw:flex-row tw:px-12 tw:mb-10">
-      <ReadSummaryTable ref="readSummaryTableRef" class="tw:flex-1"
-        url="/api/readSummaryTable"
-        @open-read-details="openReadDetailsPage"></ReadSummaryTable>
+    <!-- <div class="tw:flex tw:flex-row tw:px-12 tw:mb-10"> -->
+    <!--   <ReadSummaryTable ref="readSummaryTableRef" class="tw:flex-1" -->
+    <!--     url="/api/readSummaryTable" -->
+    <!--     @open-read-details="openReadDetailsPage"></ReadSummaryTable> -->
+    <!-- </div> -->
+
+    <!-- <div class="tw:my-5 tw:mb-32"> -->
+    <!--   <div id="igv-div" class="tw:h-[1000px]"></div> -->
+    <!-- </div> -->
+
+    <div class="tw:px-12 tw:mb-6">
+      <div class="tw:border tw:border-gray-300 tw:rounded tw:px-4 tw:pb-4 tw:pt-2">
+        <h3 class="tw:text-lg tw:font-bold tw:mb-4 tw:text-center tw:text-gray-500">Read Selection</h3>
+        <ReadSummaryTable ref="readSummaryTableRef" class="tw:flex-1"
+          url="/api/readSummaryTable"
+          @open-read-details="openReadDetailsPage"
+          @content-changed="tableUpdated">
+        </ReadSummaryTable>
+        <Igv url="/api/igvConfigTarget"></Igv>
+      </div>
     </div>
 
-    <div class="tw:my-5 tw:mb-32">
-      <div id="igv-div" class="tw:h-[1000px]"></div>
+    <div class="tw:px-12 tw:mb-6">
+      <div class="tw:border tw:border-gray-300 tw:rounded tw:p-4">
+        <h3 class="tw:text-lg tw:font-bold tw:mb-4 tw:text-center">Accepted Reads</h3>
+        <Igv ref="igvAccepted" url="/api/accepted/igvConfig"></Igv>
+      </div>
+    </div>
+
+    <div>
     </div>
 
   </div>
@@ -78,10 +100,11 @@ import * as UpSetJS from '@upsetjs/bundle'
 
 import * as d3 from 'd3'
 
-import MapperMultimappingHeatmap from "../components/MapperMultimappingHeatmap.vue";
-import MapperMultimappingParallelPlot from "../components/MapperMultimappingParallelPlot.vue";
-import ReadSummaryTable from "../components/ReadSummaryTable.vue";
-import UpsetPlotMapperAgreement from "../components/UpsetPlotMapperAgreement.vue";
+import MapperMultimappingHeatmap from "../components/MapperMultimappingHeatmap.vue"
+import MapperMultimappingParallelPlot from "../components/MapperMultimappingParallelPlot.vue"
+import ReadSummaryTable from "../components/ReadSummaryTable.vue"
+import UpsetPlotMapperAgreement from "../components/UpsetPlotMapperAgreement.vue"
+import Igv from "../components/Igv.vue"
 
 export default {
   name: "OverviewPage",
@@ -89,93 +112,96 @@ export default {
     UpsetPlotReadPos: UpsetPlotMapperAgreement,
     ReadSummaryTable,
     MapperMultimappingHeatmap,
-    MapperMultimappingParallelPlot
+    MapperMultimappingParallelPlot,
+    Igv
   },
   setup() {
 
     const ApiService = inject("http")
     const router = useRouter()
 
-    let igvInfo = ref({})
-    let igvBrowser = ref(undefined)
+    let igvAccepted = ref(null)
+
+    // let igvInfo = ref({})
+    // let igvBrowser = ref(undefined)
 
     const readSummaryTableRef = ref(null);
 
-    const getIgvConfig = function() {
-
-      ApiService.get("/api/igvConfigTarget")
-          .then((response) => {
-            if (response.status === 200) {
-
-              igvInfo.value ={
-                genome: response.data.genomeConfig,
-                tracks: response.data.tracks,
-                location: response.data.location,
-              }
-
-              initializeIgv()
-            }
-
-          }).catch((err) => {
-            console.log(err)
-          })
-    }
-
-    const initializeIgv = function () {
-
-      const igvDiv = ref(document.getElementById("igv-div"))
-
-      // the genome information is loaded from API
-      const options = {
-        genome: igvInfo.value.genome,
-        locus: igvInfo.value.location
-      }
-
-      igv.createBrowser(igvDiv.value, options)
-        .then(function (browser) {
-
-          igvBrowser = ref(browser)
-
-          // initialize tracks by track config loaded from API
-          for (const trackConfig of igvInfo.value.tracks) {
-            browser.loadTrack(trackConfig)
-          }
-
-          browser.on('trackclick', function (track, popoverData) {
-
-            if (track.type === "alignment" && popoverData && popoverData.length > 0) {
-
-              let readInfo = {
-                // the read name (qname) of the read
-                qname: "",
-                // the name of the mapper which produced this mapping
-                mapperName: "",
-                // the index of the mapping in the respective sam file
-                index: 0,
-              }
-             
-              popoverData.forEach(item => {
-                switch (item.name) {
-                  case "Read Name":
-                    readInfo.qname = item.value;
-                    break;
-                  case "XM":
-                    readInfo.mapperName = item.value;
-                    break;
-                  case "XI":
-                    readInfo.index = item.value;
-                    break;
-                }
-              })
-              
-              track.alignmentTrack.setHighlightedReads([readInfo.qname], "#0000ff")
-              track.updateViews()
-
-              handleReadClick(readInfo)
-            }
-          });
-        })
-    }
+    // const getIgvConfig = function() {
+    //
+    //   ApiService.get("/api/igvConfigTarget")
+    //       .then((response) => {
+    //         if (response.status === 200) {
+    //
+    //           igvInfo.value ={
+    //             genome: response.data.genomeConfig,
+    //             tracks: response.data.tracks,
+    //             location: response.data.location,
+    //           }
+    //
+    //           initializeIgv()
+    //         }
+    //
+    //       }).catch((err) => {
+    //         console.log(err)
+    //       })
+    // }
+    //
+    // const initializeIgv = function () {
+    //
+    //   const igvDiv = ref(document.getElementById("igv-div"))
+    //
+    //   // the genome information is loaded from API
+    //   const options = {
+    //     genome: igvInfo.value.genome,
+    //     locus: igvInfo.value.location
+    //   }
+    //
+    //   igv.createBrowser(igvDiv.value, options)
+    //     .then(function (browser) {
+    //
+    //       igvBrowser = ref(browser)
+    //
+    //       // initialize tracks by track config loaded from API
+    //       for (const trackConfig of igvInfo.value.tracks) {
+    //         browser.loadTrack(trackConfig)
+    //       }
+    //
+    //       browser.on('trackclick', function (track, popoverData) {
+    //
+    //         if (track.type === "alignment" && popoverData && popoverData.length > 0) {
+    //
+    //           let readInfo = {
+    //             // the read name (qname) of the read
+    //             qname: "",
+    //             // the name of the mapper which produced this mapping
+    //             mapperName: "",
+    //             // the index of the mapping in the respective sam file
+    //             index: 0,
+    //           }
+    //          
+    //           popoverData.forEach(item => {
+    //             switch (item.name) {
+    //               case "Read Name":
+    //                 readInfo.qname = item.value;
+    //                 break;
+    //               case "XM":
+    //                 readInfo.mapperName = item.value;
+    //                 break;
+    //               case "XI":
+    //                 readInfo.index = item.value;
+    //                 break;
+    //             }
+    //           })
+    //           
+    //           track.alignmentTrack.setHighlightedReads([readInfo.qname], "#0000ff")
+    //           track.updateViews()
+    //
+    //           handleReadClick(readInfo)
+    //         }
+    //       });
+    //     })
+    // }
 
     /**
      * Handle the click event on a read in the igv by sending the read information to the read summary table
@@ -187,105 +213,105 @@ export default {
     }
 
     // RIDGE
-    const chartContainer = ref(null)
-
-    const createChart = async () => {
-
-      // Clear any existing chart
-      d3.select(chartContainer.value).selectAll("*").remove()
-
-      console.log(chartContainer.value)
-
-      // Set dimensions and margins
-      const margin = { top: 60, right: 30, bottom: 20, left: 110 }
-      const width = 460 - margin.left - margin.right
-      const height = 400 - margin.top - margin.bottom
-
-      // Create SVG
-      const svg = d3.select(chartContainer.value)
-          .append("svg")
-          .attr("width", width + margin.left + margin.right)
-          .attr("height", height + margin.top + margin.bottom)
-          .append("g")
-          .attr("transform", `translate(${margin.left}, ${margin.top})`)
-
-      try {
-        // Load data
-        const data = await d3.csv("https://raw.githubusercontent.com/zonination/perceptions/master/probly.csv")
-
-        console.log(data)
-
-        // Get categories
-        const categories = data.columns
-        const n = categories.length
-
-        // Add X axis
-        const x = d3.scaleLinear()
-            .domain([-10, 140])
-            .range([0, width])
-
-        svg.append("g")
-            .attr("transform", `translate(0, ${height})`)
-            .call(d3.axisBottom(x))
-
-        // Create Y scale for densities
-        const y = d3.scaleLinear()
-            .domain([0, 0.4])
-            .range([height, 0])
-
-        // Create Y axis for names
-        const yName = d3.scaleBand()
-            .domain(categories)
-            .range([0, height])
-            .paddingInner(1)
-
-        svg.append("g")
-            .call(d3.axisLeft(yName))
-
-        // Compute kernel density estimation
-        const kde = kernelDensityEstimator(kernelEpanechnikov(7), x.ticks(40))
-        const allDensity = []
-
-        for (let i = 0; i < n; i++) {
-          const key = categories[i]
-          const density = kde(data.map(d => d[key]))
-          allDensity.push({ key: key, density: density })
-        }
-
-        // Add areas
-        svg.selectAll("areas")
-            .data(allDensity)
-            .join("path")
-            .attr("transform", d => `translate(0, ${(yName(d.key) - height)})`)
-            .datum(d => d.density)
-            .attr("fill", "#69b3a2")
-            .attr("stroke", "#000")
-            .attr("stroke-width", 1)
-            .attr("d", d3.line()
-                .curve(d3.curveBasis)
-                .x(d => x(d[0]))
-                .y(d => y(d[1]))
-            )
-
-      } catch (error) {
-        console.error('Error loading data:', error)
-      }
-    }
-
-    // Kernel density estimation functions
-    const kernelDensityEstimator = (kernel, X) => {
-      return (V) => {
-        return X.map(x => {
-          return [x, d3.mean(V, v => kernel(x - v))]
-        })
-      }
-    }
-
-    const kernelEpanechnikov = (k) => {
-      return (v) => {
-        return Math.abs(v /= k) <= 1 ? 0.75 * (1 - v * v) / k : 0
-      }
-    }
+    // const chartContainer = ref(null)
+    //
+    // const createChart = async () => {
+    //
+    //   // Clear any existing chart
+    //   d3.select(chartContainer.value).selectAll("*").remove()
+    //
+    //   console.log(chartContainer.value)
+    //
+    //   // Set dimensions and margins
+    //   const margin = { top: 60, right: 30, bottom: 20, left: 110 }
+    //   const width = 460 - margin.left - margin.right
+    //   const height = 400 - margin.top - margin.bottom
+    //
+    //   // Create SVG
+    //   const svg = d3.select(chartContainer.value)
+    //       .append("svg")
+    //       .attr("width", width + margin.left + margin.right)
+    //       .attr("height", height + margin.top + margin.bottom)
+    //       .append("g")
+    //       .attr("transform", `translate(${margin.left}, ${margin.top})`)
+    //
+    //   try {
+    //     // Load data
+    //     const data = await d3.csv("https://raw.githubusercontent.com/zonination/perceptions/master/probly.csv")
+    //
+    //     console.log(data)
+    //
+    //     // Get categories
+    //     const categories = data.columns
+    //     const n = categories.length
+    //
+    //     // Add X axis
+    //     const x = d3.scaleLinear()
+    //         .domain([-10, 140])
+    //         .range([0, width])
+    //
+    //     svg.append("g")
+    //         .attr("transform", `translate(0, ${height})`)
+    //         .call(d3.axisBottom(x))
+    //
+    //     // Create Y scale for densities
+    //     const y = d3.scaleLinear()
+    //         .domain([0, 0.4])
+    //         .range([height, 0])
+    //
+    //     // Create Y axis for names
+    //     const yName = d3.scaleBand()
+    //         .domain(categories)
+    //         .range([0, height])
+    //         .paddingInner(1)
+    //
+    //     svg.append("g")
+    //         .call(d3.axisLeft(yName))
+    //
+    //     // Compute kernel density estimation
+    //     const kde = kernelDensityEstimator(kernelEpanechnikov(7), x.ticks(40))
+    //     const allDensity = []
+    //
+    //     for (let i = 0; i < n; i++) {
+    //       const key = categories[i]
+    //       const density = kde(data.map(d => d[key]))
+    //       allDensity.push({ key: key, density: density })
+    //     }
+    //
+    //     // Add areas
+    //     svg.selectAll("areas")
+    //         .data(allDensity)
+    //         .join("path")
+    //         .attr("transform", d => `translate(0, ${(yName(d.key) - height)})`)
+    //         .datum(d => d.density)
+    //         .attr("fill", "#69b3a2")
+    //         .attr("stroke", "#000")
+    //         .attr("stroke-width", 1)
+    //         .attr("d", d3.line()
+    //             .curve(d3.curveBasis)
+    //             .x(d => x(d[0]))
+    //             .y(d => y(d[1]))
+    //         )
+    //
+    //   } catch (error) {
+    //     console.error('Error loading data:', error)
+    //   }
+    // }
+    //
+    // // Kernel density estimation functions
+    // const kernelDensityEstimator = (kernel, X) => {
+    //   return (V) => {
+    //     return X.map(x => {
+    //       return [x, d3.mean(V, v => kernel(x - v))]
+    //     })
+    //   }
+    // }
+    //
+    // const kernelEpanechnikov = (k) => {
+    //   return (v) => {
+    //     return Math.abs(v /= k) <= 1 ? 0.75 * (1 - v * v) / k : 0
+    //   }
+    // }
 
     const openReadDetailsPage = function(readItem) {
       const url = router.resolve({
@@ -306,17 +332,26 @@ export default {
       // })
     }
 
+    const tableUpdated = function() {
+      console.log("table updated")
+      console.log(igvAccepted)
+      igvAccepted.value.update()
+      // igvAccepted.update()
+    }
+
     return {
-      getIgvConfig,
-      initializeIgv,
-      createChart,
-      chartContainer,
+      igvAccepted,
+      tableUpdated,
+      // getIgvConfig,
+      // initializeIgv,
+      // createChart,
+      // chartContainer,
       readSummaryTableRef,
       openReadDetailsPage,
     }
   },
   mounted() {
-    this.getIgvConfig()
+    // this.getIgvConfig()
     // this.getReadSummaryTableData()
     // this.getUpsetDataRead()
     // this.getUpsetDataRecordPos()
