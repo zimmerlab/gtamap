@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +17,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/formats/fasta"
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
+	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
 )
@@ -53,6 +53,17 @@ func (s *Server) InitRoutes() {
 	api.HandleFunc("/mapperMultimappingParallel", s.mapperMultimappingParallel).Methods("GET")
 	api.HandleFunc("/mapperDistances", s.mapperDistances).Methods("GET")
 
+	api.HandleFunc("/acceptRecord", s.acceptRecord).Methods("GET")
+
+	summary := s.Router.PathPrefix("/summary").Subrouter()
+	summary.HandleFunc("/table", s.getReadSummaryTable).Methods("GET")
+	summary.HandleFunc("/target/igvConfig", getTargetRegionIgvConfig).Methods("GET")
+
+	accepted := api.PathPrefix("/accepted").Subrouter()
+	// sel.HandleFunc("/table", s.getReadSelectionTable).Methods("GET")
+	accepted.HandleFunc("/igvConfig", getTargetRegionIgvConfig).Methods("GET")
+	accepted.HandleFunc("/sam", s.serveAcceptedRecordsSam).Methods("GET")
+
 	download := s.Router.PathPrefix("/download").Subrouter()
 
 	download.HandleFunc("/genome/fasta", serveGenomeFastaFile).Methods("GET")
@@ -72,6 +83,7 @@ func (s *Server) InitRoutes() {
 	readDetailsRouter := api.PathPrefix("/readDetails").Subrouter()
 
 	readDetailsRouter.HandleFunc("/readInfo", s.getReadDetailsInfo).Methods("GET")
+	readDetailsRouter.HandleFunc("/table", s.readDetailsTable).Methods("GET")
 }
 
 func (s *Server) Start() {
@@ -711,7 +723,7 @@ func (s *Server) getCombinedSam() string {
 				continue
 			}
 
-			builder.WriteString(record.StringWithMapperInfo(config.GetTargetStart(), mapperInfo.MapperName))
+			builder.WriteString(record.StringWithMapperInfo(config.GetTargetStart(), mapperInfo.MapperName, record.Index))
 			builder.WriteString("\n")
 		}
 	}
@@ -896,7 +908,7 @@ func serveBamIndexFile(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getReadSummaryTable(w http.ResponseWriter, r *http.Request) {
 
-	response := s.ReadSummaryTableData()
+	response := s.Handler.GetReadSummaryTableData()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
@@ -1000,126 +1012,18 @@ type ReadOverviewInfo struct {
 }
 
 type ReadLocationInfo struct {
-	Pair          string   `json:"pairType"` // "first" or "second"
-	Contig        string   `json:"contigName"`
-	Strand        bool     `json:"isForwardStrand"` // true for forward strand, false for reverse strand
-	Position      int      `json:"position"`
-	Cigar         string   `json:"cigar"`
-	CigarDetailed string   `json:"cigarDetailed,omitempty"` // optional, for detailed CIGAR representation
-	NumMismatches int      `json:"numMismatches"`
-	NumGaps       int      `json:"numGaps"`
-	NumMappedBy   int      `json:"numMappedBy"`
-	MappedBy      []string `json:"mappedBy"`
-	ReadIndices   []int    `json:"readIndices"`
-}
-
-func (s *Server) ReadSummaryTableData() []ReadOverviewInfo {
-
-	reads := make([]ReadOverviewInfo, 0, len(s.Handler.ReadInfos))
-
-	for _, readInfo := range s.Handler.ReadInfos {
-
-		qnameCluster := s.Handler.QnameCluster[readInfo.Qname]
-
-		numClusterR1 := len(qnameCluster.ClusterR1.SimilarRecords)
-		numClusterR2 := len(qnameCluster.ClusterR2.SimilarRecords)
-
-		locations := make([]*ReadLocationInfo, 0, numClusterR1+numClusterR2)
-
-		mappedBy := make(map[string]bool)
-
-		for _, cR1 := range qnameCluster.ClusterR1.SimilarRecords {
-
-			mappedByCluster := make(map[string]bool)
-			for _, r := range cR1 {
-				mappedBy[s.Handler.MapperInfos[r.MapperIndex].MapperName] = true
-				mappedByCluster[s.Handler.MapperInfos[r.MapperIndex].MapperName] = true
-			}
-			mappedByClusterList := make([]string, 0, len(mappedByCluster))
-			for mapperName := range mappedByCluster {
-				mappedByClusterList = append(mappedByClusterList, mapperName)
-			}
-			slices.Sort(mappedByClusterList)
-
-			locationInfo := ReadLocationInfo{
-				Pair:          "first",
-				Contig:        cR1[0].Rname,
-				Strand:        !cR1[0].Flag.IsReverseStrand(),
-				Position:      cR1[0].Pos,
-				Cigar:         cR1[0].CigarObj.StringUniform(),
-				CigarDetailed: cR1[0].CigarObj.String(),
-				NumMismatches: cR1[0].CigarObj.GetNumMismatches(),
-				NumGaps:       cR1[0].CigarObj.GetNumGaps(),
-				NumMappedBy:   len(mappedByCluster),
-				MappedBy:      mappedByClusterList,
-				ReadIndices:   make([]int, 0),
-			}
-
-			for _, r := range cR1 {
-				locationInfo.ReadIndices = append(locationInfo.ReadIndices, r.IndexInSam)
-			}
-
-			locations = append(locations, &locationInfo)
-		}
-
-		for _, cR2 := range qnameCluster.ClusterR2.SimilarRecords {
-
-			mappedByCluster := make(map[string]bool)
-			for _, r := range cR2 {
-				mappedBy[s.Handler.MapperInfos[r.MapperIndex].MapperName] = true
-				mappedByCluster[s.Handler.MapperInfos[r.MapperIndex].MapperName] = true
-			}
-			mappedByClusterList := make([]string, 0, len(mappedByCluster))
-			for mapperName := range mappedByCluster {
-				mappedByClusterList = append(mappedByClusterList, mapperName)
-			}
-			slices.Sort(mappedByClusterList)
-
-			locationInfo := ReadLocationInfo{
-				Pair:          "second",
-				Contig:        cR2[0].Rname,
-				Strand:        !cR2[0].Flag.IsReverseStrand(),
-				Position:      cR2[0].Pos,
-				Cigar:         cR2[0].CigarObj.StringUniform(),
-				CigarDetailed: cR2[0].CigarObj.String(),
-				NumMismatches: cR2[0].CigarObj.GetNumMismatches(),
-				NumGaps:       cR2[0].CigarObj.GetNumGaps(),
-				NumMappedBy:   len(mappedByCluster),
-				MappedBy:      mappedByClusterList,
-				ReadIndices:   make([]int, 0),
-			}
-
-			for _, r := range cR2 {
-				locationInfo.ReadIndices = append(locationInfo.ReadIndices, r.IndexInSam)
-			}
-
-			locations = append(locations, &locationInfo)
-		}
-
-		mappedByList := make([]string, 0, len(mappedBy))
-		for mapperName := range mappedBy {
-			mappedByList = append(mappedByList, mapperName)
-		}
-		slices.Sort(mappedByList)
-
-		distanceMean := (qnameCluster.ClusterR1.RecordDistanceMean + qnameCluster.ClusterR2.RecordDistanceMean) / 2.0
-
-		readOverviewInfo := ReadOverviewInfo{
-			Qname:           readInfo.Qname,
-			ReadLengthR1:    len(readInfo.SequenceFirstOfPair),
-			ReadLengthR2:    len(readInfo.SequenceSecondOfPair),
-			NumMappedBy:     len(mappedBy),
-			MappedBy:        mappedByList,
-			NumLocations:    len(locations),
-			Locations:       locations,
-			DistanceScore:   distanceMean,
-			ConfidenceLevel: qnameCluster.ConfidenceLevel,
-		}
-
-		reads = append(reads, readOverviewInfo)
-	}
-
-	return reads
+	Pair                 string   `json:"pairType"` // "first" or "second"
+	Contig               string   `json:"contigName"`
+	Strand               bool     `json:"isForwardStrand"` // true for forward strand, false for reverse strand
+	Position             int      `json:"position"`
+	Cigar                string   `json:"cigar"`
+	CigarDetailed        string   `json:"cigarDetailed,omitempty"` // optional, for detailed CIGAR representation
+	NumMismatches        int      `json:"numMismatches"`
+	NumGaps              int      `json:"numGaps"`
+	NumMappedBy          int      `json:"numMappedBy"`
+	MappedBy             []string `json:"mappedBy"`
+	ReadIndices          []int    `json:"readIndices"`          // index in the global list of records
+	ReadIndicesInMappers []int    `json:"readIndicesInMappers"` // index in the sam of the respective mapper
 }
 
 type RecordWithMapperInfo struct {
@@ -1199,4 +1103,40 @@ func (s *Server) getReadDetailsInfo(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(readDetails)
+}
+
+func (s *Server) serveAcceptedRecordsSam(w http.ResponseWriter, r *http.Request) {
+
+	// get the relativeCoords parameter to choose between global or relative coordinates
+	relativeCoords, err := utils.GetSpecificRequestParamBool(r, "relativeCoords")
+	if err != nil {
+		// w.WriteHeader(http.StatusBadRequest)
+		// fmt.Fprintf(w, "Error parsing relativeCoords parameter: %v", err)
+		// return
+		relativeCoords = false
+	}
+
+	samString := s.Handler.GetAcceptedRecordsSam(relativeCoords)
+
+	w.Header().Set("Content-Type", "plain/text")
+	w.Write([]byte(samString))
+}
+
+func (s *Server) acceptRecord(w http.ResponseWriter, r *http.Request) {
+
+	recordIndex, err := utils.GetSpecificRequestParamInt(r, "recordIndex")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error parsing recordIndex parameter: %v", err), http.StatusBadRequest)
+		return
+	}
+	if recordIndex < 0 || recordIndex >= len(s.Handler.Records) {
+		http.Error(w, fmt.Sprintf("Invalid recordIndex: %d", recordIndex), http.StatusBadRequest)
+		return
+	}
+
+	record := s.Handler.Records[recordIndex]
+
+	s.Handler.AcceptRecord(record)
+
+	w.Write([]byte("Record accepted successfully"))
 }

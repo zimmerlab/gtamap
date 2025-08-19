@@ -143,3 +143,29 @@ func FormatDuration(d time.Duration) string {
 		return fmt.Sprintf("%dh %dm %ds", int(d.Hours()), int(d.Minutes())%60, int(d.Seconds())%60)
 	}
 }
+
+func ArrayStringToString(arr []string, sep string) string {
+	if len(arr) == 0 {
+		return ""
+	}
+	var builder strings.Builder
+	builder.WriteString(arr[0])
+	for _, item := range arr[1:] {
+		builder.WriteString(sep)
+		builder.WriteString(item)
+	}
+	return builder.String()
+}
+
+func ArrayIntToString(arr []int, sep string) string {
+	if len(arr) == 0 {
+		return ""
+	}
+	var builder strings.Builder
+	builder.WriteString(fmt.Sprintf("%d", arr[0]))
+	for _, item := range arr[1:] {
+		builder.WriteString(sep)
+		builder.WriteString(fmt.Sprintf("%d", item))
+	}
+	return builder.String()
+}

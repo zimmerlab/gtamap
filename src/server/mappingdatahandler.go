@@ -5,188 +5,16 @@ import (
 	"log"
 	"math"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/KleinSamuel/gtamap/src/config"
-	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
-	"github.com/KleinSamuel/gtamap/src/formats/cigar"
 	"github.com/KleinSamuel/gtamap/src/formats/fasta"
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
 	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
 )
-
-type EnhancedRecord struct {
-	sam.Record
-	MapperIndex  int                        // index of the mapper in MapperInfos
-	MappedGenome *regionvector.RegionVector // the matched intervals in the genome (mis- + matches (M, =, X in cigar))
-	MappedRead   *regionvector.RegionVector // the matched intervals in the read (matches (M, =, X) in cigar)
-	Mismatches   []int                      // the positions of the mismatches in the read sequence (min = 0, max = read length)
-	CigarObj     *cigar.Object
-}
-
-func (h *MappingDataHandler) NewEnhancedRecord(record sam.Record, mapperIndex int) (*EnhancedRecord, error) {
-
-	cigarObj, errCigarObj := cigar.NewCigarFromString(record.Cigar)
-	if errCigarObj != nil {
-		return nil, fmt.Errorf("error creating cigar from record: %w", errCigarObj)
-	}
-
-	genomicRegionsMapped := regionvector.NewRegionVector()
-	readRegionsMapped := regionvector.NewRegionVector()
-	start := record.Pos - 1 // SAM format is 1-based, convert to 0-based
-	startRead := 0
-	for _, elem := range cigarObj.Elements {
-		if elem.IsMatch() {
-			genomicRegionsMapped.AddRegion(start, start+elem.Length)
-			readRegionsMapped.AddRegion(startRead, startRead+elem.Length)
-		}
-		if elem.ConsumesRead() {
-			startRead += elem.Length
-		}
-		if elem.ConsumesReference() {
-			start += elem.Length
-		}
-	}
-
-	// number of genomic and read regions should be the same
-	if genomicRegionsMapped.NumRegions() != readRegionsMapped.NumRegions() {
-		logrus.Errorf("number of genomic regions (%d) does not match number of read regions (%d) in record %s", genomicRegionsMapped.NumRegions(), readRegionsMapped.NumRegions(), record.Qname)
-	}
-
-	genomicCombined, readCombined, errCombine := regionvector.CombineRegionVectorsConsecutiveInBoth(genomicRegionsMapped, readRegionsMapped)
-	if errCombine != nil {
-		fmt.Println(cigarObj.String())
-		logrus.Errorf("error combining genomic and read regions: %v", errCombine)
-		logrus.Errorf("record: %s for mapper index %d", record.Qname, mapperIndex)
-		logrus.Errorf("genomic regions: %s", genomicRegionsMapped)
-		logrus.Errorf("read regions: %s", readRegionsMapped)
-	}
-
-	// calculate mismatches based on inferred genome sequence, read sequence
-	// and cigar string based region vectors
-	posInRead := 0
-	posInGenome := record.Pos - 1
-	detailedCigarElements := make([]cigar.Element, 0)
-	for _, elem := range cigarObj.Elements {
-
-		if elem.Type == "S" || elem.Type == "H" || elem.Type == "I" {
-			// skip soft-clipped, hard-clipped and inserted bases
-			posInRead += elem.Length
-			detailedCigarElements = append(detailedCigarElements, cigar.Element{
-				Length: elem.Length,
-				Type:   elem.Type,
-			})
-			continue
-		}
-
-		if elem.Type == "D" || elem.Type == "N" {
-			// skip deleted bases in the genome
-			posInGenome += elem.Length
-			detailedCigarElements = append(detailedCigarElements, cigar.Element{
-				Length: elem.Length,
-				Type:   elem.Type,
-			})
-			continue
-		}
-
-		if elem.Type == "X" || elem.Type == "=" {
-			posInGenome += elem.Length
-			posInRead += elem.Length
-			detailedCigarElements = append(detailedCigarElements, cigar.Element{
-				Length: elem.Length,
-				Type:   elem.Type,
-			})
-			continue
-		}
-
-		if elem.Type == "M" {
-
-			// compare the read sequence with the genome sequence to find
-			// mismatches, genome sequence is consecutive
-
-			endInGenome := posInGenome + elem.Length
-
-			isInTargetSeq := h.TargetRegion.Contig == record.Rname && h.TargetRegion.Start <= posInGenome && endInGenome <= h.TargetRegion.End
-
-			var seq string
-
-			if isInTargetSeq {
-				seq = h.TargetRegion.SequenceDnaForward[posInGenome-h.TargetRegion.Start : endInGenome-h.TargetRegion.Start]
-			} else {
-				var errSeq error
-				seq, errSeq = h.ExtractSequence(record.Rname, posInGenome, endInGenome)
-				if errSeq != nil {
-					return nil, fmt.Errorf("error extracting sequence from fasta: %w", errSeq)
-				}
-			}
-
-			currentLen := 1
-			currentIsMatch := record.Seq[posInRead] == seq[0]
-			for i := 1; i < elem.Length; i++ {
-				isMatch := record.Seq[posInRead+i] == seq[i]
-
-				if currentIsMatch == isMatch {
-					currentLen += 1
-					continue
-				}
-
-				typeChar := "X"
-				if currentIsMatch {
-					typeChar = "="
-				}
-
-				detailedCigarElements = append(detailedCigarElements, cigar.Element{
-					Length: currentLen,
-					Type:   typeChar,
-				})
-
-				currentLen = 1
-				currentIsMatch = isMatch
-			}
-
-			typeChar := "X"
-			if currentIsMatch {
-				typeChar = "="
-			}
-
-			detailedCigarElements = append(detailedCigarElements, cigar.Element{
-				Length: currentLen,
-				Type:   typeChar,
-			})
-
-			posInRead += elem.Length
-			posInGenome += elem.Length
-
-			continue
-		}
-
-		return nil, fmt.Errorf("unknown cigar element type: %s", elem.Type)
-	}
-
-	return &EnhancedRecord{
-		Record:       record,
-		MapperIndex:  mapperIndex,
-		MappedGenome: genomicCombined,
-		MappedRead:   readCombined,
-		Mismatches:   make([]int, 0),
-		CigarObj:     &cigar.Object{Elements: detailedCigarElements},
-	}, nil
-}
-
-func (r *EnhancedRecord) IsEqual(other *EnhancedRecord) bool {
-	if r == nil || other == nil {
-		return false
-	}
-	if r.Qname != other.Qname || r.Rname != other.Rname || r.Pos != other.Pos {
-		return false
-	}
-	if r.CigarObj.String() != other.CigarObj.String() {
-		return false
-	}
-	return true
-}
 
 type MapperInfo struct {
 	Index      int // index in MapperNames
@@ -218,6 +46,7 @@ func NewReadInfo() *ReadInfo {
 
 type TargetRegion struct {
 	Contig             string // name of the contig
+	ContigLength       int    // the length of the original contig
 	Start              int    // start position (0-based)
 	End                int    // end position (0-based, exclusive)
 	IsForwardStrand    bool   // true if the target region is on the forward strand, false if on the reverse strand
@@ -232,6 +61,7 @@ type MappingDataHandler struct {
 	MapperInfos     []*MapperInfo                  // list of mapper infos in consistent order
 	ReadInfos       []*ReadInfo                    // list of read infos
 	ReadNamesMap    map[string]*ReadInfo           // map has key = read name, value = read info
+	Records         []*EnhancedRecord              // list of all records
 	RecordsByMapper [][]*EnhancedRecord            // outer array = mappers by order of MapperNames, inner array = records for each mapper
 	QnamesByMapper  []map[string][]*EnhancedRecord // outer array = mappers by order of MapperNames, map has key = qname, value = enhanced record
 	QnameCluster    map[string]*QnameCluster       // map has key = qname, value = cluster of records with this qname
@@ -253,6 +83,7 @@ type ReadCluster struct {
 	RecordDistanceMean float64
 	ConfidenceLevel    int
 	SimilarRecords     [][]*EnhancedRecord // similar records for the first read in the pair
+	AcceptedRecord     *EnhancedRecord     // the record that is accepted as the representative of the cluster
 }
 
 func NewMappingDataHandler(fastaFilePath string, fastaIndexFilePath string) (*MappingDataHandler, error) {
@@ -417,6 +248,10 @@ func (h *MappingDataHandler) AddMapperInfo(mapperName string, mapperSamFilePath 
 			}
 		}
 
+		// add the records
+		enhancedRecord.Index = len(h.Records)
+		h.Records = append(h.Records, enhancedRecord)
+
 		recordsByMapper = append(recordsByMapper, enhancedRecord)
 
 		if _, exists := qnameMap[record.Qname]; !exists {
@@ -448,6 +283,8 @@ func (h *MappingDataHandler) AddMapperInfo(mapperName string, mapperSamFilePath 
 		} else {
 			qnameCluster.ClusterR2.Records = append(qnameCluster.ClusterR2.Records, enhancedRecord)
 		}
+
+		enhancedRecord.QnameCluster = qnameCluster
 	}
 
 	h.RecordsByMapper = append(h.RecordsByMapper, recordsByMapper)
@@ -860,4 +697,82 @@ func (h *MappingDataHandler) LoadMapperResults() {
 	}
 
 	h.ComputeQnameClusters()
+}
+
+func (h *MappingDataHandler) GetAcceptedRecords() []*EnhancedRecord {
+
+	accepted := make([]*EnhancedRecord, 0)
+
+	for _, cluster := range h.QnameCluster {
+
+		if cluster.ClusterR1.AcceptedRecord != nil {
+			accepted = append(accepted, cluster.ClusterR1.AcceptedRecord)
+		}
+		if cluster.ClusterR2.AcceptedRecord != nil {
+			accepted = append(accepted, cluster.ClusterR2.AcceptedRecord)
+		}
+	}
+
+	return accepted
+}
+
+func (h *MappingDataHandler) AcceptRecord(r *EnhancedRecord) {
+
+	logrus.WithFields(logrus.Fields{
+		"qname": r.Qname,
+		"index": r.Index,
+	}).Info("accepting record")
+
+	r.IsAccepted = true
+
+	if r.Flag.IsFirstInPair() {
+		r.QnameCluster.ClusterR1.AcceptedRecord = r
+	} else {
+		r.QnameCluster.ClusterR2.AcceptedRecord = r
+	}
+}
+
+func (h *MappingDataHandler) GetSimilarRecordsInCluster(r *EnhancedRecord) []*EnhancedRecord {
+
+	var clust *ReadCluster
+	if r.Flag.IsFirstInPair() {
+		clust = r.QnameCluster.ClusterR1
+	} else {
+		clust = r.QnameCluster.ClusterR2
+	}
+
+	for _, s1 := range clust.SimilarRecords {
+		contained := slices.Contains(s1, r)
+		if !contained {
+			continue
+		}
+		return s1
+	}
+
+	return nil
+}
+
+func (h *MappingDataHandler) GetMapperNamesThatMappedRecord(r *EnhancedRecord) []string {
+
+	var clust *ReadCluster
+	if r.Flag.IsFirstInPair() {
+		clust = r.QnameCluster.ClusterR1
+	} else {
+		clust = r.QnameCluster.ClusterR2
+	}
+
+	names := make([]string, 0)
+
+	for _, s1 := range clust.SimilarRecords {
+		contained := slices.Contains(s1, r)
+		if !contained {
+			continue
+		}
+		for _, r := range s1 {
+			mapperName := h.MapperInfos[r.MapperIndex].MapperName
+			names = append(names, mapperName)
+		}
+	}
+
+	return names
 }

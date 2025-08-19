@@ -94,7 +94,7 @@ func (entry *Record) String() string {
 	return alignmentLineString
 }
 
-func (entry *Record) StringWithMapperInfo(relPos int, mapperName string) string {
+func (entry *Record) StringWithMapperInfo(relPos int, mapperName string, recordIndex int) string {
 	if entry == nil {
 		return ""
 	}
@@ -102,6 +102,10 @@ func (entry *Record) StringWithMapperInfo(relPos int, mapperName string) string 
 	alignmentLineString := fmt.Sprintf("%s\t%s\t%s\t%d\t%d\t%s\t%s\t%d\t%d\t%s\t%s",
 		entry.Qname, entry.Flag.String(), entry.Rname, entry.Pos-relPos, entry.Mapq, entry.Cigar,
 		entry.Rnext, entry.Pnext, entry.Tlen, entry.Seq, entry.Qual)
+
+	if recordIndex >= 0 {
+		alignmentLineString += fmt.Sprintf("\tXG:Z:%d", recordIndex)
+	}
 
 	alignmentLineString += fmt.Sprintf("\tXI:I:%d", entry.IndexInSam)
 
