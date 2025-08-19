@@ -403,9 +403,8 @@ func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperu
 
 		// count mismatches when filling the gap and skip the match if there are too many
 		geneSeqPos := 0
-		for i := gapRead.Start - 1; i < gapRead.End-1; i++ {
-
-			readByte := (*read.Sequence)[i]
+		for k := gapRead.Start - 1; k <= gapRead.End-1; k++ {
+			readByte := (*read.Sequence)[k]
 			gIndex := gapGenome.Start + geneSeqPos - 1
 			genomeByte := (*genomeIndex.Sequences[result.SequenceIndex])[gIndex]
 			geneSeqPos++
@@ -416,7 +415,7 @@ func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperu
 			}
 
 			// add the mismatche to the result
-			result.MismatchesRead = append(result.MismatchesRead, i)
+			result.MismatchesRead = append(result.MismatchesRead, k)
 
 			// skip this match result if there are too many mismatches
 			if exceedsMismatchConstraint(read, result) {
@@ -787,6 +786,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 
 		// there are unmatched positions in the back of the read
 		lastRegionRead, _ := result.MatchedRead.GetLastRegion()
+
 		if lastRegionRead.End < len(*read.Sequence) {
 
 			startRead := lastRegionRead.End
@@ -858,7 +858,6 @@ func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.Genome
 		MatchedGenome:  regionvector.NewRegionVector(),
 		MismatchesRead: make([]int, 0),
 	}
-
 	applyPossibleDiagonals(read, genomeIndex, diagonalHandler, result, &results, greedy, currDepth)
 
 	finalResults := make([]*mapperutils.ReadMatchResult, 0)
