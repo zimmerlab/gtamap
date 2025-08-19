@@ -57,6 +57,7 @@
 
     <div class="tw:flex tw:flex-row tw:px-12 tw:mb-10">
       <ReadSummaryTable ref="readSummaryTableRef" class="tw:flex-1"
+        url="/api/readSummaryTable"
         @open-read-details="openReadDetailsPage"></ReadSummaryTable>
     </div>
 

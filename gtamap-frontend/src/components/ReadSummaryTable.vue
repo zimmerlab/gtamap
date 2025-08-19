@@ -87,6 +87,13 @@ const emit = defineEmits(['open-read-details'])
 
 const ApiService = inject("http")
 
+const props = defineProps({
+  url: {
+    type: String,
+    default: ''
+  }
+})
+
 const pagination = ref({
   total: 0,
   itemsPerPage: 30,
@@ -191,7 +198,7 @@ let getReadSummaryTableData = function() {
 
   tableData.value.loading = true
 
-  ApiService.get("/api/readSummaryTable")
+  ApiService.get(props.url)
       .then(response => {
 
         if (response.status === 200) {
