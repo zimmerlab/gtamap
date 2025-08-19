@@ -868,7 +868,7 @@ func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.Genome
 
 		// INFO: DNA RNA
 		// Only annotate if RNA
-		if res.MatchedGenome.HasGaps() {
+		if res.MatchedGenome.HasGaps() && config.IsOriginRNA {
 			res.NormalizeRegions()
 			annotateSpliceSites(read, genomeIndex, res)
 		}
@@ -886,7 +886,8 @@ func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.Genome
 		// If res in a repeat region, only append to finalResults when low mm
 		isInRepeat := isPartOfRepeat(res, genomeIndex)
 		if isInRepeat {
-			if len(res.MismatchesRead) < 4 {
+			// TODO: add to conf
+			if len(res.MismatchesRead) < config.MaxRepeatMM {
 				finalResults = append(finalResults, res)
 			}
 		} else {

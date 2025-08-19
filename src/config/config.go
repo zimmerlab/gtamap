@@ -61,6 +61,8 @@ var (
 	IntronClusterRepairWindow int = 5
 )
 
+var MaxRepeatMM int = 4
+
 // SAM options
 var (
 	IncludeMMinSAM     bool = true  // if set to true, CIGAR will include "=" and "X" runes instead of only "M"
