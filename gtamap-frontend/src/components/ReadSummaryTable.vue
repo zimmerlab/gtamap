@@ -41,7 +41,7 @@
   <w-table
       :loading="tableData.loading"
       :headers="tableData.headers"
-      :items="filteredItems"
+      :items="summaryTableData.filteredItems"
       :pagination="pagination"
       :selectable-rows="1"
       :selected-rows="tableData.selectedRows"
@@ -209,7 +209,7 @@ const handleSort = function(sortInfo) {
 
 const customSort = function() {
 
-  const items = readSummaryTableData.value.items
+  const items = summaryTableData.value.items
 
   if (!tableData.value.sortKey || tableData.value.sortKey === "") {
     return items
@@ -246,7 +246,10 @@ const customSort = function() {
 }
 
 // content of the outer table (qnames)
-const readSummaryTableData = ref({items: []})
+const summaryTableData = ref({
+  items: [],
+  filteredItems: []
+})
 // content of the inner table (mapping location records per qname)
 const readMappingTableData = ref({items: []})
 
@@ -256,11 +259,9 @@ const filterOptions = ref({
   hideNonInProgressRecords: false,
 })
 
-const updateTimeout = ref(null)
+const applyFilters = function() {
 
-const filteredItems = computed(() => {
-  const initLength = readSummaryTableData.value.items.length
-  let items = readSummaryTableData.value.items
+  let items = summaryTableData.value.items
 
   if (filterOptions.value.hideAcceptedRecords) {
     items = items.filter(item => !(item.isAcceptedR1 && item.isAcceptedR2))
@@ -272,22 +273,12 @@ const filteredItems = computed(() => {
     items = items.filter(item => (item.isAcceptedR1 || item.isAcceptedR2) && !(item.isAcceptedR1 && item.isAcceptedR2))
   }
 
-  if (items.length !== initLength) {
-    updateSummaryFilters().then(() => {
-      // debounce event to prevent too many updates
-      clearTimeout(updateTimeout.value)
-      updateTimeout.value = setTimeout(() => {
-        emit("summary-table-update")
-      }, 50)
-    })
-  }
-  
-  return items
-})
+  // emit the table update only once the server was notified about the new filters
+  updateSummaryFilters().then(() => {
+    emit("summary-table-update")
+  })
 
-const applyFilters = function() {
-  // Filters are applied automatically through the computed property
-  // This function can be used for additional filter logic if needed
+  summaryTableData.value.filteredItems = items
 }
 
 const expandRowClickHandler = function(rowInfo) {
@@ -309,7 +300,7 @@ const expandRow = function(rowItem) {
   readMappingTableData.value.items = rowItem.locations.slice() || []
 }
 
-let getReadSummaryTableData = function() {
+let getSummaryTableData = function() {
 
   tableData.value.loading = true
 
@@ -318,12 +309,15 @@ let getReadSummaryTableData = function() {
 
         if (response.status === 200) {
 
-          readSummaryTableData.value.items = response.data
-          pagination.value.total = filteredItems.value.length
+          summaryTableData.value.items = response.data
+  
+          applyFilters()
+
+          pagination.value.total = summaryTableData.value.filteredItems.length
           pagination.value.itemsPerPage = 15
 
           // add parent information to each location
-          for (const item of readSummaryTableData.value.items) {
+          for (const item of summaryTableData.value.items) {
             item.isSelected = false
             for (const l of item.locations) {
               l.parent = item
@@ -357,7 +351,7 @@ let openReadDetails = function(readItem) {
 
 const selectAndScrollToRead = async function(readInfo) {
 
-  const targetRead = readSummaryTableData.value.items.find(item => item.qname === readInfo.qname)
+  const targetRead = summaryTableData.value.items.find(item => item.qname === readInfo.qname)
   if (!targetRead) {
     console.warn("Read not found in the table data")
     return
@@ -504,7 +498,7 @@ const acceptAllMaxConfidenceReads = function() {
 
   let items = []
 
-  for (const item of readSummaryTableData.value.items) {
+  for (const item of summaryTableData.value.items) {
     if (item.confidenceLevel === 5 && !item.isAccepted) {
       for (const l of item.locations) {
         l.isAccepted = true
@@ -525,7 +519,7 @@ const acceptAllMaxConfidenceReads = function() {
 // SELECTION ACTIONS
 
 const deselectAll = function() {
-  for (const item of readSummaryTableData.value.items) {
+  for (const item of summaryTableData.value.items) {
     item.isSelected = false
   }
 }
@@ -533,7 +527,7 @@ const deselectAll = function() {
 defineExpose({selectAndScrollToRead})
 
 onMounted(() => {
-  getReadSummaryTableData()
+  getSummaryTableData()
 })
 </script>
 
