@@ -122,7 +122,7 @@ func (h *MappingDataHandler) GetReadSummaryTableData() []ReadOverviewInfo {
 			ConfidenceLevel: qnameCluster.ConfidenceLevel,
 			IsAcceptedR1:    isAcceptedR1,
 			IsAcceptedR2:    isAcceptedR2,
-			IsDiscarded:     false,
+			IsDiscarded:     qnameCluster.IsDiscarded,
 		}
 
 		reads = append(reads, readOverviewInfo)

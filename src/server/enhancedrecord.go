@@ -196,3 +196,18 @@ func (r *EnhancedRecord) StringFinal(posOffset int, mapperNames string, recordIn
 
 	return alignmentLineString
 }
+
+func (r *EnhancedRecord) StringCombinedAll(posOffset int, mapperNames string, samIndices string, recordIndices string) string {
+
+	alignmentLineString := fmt.Sprintf("%s\t%s\t%s\t%d\t%d\t%s\t%s\t%d\t%d\t%s\t%s",
+		r.Qname, r.Flag.String(), r.Rname, r.Pos-posOffset, r.Mapq, r.Cigar,
+		r.Rnext, r.Pnext, r.Tlen, r.Seq, r.Qual)
+
+	alignmentLineString += fmt.Sprintf("\tXM:Z:%s", mapperNames)
+
+	alignmentLineString += fmt.Sprintf("\tXI:Z:%s", samIndices)
+
+	alignmentLineString += fmt.Sprintf("\tXG:Z:%s", recordIndices)
+
+	return alignmentLineString
+}

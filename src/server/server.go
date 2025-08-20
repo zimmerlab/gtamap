@@ -35,9 +35,9 @@ func (s *Server) InitRoutes() {
 	api.HandleFunc("/health", s.healthCheck).Methods("GET")
 
 	//api.HandleFunc("/genomeConfig", getTestGenomeConfig).Methods("GET")
-	api.HandleFunc("/igvConfigTarget", getTargetRegionIgvConfig).Methods("GET")
+	// api.HandleFunc("/igvConfigTarget", getTargetRegionIgvConfig).Methods("GET")
 
-	api.HandleFunc("/readSummaryTable", s.getReadSummaryTable).Methods("GET")
+	// api.HandleFunc("/readSummaryTable", s.getReadSummaryTable).Methods("GET")
 
 	api.HandleFunc("/upsetData", s.upsetData).Methods("GET")
 	// api.HandleFunc("/upsetDataRecordPos", s.upsetDataRecordPos).Methods("GET")
@@ -53,14 +53,21 @@ func (s *Server) InitRoutes() {
 	api.HandleFunc("/mapperMultimappingParallel", s.mapperMultimappingParallel).Methods("GET")
 	api.HandleFunc("/mapperDistances", s.mapperDistances).Methods("GET")
 
-	api.HandleFunc("/acceptRecord", s.acceptRecord).Methods("GET")
-	api.HandleFunc("/acceptRecords", s.acceptRecords).Methods("POST")
-	api.HandleFunc("/unacceptRecords", s.unacceptRecords).Methods("POST")
-
-	summary := s.Router.PathPrefix("/summary").Subrouter()
+	// SUMMARY
+	summary := api.PathPrefix("/summary").Subrouter()
 	summary.HandleFunc("/table", s.getReadSummaryTable).Methods("GET")
-	summary.HandleFunc("/target/igvConfig", getTargetRegionIgvConfig).Methods("GET")
+	summary.HandleFunc("/filterUpdate", s.filterUpdate).Methods("POST")
+	summary.HandleFunc("/igvConfig", getTargetRegionIgvConfig).Methods("GET")
+	summary.HandleFunc("/sam", s.serveTargetRegionCombinedMappingSam).Methods("GET")
+	summary.HandleFunc("/bam", s.serveTargetRegionCombinedMappingBam).Methods("GET")
+	summary.HandleFunc("/bamIndex", s.serveTargetRegionCombinedMappingBamIndex).Methods("GET")
 
+	summary.HandleFunc("/acceptRecord", s.acceptRecord).Methods("GET")
+	summary.HandleFunc("/acceptRecords", s.acceptRecords).Methods("POST")
+	summary.HandleFunc("/unacceptRecords", s.unacceptRecords).Methods("POST")
+	summary.HandleFunc("/discardReads", s.discardReads).Methods("POST")
+
+	// ACCEPTED
 	accepted := api.PathPrefix("/accepted").Subrouter()
 	// sel.HandleFunc("/table", s.getReadSelectionTable).Methods("GET")
 	accepted.HandleFunc("/igvConfig", s.getAcceptedRecordsIgvConfig).Methods("GET")
@@ -718,19 +725,102 @@ func (s *Server) getCombinedSam() string {
 	builder.WriteString("@HD\tVN:1.6\tSO:unsorted\n")
 	builder.WriteString(fmt.Sprintf("@SQ\tSN:%s\tLN:%d\n", config.GetTargetContig(), config.GetTargetEnd()-config.GetTargetStart()+1))
 
-	for mIndex, mapperInfo := range s.Handler.MapperInfos {
-		for _, record := range s.Handler.RecordsByMapper[mIndex] {
-			// only include records that map to the target region
-			isOnTargetContig := record.Rname == config.GetTargetContig()
-			isInTargetRegion := record.Pos >= config.GetTargetStart() && record.Pos <= config.GetTargetEnd()
+	for _, readInfo := range s.Handler.ReadInfos {
+		qclust := s.Handler.QnameCluster[readInfo.Qname]
+
+		// skip cluster if accepted and filter is set
+		isAccepted := qclust.ClusterR1.AcceptedRecord != nil && qclust.ClusterR2.AcceptedRecord != nil
+		if s.Handler.SummaryFilters.HideAccepted && isAccepted {
+			continue
+		}
+
+		// skip cluster if discarded and filter is set
+		if s.Handler.SummaryFilters.HideDiscarded && qclust.IsDiscarded {
+			continue
+		}
+
+		// skip cluster if not in progress and filter is set
+		inProgress := (qclust.ClusterR1.AcceptedRecord != nil || qclust.ClusterR2.AcceptedRecord != nil) && !isAccepted
+		if s.Handler.SummaryFilters.HideNonInProgress && !inProgress {
+			continue
+		}
+
+		for _, records := range qclust.ClusterR1.SimilarRecords {
+
+			// INFO: this skips the read cluster if it has an accepted record
+			// if qclust.ClusterR1.AcceptedRecord != nil {
+			// 	break
+			// }
+
+			r1 := records[0] // take the first record as representative
+
+			isOnTargetContig := r1.Rname == config.GetTargetContig()
+			isInTargetRegion := r1.Pos >= config.GetTargetStart() && r1.Pos <= config.GetTargetEnd()
 			if !isOnTargetContig || !isInTargetRegion {
 				continue
 			}
 
-			builder.WriteString(record.StringWithMapperInfo(config.GetTargetStart(), mapperInfo.MapperName, record.Index))
+			sNames := make([]string, 0, len(records))
+			rIndices := make([]int, 0, len(records))
+			sIndices := make([]int, 0, len(records))
+			for _, r := range records {
+				sNames = append(sNames, s.Handler.MapperInfos[r.MapperIndex].MapperName)
+				rIndices = append(rIndices, r.Index)
+				sIndices = append(sIndices, r.IndexInSam)
+			}
+			sNamesString := utils.ArrayStringToString(sNames, ",")
+			rIndicesString := utils.ArrayIntToString(rIndices, ",")
+			sIndicesString := utils.ArrayIntToString(sIndices, ",")
+
+			builder.WriteString(r1.StringCombinedAll(config.GetTargetStart(), sNamesString, sIndicesString, rIndicesString))
+			builder.WriteString("\n")
+		}
+
+		for _, records := range qclust.ClusterR2.SimilarRecords {
+
+			// INFO: this skips the read cluster if it has an accepted record
+			// if qclust.ClusterR2.AcceptedRecord != nil {
+			// 	break
+			// }
+
+			r2 := records[0] // take the first record as representative
+
+			isOnTargetContig := r2.Rname == config.GetTargetContig()
+			isInTargetRegion := r2.Pos >= config.GetTargetStart() && r2.Pos <= config.GetTargetEnd()
+			if !isOnTargetContig || !isInTargetRegion {
+				continue
+			}
+
+			sNames := make([]string, 0, len(records))
+			rIndices := make([]int, 0, len(records))
+			sIndices := make([]int, 0, len(records))
+			for _, r := range records {
+				sNames = append(sNames, s.Handler.MapperInfos[r.MapperIndex].MapperName)
+				rIndices = append(rIndices, r.Index)
+				sIndices = append(sIndices, r.IndexInSam)
+			}
+			sNamesString := utils.ArrayStringToString(sNames, ",")
+			rIndicesString := utils.ArrayIntToString(rIndices, ",")
+			sIndicesString := utils.ArrayIntToString(sIndices, ",")
+
+			builder.WriteString(r2.StringCombinedAll(config.GetTargetStart(), sNamesString, sIndicesString, rIndicesString))
 			builder.WriteString("\n")
 		}
 	}
+
+	// for mIndex, mapperInfo := range s.Handler.MapperInfos {
+	// 	for _, record := range s.Handler.RecordsByMapper[mIndex] {
+	// 		// only include records that map to the target region
+	// 		isOnTargetContig := record.Rname == config.GetTargetContig()
+	// 		isInTargetRegion := record.Pos >= config.GetTargetStart() && record.Pos <= config.GetTargetEnd()
+	// 		if !isOnTargetContig || !isInTargetRegion {
+	// 			continue
+	// 		}
+	//
+	// 		builder.WriteString(record.StringWithMapperInfo(config.GetTargetStart(), mapperInfo.MapperName, record.Index))
+	// 		builder.WriteString("\n")
+	// 	}
+	// }
 
 	return builder.String()
 }
@@ -939,18 +1029,18 @@ type IgvTrackConfig struct {
 func getTargetRegionIgvConfig(w http.ResponseWriter, r *http.Request) {
 
 	genomeConfig := IgvGenomeConfig{
-		Id:       "Target Region (chr3:123456-789012)",
+		Id:       "Target Region",
 		Label:    "BASE_GENOME_LABEL",
 		FastaUrl: "http://localhost:8000/download/targetRegion/fasta",
 		IndexUrl: "http://localhost:8000/download/targetRegion/fastaIndex",
 	}
 
 	track := IgvTrackConfig{
-		Name:        "TEST_TRACK",
+		Name:        "Read Selection",
 		Format:      "sam",
 		DisplayMode: "EXPANDED",
-		Url:         "http://localhost:8000/download/targetRegion/combinedBam",
-		IndexUrl:    "http://localhost:8000/download/targetRegion/combinedBamIndex",
+		Url:         "http://localhost:8000/api/summary/bam",
+		IndexUrl:    "http://localhost:8000/api/summary/bamIndex",
 		Type:        "alignment",
 		Height:      800,
 		MaxHeight:   1000,
@@ -1270,4 +1360,52 @@ func (s *Server) acceptRecord(w http.ResponseWriter, r *http.Request) {
 	s.Handler.AcceptRecord(record)
 
 	w.Write([]byte("Record accepted successfully"))
+}
+
+type DiscardReadsDto struct {
+	Qnames []string `json:"qnames"`
+}
+
+func (s *Server) discardReads(w http.ResponseWriter, r *http.Request) {
+
+	var p DiscardReadsDto
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	for _, qname := range p.Qnames {
+		if _, exists := s.Handler.QnameCluster[qname]; !exists {
+			http.Error(w, fmt.Sprintf("Qname not found: %s", qname), http.StatusBadRequest)
+			return
+		}
+	}
+	for _, qname := range p.Qnames {
+		s.Handler.DiscardReadCluster(s.Handler.QnameCluster[qname])
+	}
+
+	w.Write([]byte("Reads discarded successfully"))
+}
+
+type SummaryFilterUpdateDto struct {
+	HideAccepted      bool `json:"hideAccepted"`
+	HideDiscarded     bool `json:"hideDiscarded"`
+	HideNonInProgress bool `json:"hideNonInProgress"`
+}
+
+func (s *Server) filterUpdate(w http.ResponseWriter, r *http.Request) {
+
+	var p SummaryFilterUpdateDto
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	s.Handler.SummaryFilters.HideAccepted = p.HideAccepted
+	s.Handler.SummaryFilters.HideDiscarded = p.HideDiscarded
+	s.Handler.SummaryFilters.HideNonInProgress = p.HideNonInProgress
+
+	w.Write([]byte("Filter update received successfully"))
 }

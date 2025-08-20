@@ -54,6 +54,20 @@ type TargetRegion struct {
 	SequenceDnaReverse string // reverse complement sequence of the target region
 }
 
+type SummaryFilters struct {
+	HideAccepted      bool
+	HideDiscarded     bool
+	HideNonInProgress bool
+}
+
+func NewSummaryFilters() *SummaryFilters {
+	return &SummaryFilters{
+		HideAccepted:      false,
+		HideDiscarded:     false,
+		HideNonInProgress: false,
+	}
+}
+
 type MappingDataHandler struct {
 	FastaFile       *os.File
 	FastaIndex      *fasta.Index
@@ -65,6 +79,7 @@ type MappingDataHandler struct {
 	RecordsByMapper [][]*EnhancedRecord            // outer array = mappers by order of MapperNames, inner array = records for each mapper
 	QnamesByMapper  []map[string][]*EnhancedRecord // outer array = mappers by order of MapperNames, map has key = qname, value = enhanced record
 	QnameCluster    map[string]*QnameCluster       // map has key = qname, value = cluster of records with this qname
+	SummaryFilters  *SummaryFilters
 }
 
 type QnameCluster struct {
@@ -73,6 +88,7 @@ type QnameCluster struct {
 	ClusterR1       *ReadCluster // cluster of records for the first read in the pair (R1)
 	ClusterR2       *ReadCluster // cluster of records for the second read in the pair (R2)
 	ConfidenceLevel int
+	IsDiscarded     bool
 }
 
 type ReadCluster struct {
@@ -108,6 +124,7 @@ func NewMappingDataHandler(fastaFilePath string, fastaIndexFilePath string) (*Ma
 		RecordsByMapper: make([][]*EnhancedRecord, 0),
 		QnamesByMapper:  make([]map[string][]*EnhancedRecord, 0),
 		QnameCluster:    make(map[string]*QnameCluster),
+		SummaryFilters:  NewSummaryFilters(),
 	}
 
 	seqFw, err := h.ExtractSequence(config.GetTargetContig(), config.GetTargetStart(), config.GetTargetEnd())
@@ -746,6 +763,10 @@ func (h *MappingDataHandler) UnacceptRecord(r *EnhancedRecord) {
 	} else {
 		r.QnameCluster.ClusterR2.AcceptedRecord = nil
 	}
+}
+
+func (h *MappingDataHandler) DiscardReadCluster(c *QnameCluster) {
+	c.IsDiscarded = true
 }
 
 func (h *MappingDataHandler) GetSimilarRecordsInCluster(r *EnhancedRecord) []*EnhancedRecord {
