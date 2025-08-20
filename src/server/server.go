@@ -1024,6 +1024,8 @@ type IgvTrackConfig struct {
 	Type        string `json:"type"`
 	Height      int    `json:"height,omitempty"`
 	MaxHeight   int    `json:"maxHeight,omitempty"`
+	MaxRows     int    `json:"maxRows,omitempty"`
+	ColorBy     string `json:"colorBy,omitempty"`
 }
 
 func getTargetRegionIgvConfig(w http.ResponseWriter, r *http.Request) {
@@ -1044,6 +1046,8 @@ func getTargetRegionIgvConfig(w http.ResponseWriter, r *http.Request) {
 		Type:        "alignment",
 		Height:      800,
 		MaxHeight:   1000,
+		MaxRows:     20000,
+		ColorBy:     "none",
 	}
 
 	tracks := make([]IgvTrackConfig, 0)
@@ -1081,6 +1085,8 @@ func (s *Server) getAcceptedRecordsIgvConfig(w http.ResponseWriter, r *http.Requ
 		Type:        "alignment",
 		Height:      800,
 		MaxHeight:   1000,
+		MaxRows:     20000,
+		ColorBy:     "none",
 	}
 
 	tracks := make([]IgvTrackConfig, 0)
