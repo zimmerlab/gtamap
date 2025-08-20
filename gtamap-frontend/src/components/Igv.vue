@@ -71,23 +71,28 @@ const initializeIgv = function () {
           let readInfo = {
             // the read name (qname) of the read
             qname: "",
-            // the name of the mapper which produced this mapping
-            mapperName: "",
-            // the index of the mapping in the respective sam file
-            index: 0,
+            // the names of the mapper which produced this mapping
+            mapperNames: [],
+            // the indices of the mappings in the respective sam file
+            samIndices: [],
+            // list if indices of global records
+            recordIndices: [],
           }
          
           popoverData.forEach(item => {
             switch (item.name) {
               case "Read Name":
-                readInfo.qname = item.value;
-                break;
+                readInfo.qname = item.value
+                break
               case "XM":
-                readInfo.mapperName = item.value;
-                break;
+                readInfo.mapperNames.push(item.value)
+                break
               case "XG":
-                readInfo.index = item.value;
-                break;
+                readInfo.recordIndices.push(parseInt(item.value))
+                break
+              case "XI":
+                readInfo.samIndices.push(parseInt(item.value))
+                break
             }
           })
           

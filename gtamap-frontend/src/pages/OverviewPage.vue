@@ -292,8 +292,6 @@ export default {
       updateIgvAccepted,
       summaryTableUpdate,
       tableUpdated,
-      // getIgvConfig,
-      // initializeIgv,
       // createChart,
       // chartContainer,
       readSummaryTableRef,
@@ -303,12 +301,6 @@ export default {
     }
   },
   mounted() {
-    // this.getIgvConfig()
-    // this.getReadSummaryTableData()
-    // this.getUpsetDataRead()
-    // this.getUpsetDataRecordPos()
-    // this.getUpsetDataRecordPosCigar()
-    // this.createChart()
   },
 }
 </script>

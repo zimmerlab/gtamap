@@ -272,17 +272,13 @@ const filteredItems = computed(() => {
     items = items.filter(item => (item.isAcceptedR1 || item.isAcceptedR2) && !(item.isAcceptedR1 && item.isAcceptedR2))
   }
 
-  console.log("filtered items computed update")
-  console.log("items length:", items.length, "initial length:", initLength)
-
   if (items.length !== initLength) {
-    console.log("triggered")
     updateSummaryFilters().then(() => {
       // debounce event to prevent too many updates
       clearTimeout(updateTimeout.value)
       updateTimeout.value = setTimeout(() => {
         emit("summary-table-update")
-      }, 300)
+      }, 50)
     })
   }
   
@@ -348,8 +344,6 @@ let getReadSummaryTableData = function() {
 }
 
 const updateSummaryFilters = function() {
-  console.log("send filter update")
-  console.log(filterOptions.value)
   return ApiService.post("/api/summary/filterUpdate", {
     hideAccepted: filterOptions.value.hideAcceptedRecords,
     hideDiscarded: filterOptions.value.hideDiscardedRecords,
@@ -381,17 +375,16 @@ const selectAndScrollToRead = async function(readInfo) {
   for (const mapping of readMappingTableData.value.items) {
 
     for (let i = 0; i < mapping.mappedBy.length; i++) {
-      if (mapping.mappedBy[i] !== readInfo.mapperName) {
-        continue
+      for (let j = 0; j < readInfo.mapperNames.length; j++) {
+        if (mapping.mappedBy[i] === readInfo.mapperNames[j] && mapping.readIndices[i] === readInfo.samIndices[j]) {
+          if (selectedMappingRow !== undefined) {
+            console.warn("Multiple mappings found for the selected read, selecting the first one")
+            break
+          }
+          selectedMappingRow = mapping
+          break
+        }
       }
-      if (mapping.readIndices[i] !== readInfo.index) {
-        continue
-      }
-      if (selectedMappingRow !== undefined) {
-        console.warn("Multiple mappings found for the selected read, selecting the first one")
-        break
-      }
-      selectedMappingRow = mapping
     }
   }
 
