@@ -1050,7 +1050,9 @@ type ReadOverviewInfo struct {
 	Locations       []*ReadLocationInfo `json:"locations"`
 	DistanceScore   float64             `json:"distanceScore,omitempty"`   // optional, for distance score
 	ConfidenceLevel int                 `json:"confidenceLevel,omitempty"` // optional, for confidence level
-	IsAccepted      bool                `json:"isAccepted"`
+	IsAcceptedR1    bool                `json:"isAcceptedR1"`
+	IsAcceptedR2    bool                `json:"isAcceptedR2"`
+	IsDiscarded     bool                `json:"isDiscarded"`
 }
 
 type ReadLocationInfo struct {

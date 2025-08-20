@@ -68,19 +68,29 @@
     <div class="tw:px-12 tw:mb-6">
       <div class="tw:border tw:border-gray-300 tw:rounded tw:px-4 tw:pb-4 tw:pt-2">
         <h3 class="tw:text-lg tw:font-bold tw:mb-4 tw:text-center tw:text-gray-500">Read Selection</h3>
-        <ReadSummaryTable ref="readSummaryTableRef" class="tw:flex-1"
+        <ReadSummaryTable
+          ref="readSummaryTableRef"
+          class="tw:flex-1"
           url="/api/readSummaryTable"
           @open-read-details="openReadDetailsPage"
           @content-changed="tableUpdated">
         </ReadSummaryTable>
-        <Igv url="/api/igvConfigTarget"></Igv>
+        <Igv 
+          ref="igvSummary"
+          url="/api/igvConfigTarget"
+          @read-click="handleReadClick"
+        ></Igv>
       </div>
     </div>
 
     <div class="tw:px-12 tw:mb-6">
       <div class="tw:border tw:border-gray-300 tw:rounded tw:p-4">
         <h3 class="tw:text-lg tw:font-bold tw:mb-4 tw:text-center">Accepted Reads</h3>
-        <Igv ref="igvAccepted" url="/api/accepted/igvConfig"></Igv>
+        <Igv
+          ref="igvAccepted"
+          url="/api/accepted/igvConfig"
+          @read-click="handleReadClickAccepted"
+        ></Igv>
       </div>
     </div>
 
@@ -120,88 +130,10 @@ export default {
     const ApiService = inject("http")
     const router = useRouter()
 
+    let igvSummary = ref(null)
     let igvAccepted = ref(null)
 
-    // let igvInfo = ref({})
-    // let igvBrowser = ref(undefined)
-
     const readSummaryTableRef = ref(null);
-
-    // const getIgvConfig = function() {
-    //
-    //   ApiService.get("/api/igvConfigTarget")
-    //       .then((response) => {
-    //         if (response.status === 200) {
-    //
-    //           igvInfo.value ={
-    //             genome: response.data.genomeConfig,
-    //             tracks: response.data.tracks,
-    //             location: response.data.location,
-    //           }
-    //
-    //           initializeIgv()
-    //         }
-    //
-    //       }).catch((err) => {
-    //         console.log(err)
-    //       })
-    // }
-    //
-    // const initializeIgv = function () {
-    //
-    //   const igvDiv = ref(document.getElementById("igv-div"))
-    //
-    //   // the genome information is loaded from API
-    //   const options = {
-    //     genome: igvInfo.value.genome,
-    //     locus: igvInfo.value.location
-    //   }
-    //
-    //   igv.createBrowser(igvDiv.value, options)
-    //     .then(function (browser) {
-    //
-    //       igvBrowser = ref(browser)
-    //
-    //       // initialize tracks by track config loaded from API
-    //       for (const trackConfig of igvInfo.value.tracks) {
-    //         browser.loadTrack(trackConfig)
-    //       }
-    //
-    //       browser.on('trackclick', function (track, popoverData) {
-    //
-    //         if (track.type === "alignment" && popoverData && popoverData.length > 0) {
-    //
-    //           let readInfo = {
-    //             // the read name (qname) of the read
-    //             qname: "",
-    //             // the name of the mapper which produced this mapping
-    //             mapperName: "",
-    //             // the index of the mapping in the respective sam file
-    //             index: 0,
-    //           }
-    //          
-    //           popoverData.forEach(item => {
-    //             switch (item.name) {
-    //               case "Read Name":
-    //                 readInfo.qname = item.value;
-    //                 break;
-    //               case "XM":
-    //                 readInfo.mapperName = item.value;
-    //                 break;
-    //               case "XI":
-    //                 readInfo.index = item.value;
-    //                 break;
-    //             }
-    //           })
-    //           
-    //           track.alignmentTrack.setHighlightedReads([readInfo.qname], "#0000ff")
-    //           track.updateViews()
-    //
-    //           handleReadClick(readInfo)
-    //         }
-    //       });
-    //     })
-    // }
 
     /**
      * Handle the click event on a read in the igv by sending the read information to the read summary table
@@ -209,7 +141,14 @@ export default {
      * @param readInfo
      */
     const handleReadClick = function(readInfo) {
+      console.log("handle read")
+      console.log(readInfo)
       readSummaryTableRef.value.selectAndScrollToRead(readInfo)
+    }
+
+    const handleReadClickAccepted = function(readInfo) {
+      console.log("handle read accepted")
+      console.log(readInfo)
     }
 
     // RIDGE
@@ -332,15 +271,23 @@ export default {
       // })
     }
 
-    const tableUpdated = function() {
-      console.log("table updated")
-      console.log(igvAccepted)
+    const updateIgvSummary = function() {
+      igvSummary.value.update()
+    }
+
+    const updateIgvAccepted = function() {
       igvAccepted.value.update()
-      // igvAccepted.update()
+    }
+
+    const tableUpdated = function() {
+      igvAccepted.value.update()
     }
 
     return {
+      igvSummary,
       igvAccepted,
+      updateIgvSummary,
+      updateIgvAccepted,
       tableUpdated,
       // getIgvConfig,
       // initializeIgv,
@@ -348,6 +295,8 @@ export default {
       // chartContainer,
       readSummaryTableRef,
       openReadDetailsPage,
+      handleReadClick,
+      handleReadClickAccepted
     }
   },
   mounted() {

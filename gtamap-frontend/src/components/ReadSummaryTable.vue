@@ -1,5 +1,4 @@
 <template>
-  <!-- Filtering Options Section -->
   <div class="filter-section tw:mb-4 tw:p-4 tw:border tw:border-gray-300 tw:rounded-lg tw:bg-gray-50">
     <h3 class="tw:text-lg tw:font-medium tw:mb-3">Table Filters</h3>
     <div class="tw:flex tw:items-center tw:gap-4">
@@ -8,6 +7,33 @@
         label="Hide accepted records"
         @change="applyFilters"
       />
+      <w-checkbox
+        v-model="filterOptions.hideAcceptedRecords"
+        label="Hide discarded records"
+        @change="applyFilters"
+      />
+      <w-checkbox
+        v-model="filterOptions.hideAcceptedRecords"
+        label="Show only records in progress"
+        @change="applyFilters"
+      />
+    </div>
+  </div>
+
+  <div class="filter-section tw:mb-4 tw:px-4 tw:py-2 tw:border tw:border-gray-300 tw:rounded-lg tw:bg-gray-50">
+    <h3 class="tw:text-md tw:font-medium tw:mb-3">Quick Actions</h3>
+    <div class="tw:flex tw:items-center tw:gap-4">
+      <w-button @click="acceptAllMaxConfidenceReads"><span class="tw-text-xs">Accept All Max Confidence Reads</span></w-button>
+    </div>
+  </div>
+
+  <div class="filter-section tw:mb-4 tw:px-4 tw:py-2 tw:border tw:border-gray-300 tw:rounded-lg tw:bg-gray-50">
+    <h3 class="tw:text-md tw:font-medium tw:mb-3">Selection</h3>
+    <div class="tw:flex tw:items-center tw:gap-4">
+      <w-button><span class="tw-text-xs">Deselect All</span></w-button>
+      <w-button><span class="tw-text-xs">Reset Acceptance for Selected</span></w-button>
+      <w-button><span class="tw-text-xs">Accept Selected</span></w-button>
+      <w-button><span class="tw-text-xs">Discard Selected</span></w-button>
     </div>
   </div>
 
@@ -15,7 +41,6 @@
       :loading="tableData.loading"
       :headers="tableData.headers"
       :items="filteredItems"
-      fixed-headers
       :pagination="pagination"
       :selectable-rows="1"
       :selected-rows="tableData.selectedRows"
@@ -25,17 +50,23 @@
       :sort-function="customSort"
       @update:sort="handleSort"
       class="tw:text-xs"
+      fixed-headers
       expandable-rows>
+
+    <template #item-cell.isSelected="{ item }">
+      <w-checkbox
+        :model-value="item.isSelected"
+      />
+    </template>
 
     <template #item-cell.readDetails="{ item }">
       <w-button @click.stop="openReadDetails(item)" xs>view</w-button>
     </template>
 
-    <template #item-cell.isAccepted="{ item }">
-      <w-checkbox
-        :model-value="item.isAccepted"
-        disabled
-      />
+    <template #item-cell.state="{ item }">
+      <w-tag v-if="item.isDiscarded" xs bg-color="red">discarded</w-tag>
+      <w-tag v-else-if="item.isAcceptedR1 && item.isAcceptedR2" xs bg-color="green">accepted</w-tag>
+      <w-tag v-else-if="item.isAcceptedR1 || item.isAcceptedR2" xs bg-color="yellow">in progress</w-tag>
     </template>
 
     <template #item-cell.confidence="{ item }">
@@ -138,8 +169,9 @@ const tableData = ref({
   loading: true,
   sortKey: "+qname",
   headers: [
+    {label: 'Select', key: 'isSelected', sortable: false, type: 'boolean'},
     {label: '', key: 'readDetails', sortable: false},
-    {label: 'Accepted', key: 'isAccepted', sortable: false},
+    {label: 'State', key: 'state', sortable: false},
     {label: 'Confidence', key: 'confidence', sortable: true, type: 'number'},
     {label: 'Read Name', key: 'qname', sortable: true, type: 'string'},
     {label: 'Locations', key: 'numLocations', type: 'number'},
@@ -263,6 +295,7 @@ let getReadSummaryTableData = function() {
 
           // add parent information to each location
           for (const item of readSummaryTableData.value.items) {
+            item.isSelected = false
             for (const l of item.locations) {
               l.parent = item
             }
@@ -332,12 +365,18 @@ const isItemSelected = function(item) {
 }
 
 const acceptRecord = function(item) {
+  acceptRecords([item])
+}
+
+const acceptRecords = function(items) {
+  const recordIds = items.map(item => item.readIndices).flat()
+  
   ApiService.post("/api/acceptRecords", {
-    recordIds: item.readIndices
+    recordIds: recordIds
   }).then(response => {
       console.log(response)
   }).catch(err => {
-    console.error("Error accepting record:", err)
+    console.error("Error accepting records:", err)
   })
 }
 
@@ -354,7 +393,6 @@ const unacceptRecord = function(item) {
 const updateItemAcceptance = function(item, isAccepted) {
 
   for (const o of item.parent.locations) {
-    console.log(o)
     if (o.pairType !== item.pairType) {
       continue
     }
@@ -388,7 +426,28 @@ const updateItemAcceptance = function(item, isAccepted) {
     }
   }
 
-  item.parent.isAccepted = acceptR1 && acceptR2
+  item.parent.isAcceptedR1 = acceptR1
+  item.parent.isAcceptedR2 = acceptR2
+
+  emit("content-changed", {})
+}
+
+const acceptAllMaxConfidenceReads = function() {
+
+  let items = []
+
+  for (const item of readSummaryTableData.value.items) {
+    if (item.confidenceLevel === 5 && !item.isAccepted) {
+      for (const l of item.locations) {
+        l.isAccepted = true
+        items.push(l)
+      }
+      item.isAcceptedR1 = true
+      item.isAcceptedR2 = true
+    }
+  }
+
+  acceptRecords(items)
 
   emit("content-changed", {})
 }

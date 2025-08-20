@@ -721,7 +721,7 @@ func (h *MappingDataHandler) AcceptRecord(r *EnhancedRecord) {
 	logrus.WithFields(logrus.Fields{
 		"qname": r.Qname,
 		"index": r.Index,
-	}).Info("accepting record")
+	}).Debug("accepting record")
 
 	r.IsAccepted = true
 
@@ -737,7 +737,7 @@ func (h *MappingDataHandler) UnacceptRecord(r *EnhancedRecord) {
 	logrus.WithFields(logrus.Fields{
 		"qname": r.Qname,
 		"index": r.Index,
-	}).Info("unaccepting record")
+	}).Debug("unaccepting record")
 
 	r.IsAccepted = false
 

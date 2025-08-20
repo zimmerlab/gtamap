@@ -120,7 +120,9 @@ func (h *MappingDataHandler) GetReadSummaryTableData() []ReadOverviewInfo {
 			Locations:       locations,
 			DistanceScore:   distanceMean,
 			ConfidenceLevel: qnameCluster.ConfidenceLevel,
-			IsAccepted:      isAcceptedR1 && isAcceptedR2,
+			IsAcceptedR1:    isAcceptedR1,
+			IsAcceptedR2:    isAcceptedR2,
+			IsDiscarded:     false,
 		}
 
 		reads = append(reads, readOverviewInfo)
