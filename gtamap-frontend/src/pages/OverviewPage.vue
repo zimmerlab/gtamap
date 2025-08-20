@@ -71,13 +71,15 @@
         <ReadSummaryTable
           ref="readSummaryTableRef"
           class="tw:flex-1"
-          url="/api/readSummaryTable"
+          url="/api/summary/table"
           @open-read-details="openReadDetailsPage"
-          @content-changed="tableUpdated">
+          @content-changed="tableUpdated"
+          @summary-table-update="summaryTableUpdate"
+        >
         </ReadSummaryTable>
         <Igv 
           ref="igvSummary"
-          url="/api/igvConfigTarget"
+          url="/api/summary/igvConfig"
           @read-click="handleReadClick"
         ></Igv>
       </div>
@@ -261,14 +263,6 @@ export default {
       }).href
 
       window.open(url, '_blank')
-    
-      // INFO: this is used to open in the same tab
-      // router.push({
-      //   name: 'readDetailsPage',
-      //   query: {
-      //     readId: readItem.qname
-      //   }
-      // })
     }
 
     const updateIgvSummary = function() {
@@ -283,11 +277,20 @@ export default {
       igvAccepted.value.update()
     }
 
+    const summaryTableUpdate = function() {
+      if (!igvSummary.value) {
+        console.warn("IGV summary not initialized")
+        return
+      }
+      updateIgvSummary()
+    }
+
     return {
       igvSummary,
       igvAccepted,
       updateIgvSummary,
       updateIgvAccepted,
+      summaryTableUpdate,
       tableUpdated,
       // getIgvConfig,
       // initializeIgv,

@@ -1,5 +1,6 @@
 <template>
-  <div class="filter-section tw:mb-4 tw:p-4 tw:border tw:border-gray-300 tw:rounded-lg tw:bg-gray-50">
+  <div>
+    <div class="filter-section tw:mb-4 tw:p-4 tw:border tw:border-gray-300 tw:rounded-lg tw:bg-gray-50">
     <h3 class="tw:text-lg tw:font-medium tw:mb-3">Table Filters</h3>
     <div class="tw:flex tw:items-center tw:gap-4">
       <w-checkbox
@@ -8,12 +9,12 @@
         @change="applyFilters"
       />
       <w-checkbox
-        v-model="filterOptions.hideAcceptedRecords"
+        v-model="filterOptions.hideDiscardedRecords"
         label="Hide discarded records"
         @change="applyFilters"
       />
       <w-checkbox
-        v-model="filterOptions.hideAcceptedRecords"
+        v-model="filterOptions.hideNonInProgressRecords"
         label="Show only records in progress"
         @change="applyFilters"
       />
@@ -59,8 +60,12 @@
       />
     </template>
 
-    <template #item-cell.readDetails="{ item }">
-      <w-button @click.stop="openReadDetails(item)" xs>view</w-button>
+    <template #item-cell.actions="{ item }">
+      <w-button @click.stop="openReadDetails(item)" outline xs>
+        <w-icon class="mr1">mdi mdi-open-in-new</w-icon>
+        view details
+      </w-button>
+      <w-button v-if="!item.isDiscarded" fg-color="red" class="tw:ml-2" @click.stop="discardRead(item)" outline xs>discard read</w-button>
     </template>
 
     <template #item-cell.state="{ item }">
@@ -140,6 +145,7 @@
       </w-table>
     </template>
   </w-table>
+  </div>
 </template>
 
 <script setup>
@@ -148,7 +154,7 @@ import CustomTag from "./CustomTag.vue"
 
 import {defineExpose, inject, nextTick, onMounted, ref, defineEmits, computed} from 'vue'
 
-const emit = defineEmits(['open-read-details', 'content-changed'])
+const emit = defineEmits(['open-read-details', 'content-changed', 'summary-table-update'])
 
 const ApiService = inject("http")
 
@@ -170,7 +176,7 @@ const tableData = ref({
   sortKey: "+qname",
   headers: [
     {label: 'Select', key: 'isSelected', sortable: false, type: 'boolean'},
-    {label: '', key: 'readDetails', sortable: false},
+    {label: '', key: 'actions', sortable: false},
     {label: 'State', key: 'state', sortable: false},
     {label: 'Confidence', key: 'confidence', sortable: true, type: 'number'},
     {label: 'Read Name', key: 'qname', sortable: true, type: 'string'},
@@ -239,20 +245,47 @@ const customSort = function() {
   return items
 }
 
+// content of the outer table (qnames)
 const readSummaryTableData = ref({items: []})
+// content of the inner table (mapping location records per qname)
 const readMappingTableData = ref({items: []})
 
 const filterOptions = ref({
-  hideAcceptedRecords: false
+  hideAcceptedRecords: false,
+  hideDiscardedRecords: false,
+  hideNonInProgressRecords: false,
 })
 
+const updateTimeout = ref(null)
+
 const filteredItems = computed(() => {
+  const initLength = readSummaryTableData.value.items.length
   let items = readSummaryTableData.value.items
 
   if (filterOptions.value.hideAcceptedRecords) {
-    items = items.filter(item => !item.isAccepted)
+    items = items.filter(item => !(item.isAcceptedR1 && item.isAcceptedR2))
+  }
+  if (filterOptions.value.hideDiscardedRecords) {
+    items = items.filter(item => !item.isDiscarded)
+  }
+  if (filterOptions.value.hideNonInProgressRecords) {
+    items = items.filter(item => (item.isAcceptedR1 || item.isAcceptedR2) && !(item.isAcceptedR1 && item.isAcceptedR2))
   }
 
+  console.log("filtered items computed update")
+  console.log("items length:", items.length, "initial length:", initLength)
+
+  if (items.length !== initLength) {
+    console.log("triggered")
+    updateSummaryFilters().then(() => {
+      // debounce event to prevent too many updates
+      clearTimeout(updateTimeout.value)
+      updateTimeout.value = setTimeout(() => {
+        emit("summary-table-update")
+      }, 300)
+    })
+  }
+  
   return items
 })
 
@@ -314,6 +347,16 @@ let getReadSummaryTableData = function() {
   })
 }
 
+const updateSummaryFilters = function() {
+  console.log("send filter update")
+  console.log(filterOptions.value)
+  return ApiService.post("/api/summary/filterUpdate", {
+    hideAccepted: filterOptions.value.hideAcceptedRecords,
+    hideDiscarded: filterOptions.value.hideDiscardedRecords,
+    hideNonInProgress: filterOptions.value.hideNonInProgressRecords,
+  })
+}
+
 let openReadDetails = function(readItem) {
   emit("open-read-details", readItem)
 }
@@ -364,14 +407,44 @@ const isItemSelected = function(item) {
   return tableData.value.customSelectedItems.includes(item._uid)
 }
 
+const discardRead = function(item) {
+  discardReads([item])
+}
+
+const discardReads = function(items) {
+
+  for (const item of items) {
+    item.isDiscarded = true
+    item.isAcceptedR1 = false
+    item.isAcceptedR2 = false
+    for (const l of item.locations) {
+      l.isAccepted = false
+    }
+  }
+
+  const qnames = items.map(item => item.qname).flat()
+  ApiService.post("/api/summary/discardReads", {
+    qnames: qnames
+  }).then(response => {
+      console.log(response)
+  }).catch(err => {
+    console.error("Error discarding records:", err)
+  })
+}
+
 const acceptRecord = function(item) {
   acceptRecords([item])
 }
 
 const acceptRecords = function(items) {
+
+  for (const item of items) {
+    item.parent.isDiscarded = false
+  }
+
   const recordIds = items.map(item => item.readIndices).flat()
   
-  ApiService.post("/api/acceptRecords", {
+  ApiService.post("/api/summary/acceptRecords", {
     recordIds: recordIds
   }).then(response => {
       console.log(response)
@@ -381,7 +454,7 @@ const acceptRecords = function(items) {
 }
 
 const unacceptRecord = function(item) {
-  ApiService.post("/api/unacceptRecords", {
+  ApiService.post("/api/summary/unacceptRecords", {
     recordIds: item.readIndices
   }).then(response => {
       console.log(response)
@@ -432,6 +505,8 @@ const updateItemAcceptance = function(item, isAccepted) {
   emit("content-changed", {})
 }
 
+// QUICK ACTIONS
+
 const acceptAllMaxConfidenceReads = function() {
 
   let items = []
@@ -450,6 +525,16 @@ const acceptAllMaxConfidenceReads = function() {
   acceptRecords(items)
 
   emit("content-changed", {})
+}
+
+// FILTERS
+
+// SELECTION ACTIONS
+
+const deselectAll = function() {
+  for (const item of readSummaryTableData.value.items) {
+    item.isSelected = false
+  }
 }
 
 defineExpose({selectAndScrollToRead})

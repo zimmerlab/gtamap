@@ -4,6 +4,7 @@ import WaveUI from 'wave-ui'
 import 'wave-ui/dist/wave-ui.css'
 
 import './style.css'
+import '@mdi/font/css/materialdesignicons.min.css'
 
 import App from './App.vue'
 

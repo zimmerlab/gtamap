@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@mdi/font": "^7.4.47",
     "@tailwindcss/vite": "^4.1.10",
     "@upsetjs/bundle": "^1.11.0",
     "axios": "^1.10.0",
