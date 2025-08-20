@@ -7,7 +7,7 @@
 
 <script setup>
 
-import { ref, inject, onMounted, defineExpose, defineEmits } from 'vue'
+import { ref, inject, onMounted, defineExpose, defineEmits, nextTick } from 'vue'
 import igv from "../js/igv/dist/igv.esm.js"
 
 const ApiService = inject("http")
@@ -106,9 +106,22 @@ const updateBrowserTracks = function() {
     return
   }
 
-  igv.removeBrowser(igvBrowser.value)
+  if (!igvDiv.value) {
+    console.warn("IGV div not available")
+    return
+  }
 
-  initializeIgv()
+  try {
+    igv.removeBrowser(igvBrowser.value)
+    igvBrowser.value = null
+    
+    // Wait for DOM to be ready before reinitializing
+    nextTick(() => {
+      initializeIgv()
+    })
+  } catch (error) {
+    console.error("Error updating IGV browser tracks:", error)
+  }
 }
 
 const handleReadClick = function (readInfo) {
