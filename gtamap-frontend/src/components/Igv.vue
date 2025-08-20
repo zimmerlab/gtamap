@@ -7,7 +7,7 @@
 
 <script setup>
 
-import { ref, inject, onMounted, defineExpose } from 'vue'
+import { ref, inject, onMounted, defineExpose, defineEmits } from 'vue'
 import igv from "../js/igv/dist/igv.esm.js"
 
 const ApiService = inject("http")
@@ -18,6 +18,8 @@ const props = defineProps({
     required: true
   }
 })
+
+const emit = defineEmits(['read-click'])
 
 let igvInfo = ref({})
 const igvDiv = ref(null)
@@ -106,18 +108,13 @@ const updateBrowserTracks = function() {
 
   igv.removeBrowser(igvBrowser.value)
 
-  // igvBrowser.value.dispose()
-  // igvBrowser.value = null
-
-  console.log("igv")
-  console.log(igv)
-
   initializeIgv()
 }
 
 const handleReadClick = function (readInfo) {
   // Emit an event or handle the read click as needed
   console.log("Read clicked:", readInfo)
+  emit('read-click', readInfo)
 }
 
 const update = function() {
