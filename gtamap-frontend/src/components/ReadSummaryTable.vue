@@ -6,18 +6,20 @@
       <w-checkbox
         v-model="filterOptions.hideAcceptedRecords"
         label="Hide accepted records"
-        @change="applyFilters"
       />
       <w-checkbox
         v-model="filterOptions.hideDiscardedRecords"
         label="Hide discarded records"
-        @change="applyFilters"
       />
       <w-checkbox
         v-model="filterOptions.hideNonInProgressRecords"
         label="Show only records in progress"
-        @change="applyFilters"
       />
+    </div>
+    <div>
+      <w-button @click="applyFilters" class="tw:mt-2">
+        <span class="tw-text-xs">Apply Filters</span>
+      </w-button>
     </div>
   </div>
 
@@ -278,7 +280,16 @@ const applyFilters = function() {
     emit("summary-table-update")
   })
 
+  deselectRows()
+
   summaryTableData.value.filteredItems = items
+}
+
+const deselectRows = function() {
+  tableData.value.selectedRows = []
+  tableData.value.selectedRowsInExpanded = []
+  tableData.value.expandedRows = []
+  readMappingTableData.value.items = []
 }
 
 const expandRowClickHandler = function(rowInfo) {
