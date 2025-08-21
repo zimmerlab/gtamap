@@ -68,18 +68,26 @@ func NewSummaryFilters() *SummaryFilters {
 	}
 }
 
+type DetailsViewerData struct {
+	Interval         *Interval
+	FastaSequence    string
+	FastaIndexString string
+	Records          []*EnhancedRecord
+}
+
 type MappingDataHandler struct {
-	FastaFile       *os.File
-	FastaIndex      *fasta.Index
-	TargetRegion    *TargetRegion
-	MapperInfos     []*MapperInfo                  // list of mapper infos in consistent order
-	ReadInfos       []*ReadInfo                    // list of read infos
-	ReadNamesMap    map[string]*ReadInfo           // map has key = read name, value = read info
-	Records         []*EnhancedRecord              // list of all records
-	RecordsByMapper [][]*EnhancedRecord            // outer array = mappers by order of MapperNames, inner array = records for each mapper
-	QnamesByMapper  []map[string][]*EnhancedRecord // outer array = mappers by order of MapperNames, map has key = qname, value = enhanced record
-	QnameCluster    map[string]*QnameCluster       // map has key = qname, value = cluster of records with this qname
-	SummaryFilters  *SummaryFilters
+	FastaFile         *os.File
+	FastaIndex        *fasta.Index
+	TargetRegion      *TargetRegion
+	MapperInfos       []*MapperInfo                  // list of mapper infos in consistent order
+	ReadInfos         []*ReadInfo                    // list of read infos
+	ReadNamesMap      map[string]*ReadInfo           // map has key = read name, value = read info
+	Records           []*EnhancedRecord              // list of all records
+	RecordsByMapper   [][]*EnhancedRecord            // outer array = mappers by order of MapperNames, inner array = records for each mapper
+	QnamesByMapper    []map[string][]*EnhancedRecord // outer array = mappers by order of MapperNames, map has key = qname, value = enhanced record
+	QnameCluster      map[string]*QnameCluster       // map has key = qname, value = cluster of records with this qname
+	SummaryFilters    *SummaryFilters
+	DetailsViewerData map[string]*DetailsViewerData
 }
 
 type QnameCluster struct {
@@ -116,15 +124,16 @@ func NewMappingDataHandler(fastaFilePath string, fastaIndexFilePath string) (*Ma
 	// defer fastaFile.Close()
 
 	h := &MappingDataHandler{
-		FastaFile:       fastaFile,
-		FastaIndex:      fastaIndex,
-		MapperInfos:     make([]*MapperInfo, 0),
-		ReadInfos:       make([]*ReadInfo, 0),
-		ReadNamesMap:    make(map[string]*ReadInfo),
-		RecordsByMapper: make([][]*EnhancedRecord, 0),
-		QnamesByMapper:  make([]map[string][]*EnhancedRecord, 0),
-		QnameCluster:    make(map[string]*QnameCluster),
-		SummaryFilters:  NewSummaryFilters(),
+		FastaFile:         fastaFile,
+		FastaIndex:        fastaIndex,
+		MapperInfos:       make([]*MapperInfo, 0),
+		ReadInfos:         make([]*ReadInfo, 0),
+		ReadNamesMap:      make(map[string]*ReadInfo),
+		RecordsByMapper:   make([][]*EnhancedRecord, 0),
+		QnamesByMapper:    make([]map[string][]*EnhancedRecord, 0),
+		QnameCluster:      make(map[string]*QnameCluster),
+		SummaryFilters:    NewSummaryFilters(),
+		DetailsViewerData: make(map[string]*DetailsViewerData),
 	}
 
 	seqFw, err := h.ExtractSequence(config.GetTargetContig(), config.GetTargetStart(), config.GetTargetEnd())
@@ -767,6 +776,20 @@ func (h *MappingDataHandler) UnacceptRecord(r *EnhancedRecord) {
 
 func (h *MappingDataHandler) DiscardReadCluster(c *QnameCluster) {
 	c.IsDiscarded = true
+}
+
+func (h *MappingDataHandler) ResetReadCluster(c *QnameCluster) {
+
+	c.IsDiscarded = false
+
+	c.ClusterR1.AcceptedRecord = nil
+	for _, r := range c.ClusterR1.Records {
+		r.IsAccepted = false
+	}
+	c.ClusterR2.AcceptedRecord = nil
+	for _, r := range c.ClusterR2.Records {
+		r.IsAccepted = false
+	}
 }
 
 func (h *MappingDataHandler) GetSimilarRecordsInCluster(r *EnhancedRecord) []*EnhancedRecord {

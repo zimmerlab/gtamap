@@ -47,6 +47,7 @@ func (h *MappingDataHandler) GetReadSummaryTableData() []ReadOverviewInfo {
 				ReadIndices:          make([]int, 0),
 				ReadIndicesInMappers: make([]int, 0),
 				IsAccepted:           cR1[0].IsAccepted,
+				TargetRegionOverlap:  cR1[0].TargetRegionOverlap,
 			}
 
 			if cR1[0].IsAccepted {
@@ -88,6 +89,7 @@ func (h *MappingDataHandler) GetReadSummaryTableData() []ReadOverviewInfo {
 				ReadIndices:          make([]int, 0),
 				ReadIndicesInMappers: make([]int, 0),
 				IsAccepted:           cR2[0].IsAccepted,
+				TargetRegionOverlap:  cR2[0].TargetRegionOverlap,
 			}
 
 			if cR2[0].IsAccepted {

@@ -11,14 +11,15 @@ import (
 
 type EnhancedRecord struct {
 	sam.Record
-	Index        int                        // id to identify the record = count of global records
-	MapperIndex  int                        // index of the mapper in MapperInfos
-	MappedGenome *regionvector.RegionVector // the matched intervals in the genome (mis- + matches (M, =, X in cigar))
-	MappedRead   *regionvector.RegionVector // the matched intervals in the read (matches (M, =, X) in cigar)
-	Mismatches   []int                      // the positions of the mismatches in the read sequence (min = 0, max = read length)
-	CigarObj     *cigar.Object
-	IsAccepted   bool
-	QnameCluster *QnameCluster // pointer to the cluster of records with the same qname
+	Index               int                        // id to identify the record = count of global records
+	MapperIndex         int                        // index of the mapper in MapperInfos
+	MappedGenome        *regionvector.RegionVector // the matched intervals in the genome (mis- + matches (M, =, X in cigar))
+	MappedRead          *regionvector.RegionVector // the matched intervals in the read (matches (M, =, X) in cigar)
+	Mismatches          []int                      // the positions of the mismatches in the read sequence (min = 0, max = read length)
+	CigarObj            *cigar.Object
+	IsAccepted          bool
+	TargetRegionOverlap int
+	QnameCluster        *QnameCluster // pointer to the cluster of records with the same qname
 }
 
 func (h *MappingDataHandler) NewEnhancedRecord(record sam.Record, mapperIndex int) (*EnhancedRecord, error) {
@@ -160,7 +161,7 @@ func (h *MappingDataHandler) NewEnhancedRecord(record sam.Record, mapperIndex in
 		return nil, fmt.Errorf("unknown cigar element type: %s", elem.Type)
 	}
 
-	return &EnhancedRecord{
+	r := &EnhancedRecord{
 		Record:       record,
 		MapperIndex:  mapperIndex,
 		MappedGenome: genomicCombined,
@@ -168,7 +169,11 @@ func (h *MappingDataHandler) NewEnhancedRecord(record sam.Record, mapperIndex in
 		Mismatches:   make([]int, 0),
 		CigarObj:     &cigar.Object{Elements: detailedCigarElements},
 		QnameCluster: nil,
-	}, nil
+	}
+
+	r.TargetRegionOverlap = IsInTargetRegion(r)
+
+	return r, nil
 }
 
 func (r *EnhancedRecord) IsEqual(other *EnhancedRecord) bool {

@@ -73,7 +73,7 @@
           class="tw:flex-1"
           url="/api/summary/table"
           @open-read-details="openReadDetailsPage"
-          @content-changed="tableUpdated"
+          @accepted-table-update="tableUpdated"
           @summary-table-update="summaryTableUpdate"
         >
         </ReadSummaryTable>

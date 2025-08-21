@@ -122,12 +122,12 @@ func main() {
 	//
 	// s.Start()
 
-	fastaFilePath := "/home/sam/Data/reference-genomes/ensembl/113/homo_sapiens/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
-	fastaIndexFilePath := "/home/sam/Data/reference-genomes/ensembl/113/homo_sapiens/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai"
+	// fastaFilePath := "/home/sam/Data/reference-genomes/ensembl/113/homo_sapiens/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+	// fastaIndexFilePath := "/home/sam/Data/reference-genomes/ensembl/113/homo_sapiens/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai"
 	// gtamapSamFilePath := "/home/sam/Data/gtamap/output/3c2c2757/92f24301/664d462a/ENSG00000173585.gtamap.target.sam"
 
 	s := server.NewServer()
-	s.InitMappingDataHandler(fastaFilePath, fastaIndexFilePath)
+	s.InitMappingDataHandler(config.GetGenomeFasta(), config.GetGenomeFastaIndex())
 
 	s.Handler.LoadMapperResults()
 

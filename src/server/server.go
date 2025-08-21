@@ -20,6 +20,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
+	"github.com/sirupsen/logrus"
 )
 
 type Server struct {
@@ -66,6 +67,7 @@ func (s *Server) InitRoutes() {
 	summary.HandleFunc("/acceptRecords", s.acceptRecords).Methods("POST")
 	summary.HandleFunc("/unacceptRecords", s.unacceptRecords).Methods("POST")
 	summary.HandleFunc("/discardReads", s.discardReads).Methods("POST")
+	summary.HandleFunc("/resetReads", s.resetReads).Methods("POST")
 
 	// ACCEPTED
 	accepted := api.PathPrefix("/accepted").Subrouter()
@@ -75,14 +77,24 @@ func (s *Server) InitRoutes() {
 	accepted.HandleFunc("/bam", s.serveAcceptedRecordsBam).Methods("GET")
 	accepted.HandleFunc("/bamIndex", s.serveAcceptedRecordsBamIndex).Methods("GET")
 
+	// READ DETAILS
+	details := api.PathPrefix("/details").Subrouter()
+	details.HandleFunc("/table", s.getReadDetailsTable).Methods("GET")
+	// details.HandleFunc("/viewerData", s.getReadDetailsViewerData).Methods("GET")
+
+	detailsViewer := details.PathPrefix("/viewer").Subrouter()
+	detailsViewer.HandleFunc("/data", s.getReadDetailsViewerData).Methods("GET")
+	detailsViewer.HandleFunc("/fasta", s.serverDetailsViewerFasta).Methods("GET")
+	detailsViewer.HandleFunc("/fastaIndex", s.serverDetailsViewerFastaIndex).Methods("GET")
+
 	download := s.Router.PathPrefix("/download").Subrouter()
 
-	download.HandleFunc("/genome/fasta", serveGenomeFastaFile).Methods("GET")
-	download.HandleFunc("/genome/fastaIndex", serveGenomeFastaIndexFile).Methods("GET")
+	// download.HandleFunc("/genome/fasta", serveGenomeFastaFile).Methods("GET")
+	// download.HandleFunc("/genome/fastaIndex", serveGenomeFastaIndexFile).Methods("GET")
 
-	download.HandleFunc("/genome/gtf", serveGenomeAnnotationFile).Methods("GET")
-	download.HandleFunc("/gtamap/bam", serveBamFile).Methods("GET")
-	download.HandleFunc("/gtamap/bamIndex", serveBamIndexFile).Methods("GET")
+	// download.HandleFunc("/genome/gtf", serveGenomeAnnotationFile).Methods("GET")
+	// download.HandleFunc("/gtamap/bam", serveBamFile).Methods("GET")
+	// download.HandleFunc("/gtamap/bamIndex", serveBamIndexFile).Methods("GET")
 
 	download.HandleFunc("/targetRegion/fasta", serveTargetRegionFastaFile).Methods("GET")
 	download.HandleFunc("/targetRegion/fastaIndex", serveTargetRegionFastaIndexFile).Methods("GET")
@@ -942,7 +954,9 @@ func bamToBamIndex(bamBytes []byte) (string, error) {
 
 func serveGenomeFastaFile(w http.ResponseWriter, r *http.Request) {
 
-	filePath := "/home/sam/Projects/gtamap-paper/pipeline/input/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+	// filePath := "/home/sam/Projects/gtamap-paper/pipeline/input/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+
+	filePath := config.GetGenomeFasta()
 
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		http.Error(w, "File not found", http.StatusNotFound)
@@ -954,7 +968,9 @@ func serveGenomeFastaFile(w http.ResponseWriter, r *http.Request) {
 
 func serveGenomeFastaIndexFile(w http.ResponseWriter, r *http.Request) {
 
-	filePath := "/home/sam/Projects/gtamap-paper/pipeline/input/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai"
+	// filePath := "/home/sam/Projects/gtamap-paper/pipeline/input/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai"
+
+	filePath := config.GetGenomeFastaIndex()
 
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		http.Error(w, "File not found", http.StatusNotFound)
@@ -1165,6 +1181,7 @@ type ReadLocationInfo struct {
 	ReadIndices          []int    `json:"readIndices"`          // index in the global list of records
 	ReadIndicesInMappers []int    `json:"readIndicesInMappers"` // index in the sam of the respective mapper
 	IsAccepted           bool     `json:"isAccepted"`
+	TargetRegionOverlap  int      `json:"targetRegionOverlap"` // int showing the overlap status to the target region
 }
 
 type RecordWithMapperInfo struct {
@@ -1281,14 +1298,20 @@ func (s *Server) serveAcceptedRecordsBamIndex(w http.ResponseWriter, r *http.Req
 
 	samString := s.Handler.GetAcceptedRecordsSam(true)
 
+	fmt.Println(samString)
+
 	bamBytes, err := samToSortedBam(samString)
 	if err != nil {
+		logrus.Error("error while converting sam to bam")
+		logrus.Error(err)
 		http.Error(w, fmt.Sprintf("Error converting SAM to BAM: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	bamIndex, err := bamToBamIndex(bamBytes)
 	if err != nil {
+		logrus.Error("error while creating bam index")
+		logrus.Error(err)
 		http.Error(w, fmt.Sprintf("Error creating BAM index: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -1368,13 +1391,13 @@ func (s *Server) acceptRecord(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Record accepted successfully"))
 }
 
-type DiscardReadsDto struct {
+type QnamesDto struct {
 	Qnames []string `json:"qnames"`
 }
 
 func (s *Server) discardReads(w http.ResponseWriter, r *http.Request) {
 
-	var p DiscardReadsDto
+	var p QnamesDto
 	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
@@ -1392,6 +1415,28 @@ func (s *Server) discardReads(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Write([]byte("Reads discarded successfully"))
+}
+
+func (s *Server) resetReads(w http.ResponseWriter, r *http.Request) {
+
+	var p QnamesDto
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	for _, qname := range p.Qnames {
+		if _, exists := s.Handler.QnameCluster[qname]; !exists {
+			http.Error(w, fmt.Sprintf("Qname not found: %s", qname), http.StatusBadRequest)
+			return
+		}
+	}
+	for _, qname := range p.Qnames {
+		s.Handler.ResetReadCluster(s.Handler.QnameCluster[qname])
+	}
+
+	w.Write([]byte("Reads reset successfully"))
 }
 
 type SummaryFilterUpdateDto struct {
@@ -1414,4 +1459,60 @@ func (s *Server) filterUpdate(w http.ResponseWriter, r *http.Request) {
 	s.Handler.SummaryFilters.HideNonInProgress = p.HideNonInProgress
 
 	w.Write([]byte("Filter update received successfully"))
+}
+
+func (s *Server) getReadDetailsTable(w http.ResponseWriter, r *http.Request) {
+
+	qname, err := utils.GetSpecificRequestParam(r, "qname")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error parsing qname parameter: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	details := s.Handler.GetReadDetailsTable(qname)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(details)
+}
+
+func (s *Server) getReadDetailsViewerData(w http.ResponseWriter, r *http.Request) {
+
+	qname, err := utils.GetSpecificRequestParam(r, "qname")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error parsing qname parameter: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	details := s.Handler.GetReadDetailsViewerData(qname)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(details)
+}
+
+func (s *Server) serverDetailsViewerFasta(w http.ResponseWriter, r *http.Request) {
+
+	id, err := utils.GetSpecificRequestParam(r, "id")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error parsing id parameter: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	fastaString := s.Handler.DetailsViewerData[id].FastaSequence
+
+	w.Header().Set("Content-Type", "plain/text")
+	w.Write([]byte(fastaString))
+}
+
+func (s *Server) serverDetailsViewerFastaIndex(w http.ResponseWriter, r *http.Request) {
+
+	id, err := utils.GetSpecificRequestParam(r, "id")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error parsing id parameter: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	fastaString := s.Handler.DetailsViewerData[id].FastaIndexString
+
+	w.Header().Set("Content-Type", "plain/text")
+	w.Write([]byte(fastaString))
 }
