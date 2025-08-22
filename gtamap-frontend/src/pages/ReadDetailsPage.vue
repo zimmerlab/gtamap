@@ -150,9 +150,11 @@
             </div>
 
             <!-- R1 Rows -->
-            <div v-for="item in byMapper.r1" :key="'r1-' + item.position + item.contigName"
-              class="tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:py-2 tw:text-xs tw:border-b tw:border-gray-100 hover:tw:bg-gray-50 tw:select-none tw:cursor-pointer tw:hover:bg-gray-50"
-              :data-contig-cigar="`${item.contigName}-${item.cigar}`" :data-group-id="`group-${index}`">
+            <div v-for="item in byMapper.r1" :key="'r1-' + item.position + item.cigar"
+              class="tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:py-2 tw:text-xs tw:border-b tw:border-gray-100 tw:select-none tw:cursor-pointer"
+              :data-contig-cigar="`${item.contigName}-${item.position}-${item.cigar}`" :data-group-id="`group-${index}`"
+              @mouseenter="highlightEquivalentRows(`${item.contigName}-${item.position}-${item.cigar}`, item)"
+              @mouseleave="clearHighlight">
 
               <!-- Empty first column -->
               <div></div>
@@ -199,9 +201,11 @@
             <div v-if="byMapper.r1.length > 0 && byMapper.r2.length > 0" class="tw:h-2 tw:bg-gray-100"></div>
 
             <!-- R2 Rows -->
-            <div v-for="item in byMapper.r2" :key="'r2-' + item.position + item.contigName"
-              class="tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:py-2 tw:text-xs tw:border-b tw:border-gray-100 hover:tw:bg-gray-50"
-              :data-contig-cigar="`${item.contigName}-${item.cigar}`" :data-group-id="`group-${index}`">
+            <div v-for="item in byMapper.r2" :key="'r2-' + item.position + item.cigar"
+              class="tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:py-2 tw:text-xs tw:border-b tw:border-gray-100 tw:select-none tw:cursor-pointer"
+              :data-contig-cigar="`${item.contigName}-${item.position}-${item.cigar}`" :data-group-id="`group-${index}`"
+              @mouseenter="highlightEquivalentRows(`${item.contigName}-${item.position}-${item.cigar}`, item)"
+              @mouseleave="clearHighlight">
 
               <!-- Empty first column -->
               <div></div>
@@ -387,8 +391,6 @@ export default {
         .then(async (response) => {
           if (response.status === 200) {
 
-            console.log(response.data)
-
             detailsData.value.confidence = response.data.confidence
             detailsData.value.r1Mapped = response.data.r1Mapped
             detailsData.value.r2Mapped = response.data.r2Mapped
@@ -428,15 +430,22 @@ export default {
                 }
               }
 
+              // sort byMapperList by mapperName (gtamap always first, then alphabetically)
+              byMapperList.sort((a, b) => {
+                if (a.mapperName === 'gtamap') return -1
+                if (b.mapperName === 'gtamap') return 1
+                return a.mapperName.localeCompare(b.mapperName)
+              })
+
               group.byMapperList = byMapperList
 
               readGroups.value.push(group)
             }
 
-            console.log(readGroups.value)
-
+            // need to wait for the next tick to be able to access the igvRefs
             await nextTick()
 
+            // update each igv with the respective read group data
             for (let i = 0; i < igvRefs.value.length; i++) {
               igvRefs.value[i].init(readGroups.value[i].viewerConfig)
             }
@@ -451,6 +460,8 @@ export default {
           console.error(err)
         })
     }
+
+    const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899']
 
     const drawDendrogramLines = function () {
       readGroups.value.forEach((group, groupIndex) => {
@@ -487,7 +498,6 @@ export default {
         })
 
         // Draw connecting lines for groups with multiple rows
-        const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899']
         let colorIndex = 0
 
         Object.entries(groups).forEach(([contigCigar, groupRows]) => {
@@ -532,85 +542,81 @@ export default {
       })
     }
 
-    // IGV
-    let igvBrowser = ref(undefined)
-
-    const getIgvConfig = function () {
-      ApiService.get('/api/igvConfigTarget')
-        .then((response) => {
-          if (response.status === 200) {
-            igvInfo.value = {
-              genome: response.data.genomeConfig,
-              tracks: response.data.tracks,
-              location: response.data.location,
-            }
-
-            initializeIgv()
-          }
-        })
-        .catch((err) => {
-          console.log(err)
-        })
-    }
-
-    const initializeIgv = function () {
-      const igvDiv = ref(document.getElementById('igv-div'))
-
-      // the genome information is loaded from API
-      const options = {
-        genome: igvInfo.value.genome,
-        locus: igvInfo.value.location,
-      }
-
-      igv.createBrowser(igvDiv.value, options).then(function (browser) {
-        igvBrowser = ref(browser)
-
-        // initialize tracks by track config loaded from API
-        for (const trackConfig of igvInfo.value.tracks) {
-          browser.loadTrack(trackConfig)
-        }
-
-        // browser.on('trackclick', function (track, popoverData) {
-        //
-        //   if (track.type === "alignment" && popoverData && popoverData.length > 0) {
-        //
-        //     let readInfo = {
-        //       // the read name (qname) of the read
-        //       qname: "",
-        //       // the name of the mapper which produced this mapping
-        //       mapperName: "",
-        //       // the index of the mapping in the respective sam file
-        //       index: 0,
-        //     }
-        //
-        //     popoverData.forEach(item => {
-        //       switch (item.name) {
-        //         case "Read Name":
-        //           readInfo.qname = item.value;
-        //           break;
-        //         case "XM":
-        //           readInfo.mapperName = item.value;
-        //           break;
-        //         case "XI":
-        //           readInfo.index = item.value;
-        //           break;
-        //       }
-        //     })
-        //
-        //     track.alignmentTrack.setHighlightedReads([readInfo.qname], "#0000ff")
-        //     track.updateViews()
-        //
-        //     handleReadClick(readInfo)
-        //   }
-        // });
-      })
-    }
-
     onMounted(() => {
       getReadIdFromQuery()
       getReadDetails()
       getViewerData()
     })
+
+    const highlightEquivalentRows = function(contigCigar, item) {
+
+      console.log('hello', item)
+      
+      // find all rows with matching data-contig-cigar attribute
+      const allRows = document.querySelectorAll(`[data-contig-cigar="${contigCigar}"]`)
+      
+      // all unique contig-cigar combinations in the current group
+      const groupElement = allRows[0]?.closest('[data-group-id]')
+
+      if (groupElement) {
+
+        const groupId = groupElement.getAttribute('data-group-id')
+        const groupRows = document.querySelectorAll(`[data-group-id="${groupId}"]`)
+        
+        // group rows by their data-contig-cigar attribute and count them
+        let groups = []
+        for (let row of groupRows) {
+          const key = row.getAttribute('data-contig-cigar')
+          let index = -1
+          for (let i = 0; i < groups.length; i++) {
+            if (groups[i].key === key) {
+              groups[i].count += 1
+              index = i
+              break
+            }
+          }
+          if (index == -1) {
+            groups.push({key: key, count: 1})
+          }
+        }
+
+        // find the color index based on rows with multiple entries
+        let index = -1
+        // check if the current row has multiple entries and deserves a color
+        let mult = false
+        for (const g of groups) {
+          if (g.count > 1) {
+            index += 1
+          }
+          if (g.key === contigCigar) {
+            mult = g.count > 1
+            break
+          }
+        }
+
+        // apply default color (gray) if no equivalent rows found
+        let color = "#d3d3d3"
+        // use the same color as in the SVG
+        if (mult && index < colors.length) {
+          color = colors[index]
+        }
+        
+        // apply the same color as background with opacity
+        allRows.forEach(row => {
+          row.style.backgroundColor = color + '33'
+          row.classList.add('highlighted-row')
+        })
+      }
+    }
+    
+    const clearHighlight = function() {
+      // Remove highlight class from all previously highlighted rows
+      const highlightedRows = document.querySelectorAll('.highlighted-row')
+      highlightedRows.forEach(row => {
+        row.classList.remove('highlighted-row')
+        row.style.backgroundColor = '' // Clear inline background color
+      })
+    }
 
     return {
       readId,
@@ -626,6 +632,8 @@ export default {
       igvRefs,
       setIgvRef,
       drawDendrogramLines,
+      highlightEquivalentRows,
+      clearHighlight,
     }
   },
   components: {
@@ -635,4 +643,9 @@ export default {
 }
 </script>
 
-<style scoped></style>
+<style scoped>
+.highlighted-row {
+  /* @apply tw:bg-blue-100 tw:border-blue-300; */
+  background-color: blue;
+}
+</style>
