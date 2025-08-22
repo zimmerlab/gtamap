@@ -73,6 +73,8 @@ type DetailsViewerData struct {
 	FastaSequence    string
 	FastaIndexString string
 	Records          []*EnhancedRecord
+	MapperNames      []string
+	RecordsByMapper  [][]*EnhancedRecord
 }
 
 type MappingDataHandler struct {

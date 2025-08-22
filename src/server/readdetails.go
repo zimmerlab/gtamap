@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/KleinSamuel/gtamap/src/dataloader"
@@ -117,9 +118,12 @@ func (h *MappingDataHandler) GetReadDetailsTable(qname string) *ReadDetailsDto {
 }
 
 type ReadDetailsViewerData struct {
-	// Intervals    []*Interval                     `json:"intervals"`
-	// IntervalsMap map[*Interval][]*EnhancedRecord `json:"intervalsMap"`
-	ViewerConfigs []map[string]any `json:"viewerConfigs"`
+	ReadGroups []*ReadGroup `json:"readGroups"`
+}
+
+type ReadGroup struct {
+	ViewerConfig map[string]any      `json:"viewerConfig"`
+	Locations    []*ReadLocationInfo `json:"locations"`
 }
 
 func (h *MappingDataHandler) GetReadDetailsViewerData(qname string) *ReadDetailsViewerData {
@@ -190,7 +194,7 @@ func (h *MappingDataHandler) GetReadDetailsViewerData(qname string) *ReadDetails
 		}
 	}
 
-	viewerConfigs := make([]map[string]any, 0)
+	readGroups := make([]*ReadGroup, 0)
 
 	for xi, i := range intervals {
 
@@ -204,22 +208,80 @@ func (h *MappingDataHandler) GetReadDetailsViewerData(qname string) *ReadDetails
 
 		fastaIndex := fmt.Sprintf("%s\t%d\t%d\t%d\t%d", i.Contig, len(seq), len(header), len(seq), len(seq)+1)
 
+		mapperNames := make([]string, 0)
+		recordsByMapper := make([][]*EnhancedRecord, 0)
+
+		for _, r := range c {
+			mapperName := h.MapperInfos[r.MapperIndex].MapperName
+			mapperIndex := -1
+
+			for mI, mN := range mapperNames {
+				if mN == mapperName {
+					mapperIndex = mI
+				}
+			}
+
+			if mapperIndex > -1 {
+				recordsByMapper[mapperIndex] = append(recordsByMapper[mapperIndex], r)
+			} else {
+				mapperNames = append(mapperNames, mapperName)
+				recordsByMapper = append(recordsByMapper, []*EnhancedRecord{r})
+			}
+		}
+
 		details := &DetailsViewerData{
 			Interval:         i,
 			FastaSequence:    header + seq + "\n",
 			FastaIndexString: fastaIndex,
 			Records:          c,
+			MapperNames:      mapperNames,
+			RecordsByMapper:  recordsByMapper,
 		}
 
 		h.DetailsViewerData[id] = details
 
 		config := h.GetViewerConfig(id, i.Contig, i.Start, i.End)
 
-		viewerConfigs = append(viewerConfigs, config)
+		// read groups
+		locations := make([]*ReadLocationInfo, 0)
+
+		for _, r := range c {
+
+			pair := "first"
+			if !r.Flag.IsFirstInPair() {
+				pair = "second"
+			}
+
+			locationInfo := &ReadLocationInfo{
+				Pair:                 pair,
+				Contig:               r.Rname,
+				Strand:               !r.Flag.IsReverseStrand(),
+				Position:             r.Pos,
+				Cigar:                r.CigarObj.StringUniform(),
+				CigarDetailed:        r.CigarObj.String(),
+				NumMismatches:        r.CigarObj.GetNumMismatches(),
+				NumGaps:              r.CigarObj.GetNumGaps(),
+				NumMappedBy:          1,
+				MappedBy:             []string{h.MapperInfos[r.MapperIndex].MapperName},
+				ReadIndices:          []int{r.Index},
+				ReadIndicesInMappers: []int{r.MapperIndex},
+				IsAccepted:           r.IsAccepted,
+				TargetRegionOverlap:  r.TargetRegionOverlap,
+			}
+
+			locations = append(locations, locationInfo)
+		}
+
+		group := &ReadGroup{
+			ViewerConfig: config,
+			Locations:    locations,
+		}
+
+		readGroups = append(readGroups, group)
 	}
 
 	return &ReadDetailsViewerData{
-		ViewerConfigs: viewerConfigs,
+		ReadGroups: readGroups,
 	}
 }
 
@@ -232,21 +294,25 @@ func (h *MappingDataHandler) GetViewerConfig(id string, contig string, start int
 		IndexUrl: "http://localhost:8000/api/details/viewer/fastaIndex?id=" + id,
 	}
 
-	track := IgvTrackConfig{
-		Name:        "Read Mappings",
-		Format:      "sam",
-		DisplayMode: "EXPANDED",
-		Url:         "http://localhost:8000/api/details/viewer/bam?id=" + id,
-		IndexUrl:    "http://localhost:8000/api/details/viewer/bamIndex?id=" + id,
-		Type:        "alignment",
-		Height:      100 + 20*(len(h.DetailsViewerData[id].Records)),
-		MaxHeight:   1000,
-		MaxRows:     200,
-		ColorBy:     "none",
-	}
-
 	tracks := make([]IgvTrackConfig, 0)
-	tracks = append(tracks, track)
+
+	for i, mapperName := range h.DetailsViewerData[id].MapperNames {
+
+		track := IgvTrackConfig{
+			Name:        mapperName,
+			Format:      "sam",
+			DisplayMode: "EXPANDED",
+			Url:         "http://localhost:8000/api/details/viewer/bam?id=" + id + "&i=" + strconv.Itoa(i),
+			IndexUrl:    "http://localhost:8000/api/details/viewer/bamIndex?id=" + id + "&i=" + strconv.Itoa(i),
+			Type:        "alignment",
+			Height:      100 + 20*(len(h.DetailsViewerData[id].RecordsByMapper[i])),
+			MaxHeight:   1000,
+			MaxRows:     200,
+			ColorBy:     "none",
+		}
+
+		tracks = append(tracks, track)
+	}
 
 	// convert global location to local location
 	targetRegionStrLocal := fmt.Sprintf("%s:%d-%d", contig, 1, end-start+1)
@@ -260,7 +326,7 @@ func (h *MappingDataHandler) GetViewerConfig(id string, contig string, start int
 	return response
 }
 
-func (h *MappingDataHandler) GetReadGroupSam(groupId string) string {
+func (h *MappingDataHandler) GetReadGroupSam(groupId string, mapperIndex int) string {
 
 	details := h.DetailsViewerData[groupId]
 
@@ -271,10 +337,7 @@ func (h *MappingDataHandler) GetReadGroupSam(groupId string) string {
 	builder.WriteString("@HD\tVN:1.6\tSO:unsorted\n")
 	builder.WriteString(fmt.Sprintf("@SQ\tSN:%s\tLN:%d\n", details.Interval.Contig, details.Interval.End-details.Interval.Start+1))
 
-	for _, r := range details.Records {
-
-		fmt.Println(r.Pos)
-
+	for _, r := range details.RecordsByMapper[mapperIndex] {
 		builder.WriteString(r.StringWithMapperInfo(details.Interval.Start, h.MapperInfos[r.MapperIndex].MapperName, r.Index))
 		builder.WriteString("\n")
 	}

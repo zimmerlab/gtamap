@@ -84,15 +84,144 @@
       </w-table>
     </div>
 
-    <div class="tw:px-6 tw:mb-6">
+    <div class="tw:p-6 tw:mb-6">
 
-      <div v-for="(config, index) in viewerData" :key="config" class="tw:border tw:border-gray-300 tw:rounded-lg tw:mb-4 tw:py-2">
+      <div v-for="(group, index) in readGroups" :key="group"
+        class="tw:border tw:border-gray-300 tw:rounded-lg tw:my-4 tw:py-2">
 
         <h3 class="tw:text-lg tw:font-bold tw:mb-4 tw:text-center tw:text-gray-500">
           Read Group {{ index + 1 }}
         </h3>
 
-        <div  class="tw:px-4">
+        <div class="tw:mx-4 tw:border tw:rounded-sm tw:border-gray-200">
+          <!-- Table Header -->
+          <div
+            class="tw:bg-gray-50 tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:py-2 tw:text-xs tw:font-semibold tw:text-gray-600 tw:border-b tw:border-gray-200">
+            <div></div>
+            <div>Pair Type</div>
+            <div>In Target Region?</div>
+            <div>Contig</div>
+            <div>Strand</div>
+            <div>Position</div>
+            <div>Cigar String</div>
+            <div>Mismatches</div>
+            <div>Gaps</div>
+          </div>
+
+          <div v-for="byMapper in group.byMapperList" :key="byMapper"
+            class="tw:border-b tw:border-gray-200 last:tw:border-b-0">
+
+            <!-- MappedBy Group Header -->
+            <div class="tw:bg-blue-50 tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:border-b tw:border-gray-200">
+              <h4 class="tw:text-sm tw:font-semibold tw:text-blue-800">
+                {{ byMapper.mapperName }}
+              </h4>
+              <div></div>
+              <div></div>
+              <div></div>
+              <div></div>
+              <div></div>
+              <div></div>
+              <div></div>
+              <div></div>
+            </div>
+
+            <!-- R1 Rows -->
+            <div v-for="item in byMapper.r1" :key="'r1-' + item.position + item.contigName"
+              class="tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:py-2 tw:text-xs tw:border-b tw:border-gray-100 hover:tw:bg-gray-50 tw:select-none tw:cursor-pointer tw:hover:bg-gray-50">
+
+              <!-- Empty first column -->
+              <div></div>
+
+              <!-- Pair Type -->
+              <div class="tw:flex tw:items-center">
+                <w-tag xs bg-color="blue">R1</w-tag>
+              </div>
+
+              <!-- Target Region Overlap -->
+              <div class="tw:flex tw:items-center">
+                <w-tag v-if="item.targetRegionOverlap === 0" xs bg-color="red">no overlap</w-tag>
+                <w-tag v-else-if="item.targetRegionOverlap === 1" xs bg-color="green">contained</w-tag>
+                <w-tag v-else xs bg-color="yellow">partially</w-tag>
+              </div>
+
+              <!-- Contig -->
+              <div class="tw:flex tw:items-center">{{ item.contigName }}</div>
+
+              <!-- Strand -->
+              <div class="tw:flex tw:items-center">
+                <span v-if="item.isForwardStrand">+</span>
+                <span v-else>-</span>
+              </div>
+
+              <!-- Position -->
+              <div class="tw:flex tw:items-center">{{ item.position }}</div>
+
+              <!-- Cigar String -->
+              <div class="tw:flex tw:items-center tw:truncate" :title="item.cigar">{{ item.cigar }}</div>
+
+              <!-- Mismatches -->
+              <div class="tw:flex tw:items-center">
+                {{ item.numMismatches !== undefined ? item.numMismatches : 'N/A' }}
+              </div>
+
+              <!-- Gaps -->
+              <div class="tw:flex tw:items-center">
+                {{ item.numGaps !== undefined ? item.numGaps : 'N/A' }}
+              </div>
+            </div>
+
+            <!-- Space between R1 and R2 -->
+            <div v-if="byMapper.r1.length > 0 && byMapper.r2.length > 0" class="tw:h-2 tw:bg-gray-100"></div>
+
+            <!-- R2 Rows -->
+            <div v-for="item in byMapper.r2" :key="'r2-' + item.position + item.contigName"
+              class="tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:py-2 tw:text-xs tw:border-b tw:border-gray-100 hover:tw:bg-gray-50">
+
+              <!-- Empty first column -->
+              <div></div>
+
+              <!-- Pair Type -->
+              <div class="tw:flex tw:items-center">
+                <w-tag xs bg-color="green">R2</w-tag>
+              </div>
+
+              <!-- Target Region Overlap -->
+              <div class="tw:flex tw:items-center">
+                <w-tag v-if="item.targetRegionOverlap === 0" xs bg-color="red">no overlap</w-tag>
+                <w-tag v-else-if="item.targetRegionOverlap === 1" xs bg-color="green">contained</w-tag>
+                <w-tag v-else xs bg-color="yellow">partially</w-tag>
+              </div>
+
+              <!-- Contig -->
+              <div class="tw:flex tw:items-center">{{ item.contigName }}</div>
+
+              <!-- Strand -->
+              <div class="tw:flex tw:items-center">
+                <span v-if="item.isForwardStrand">+</span>
+                <span v-else>-</span>
+              </div>
+
+              <!-- Position -->
+              <div class="tw:flex tw:items-center">{{ item.position }}</div>
+
+              <!-- Cigar String -->
+              <div class="tw:flex tw:items-center tw:truncate" :title="item.cigar">{{ item.cigar }}</div>
+
+              <!-- Mismatches -->
+              <div class="tw:flex tw:items-center">
+                {{ item.numMismatches !== undefined ? item.numMismatches : 'N/A' }}
+              </div>
+
+              <!-- Gaps -->
+              <div class="tw:flex tw:items-center">
+                {{ item.numGaps !== undefined ? item.numGaps : 'N/A' }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tw:px-4 tw:mt-6">
           <Igv :ref="(el) => setIgvRef(el, index)" </Igv>
         </div>
 
@@ -177,6 +306,33 @@ export default {
         })
     }
 
+    // READ GROUPS DATA
+
+    let readGroups = ref([])
+
+    let readGroupTableData = ref({
+      loading: true,
+      sortKey: '+qname',
+      headers: [
+        // { label: 'Accepted', key: 'isAccepted', sortable: false },
+        {
+          label: 'In Target Region?',
+          key: 'targetRegionOverlap',
+          type: 'number',
+          sortable: false,
+        },
+        { label: 'Pair Type', key: 'pairType' },
+        { label: 'Contig', key: 'contigName' },
+        { label: 'Strand', key: 'isForwardStrand' },
+        { label: 'Position', key: 'position' },
+        { label: 'Cigar String', key: 'cigar' },
+        { label: 'Mismatches', key: 'numMismatches', type: 'number' },
+        { label: 'Gaps', key: 'numGaps', type: 'number' },
+        // { label: 'Num Mapped By', key: 'numMappedBy' },
+        { label: 'Mapped By', key: 'mappedBy', sortable: false },
+      ],
+    })
+
     // IGV VIEWER DATA
 
     let viewerData = ref([])
@@ -197,17 +353,55 @@ export default {
       })
         .then(async (response) => {
           if (response.status === 200) {
-            console.log(response)
-            viewerData.value = response.data.viewerConfigs
+
+            for (let group of response.data.readGroups) {
+
+              group.tableData = {
+                loading: false
+              }
+
+              let byMapperList = []
+
+              for (let location of group.locations) {
+
+                let byMapperIndex = -1
+
+                for (let i = 0; i < byMapperList.length; i++) {
+                  if (byMapperList[i].mapperName === location.mappedBy[0]) {
+                    byMapperIndex = i
+                    break
+                  }
+                }
+
+                if (byMapperIndex === -1) {
+                  byMapperIndex = byMapperList.length
+                  byMapperList.push({
+                    mapperName: location.mappedBy[0],
+                    r1: [],
+                    r2: []
+                  })
+                }
+
+                if (location.pairType === 'first') {
+                  byMapperList[byMapperIndex].r1.push(location)
+                } else if (location.pairType === 'second') {
+                  byMapperList[byMapperIndex].r2.push(location)
+                }
+              }
+
+              group.byMapperList = byMapperList
+
+              readGroups.value.push(group)
+            }
+
+            console.log(readGroups.value)
 
             await nextTick()
 
-            console.log("after config load")
-            console.log(igvRefs.value)
-
             for (let i = 0; i < igvRefs.value.length; i++) {
-              igvRefs.value[i].init(viewerData.value[i])
+              igvRefs.value[i].init(readGroups.value[i].viewerConfig)
             }
+
           }
         })
         .catch((err) => {
@@ -300,6 +494,8 @@ export default {
       goBack,
       tableItems,
       tableData,
+      readGroups,
+      readGroupTableData,
       getReadDetails,
       viewerData,
       getViewerData,

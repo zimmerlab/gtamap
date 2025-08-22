@@ -1527,13 +1527,18 @@ func (s *Server) serveDetailsViewerSam(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Error parsing id parameter: %v", err), http.StatusBadRequest)
 		return
 	}
-
 	if _, exists := s.Handler.DetailsViewerData[id]; !exists {
 		http.Error(w, fmt.Sprintf("Details viewer data not found for id: %s", id), http.StatusNotFound)
 		return
 	}
 
-	samString := s.Handler.GetReadGroupSam(id)
+	mapperIndex, err := utils.GetSpecificRequestParamInt(r, "i")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error parsing i parameter: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	samString := s.Handler.GetReadGroupSam(id, mapperIndex)
 
 	w.Header().Set("Content-Type", "plain/text")
 	w.Write([]byte(samString))
@@ -1546,13 +1551,18 @@ func (s *Server) serveDetailsViewerBam(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Error parsing id parameter: %v", err), http.StatusBadRequest)
 		return
 	}
-
 	if _, exists := s.Handler.DetailsViewerData[id]; !exists {
 		http.Error(w, fmt.Sprintf("Details viewer data not found for id: %s", id), http.StatusNotFound)
 		return
 	}
 
-	samString := s.Handler.GetReadGroupSam(id)
+	mapperIndex, err := utils.GetSpecificRequestParamInt(r, "i")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error parsing i parameter: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	samString := s.Handler.GetReadGroupSam(id, mapperIndex)
 
 	bamBytes, err := samToSortedBam(samString)
 	if err != nil {
@@ -1573,13 +1583,18 @@ func (s *Server) serveDetailsViewerBamIndex(w http.ResponseWriter, r *http.Reque
 		http.Error(w, fmt.Sprintf("Error parsing id parameter: %v", err), http.StatusBadRequest)
 		return
 	}
-
 	if _, exists := s.Handler.DetailsViewerData[id]; !exists {
 		http.Error(w, fmt.Sprintf("Details viewer data not found for id: %s", id), http.StatusNotFound)
 		return
 	}
 
-	samString := s.Handler.GetReadGroupSam(id)
+	mapperIndex, err := utils.GetSpecificRequestParamInt(r, "i")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error parsing i parameter: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	samString := s.Handler.GetReadGroupSam(id, mapperIndex)
 
 	bamBytes, err := samToSortedBam(samString)
 	if err != nil {
