@@ -1,5 +1,5 @@
 <template>
-  <div class="tw:h-screen">
+  <div class="tw:min-h-screen app-background">
     <w-toolbar
       class="tw:h-10"
       fixed
@@ -106,4 +106,23 @@
   }
 </script>
 
-<style scoped></style>
+<style scoped>
+.app-background {
+  background-color: #f8fafc;
+  background-image: radial-gradient(circle, #e2e8f0 1px, transparent 1px);
+  background-size: 20px 20px;
+  background-attachment: fixed;
+}
+
+/* Alternative: subtle radial gradient */
+/* .app-background {
+  background: radial-gradient(ellipse at center, #f8fafc 0%, #e2e8f0 100%);
+  min-height: 100vh;
+} */
+
+/* Alternative: subtle diagonal gradient */
+/* .app-background {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f1f5f9 100%);
+  min-height: 100vh;
+} */
+</style>

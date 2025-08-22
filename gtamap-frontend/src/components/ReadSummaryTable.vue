@@ -1,60 +1,63 @@
 <template>
   <div>
     <div
-      class="filter-section tw:mb-4 tw:p-4 tw:border tw:border-gray-300 tw:rounded-lg tw:bg-gray-50"
+      class="filter-section tw:mb-3 tw:px-3 tw:py-2 tw:border tw:border-gray-200 tw:rounded tw:bg-gray-25"
     >
-      <h3 class="tw:text-lg tw:font-medium tw:mb-3">Table Filters</h3>
-      <div class="tw:flex tw:items-center tw:gap-4">
+      <h4 class="tw:text-sm tw:font-medium tw:mb-2 tw:text-gray-600">Table Filters</h4>
+      <div class="tw:flex tw:items-center tw:gap-3 tw:text-sm">
         <w-checkbox
           v-model="filterOptions.hideAcceptedRecords"
           label="Hide accepted records"
+          xs
         />
         <w-checkbox
           v-model="filterOptions.hideDiscardedRecords"
           label="Hide discarded records"
+          xs
         />
         <w-checkbox
           v-model="filterOptions.hideNonInProgressRecords"
           label="Show only records in progress"
+          xs
         />
       </div>
       <div>
         <w-button
           @click="applyFilters"
           class="tw:mt-2"
+          xs
         >
-          <span class="tw-text-xs">Apply Filters</span>
+          <span class="tw:text-xs">Apply Filters</span>
         </w-button>
       </div>
     </div>
 
     <div
-      class="filter-section tw:mb-4 tw:px-4 tw:py-2 tw:border tw:border-gray-300 tw:rounded-lg tw:bg-gray-50"
+      class="filter-section tw:mb-3 tw:px-3 tw:py-2 tw:border tw:border-gray-200 tw:rounded tw:bg-gray-25"
     >
-      <h3 class="tw:text-md tw:font-medium tw:mb-3">Quick Actions</h3>
-      <div class="tw:flex tw:items-center tw:gap-4">
-        <w-button @click="acceptAllMaxConfidenceReads"
-          ><span class="tw-text-xs">Accept All Max Confidence Reads</span></w-button
+      <h4 class="tw:text-sm tw:font-medium tw:mb-2 tw:text-gray-600">Quick Actions</h4>
+      <div class="tw:flex tw:items-center tw:gap-3">
+        <w-button @click="acceptAllMaxConfidenceReads" xs
+          ><span class="tw:text-xs">Accept All Max Confidence Reads</span></w-button
         >
       </div>
     </div>
 
     <div
-      class="filter-section tw:mb-4 tw:px-4 tw:py-2 tw:border tw:border-gray-300 tw:rounded-lg tw:bg-gray-50"
+      class="filter-section tw:mb-3 tw:px-3 tw:py-2 tw:border tw:border-gray-200 tw:rounded tw:bg-gray-25"
     >
-      <h3 class="tw:text-md tw:font-medium tw:mb-3">Selection</h3>
-      <div class="tw:flex tw:items-center tw:gap-4">
-        <w-button @click="deselectAll"><span class="tw-text-xs">Unselect All</span> </w-button>
-      </div>
-      <div class="tw:flex tw:items-center tw:gap-4 tw:pt-2">
-        <w-button><span class="tw-text-xs">Reset Acceptance for Selected</span></w-button>
+      <h4 class="tw:text-sm tw:font-medium tw:mb-2 tw:text-gray-600">Selection</h4>
+      <div class="tw:flex tw:items-center tw:gap-2 tw:flex-wrap">
+        <w-button @click="deselectAll" xs><span class="tw:text-xs">Unselect All</span></w-button>
+        <w-button xs><span class="tw:text-xs">Reset Acceptance for Selected</span></w-button>
         <w-button
           :disabled="!tableData.actions.accept"
           @click="acceptSelected"
-          ><span class="tw-text-xs">Accept Selected</span>
+          xs
+          ><span class="tw:text-xs">Accept Selected</span>
         </w-button>
-        <w-button><span class="tw-text-xs">Discard Selected</span></w-button>
-        <w-button @click="resetSelected"><span class="tw-text-xs">Reset Selected</span> </w-button>
+        <w-button xs><span class="tw:text-xs">Discard Selected</span></w-button>
+        <w-button @click="resetSelected" xs><span class="tw:text-xs">Reset Selected</span></w-button>
       </div>
     </div>
 

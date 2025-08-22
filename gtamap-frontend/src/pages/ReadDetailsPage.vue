@@ -3,6 +3,7 @@
   <div v-else-if="readId === 'state:no-read-id-found' || !readId || readId === ''">
     No readId found in query parameters
   </div>
+
   <div v-else>
     <div class="tw:px-6 tw:py-4">
       <w-button @click="goBack"
@@ -14,17 +15,27 @@
 
     <div class="tw:flex tw:flex-row tw:gap-6 tw:justify-center tw:p-6 tw:mb-6">
 
-      <div class="tw:w-fit tw:border tw:border-gray-300 tw:rounded tw:px-6 tw:py-4 tw:text-center">
+      <div class="tw:w-fit my-card">
         <div class="tw:text-sm tw:font-semibold tw:text-gray-600">Read ID</div>
         <div class="tw:text-lg tw:font-bold">{{ readId }}</div>
+        <w-button bg-color="red" sm>discard</w-button>
       </div>
 
-      <div class="tw:w-fit tw:border tw:border-gray-300 tw:rounded tw:px-6 tw:py-4 tw:text-center">
+      <div class="tw:w-fit my-card">
         <div class="tw:text-sm tw:font-semibold tw:text-gray-600 tw:mb-2">Confidence Score</div>
         <CustomTag :level="detailsData.confidence" size="md"></CustomTag>
       </div>
 
-      <div class="tw:w-fit tw:border tw:border-gray-300 tw:rounded tw:px-6 tw:py-4 tw:text-center">
+      <div class="tw:w-fit my-card">
+        <div class="tw:text-sm tw:font-semibold tw:text-gray-600 tw:mb-2">Genomic Locations</div>
+        <div v-for="group in readGroups" :key="group" class="tw:mb-1">
+          <w-tag>chr{{ group.interval.contig }} {{ group.interval.start }} -
+            {{ group.interval.end }}</w-tag>
+        </div>
+      </div>
+
+
+      <div class="tw:w-fit my-card">
         <div class="tw:text-sm tw:font-semibold tw:text-gray-600 tw:mb-2">Mapped By</div>
 
         <!-- R1 Row -->
@@ -53,18 +64,21 @@
       </div>
     </div>
 
-    <div class="tw:px-6 tw:mb-6">
-      <div class="tw:border tw:border-gray-300 tw:rounded tw:px-4 tw:pb-4 tw:pt-2">
-        <h3 class="tw:text-lg tw:font-bold tw:mb-4 tw:text-center tw:text-gray-500">
-          Read Quality
-        </h3>
-        <div class="tw:flex tw:justify-center">
-          <w-tag>coming soon</w-tag>
-        </div>
+    <div class="my-card tw:mx-6 tw:mb-6">
+      <h3 class="tw:text-lg tw:font-bold tw:mb-4 tw:text-center tw:text-gray-500">
+        Read Quality
+      </h3>
+      <div class="tw:flex tw:justify-center">
+        <w-tag>coming soon</w-tag>
       </div>
     </div>
 
-    <div class="tw:px-6 tw:mb-6">
+    <div class="my-card tw:mx-6 tw:mb-6">
+
+      <h3 class="tw:text-lg tw:font-bold tw:mb-4 tw:text-center tw:text-gray-500">
+        Read Overview
+      </h3>
+
       <w-table :loading="tableData.loading" :headers="tableData.headers" :items="tableItems" class="tw:text-xs"
         fixed-headers>
         <template #item-cell.isAccepted="{ item }">
@@ -107,162 +121,164 @@
       </w-table>
     </div>
 
-    <div class="tw:p-6 tw:mb-6">
+    <div v-for="(group, index) in readGroups" :key="group" class="my-card tw:mx-6 tw:mb-6">
 
-      <div v-for="(group, index) in readGroups" :key="group"
-        class="tw:border tw:border-gray-300 tw:rounded-lg tw:my-4 tw:py-2">
+      <h3 class="tw:mb-4 tw:text-center">
+        <div class="tw:text-lg tw:font-bold tw:text-gray-500">
+          Genomic Location
+        </div>
+        <w-tag>
+          chr{{ group.interval.contig }} {{ group.interval.start }} -
+          {{ group.interval.end }}
+        </w-tag>
+      </h3>
 
-        <h3 class="tw:text-lg tw:font-bold tw:mb-4 tw:text-center tw:text-gray-500">
-          Read Group {{ index + 1 }}
-        </h3>
+      <div class="tw:border tw:rounded-sm tw:border-gray-200 tw:relative">
+        <!-- Table Header -->
+        <div
+          class="tw:bg-gray-50 tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:py-2 tw:text-xs tw:font-semibold tw:text-gray-600 tw:border-b tw:border-gray-200">
+          <div></div>
+          <div>Pair Type</div>
+          <div>In Target Region?</div>
+          <div>Contig</div>
+          <div>Strand</div>
+          <div>Position</div>
+          <div>Cigar String</div>
+          <div>Mismatches</div>
+          <div>Gaps</div>
+        </div>
 
-        <div class="tw:mx-4 tw:border tw:rounded-sm tw:border-gray-200 tw:relative">
-          <!-- Table Header -->
-          <div
-            class="tw:bg-gray-50 tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:py-2 tw:text-xs tw:font-semibold tw:text-gray-600 tw:border-b tw:border-gray-200">
+        <div v-for="byMapper in group.byMapperList" :key="byMapper"
+          class="tw:border-b tw:border-gray-200 last:tw:border-b-0">
+
+          <!-- MappedBy Group Header -->
+          <div class="tw:bg-blue-50 tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:border-b tw:border-gray-200">
+            <h4 class="tw:text-sm tw:font-semibold tw:text-blue-800">
+              {{ byMapper.mapperName }}
+            </h4>
             <div></div>
-            <div>Pair Type</div>
-            <div>In Target Region?</div>
-            <div>Contig</div>
-            <div>Strand</div>
-            <div>Position</div>
-            <div>Cigar String</div>
-            <div>Mismatches</div>
-            <div>Gaps</div>
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
           </div>
 
-          <div v-for="byMapper in group.byMapperList" :key="byMapper"
-            class="tw:border-b tw:border-gray-200 last:tw:border-b-0">
+          <!-- R1 Rows -->
+          <div v-for="item in byMapper.r1" :key="'r1-' + item.position + item.cigar"
+            class="tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:py-2 tw:text-xs tw:border-b tw:border-gray-100 tw:select-none tw:cursor-pointer"
+            :data-contig-cigar="`${item.contigName}-${item.position}-${item.cigar}`" :data-group-id="`group-${index}`"
+            :data-item-index="`${item.index}`"
+            @mouseenter="highlightEquivalentRows(`${item.contigName}-${item.position}-${item.cigar}`, item, group, index)"
+            @mouseleave="clearHighlight">
 
-            <!-- MappedBy Group Header -->
-            <div class="tw:bg-blue-50 tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:border-b tw:border-gray-200">
-              <h4 class="tw:text-sm tw:font-semibold tw:text-blue-800">
-                {{ byMapper.mapperName }}
-              </h4>
-              <div></div>
-              <div></div>
-              <div></div>
-              <div></div>
-              <div></div>
-              <div></div>
-              <div></div>
-              <div></div>
+            <!-- Empty first column -->
+            <div></div>
+
+            <!-- Pair Type -->
+            <div class="tw:flex tw:items-center">
+              <w-tag xs bg-color="blue">R1</w-tag>
             </div>
 
-            <!-- R1 Rows -->
-            <div v-for="item in byMapper.r1" :key="'r1-' + item.position + item.cigar"
-              class="tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:py-2 tw:text-xs tw:border-b tw:border-gray-100 tw:select-none tw:cursor-pointer"
-              :data-contig-cigar="`${item.contigName}-${item.position}-${item.cigar}`" :data-group-id="`group-${index}`"
-              :data-item-index="`${item.index}`"
-              @mouseenter="highlightEquivalentRows(`${item.contigName}-${item.position}-${item.cigar}`, item, group, index)"
-              @mouseleave="clearHighlight">
-
-              <!-- Empty first column -->
-              <div></div>
-
-              <!-- Pair Type -->
-              <div class="tw:flex tw:items-center">
-                <w-tag xs bg-color="blue">R1</w-tag>
-              </div>
-
-              <!-- Target Region Overlap -->
-              <div class="tw:flex tw:items-center">
-                <w-tag v-if="item.targetRegionOverlap === 0" xs bg-color="red">no overlap</w-tag>
-                <w-tag v-else-if="item.targetRegionOverlap === 1" xs bg-color="green">contained</w-tag>
-                <w-tag v-else xs bg-color="yellow">partially</w-tag>
-              </div>
-
-              <!-- Contig -->
-              <div class="tw:flex tw:items-center">{{ item.contigName }}</div>
-
-              <!-- Strand -->
-              <div class="tw:flex tw:items-center">
-                <span v-if="item.isForwardStrand">+</span>
-                <span v-else>-</span>
-              </div>
-
-              <!-- Position -->
-              <div class="tw:flex tw:items-center">{{ item.position }}</div>
-
-              <!-- Cigar String -->
-              <div class="tw:flex tw:items-center tw:truncate" :title="item.cigar">{{ item.cigar }}</div>
-
-              <!-- Mismatches -->
-              <div class="tw:flex tw:items-center">
-                {{ item.numMismatches !== undefined ? item.numMismatches : 'N/A' }}
-              </div>
-
-              <!-- Gaps -->
-              <div class="tw:flex tw:items-center">
-                {{ item.numGaps !== undefined ? item.numGaps : 'N/A' }}
-              </div>
+            <!-- Target Region Overlap -->
+            <div class="tw:flex tw:items-center">
+              <w-tag v-if="item.targetRegionOverlap === 0" xs bg-color="red">no overlap</w-tag>
+              <w-tag v-else-if="item.targetRegionOverlap === 1" xs bg-color="green">contained</w-tag>
+              <w-tag v-else xs bg-color="yellow">partially</w-tag>
             </div>
 
-            <!-- Space between R1 and R2 -->
-            <div v-if="byMapper.r1.length > 0 && byMapper.r2.length > 0" class="tw:h-2 tw:bg-gray-100"></div>
+            <!-- Contig -->
+            <div class="tw:flex tw:items-center">{{ item.contigName }}</div>
 
-            <!-- R2 Rows -->
-            <div v-for="item in byMapper.r2" :key="'r2-' + item.position + item.cigar"
-              class="tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:py-2 tw:text-xs tw:border-b tw:border-gray-100 tw:select-none tw:cursor-pointer"
-              :data-contig-cigar="`${item.contigName}-${item.position}-${item.cigar}`" :data-group-id="`group-${index}`"
-              :data-item-index="`${item.index}`"
-              @mouseenter="highlightEquivalentRows(`${item.contigName}-${item.position}-${item.cigar}`, item, group, index)"
-              @mouseleave="clearHighlight">
+            <!-- Strand -->
+            <div class="tw:flex tw:items-center">
+              <span v-if="item.isForwardStrand">+</span>
+              <span v-else>-</span>
+            </div>
 
-              <!-- Empty first column -->
-              <div></div>
+            <!-- Position -->
+            <div class="tw:flex tw:items-center">{{ item.position }}</div>
 
-              <!-- Pair Type -->
-              <div class="tw:flex tw:items-center">
-                <w-tag xs bg-color="green">R2</w-tag>
-              </div>
+            <!-- Cigar String -->
+            <div class="tw:flex tw:items-center tw:truncate" :title="item.cigar">{{ item.cigar }}</div>
 
-              <!-- Target Region Overlap -->
-              <div class="tw:flex tw:items-center">
-                <w-tag v-if="item.targetRegionOverlap === 0" xs bg-color="red">no overlap</w-tag>
-                <w-tag v-else-if="item.targetRegionOverlap === 1" xs bg-color="green">contained</w-tag>
-                <w-tag v-else xs bg-color="yellow">partially</w-tag>
-              </div>
+            <!-- Mismatches -->
+            <div class="tw:flex tw:items-center">
+              {{ item.numMismatches !== undefined ? item.numMismatches : 'N/A' }}
+            </div>
 
-              <!-- Contig -->
-              <div class="tw:flex tw:items-center">{{ item.contigName }}</div>
-
-              <!-- Strand -->
-              <div class="tw:flex tw:items-center">
-                <span v-if="item.isForwardStrand">+</span>
-                <span v-else>-</span>
-              </div>
-
-              <!-- Position -->
-              <div class="tw:flex tw:items-center">{{ item.position }}</div>
-
-              <!-- Cigar String -->
-              <div class="tw:flex tw:items-center tw:truncate" :title="item.cigar">{{ item.cigar }}</div>
-
-              <!-- Mismatches -->
-              <div class="tw:flex tw:items-center">
-                {{ item.numMismatches !== undefined ? item.numMismatches : 'N/A' }}
-              </div>
-
-              <!-- Gaps -->
-              <div class="tw:flex tw:items-center">
-                {{ item.numGaps !== undefined ? item.numGaps : 'N/A' }}
-              </div>
+            <!-- Gaps -->
+            <div class="tw:flex tw:items-center">
+              {{ item.numGaps !== undefined ? item.numGaps : 'N/A' }}
             </div>
           </div>
 
-          <!-- SVG Overlay for Dendrogram Lines -->
-          <svg class="tw:absolute tw:top-0 tw:right-0 tw:w-16 tw:h-full tw:pointer-events-none"
-            :id="`dendrogram-svg-${index}`">
-            <!-- Lines will be drawn here by JavaScript -->
-          </svg>
+          <!-- Space between R1 and R2 -->
+          <div v-if="byMapper.r1.length > 0 && byMapper.r2.length > 0" class="tw:h-2 tw:bg-gray-100"></div>
+
+          <!-- R2 Rows -->
+          <div v-for="item in byMapper.r2" :key="'r2-' + item.position + item.cigar"
+            class="tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:py-2 tw:text-xs tw:border-b tw:border-gray-100 tw:select-none tw:cursor-pointer"
+            :data-contig-cigar="`${item.contigName}-${item.position}-${item.cigar}`" :data-group-id="`group-${index}`"
+            :data-item-index="`${item.index}`"
+            @mouseenter="highlightEquivalentRows(`${item.contigName}-${item.position}-${item.cigar}`, item, group, index)"
+            @mouseleave="clearHighlight">
+
+            <!-- Empty first column -->
+            <div></div>
+
+            <!-- Pair Type -->
+            <div class="tw:flex tw:items-center">
+              <w-tag xs bg-color="green">R2</w-tag>
+            </div>
+
+            <!-- Target Region Overlap -->
+            <div class="tw:flex tw:items-center">
+              <w-tag v-if="item.targetRegionOverlap === 0" xs bg-color="red">no overlap</w-tag>
+              <w-tag v-else-if="item.targetRegionOverlap === 1" xs bg-color="green">contained</w-tag>
+              <w-tag v-else xs bg-color="yellow">partially</w-tag>
+            </div>
+
+            <!-- Contig -->
+            <div class="tw:flex tw:items-center">{{ item.contigName }}</div>
+
+            <!-- Strand -->
+            <div class="tw:flex tw:items-center">
+              <span v-if="item.isForwardStrand">+</span>
+              <span v-else>-</span>
+            </div>
+
+            <!-- Position -->
+            <div class="tw:flex tw:items-center">{{ item.position }}</div>
+
+            <!-- Cigar String -->
+            <div class="tw:flex tw:items-center tw:truncate" :title="item.cigar">{{ item.cigar }}</div>
+
+            <!-- Mismatches -->
+            <div class="tw:flex tw:items-center">
+              {{ item.numMismatches !== undefined ? item.numMismatches : 'N/A' }}
+            </div>
+
+            <!-- Gaps -->
+            <div class="tw:flex tw:items-center">
+              {{ item.numGaps !== undefined ? item.numGaps : 'N/A' }}
+            </div>
+          </div>
         </div>
 
-        <div class="tw:px-4 tw:mt-6">
-          <Igv :ref="(el) => setIgvRef(el, index)" </Igv>
-        </div>
-
+        <!-- SVG Overlay for Dendrogram Lines -->
+        <svg class="tw:absolute tw:top-0 tw:right-0 tw:w-16 tw:h-full tw:pointer-events-none"
+          :id="`dendrogram-svg-${index}`">
+          <!-- Lines will be drawn here by JavaScript -->
+        </svg>
       </div>
+
+      <div class="tw:mt-6">
+        <Igv :ref="(el) => setIgvRef(el, index)" </Igv>
+      </div>
+
     </div>
 
   </div>

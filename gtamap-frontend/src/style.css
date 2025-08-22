@@ -1,3 +1,27 @@
 @import "tailwindcss";
 
 @config "../tailwind.config.js";
+
+/* Custom component classes using @apply */
+@layer components {
+
+	.my-card {
+		@apply tw:border tw:border-gray-300 tw:rounded tw:px-6 tw:py-4 tw:text-center tw:bg-white
+	}
+
+  /* .content-box { */
+  /*   @apply tw:w-fit tw:border tw:border-gray-300 tw:rounded tw:px-6 tw:py-4 tw:text-center tw:bg-white; */
+  /* } */
+  /*  */
+  /* .btn-secondary { */
+  /*   @apply tw:bg-gray-100 hover:tw:bg-gray-200 tw:text-gray-700 tw:px-4 tw:py-2 tw:rounded tw:border tw:border-gray-300 tw:text-sm tw:font-medium; */
+  /* } */
+  /*  */
+  /* .table-row { */
+  /*   @apply tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:py-2 tw:text-xs tw:border-b tw:border-gray-100 tw:select-none tw:cursor-pointer; */
+  /* } */
+  /*  */
+  /* .section-header { */
+  /*   @apply tw:text-lg tw:font-bold tw:mb-4 tw:text-center tw:text-gray-500; */
+  /* } */
+}
