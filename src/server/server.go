@@ -79,11 +79,11 @@ func (s *Server) InitRoutes() {
 
 	// READ DETAILS
 	details := api.PathPrefix("/details").Subrouter()
+	details.HandleFunc("/data", s.getReadDetailsData).Methods("GET")
 	details.HandleFunc("/table", s.getReadDetailsTable).Methods("GET")
 	// details.HandleFunc("/viewerData", s.getReadDetailsViewerData).Methods("GET")
 
 	detailsViewer := details.PathPrefix("/viewer").Subrouter()
-	detailsViewer.HandleFunc("/data", s.getReadDetailsViewerData).Methods("GET")
 	detailsViewer.HandleFunc("/fasta", s.serverDetailsViewerFasta).Methods("GET")
 	detailsViewer.HandleFunc("/fastaIndex", s.serverDetailsViewerFastaIndex).Methods("GET")
 	detailsViewer.HandleFunc("/sam", s.serveDetailsViewerSam).Methods("GET")
@@ -1478,7 +1478,7 @@ func (s *Server) getReadDetailsTable(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(details)
 }
 
-func (s *Server) getReadDetailsViewerData(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getReadDetailsData(w http.ResponseWriter, r *http.Request) {
 
 	qname, err := utils.GetSpecificRequestParam(r, "qname")
 	if err != nil {
@@ -1486,7 +1486,7 @@ func (s *Server) getReadDetailsViewerData(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	details := s.Handler.GetReadDetailsViewerData(qname)
+	details := s.Handler.GetReadDetailsData(qname)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(details)

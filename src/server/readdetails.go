@@ -117,8 +117,16 @@ func (h *MappingDataHandler) GetReadDetailsTable(qname string) *ReadDetailsDto {
 	return details
 }
 
-type ReadDetailsViewerData struct {
-	ReadGroups []*ReadGroup `json:"readGroups"`
+type ReadDetailsData struct {
+	Confidence int            `json:"confidence"`
+	ReadGroups []*ReadGroup   `json:"readGroups"`
+	R1Mapped   []*MapperState `json:"r1Mapped"`
+	R2Mapped   []*MapperState `json:"r2Mapped"`
+}
+
+type MapperState struct {
+	MapperName string `json:"mapperName"`
+	Mapped     bool   `json:"mapped"`
 }
 
 type ReadGroup struct {
@@ -126,7 +134,7 @@ type ReadGroup struct {
 	Locations    []*ReadLocationInfo `json:"locations"`
 }
 
-func (h *MappingDataHandler) GetReadDetailsViewerData(qname string) *ReadDetailsViewerData {
+func (h *MappingDataHandler) GetReadDetailsData(qname string) *ReadDetailsData {
 
 	paddingBases := 500
 
@@ -134,6 +142,31 @@ func (h *MappingDataHandler) GetReadDetailsViewerData(qname string) *ReadDetails
 	intervalsMap := make(map[*Interval][]*EnhancedRecord)
 
 	qclust := h.QnameCluster[qname]
+
+	r1Mappers := make(map[string]bool, 0)
+	for _, r := range qclust.ClusterR1.Records {
+		mapperName := h.MapperInfos[r.MapperIndex].MapperName
+		r1Mappers[mapperName] = true
+	}
+
+	r2Mappers := make(map[string]bool, 0)
+	for _, r := range qclust.ClusterR2.Records {
+		mapperName := h.MapperInfos[r.MapperIndex].MapperName
+		r2Mappers[mapperName] = true
+	}
+
+	r1Mapped := make([]*MapperState, len(h.MapperInfos))
+	r2Mapped := make([]*MapperState, len(h.MapperInfos))
+	for i, mapperInfo := range h.MapperInfos {
+		r1Mapped[i] = &MapperState{
+			MapperName: mapperInfo.MapperName,
+			Mapped:     r1Mappers[mapperInfo.MapperName],
+		}
+		r2Mapped[i] = &MapperState{
+			MapperName: mapperInfo.MapperName,
+			Mapped:     r2Mappers[mapperInfo.MapperName],
+		}
+	}
 
 	for _, r := range append(qclust.ClusterR1.SimilarRecords, qclust.ClusterR2.SimilarRecords...) {
 
@@ -280,8 +313,11 @@ func (h *MappingDataHandler) GetReadDetailsViewerData(qname string) *ReadDetails
 		readGroups = append(readGroups, group)
 	}
 
-	return &ReadDetailsViewerData{
+	return &ReadDetailsData{
+		Confidence: qclust.ConfidenceLevel,
 		ReadGroups: readGroups,
+		R1Mapped:   r1Mapped,
+		R2Mapped:   r2Mapped,
 	}
 }
 
@@ -329,8 +365,6 @@ func (h *MappingDataHandler) GetViewerConfig(id string, contig string, start int
 func (h *MappingDataHandler) GetReadGroupSam(groupId string, mapperIndex int) string {
 
 	details := h.DetailsViewerData[groupId]
-
-	fmt.Println(details.Interval.Contig, details.Interval.Start, details.Interval.End)
 
 	var builder strings.Builder
 

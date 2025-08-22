@@ -12,23 +12,43 @@
       </w-button>
     </div>
 
-    <div class="tw:flex tw:flex-row tw:gap-6 tw:p-6 tw:border-b tw:border-gray-200 tw:mb-6">
-      <div class="tw:flex-1 tw:flex tw:flex-col">
-        <div class="tw:text-sm tw:font-semibold tw:text-gray-600 tw:mb-2">Read ID</div>
+    <div class="tw:flex tw:flex-row tw:gap-6 tw:justify-center tw:p-6 tw:mb-6">
+
+      <div class="tw:w-fit tw:border tw:border-gray-300 tw:rounded tw:px-6 tw:py-4 tw:text-center">
+        <div class="tw:text-sm tw:font-semibold tw:text-gray-600">Read ID</div>
         <div class="tw:text-lg tw:font-bold">{{ readId }}</div>
       </div>
 
-      <div class="tw:flex-1 tw:flex tw:flex-col">
+      <div class="tw:w-fit tw:border tw:border-gray-300 tw:rounded tw:px-6 tw:py-4 tw:text-center">
         <div class="tw:text-sm tw:font-semibold tw:text-gray-600 tw:mb-2">Confidence Score</div>
-        <div class="tw:text-lg tw:font-bold">0.95</div>
+        <CustomTag :level="detailsData.confidence" size="md"></CustomTag>
       </div>
 
-      <div class="tw:flex-1 tw:flex tw:flex-col">
-        <div class="tw:text-sm tw:font-semibold tw:text-gray-600 tw:mb-2">Tags per Mapper</div>
-        <div class="tw:flex tw:flex-wrap tw:gap-2">
-          <w-tag color="blue" class="tw:text-xs">Mapper1: Tag1</w-tag>
-          <w-tag color="green" class="tw:text-xs">Mapper2: Tag2</w-tag>
-          <w-tag color="orange" class="tw:text-xs">Mapper3: Tag3</w-tag>
+      <div class="tw:w-fit tw:border tw:border-gray-300 tw:rounded tw:px-6 tw:py-4 tw:text-center">
+        <div class="tw:text-sm tw:font-semibold tw:text-gray-600 tw:mb-2">Mapped By</div>
+
+        <!-- R1 Row -->
+        <div class="tw:mb-2">
+          <div class="tw:flex tw:flex-wrap tw:gap-2 tw:justify-center">
+            <w-tag xs bg-color="blue" class="tw:w-8 tw:text-center">R1</w-tag>
+
+            <w-tag v-for="mapper in detailsData.r1Mapped" :key="mapper.mapperName"
+              :color="mapper.mapped ? 'green' : 'red'" class="tw:text-xs">
+              {{ mapper.mapperName }}
+            </w-tag>
+          </div>
+        </div>
+
+        <!-- R2 Row -->
+        <div>
+          <div class="tw:flex tw:flex-wrap tw:gap-2 tw:justify-center">
+            <w-tag xs bg-color="green" class="tw:w-8 tw:text-center">R2</w-tag>
+
+            <w-tag v-for="mapper in detailsData.r2Mapped" :key="mapper.mapperName"
+              :color="mapper.mapped ? 'green' : 'red'" class="tw:text-xs">
+              {{ mapper.mapperName }}
+            </w-tag>
+          </div>
         </div>
       </div>
     </div>
@@ -38,6 +58,9 @@
         <h3 class="tw:text-lg tw:font-bold tw:mb-4 tw:text-center tw:text-gray-500">
           Read Quality
         </h3>
+        <div class="tw:flex tw:justify-center">
+          <w-tag>coming soon</w-tag>
+        </div>
       </div>
     </div>
 
@@ -93,7 +116,7 @@
           Read Group {{ index + 1 }}
         </h3>
 
-        <div class="tw:mx-4 tw:border tw:rounded-sm tw:border-gray-200">
+        <div class="tw:mx-4 tw:border tw:rounded-sm tw:border-gray-200 tw:relative">
           <!-- Table Header -->
           <div
             class="tw:bg-gray-50 tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:py-2 tw:text-xs tw:font-semibold tw:text-gray-600 tw:border-b tw:border-gray-200">
@@ -128,7 +151,8 @@
 
             <!-- R1 Rows -->
             <div v-for="item in byMapper.r1" :key="'r1-' + item.position + item.contigName"
-              class="tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:py-2 tw:text-xs tw:border-b tw:border-gray-100 hover:tw:bg-gray-50 tw:select-none tw:cursor-pointer tw:hover:bg-gray-50">
+              class="tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:py-2 tw:text-xs tw:border-b tw:border-gray-100 hover:tw:bg-gray-50 tw:select-none tw:cursor-pointer tw:hover:bg-gray-50"
+              :data-contig-cigar="`${item.contigName}-${item.cigar}`" :data-group-id="`group-${index}`">
 
               <!-- Empty first column -->
               <div></div>
@@ -176,7 +200,8 @@
 
             <!-- R2 Rows -->
             <div v-for="item in byMapper.r2" :key="'r2-' + item.position + item.contigName"
-              class="tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:py-2 tw:text-xs tw:border-b tw:border-gray-100 hover:tw:bg-gray-50">
+              class="tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:py-2 tw:text-xs tw:border-b tw:border-gray-100 hover:tw:bg-gray-50"
+              :data-contig-cigar="`${item.contigName}-${item.cigar}`" :data-group-id="`group-${index}`">
 
               <!-- Empty first column -->
               <div></div>
@@ -219,6 +244,12 @@
               </div>
             </div>
           </div>
+
+          <!-- SVG Overlay for Dendrogram Lines -->
+          <svg class="tw:absolute tw:top-0 tw:right-0 tw:w-16 tw:h-full tw:pointer-events-none"
+            :id="`dendrogram-svg-${index}`">
+            <!-- Lines will be drawn here by JavaScript -->
+          </svg>
         </div>
 
         <div class="tw:px-4 tw:mt-6">
@@ -238,6 +269,7 @@ import { useRoute } from 'vue-router'
 import igv from '../js/igv/dist/igv.esm.js'
 
 import Igv from '../components/Igv.vue'
+import CustomTag from '../components/CustomTag.vue'
 
 export default {
   name: 'ReadDetailsPage',
@@ -335,6 +367,7 @@ export default {
 
     // IGV VIEWER DATA
 
+    let detailsData = ref({})
     let viewerData = ref([])
 
     const igvRefs = ref([])
@@ -346,13 +379,19 @@ export default {
     }
 
     const getViewerData = function () {
-      ApiService.get('/api/details/viewer/data', {
+      ApiService.get('/api/details/data', {
         params: {
           qname: readId.value,
         }
       })
         .then(async (response) => {
           if (response.status === 200) {
+
+            console.log(response.data)
+
+            detailsData.value.confidence = response.data.confidence
+            detailsData.value.r1Mapped = response.data.r1Mapped
+            detailsData.value.r2Mapped = response.data.r2Mapped
 
             for (let group of response.data.readGroups) {
 
@@ -402,11 +441,95 @@ export default {
               igvRefs.value[i].init(readGroups.value[i].viewerConfig)
             }
 
+            // Draw dendrogram lines after data is loaded and DOM is updated
+            await nextTick()
+            drawDendrogramLines()
+
           }
         })
         .catch((err) => {
           console.error(err)
         })
+    }
+
+    const drawDendrogramLines = function () {
+      readGroups.value.forEach((group, groupIndex) => {
+        const svg = document.getElementById(`dendrogram-svg-${groupIndex}`)
+        if (!svg) return
+
+        // Clear existing lines
+        svg.innerHTML = ''
+
+        // Get all rows with data attributes within this group
+        const rows = document.querySelectorAll(`[data-group-id="group-${groupIndex}"]`)
+
+        // Group rows by contig-cigar combination
+        const groups = {}
+        const rowPositions = []
+
+        rows.forEach((row, index) => {
+          const contigCigar = row.getAttribute('data-contig-cigar')
+          if (!groups[contigCigar]) {
+            groups[contigCigar] = []
+          }
+
+          const rect = row.getBoundingClientRect()
+          const containerRect = svg.parentElement.getBoundingClientRect()
+          const relativeTop = rect.top - containerRect.top + rect.height / 2
+
+          groups[contigCigar].push({
+            element: row,
+            y: relativeTop,
+            index: index
+          })
+
+          rowPositions.push({ contigCigar, y: relativeTop, index })
+        })
+
+        // Draw connecting lines for groups with multiple rows
+        const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899']
+        let colorIndex = 0
+
+        Object.entries(groups).forEach(([contigCigar, groupRows]) => {
+          if (groupRows.length > 1) {
+            const color = colors[colorIndex % colors.length]
+            colorIndex++
+
+            // Sort by Y position
+            groupRows.sort((a, b) => a.y - b.y)
+
+            // Draw connecting lines between consecutive rows in the group
+            for (let i = 0; i < groupRows.length - 1; i++) {
+              const y1 = groupRows[i].y
+              const y2 = groupRows[i + 1].y
+
+              // Create a curved path
+              const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+              const d = `M 10 ${y1} Q 30 ${(y1 + y2) / 2} 10 ${y2}`
+
+              path.setAttribute('d', d)
+              path.setAttribute('stroke', color)
+              path.setAttribute('stroke-width', '2')
+              path.setAttribute('fill', 'none')
+              path.setAttribute('opacity', '0.7')
+
+              svg.appendChild(path)
+            }
+
+            // Add small circles at connection points
+            groupRows.forEach(row => {
+              const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+              circle.setAttribute('cx', '10')
+              circle.setAttribute('cy', row.y)
+              circle.setAttribute('r', '3')
+              circle.setAttribute('fill', color)
+              circle.setAttribute('opacity', '0.8')
+
+              svg.appendChild(circle)
+            })
+          }
+        })
+      })
     }
 
     // IGV
@@ -492,6 +615,7 @@ export default {
     return {
       readId,
       goBack,
+      detailsData,
       tableItems,
       tableData,
       readGroups,
@@ -501,10 +625,12 @@ export default {
       getViewerData,
       igvRefs,
       setIgvRef,
+      drawDendrogramLines,
     }
   },
   components: {
-    Igv
+    Igv,
+    CustomTag,
   },
 }
 </script>
