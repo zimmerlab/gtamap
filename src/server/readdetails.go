@@ -335,16 +335,19 @@ func (h *MappingDataHandler) GetViewerConfig(id string, contig string, start int
 	for i, mapperName := range h.DetailsViewerData[id].MapperNames {
 
 		track := IgvTrackConfig{
-			Name:        mapperName,
-			Format:      "sam",
-			DisplayMode: "EXPANDED",
-			Url:         "http://localhost:8000/api/details/viewer/bam?id=" + id + "&i=" + strconv.Itoa(i),
-			IndexUrl:    "http://localhost:8000/api/details/viewer/bamIndex?id=" + id + "&i=" + strconv.Itoa(i),
-			Type:        "alignment",
-			Height:      100 + 20*(len(h.DetailsViewerData[id].RecordsByMapper[i])),
-			MaxHeight:   1000,
-			MaxRows:     200,
-			ColorBy:     "none",
+			Name:              mapperName,
+			Format:            "sam",
+			DisplayMode:       "EXPANDED",
+			Url:               "http://localhost:8000/api/details/viewer/bam?id=" + id + "&i=" + strconv.Itoa(i),
+			IndexUrl:          "http://localhost:8000/api/details/viewer/bamIndex?id=" + id + "&i=" + strconv.Itoa(i),
+			Type:              "alignment",
+			Height:            100 + 20*(len(h.DetailsViewerData[id].RecordsByMapper[i])),
+			MaxHeight:         1000,
+			MaxRows:           200,
+			ColorBy:           "none",
+			ShowCoverage:      false,
+			ShowSoftClips:     true,
+			ShowInsertionText: true,
 		}
 
 		tracks = append(tracks, track)

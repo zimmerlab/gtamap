@@ -1035,16 +1035,19 @@ type IgvGenomeConfig struct {
 }
 
 type IgvTrackConfig struct {
-	Name        string `json:"name"`
-	Format      string `json:"format"`
-	DisplayMode string `json:"displayMode"`
-	Url         string `json:"url"`
-	IndexUrl    string `json:"indexURL"`
-	Type        string `json:"type"`
-	Height      int    `json:"height,omitempty"`
-	MaxHeight   int    `json:"maxHeight,omitempty"`
-	MaxRows     int    `json:"maxRows,omitempty"`
-	ColorBy     string `json:"colorBy,omitempty"`
+	Name              string `json:"name"`
+	Format            string `json:"format"`
+	DisplayMode       string `json:"displayMode"`
+	Url               string `json:"url"`
+	IndexUrl          string `json:"indexURL"`
+	Type              string `json:"type"`
+	Height            int    `json:"height,omitempty"`
+	MaxHeight         int    `json:"maxHeight,omitempty"`
+	MaxRows           int    `json:"maxRows,omitempty"`
+	ColorBy           string `json:"colorBy,omitempty"`
+	ShowCoverage      bool   `json:"showCoverage,omitempty"`
+	ShowSoftClips     bool   `json:"showSoftClips,omitempty"`
+	ShowInsertionText bool   `json:"showInsertionText,omitempty"`
 }
 
 func getTargetRegionIgvConfig(w http.ResponseWriter, r *http.Request) {
@@ -1300,8 +1303,6 @@ func (s *Server) serveAcceptedRecordsBam(w http.ResponseWriter, r *http.Request)
 func (s *Server) serveAcceptedRecordsBamIndex(w http.ResponseWriter, r *http.Request) {
 
 	samString := s.Handler.GetAcceptedRecordsSam(true)
-
-	fmt.Println(samString)
 
 	bamBytes, err := samToSortedBam(samString)
 	if err != nil {

@@ -231,13 +231,42 @@ func (h *MappingDataHandler) AddMapperInfo(mapperName string, mapperSamFilePath 
 		return fmt.Errorf("mapper with name '%s' and target '%s' already exists", mapperName, target)
 	}
 
-	// add new mapper info
 	mapperInfo = &MapperInfo{
 		Index:      len(h.MapperInfos),
 		MapperName: mapperName,
 		Target:     target,
 	}
-	h.MapperInfos = append(h.MapperInfos, mapperInfo)
+
+	// calculate index of the mapper (gtamap first, other alphabetically sorted)
+	index := -1
+	if mapperName == "gtamap" {
+		index = 0
+	} else {
+		for i, existingMapper := range h.MapperInfos {
+			if existingMapper.MapperName == "gtamap" {
+				continue
+			}
+			// if same mapper then target is before genome
+			if existingMapper.MapperName == mapperName && target == "target" {
+				index = i
+				break
+			}
+			// sort alphabetically by mapper name (ascending)
+			if existingMapper.MapperName > mapperName {
+				index = i
+				break
+			}
+		}
+	}
+
+	// add the mapper info at the correct index
+	if index == -1 {
+		h.MapperInfos = append(h.MapperInfos, mapperInfo)
+	} else {
+		h.MapperInfos = append(h.MapperInfos, nil)
+		copy(h.MapperInfos[index+1:], h.MapperInfos[index:])
+		h.MapperInfos[index] = mapperInfo
+	}
 
 	// add records of this mapper
 	parsedFile, err := sam.ParseSAMFile(mapperSamFilePath)
@@ -315,8 +344,18 @@ func (h *MappingDataHandler) AddMapperInfo(mapperName string, mapperSamFilePath 
 		enhancedRecord.QnameCluster = qnameCluster
 	}
 
-	h.RecordsByMapper = append(h.RecordsByMapper, recordsByMapper)
-	h.QnamesByMapper = append(h.QnamesByMapper, qnameMap)
+	if index == -1 {
+		h.RecordsByMapper = append(h.RecordsByMapper, recordsByMapper)
+		h.QnamesByMapper = append(h.QnamesByMapper, qnameMap)
+	} else {
+		h.RecordsByMapper = append(h.RecordsByMapper, nil)
+		copy(h.RecordsByMapper[index+1:], h.RecordsByMapper[index:])
+		h.RecordsByMapper[index] = recordsByMapper
+
+		h.QnamesByMapper = append(h.QnamesByMapper, nil)
+		copy(h.QnamesByMapper[index+1:], h.QnamesByMapper[index:])
+		h.QnamesByMapper[index] = qnameMap
+	}
 
 	return nil
 }
