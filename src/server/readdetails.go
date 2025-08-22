@@ -130,6 +130,8 @@ type MapperState struct {
 }
 
 type ReadGroup struct {
+	Interval     *Interval           `json:"interval"`
+	Name         string              `json:"name"`
 	ViewerConfig map[string]any      `json:"viewerConfig"`
 	Locations    []*ReadLocationInfo `json:"locations"`
 }
@@ -311,6 +313,8 @@ func (h *MappingDataHandler) GetReadDetailsData(qname string) *ReadDetailsData {
 		}
 
 		group := &ReadGroup{
+			Name:         id,
+			Interval:     i,
 			ViewerConfig: config,
 			Locations:    locations,
 		}
