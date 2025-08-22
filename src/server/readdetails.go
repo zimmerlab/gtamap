@@ -139,7 +139,6 @@ func (h *MappingDataHandler) GetReadDetailsViewerData(qname string) *ReadDetails
 
 		overlapping := make([]int, 0)
 		for i, e := range intervals {
-			fmt.Println(i, e.Start, e.End)
 			if interval.Start <= e.End && interval.End >= e.Start {
 				overlapping = append(overlapping, i)
 			}
