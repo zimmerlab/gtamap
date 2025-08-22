@@ -175,9 +175,22 @@
     updateBrowserTracks()
   }
 
+  const highlightRead = function(tags, color) {
+
+    for (const track of igvBrowser.value.findTracks()) {
+      if (track.type !== 'alignment') {
+        continue
+      }
+
+      track.setHighlightedTags(tags, color)
+      track.updateViews()
+    }
+  }
+
   defineExpose({
     init,
     update,
+    highlightRead,
   })
 
   onMounted(() => {

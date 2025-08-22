@@ -153,7 +153,8 @@
             <div v-for="item in byMapper.r1" :key="'r1-' + item.position + item.cigar"
               class="tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:py-2 tw:text-xs tw:border-b tw:border-gray-100 tw:select-none tw:cursor-pointer"
               :data-contig-cigar="`${item.contigName}-${item.position}-${item.cigar}`" :data-group-id="`group-${index}`"
-              @mouseenter="highlightEquivalentRows(`${item.contigName}-${item.position}-${item.cigar}`, item)"
+              :data-item-index="`${item.index}`"
+              @mouseenter="highlightEquivalentRows(`${item.contigName}-${item.position}-${item.cigar}`, item, group, index)"
               @mouseleave="clearHighlight">
 
               <!-- Empty first column -->
@@ -204,7 +205,8 @@
             <div v-for="item in byMapper.r2" :key="'r2-' + item.position + item.cigar"
               class="tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:py-2 tw:text-xs tw:border-b tw:border-gray-100 tw:select-none tw:cursor-pointer"
               :data-contig-cigar="`${item.contigName}-${item.position}-${item.cigar}`" :data-group-id="`group-${index}`"
-              @mouseenter="highlightEquivalentRows(`${item.contigName}-${item.position}-${item.cigar}`, item)"
+              :data-item-index="`${item.index}`"
+              @mouseenter="highlightEquivalentRows(`${item.contigName}-${item.position}-${item.cigar}`, item, group, index)"
               @mouseleave="clearHighlight">
 
               <!-- Empty first column -->
@@ -405,6 +407,8 @@ export default {
 
               for (let location of group.locations) {
 
+                location.index = location.readIndices[0]
+
                 let byMapperIndex = -1
 
                 for (let i = 0; i < byMapperList.length; i++) {
@@ -548,13 +552,12 @@ export default {
       getViewerData()
     })
 
-    const highlightEquivalentRows = function(contigCigar, item) {
+    const highlightEquivalentRows = function (contigCigar, item, group, groupIndex) {
 
-      console.log('hello', item)
-      
       // find all rows with matching data-contig-cigar attribute
       const allRows = document.querySelectorAll(`[data-contig-cigar="${contigCigar}"]`)
-      
+
+
       // all unique contig-cigar combinations in the current group
       const groupElement = allRows[0]?.closest('[data-group-id]')
 
@@ -562,7 +565,7 @@ export default {
 
         const groupId = groupElement.getAttribute('data-group-id')
         const groupRows = document.querySelectorAll(`[data-group-id="${groupId}"]`)
-        
+
         // group rows by their data-contig-cigar attribute and count them
         let groups = []
         for (let row of groupRows) {
@@ -576,7 +579,7 @@ export default {
             }
           }
           if (index == -1) {
-            groups.push({key: key, count: 1})
+            groups.push({ key: key, count: 1 })
           }
         }
 
@@ -596,25 +599,36 @@ export default {
 
         // apply default color (gray) if no equivalent rows found
         let color = "#d3d3d3"
+        let readColor = "#FD7E14"
         // use the same color as in the SVG
         if (mult && index < colors.length) {
           color = colors[index]
+          readColor = colors[index]
         }
-        
+
         // apply the same color as background with opacity
         allRows.forEach(row => {
           row.style.backgroundColor = color + '33'
           row.classList.add('highlighted-row')
         })
+
+        const readIndices = Array.from(allRows).map(row => "XG:" + row.getAttribute('data-item-index'))
+        igvRefs.value[groupIndex].highlightRead(readIndices, readColor)
       }
     }
-    
-    const clearHighlight = function() {
-      // Remove highlight class from all previously highlighted rows
+
+    const clearHighlight = function () {
+
+      // clear highlighted igv reads
+      for (const igvRef of igvRefs.value) {
+        igvRef.highlightRead([], '#000000')
+      }
+
+      // remove highlight class from all previously highlighted rows
       const highlightedRows = document.querySelectorAll('.highlighted-row')
       highlightedRows.forEach(row => {
         row.classList.remove('highlighted-row')
-        row.style.backgroundColor = '' // Clear inline background color
+        row.style.backgroundColor = ''
       })
     }
 
