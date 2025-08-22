@@ -86,6 +86,9 @@ func (s *Server) InitRoutes() {
 	detailsViewer.HandleFunc("/data", s.getReadDetailsViewerData).Methods("GET")
 	detailsViewer.HandleFunc("/fasta", s.serverDetailsViewerFasta).Methods("GET")
 	detailsViewer.HandleFunc("/fastaIndex", s.serverDetailsViewerFastaIndex).Methods("GET")
+	detailsViewer.HandleFunc("/sam", s.serveDetailsViewerSam).Methods("GET")
+	detailsViewer.HandleFunc("/bam", s.serveDetailsViewerBam).Methods("GET")
+	detailsViewer.HandleFunc("/bamIndex", s.serveDetailsViewerBamIndex).Methods("GET")
 
 	download := s.Router.PathPrefix("/download").Subrouter()
 
@@ -1515,4 +1518,85 @@ func (s *Server) serverDetailsViewerFastaIndex(w http.ResponseWriter, r *http.Re
 
 	w.Header().Set("Content-Type", "plain/text")
 	w.Write([]byte(fastaString))
+}
+
+func (s *Server) serveDetailsViewerSam(w http.ResponseWriter, r *http.Request) {
+
+	id, err := utils.GetSpecificRequestParam(r, "id")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error parsing id parameter: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	if _, exists := s.Handler.DetailsViewerData[id]; !exists {
+		http.Error(w, fmt.Sprintf("Details viewer data not found for id: %s", id), http.StatusNotFound)
+		return
+	}
+
+	samString := s.Handler.GetReadGroupSam(id)
+
+	w.Header().Set("Content-Type", "plain/text")
+	w.Write([]byte(samString))
+}
+
+func (s *Server) serveDetailsViewerBam(w http.ResponseWriter, r *http.Request) {
+
+	id, err := utils.GetSpecificRequestParam(r, "id")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error parsing id parameter: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	if _, exists := s.Handler.DetailsViewerData[id]; !exists {
+		http.Error(w, fmt.Sprintf("Details viewer data not found for id: %s", id), http.StatusNotFound)
+		return
+	}
+
+	samString := s.Handler.GetReadGroupSam(id)
+
+	bamBytes, err := samToSortedBam(samString)
+	if err != nil {
+		logrus.Error("error while converting sam to bam")
+		logrus.Error(err)
+		http.Error(w, fmt.Sprintf("Error converting SAM to BAM: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Write(bamBytes)
+}
+
+func (s *Server) serveDetailsViewerBamIndex(w http.ResponseWriter, r *http.Request) {
+
+	id, err := utils.GetSpecificRequestParam(r, "id")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error parsing id parameter: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	if _, exists := s.Handler.DetailsViewerData[id]; !exists {
+		http.Error(w, fmt.Sprintf("Details viewer data not found for id: %s", id), http.StatusNotFound)
+		return
+	}
+
+	samString := s.Handler.GetReadGroupSam(id)
+
+	bamBytes, err := samToSortedBam(samString)
+	if err != nil {
+		logrus.Error("error while converting sam to bam")
+		logrus.Error(err)
+		http.Error(w, fmt.Sprintf("Error converting SAM to BAM: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	bamIndex, err := bamToBamIndex(bamBytes)
+	if err != nil {
+		logrus.Error("error while creating bam index")
+		logrus.Error(err)
+		http.Error(w, fmt.Sprintf("Error creating BAM index: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "plain/text")
+	w.Write([]byte(bamIndex))
 }

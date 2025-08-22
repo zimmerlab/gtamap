@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/KleinSamuel/gtamap/src/dataloader"
 )
@@ -123,21 +124,22 @@ type ReadDetailsViewerData struct {
 
 func (h *MappingDataHandler) GetReadDetailsViewerData(qname string) *ReadDetailsViewerData {
 
-	paddingBases := 200
+	paddingBases := 500
 
 	intervals := make([]*Interval, 0)
 	intervalsMap := make(map[*Interval][]*EnhancedRecord)
 
 	qclust := h.QnameCluster[qname]
 
-	for _, r1 := range qclust.ClusterR1.SimilarRecords {
+	for _, r := range append(qclust.ClusterR1.SimilarRecords, qclust.ClusterR2.SimilarRecords...) {
 
-		interval := GetGenomicIntervalFromRecord(r1[0])
+		interval := GetGenomicIntervalFromRecord(r[0])
 		interval.Start -= paddingBases
 		interval.End += paddingBases
 
 		overlapping := make([]int, 0)
 		for i, e := range intervals {
+			fmt.Println(i, e.Start, e.End)
 			if interval.Start <= e.End && interval.End >= e.Start {
 				overlapping = append(overlapping, i)
 			}
@@ -152,10 +154,10 @@ func (h *MappingDataHandler) GetReadDetailsViewerData(qname string) *ReadDetails
 			maxEnd := interval.End
 			for _, idx := range overlapping {
 				if intervals[idx].Start < minStart {
-					intervals[idx].Start = minStart
+					minStart = intervals[idx].Start
 				}
 				if intervals[idx].End > maxEnd {
-					intervals[idx].End = maxEnd
+					maxEnd = intervals[idx].End
 				}
 			}
 
@@ -167,7 +169,7 @@ func (h *MappingDataHandler) GetReadDetailsViewerData(qname string) *ReadDetails
 
 			newIntervals = append(newIntervals, newInterval)
 			newIntervalsMap[newInterval] = make([]*EnhancedRecord, 0)
-			newIntervalsMap[newInterval] = append(newIntervalsMap[newInterval], r1...)
+			newIntervalsMap[newInterval] = append(newIntervalsMap[newInterval], r...)
 
 			for i, e := range intervals {
 				if slices.Contains(overlapping, i) {
@@ -185,7 +187,7 @@ func (h *MappingDataHandler) GetReadDetailsViewerData(qname string) *ReadDetails
 
 			intervals = append(intervals, interval)
 			intervalsMap[interval] = make([]*EnhancedRecord, 0)
-			intervalsMap[interval] = append(intervalsMap[interval], r1...)
+			intervalsMap[interval] = append(intervalsMap[interval], r...)
 		}
 	}
 
@@ -225,28 +227,27 @@ func (h *MappingDataHandler) GetReadDetailsViewerData(qname string) *ReadDetails
 func (h *MappingDataHandler) GetViewerConfig(id string, contig string, start int, end int) map[string]any {
 
 	genomeConfig := IgvGenomeConfig{
-		Id:       "Target Region",
+		Id:       "chr " + contig + " (relative)",
 		Label:    "BASE_GENOME_LABEL",
 		FastaUrl: "http://localhost:8000/api/details/viewer/fasta?id=" + id,
 		IndexUrl: "http://localhost:8000/api/details/viewer/fastaIndex?id=" + id,
 	}
 
-	// records track
-	// track := IgvTrackConfig{
-	// 	Name:        "Read Mappings",
-	// 	Format:      "sam",
-	// 	DisplayMode: "EXPANDED",
-	// 	Url:         "http://localhost:8000/api/details/viewer/bamMappings?id=" + id,
-	// 	IndexUrl:    "http://localhost:8000/api/details/viewer/bamIndexMappings?id=" + id,
-	// 	Type:        "alignment",
-	// 	Height:      800,
-	// 	MaxHeight:   1000,
-	// 	MaxRows:     20000,
-	// 	ColorBy:     "none",
-	// }
+	track := IgvTrackConfig{
+		Name:        "Read Mappings",
+		Format:      "sam",
+		DisplayMode: "EXPANDED",
+		Url:         "http://localhost:8000/api/details/viewer/bam?id=" + id,
+		IndexUrl:    "http://localhost:8000/api/details/viewer/bamIndex?id=" + id,
+		Type:        "alignment",
+		Height:      100 + 20*(len(h.DetailsViewerData[id].Records)),
+		MaxHeight:   1000,
+		MaxRows:     200,
+		ColorBy:     "none",
+	}
 
 	tracks := make([]IgvTrackConfig, 0)
-	// tracks = append(tracks, track)
+	tracks = append(tracks, track)
 
 	// convert global location to local location
 	targetRegionStrLocal := fmt.Sprintf("%s:%d-%d", contig, 1, end-start+1)
@@ -258,4 +259,26 @@ func (h *MappingDataHandler) GetViewerConfig(id string, contig string, start int
 	}
 
 	return response
+}
+
+func (h *MappingDataHandler) GetReadGroupSam(groupId string) string {
+
+	details := h.DetailsViewerData[groupId]
+
+	fmt.Println(details.Interval.Contig, details.Interval.Start, details.Interval.End)
+
+	var builder strings.Builder
+
+	builder.WriteString("@HD\tVN:1.6\tSO:unsorted\n")
+	builder.WriteString(fmt.Sprintf("@SQ\tSN:%s\tLN:%d\n", details.Interval.Contig, details.Interval.End-details.Interval.Start+1))
+
+	for _, r := range details.Records {
+
+		fmt.Println(r.Pos)
+
+		builder.WriteString(r.StringWithMapperInfo(details.Interval.Start, h.MapperInfos[r.MapperIndex].MapperName, r.Index))
+		builder.WriteString("\n")
+	}
+
+	return builder.String()
 }

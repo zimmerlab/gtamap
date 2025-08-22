@@ -557,6 +557,7 @@
 
   const acceptRecords = function (records) {
     for (const r of records) {
+
       r.parent.isDiscarded = false
 
       r.isAccepted = true
@@ -626,7 +627,8 @@
     const reads = summaryTableData.value.items.filter(
       (item) => item.confidenceLevel === 5 && !item.isAccepted
     )
-    acceptRecords(reads)
+    const records = reads.map((item) => item.locations).flat()
+    acceptRecords(records)
   }
 
   // FILTERS

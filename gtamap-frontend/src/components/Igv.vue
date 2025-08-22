@@ -6,7 +6,6 @@
     Error: URL prop is required for IGV component
   </div>
   <div
-    v-else
     ref="igvDiv"
   ></div>
 </template>
@@ -45,6 +44,8 @@
       console.error('IGV prop url and config cannot be used together')
       return
     }
+
+    isValid.value = true
 
     if (props.url) {
       ApiService.get(props.url)
@@ -158,14 +159,15 @@
   }
 
   const init = function (config) {
-    props.config = config
-    // getIgvConfig()
+
+    isValid.value = true
+
     igvInfo.value = {
-      genome: config.genome,
+      genome: config.genomeConfig,
       tracks: config.tracks,
       location: config.location,
     }
-    console.log(config)
+
     initializeIgv()
   }
 

@@ -85,19 +85,19 @@
     </div>
 
     <div class="tw:px-6 tw:mb-6">
-      <div class="tw:border tw:border-gray-300 tw:rounded-lg">
-        <div id="read-details-igv-div" class="tw:h-[600px] tw:bg-white tw:rounded-lg"></div>
+
+      <div v-for="(config, index) in viewerData" :key="config" class="tw:border tw:border-gray-300 tw:rounded-lg tw:mb-4 tw:py-2">
+
+        <h3 class="tw:text-lg tw:font-bold tw:mb-4 tw:text-center tw:text-gray-500">
+          Read Group {{ index + 1 }}
+        </h3>
+
+        <div  class="tw:px-4">
+          <Igv :ref="(el) => setIgvRef(el, index)" </Igv>
+        </div>
+
       </div>
     </div>
-
-    <div>
-
-      <Igv v-for="(config, index) in viewerData" :key="config" :ref="(el) => setIgvRef(el, index)"
-        </Igv>
-
-    </div>
-
-    {{ igvRefs }}
 
   </div>
 </template>
