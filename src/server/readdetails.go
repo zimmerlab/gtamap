@@ -244,21 +244,26 @@ func (h *MappingDataHandler) GetReadDetailsData(qname string) *ReadDetailsData {
 		mapperNames := make([]string, 0)
 		recordsByMapper := make([][]*EnhancedRecord, 0)
 
-		for _, r := range c {
-			mapperName := h.MapperInfos[r.MapperIndex].MapperName
-			mapperIndex := -1
+		// keeps the order of the mapper names
+		for _, mapperInfo := range h.MapperInfos {
 
-			for mI, mN := range mapperNames {
-				if mN == mapperName {
-					mapperIndex = mI
+			mapperIndex := len(mapperNames)
+			found := false
+
+			for _, r := range c {
+				mapperName := h.MapperInfos[r.MapperIndex].MapperName
+
+				if mapperName != mapperInfo.MapperName {
+					continue
 				}
-			}
 
-			if mapperIndex > -1 {
+				if !found {
+					mapperNames = append(mapperNames, mapperName)
+					recordsByMapper = append(recordsByMapper, make([]*EnhancedRecord, 0))
+				}
+				found = true
+
 				recordsByMapper[mapperIndex] = append(recordsByMapper[mapperIndex], r)
-			} else {
-				mapperNames = append(mapperNames, mapperName)
-				recordsByMapper = append(recordsByMapper, []*EnhancedRecord{r})
 			}
 		}
 
@@ -341,7 +346,7 @@ func (h *MappingDataHandler) GetViewerConfig(id string, contig string, start int
 			Url:               "http://localhost:8000/api/details/viewer/bam?id=" + id + "&i=" + strconv.Itoa(i),
 			IndexUrl:          "http://localhost:8000/api/details/viewer/bamIndex?id=" + id + "&i=" + strconv.Itoa(i),
 			Type:              "alignment",
-			Height:            100 + 20*(len(h.DetailsViewerData[id].RecordsByMapper[i])),
+			Height:            20 + 20*(len(h.DetailsViewerData[id].RecordsByMapper[i])),
 			MaxHeight:         1000,
 			MaxRows:           200,
 			ColorBy:           "none",

@@ -1045,7 +1045,7 @@ type IgvTrackConfig struct {
 	MaxHeight         int    `json:"maxHeight,omitempty"`
 	MaxRows           int    `json:"maxRows,omitempty"`
 	ColorBy           string `json:"colorBy,omitempty"`
-	ShowCoverage      bool   `json:"showCoverage,omitempty"`
+	ShowCoverage      bool   `json:"showCoverage"`
 	ShowSoftClips     bool   `json:"showSoftClips,omitempty"`
 	ShowInsertionText bool   `json:"showInsertionText,omitempty"`
 }
