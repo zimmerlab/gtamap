@@ -269,13 +269,13 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 	// there is at least one diagonal that was excluded
 	wasExcluded := len(excluded) > 0
 
-	if wasExcluded {
-		// logrus.WithFields(logrus.Fields{
-		// 	"excluded": excluded,
-		// }).Debug("excluded diagonals were found")
-	} else {
-		// logrus.Debug("no diagonals were excluded")
-	}
+	// if wasExcluded {
+	// 	// logrus.WithFields(logrus.Fields{
+	// 	// 	"excluded": excluded,
+	// 	// }).Debug("excluded diagonals were found")
+	// } else {
+	// 	// logrus.Debug("no diagonals were excluded")
+	// }
 
 	// the current diagonal contains less than x kmers
 	belowScoreThreshold := score <= 1
