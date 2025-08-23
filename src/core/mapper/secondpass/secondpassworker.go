@@ -71,18 +71,17 @@ func remapReadPair(readPairMapping *mapperutils.ReadPairMatchResults, annotation
 	}
 
 	// make mappings uniq
-	if readPairMapping.ReadPair.ReadR1.Header == "1131425" {
-		println()
-	}
 	uniqFwRemaps := getUniqRemaps(fwRemaps)
 	uniqRvRemaps := getUniqRemaps(rvRemaps)
 
+	// get valid mappings
 	if len(uniqFwRemaps) > 0 {
 		readPairMapping.Fw = filterValidMaps(uniqFwRemaps, len(*readPairMapping.ReadPair.ReadR1.Sequence))
 	} else {
 		readPairMapping.Fw = filterValidMaps(readPairMapping.Fw, len(*readPairMapping.ReadPair.ReadR1.Sequence))
 	}
 
+	// get valid mappings
 	if len(uniqRvRemaps) > 0 {
 		readPairMapping.Rv = filterValidMaps(uniqRvRemaps, len(*readPairMapping.ReadPair.ReadR2.Sequence))
 	} else {
