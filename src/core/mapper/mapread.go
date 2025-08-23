@@ -886,7 +886,6 @@ func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.Genome
 		// If res in a repeat region, only append to finalResults when low mm
 		isInRepeat := isPartOfRepeat(res, genomeIndex)
 		if isInRepeat {
-			// TODO: add to conf
 			if len(res.MismatchesRead) < config.MaxRepeatMM {
 				finalResults = append(finalResults, res)
 			}
