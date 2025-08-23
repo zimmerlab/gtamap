@@ -94,7 +94,11 @@ func getUniqRemaps(r []*mapperutils.ReadMatchResult, readLength int) []*mapperut
 			seen[hash] = true
 			if remap.MatchedRead.Regions[0].Start == 0 && remap.MatchedRead.Regions[len(remap.MatchedRead.Regions)-1].End == readLength {
 				// only append complete remaps (remap can still be shorter than read length but only if insert)
-				uniq = append(uniq, remap)
+
+				if uint8(float64(len(remap.MismatchesRead))*100/float64(readLength)) < config.MaxMismatchPercentage() {
+					// last check to make sure we do not append remaps which exeed max mm prec (this is required again because fillGaps potentially adds more mm in a remap)
+					uniq = append(uniq, remap)
+				}
 			}
 		}
 	}
@@ -711,7 +715,7 @@ func correctSymmetricIntronErrors(readMatchResult *mapperutils.ReadMatchResult, 
 			// go through all combinations and find the one with the min mismatches
 			possiblePaddings := getPossiblePaddingCombinations(leftMappedRegion, rightMappedRegion, lPaddings, rPaddings)
 			if len(possiblePaddings) > 1 {
-				logrus.Warn("Multiple padding combinations forund for semmetry intron error: Need to implement logic")
+				logrus.Warn("Multiple padding combinations fornd for sym intron error: Need to implement logic")
 			}
 		}
 	}
