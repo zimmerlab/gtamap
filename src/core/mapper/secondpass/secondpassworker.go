@@ -70,21 +70,27 @@ func remapReadPair(readPairMapping *mapperutils.ReadPairMatchResults, annotation
 		rvRemaps = append(rvRemaps, remaps...)
 	}
 
-	// all maps in fw/rvRemaps respect mm threshold but we can even be more strict
-
 	// make mappings uniq
-	uniqFwRemaps := getUniqRemaps(fwRemaps, len(*readPairMapping.ReadPair.ReadR1.Sequence))
-	uniqRvRemaps := getUniqRemaps(rvRemaps, len(*readPairMapping.ReadPair.ReadR2.Sequence))
+	if readPairMapping.ReadPair.ReadR1.Header == "1131425" {
+		println()
+	}
+	uniqFwRemaps := getUniqRemaps(fwRemaps)
+	uniqRvRemaps := getUniqRemaps(rvRemaps)
 
 	if len(uniqFwRemaps) > 0 {
-		readPairMapping.Fw = uniqFwRemaps
+		readPairMapping.Fw = filterValidMaps(uniqFwRemaps, len(*readPairMapping.ReadPair.ReadR1.Sequence))
+	} else {
+		readPairMapping.Fw = filterValidMaps(readPairMapping.Fw, len(*readPairMapping.ReadPair.ReadR1.Sequence))
 	}
+
 	if len(uniqRvRemaps) > 0 {
-		readPairMapping.Rv = uniqRvRemaps
+		readPairMapping.Rv = filterValidMaps(uniqRvRemaps, len(*readPairMapping.ReadPair.ReadR2.Sequence))
+	} else {
+		readPairMapping.Rv = filterValidMaps(readPairMapping.Rv, len(*readPairMapping.ReadPair.ReadR2.Sequence))
 	}
 }
 
-func getUniqRemaps(r []*mapperutils.ReadMatchResult, readLength int) []*mapperutils.ReadMatchResult {
+func getUniqRemaps(r []*mapperutils.ReadMatchResult) []*mapperutils.ReadMatchResult {
 	uniq := make([]*mapperutils.ReadMatchResult, 0)
 	seen := make(map[string]bool)
 	for _, remap := range r {
@@ -92,17 +98,24 @@ func getUniqRemaps(r []*mapperutils.ReadMatchResult, readLength int) []*mapperut
 		hash := createHash(remap)
 		if !seen[hash] {
 			seen[hash] = true
-			if remap.MatchedRead.Regions[0].Start == 0 && remap.MatchedRead.Regions[len(remap.MatchedRead.Regions)-1].End == readLength {
-				// only append complete remaps (remap can still be shorter than read length but only if insert)
-
-				if uint8(float64(len(remap.MismatchesRead))*100/float64(readLength)) < config.MaxMismatchPercentage() {
-					// last check to make sure we do not append remaps which exeed max mm prec (this is required again because fillGaps potentially adds more mm in a remap)
-					uniq = append(uniq, remap)
-				}
-			}
+			uniq = append(uniq, remap)
 		}
 	}
 	return uniq
+}
+
+func filterValidMaps(mappings []*mapperutils.ReadMatchResult, readLength int) []*mapperutils.ReadMatchResult {
+	valid := make([]*mapperutils.ReadMatchResult, 0)
+	for _, mapping := range mappings {
+		if mapping.MatchedRead.Regions[0].Start == 0 && mapping.MatchedRead.Regions[len(mapping.MatchedRead.Regions)-1].End == readLength && mapping.MatchedGenome.Length() == readLength {
+			// only append complete remaps (remap can still be shorter than read length but only if insert)
+			if uint8(float64(len(mapping.MismatchesRead))*100/float64(readLength)) < config.MaxMismatchPercentage() {
+				// last check to make sure we do not append remaps which exeed max mm prec (this is required again because fillGaps potentially adds more mm in a remap)
+				valid = append(valid, mapping)
+			}
+		}
+	}
+	return valid
 }
 
 func createHash(r *mapperutils.ReadMatchResult) string {
