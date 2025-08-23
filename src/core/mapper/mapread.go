@@ -714,6 +714,9 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 			endRead := firstRegionRead.Start
 			extensionLength := endRead - startRead
 
+			mmBeforeLeftExtension := make([]int, len(result.MismatchesRead))
+			copy(mmBeforeLeftExtension, result.MismatchesRead)
+
 			firstRegionGenome, _ := result.MatchedGenome.GetFirstRegion()
 			startGenome := firstRegionGenome.Start - extensionLength
 
@@ -732,6 +735,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 			if startGenome < 0 {
 				// logrus.Debug("genome index out of bounds")
 
+				result.MismatchesRead = mmBeforeLeftExtension
 				result.IncompleteMap = true
 				return
 			}
@@ -761,6 +765,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 					// 	"numMismatches":         len(result.MismatchesRead),
 					// }).Debug("too many mismatches in left extension -> skip sequence")
 
+					result.MismatchesRead = mmBeforeLeftExtension
 					result.IncompleteMap = true
 					return
 				}
@@ -789,6 +794,9 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 
 		if lastRegionRead.End < len(*read.Sequence) {
 
+			mmBeforeRightExtension := make([]int, len(result.MismatchesRead))
+			copy(mmBeforeRightExtension, result.MismatchesRead)
+
 			startRead := lastRegionRead.End
 			endRead := len(*read.Sequence)
 			extensionLength := endRead - startRead
@@ -811,6 +819,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 			if startGenome+len(readSequence) > len(*genomeIndex.Sequences[result.SequenceIndex]) {
 				// logrus.Debug("genome index out of bounds")
 
+				result.MismatchesRead = mmBeforeRightExtension
 				result.IncompleteMap = true
 				return
 			}
@@ -835,6 +844,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 					// }).Debug("too many mismatches in right extension -> skip sequence")
 					// continue sequenceLoop
 
+					result.MismatchesRead = mmBeforeRightExtension
 					result.IncompleteMap = true
 					return
 				}
