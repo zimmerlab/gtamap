@@ -451,7 +451,7 @@ func clusterGaps(targetGaps map[regionvector.Gap]int) []*regionvector.Intron {
 			return sortedGaps[i].Length() < sortedGaps[j].Length()
 		}
 
-		if sortedGaps[i].Length() != sortedGaps[j].Length() {
+		if sortedGaps[i].Length() == sortedGaps[j].Length() {
 			return sortedGaps[i].Start < sortedGaps[j].Start
 		}
 		return sortedGaps[i].Length() < sortedGaps[j].Length()
