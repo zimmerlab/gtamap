@@ -1312,9 +1312,9 @@ func fixPointRNARemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 			if mainAnchorIndex != 0 {
 				path := make([]regionvector.Region, 0)
 				l := 0
-				for i := mainAnchorIndex - 1; i >= 0; i-- {
-					path = append(path, readMatchResult.MatchedGenome.Regions[i])
-					l += readMatchResult.MatchedGenome.Regions[i].Length()
+				for k := mainAnchorIndex - 1; k >= 0; k-- {
+					path = append(path, readMatchResult.MatchedGenome.Regions[k])
+					l += readMatchResult.MatchedGenome.Regions[k].Length()
 				}
 				if l == missingBases {
 					leftPaths = append(leftPaths, path)
@@ -1337,9 +1337,9 @@ func fixPointRNARemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 			if mainAnchorIndex != len(readMatchResult.MatchedGenome.Regions)-1 {
 				path := make([]regionvector.Region, 0)
 				l := 0
-				for i := mainAnchorIndex + 1; i < len(readMatchResult.MatchedGenome.Regions); i++ {
-					path = append(path, readMatchResult.MatchedGenome.Regions[i])
-					l += readMatchResult.MatchedGenome.Regions[i].Length()
+				for k := mainAnchorIndex + 1; k < len(readMatchResult.MatchedGenome.Regions); k++ {
+					path = append(path, readMatchResult.MatchedGenome.Regions[k])
+					l += readMatchResult.MatchedGenome.Regions[k].Length()
 				}
 				if l == missingBases {
 					rightPaths = append(rightPaths, path)
