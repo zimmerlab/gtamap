@@ -10,7 +10,7 @@ import json
 from collections import defaultdict
 
 
-def compare_to_ground_truth(mapper_data, ground_truth_data):
+def compare_to_ground_truth(mapper_data, ground_truth_data, verbose):
     """
     Compare mapper data with ground truth data.
 
@@ -46,16 +46,18 @@ def compare_to_ground_truth(mapper_data, ground_truth_data):
     fw_accuracy, complient_fw = positional_accuracy(
         mapped_intervals_dict=mapper_data["fw"],
         true_intervals_dict=ground_truth_data["fw"],
-        true_mm=ground_truth_data["fw_mut"],
+        true_mm=ground_truth_data["fw_mut_combined"],
         mapped_mm=mapper_data["fw_mm"],
         read_type="fw",
+        verbose=verbose,
     )
     rw_accuracy, complient_rv = positional_accuracy(
         mapped_intervals_dict=mapper_data["rv"],
         true_intervals_dict=ground_truth_data["rv"],
-        true_mm=ground_truth_data["rv_mut"],
+        true_mm=ground_truth_data["rv_mut_combined"],
         mapped_mm=mapper_data["rv_mm"],
         read_type="rv",
+        verbose=verbose,
     )
 
     rv_level_two_recall = level_two_recall(
@@ -89,8 +91,8 @@ def compare_to_ground_truth(mapper_data, ground_truth_data):
         "precision": precision,
         "level_1_recall": recall,
         "f1_score": f1_score,
-        "fw_accuracy": fw_accuracy,
-        "rv_accuracy": rw_accuracy,
+        "fw_overlap": fw_accuracy,
+        "rv_overlap": rw_accuracy,
         "fw_level_2_recall": fw_level_two_recall,
         "rv_level_2_recall": rv_level_two_recall,
         "fw_level_3_recall": fw_level_three_recall,
@@ -182,11 +184,15 @@ def parse_ground_truth(gt_file: str, gene_id: str):
         "gene",
         "fw_regvec",
         "rw_regvec",
-        "fw_mut",
-        "rw_mut",
+        "fw_seq_err",
+        "rw_seq_err",
         "gene_length",
         "gene_start",
         "strand",
+        "fw_mut",
+        "rw_mut",
+        "fw_mut_combined",
+        "rw_mut_combined",
     ]
 
     # df = pl.read_csv(gt_file, separator="\t", columns=columns_to_read)
@@ -199,6 +205,22 @@ def parse_ground_truth(gt_file: str, gene_id: str):
     filtered_df = filtered_df.with_columns(
         filtered_df["fw_mut"].str.split(",").cast(pl.List(pl.Int64)).alias("fw_mut"),
         filtered_df["rw_mut"].str.split(",").cast(pl.List(pl.Int64)).alias("rw_mut"),
+        filtered_df["fw_seq_err"]
+        .str.split(",")
+        .cast(pl.List(pl.Int64))
+        .alias("fw_seq_err"),
+        filtered_df["rw_seq_err"]
+        .str.split(",")
+        .cast(pl.List(pl.Int64))
+        .alias("rw_seq_err"),
+        filtered_df["fw_mut_combined"]
+        .str.split(",")
+        .cast(pl.List(pl.Int64))
+        .alias("fw_mut_combined"),
+        filtered_df["rw_mut_combined"]
+        .str.split(",")
+        .cast(pl.List(pl.Int64))
+        .alias("rw_mut_combined"),
     )
     gene_strand = filtered_df["strand"][0]
     is_rev = gene_strand == "-"
@@ -226,15 +248,37 @@ def parse_ground_truth(gt_file: str, gene_id: str):
             for row in filtered_df.iter_rows(named=True)
         }
 
+    # get mutations in gene
     fw_mut = {row["readid"]: row["fw_mut"] for row in filtered_df.iter_rows(named=True)}
-
     rv_mut = {row["readid"]: row["rw_mut"] for row in filtered_df.iter_rows(named=True)}
+
+    # get seq errors
+    fw_seq_err = {
+        row["readid"]: row["fw_seq_err"] for row in filtered_df.iter_rows(named=True)
+    }
+    rv_seq_err = {
+        row["readid"]: row["rw_seq_err"] for row in filtered_df.iter_rows(named=True)
+    }
+
+    # get all mutations as combined set
+    fw_mut_combined = {
+        row["readid"]: row["fw_mut_combined"]
+        for row in filtered_df.iter_rows(named=True)
+    }
+    rv_mut_combined = {
+        row["readid"]: row["rw_mut_combined"]
+        for row in filtered_df.iter_rows(named=True)
+    }
 
     return {
         "fw": fw_dict,
         "rv": rv_dict,
         "fw_mut": fw_mut,
         "rv_mut": rv_mut,
+        "fw_seq_err": fw_seq_err,
+        "rv_seq_err": rv_seq_err,
+        "fw_mut_combined": fw_mut_combined,
+        "rv_mut_combined": rv_mut_combined,
     }, df.height
 
 
@@ -259,7 +303,7 @@ def parse_region(region: str, is_rev: bool):
 
 
 def positional_accuracy(
-    mapped_intervals_dict, true_intervals_dict, true_mm, mapped_mm, read_type
+    mapped_intervals_dict, true_intervals_dict, true_mm, mapped_mm, read_type, verbose
 ):
     """
     Compute positional accuracy for each read and return the average accuracy.
@@ -308,37 +352,38 @@ def positional_accuracy(
                 accuracies.append(best_overlap / total_true_bases)
                 number_of_complient_intervals += 1
                 # for i, o in enumerate(overlapping_bases_list):
-                #     if o != best_overlap:
-                #         missed_bases = total_true_bases - o
-                # print("[\033[33mALTERNATIVE MAP\033[0m]")
-                #         print(
-                #             f"alternative map for read {read_id} with diff of {missed_bases}:"
-                #         )
-                #         print(f"map {mapped_intervals[i]}")
-                #         print(f"ref {true_intervals}")
+                #     missed_bases = total_true_bases - o
+                #     if not true_mm[read_id]:
+                #         true_mm[read_id] = []
+                # print(f"[\033[31mMAP INFO\033[0m] of {read_id} ({read_type}):")
+                # if len(mapped_mm[read_id][i]) <= len(true_mm[read_id]):
+                #     print(f"> [   \033[35mMAP\033[0m]: {mapped_intervals[i]}")
+                # else:
+                #     print(f"> [   \033[33mMAP\033[0m]: {mapped_intervals[i]}")
+                # print(f"> [   \033[32mREF\033[0m]: {true_intervals}")
+                # if len(mapped_mm[read_id][i]) <= len(true_mm[read_id]):
+                #     print(f"> [\033[35mMM MAP\033[0m]: {mapped_mm[read_id][i]}")
+                # else:
+                #     print(f"> [\033[33mMM MAP\033[0m]: {mapped_mm[read_id][i]}")
+                # print(f"> [\033[32mMM REF\033[0m]: {true_mm[read_id]}")
             else:
                 # first get rv which best matches ground truth
-                # print(
-                #     f"[\033[31mINCOMPLETE MAP\033[0m] of {read_id} ({read_type}):"
-                # )
-                missed_bases = total_true_bases - best_overlap
-                accuracies.append(best_overlap / total_true_bases)
-                seen = set()
-                if not true_mm[read_id]:
-                    true_mm[read_id] = []
+                if verbose:
 
-                for i, interval in enumerate(mapped_intervals):
-                    key = "|".join(str(x) for x in chain.from_iterable(interval))
-                    if key not in seen:
-                        seen.add(key)
-                        missed_bases = total_true_bases - overlapping_bases_list[i]
+                    print(
+                        f"[\033[31mINCOMPLETE MAP\033[0m] of {read_id} ({read_type}):"
+                    )
+                    missed_bases = total_true_bases - best_overlap
+                    accuracies.append(best_overlap / total_true_bases)
+                    seen = set()
+                    if not true_mm[read_id]:
+                        true_mm[read_id] = []
 
-                        if len(mapped_mm[read_id][i]) > len(
-                            true_mm[read_id]
-                        ):  # comment out to see metter maps
-                            print(
-                                f"[\033[31mINCOMPLETE MAP\033[0m] of {read_id} ({read_type}):"
-                            )
+                    for i, interval in enumerate(mapped_intervals):
+                        key = "|".join(str(x) for x in chain.from_iterable(interval))
+                        if key not in seen:
+                            seen.add(key)
+                            missed_bases = total_true_bases - overlapping_bases_list[i]
                             print(
                                 f"> [\033[34mALTERNATIVE\033[0m] Missaligned positions: ({missed_bases})"
                             )
@@ -470,8 +515,8 @@ def plot_metrics(results, out_dir):
 
     # Include accuracy metrics
     accuracy_metrics = [
-        "fw_accuracy",
-        "rv_accuracy",
+        "fw_overlap",
+        "rv_overlap",
         "fw_level_2_recall",
         "rv_level_2_recall",
         "fw_level_3_recall",
@@ -621,24 +666,26 @@ if __name__ == "__main__":
     parser.add_argument(
         "--gene_id", help="Gene ID to filter reads (e.g., ENSG00000005073)"
     )
+    parser.add_argument("--verbose", action="store_true", help="Verbose output")
 
     args = parser.parse_args()
-    out_summary = os.path.join(args.output_dir, "summary.txt")
-    log_out = os.path.join(args.output_dir, "intervals.txt")
-
-    if not os.path.exists(args.output_dir):
-        os.makedirs(args.output_dir)
 
     plot_prefix = args.output_dir
 
     mapper1_data = parse_sam_file(args.sam1)
 
+    g_id = args.sam1.split("/")[-1].split(".")[0]
+
+    out_summary = os.path.join(args.output_dir, f"{g_id}.stat")
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
+
     ground_truth_data, N = parse_ground_truth(
         args.ground_truth,
-        args.gene_id,
+        g_id,
     )
 
-    results = compare_to_ground_truth(mapper1_data, ground_truth_data)
+    results = compare_to_ground_truth(mapper1_data, ground_truth_data, args.verbose)
     results["true_negatives"] = (
         N
         - results["true_positives"]
@@ -656,26 +703,36 @@ if __name__ == "__main__":
         "precision",
         "level_1_recall",
         "f1_score",
-        "fw_accuracy",
-        "rv_accuracy",
+        "fw_overlap",
+        "rv_overlap",
         "fw_level_2_recall",
         "rv_level_2_recall",
         "fw_level_3_recall",
         "rv_level_3_recall",
     ]
 
+    for key in print_order:
+        val = results[key]
+        if key == "false_negative_ids":
+            print(f"[\033[32mMETRIC\033[0m] {key} (30 examples) = {list(val)[0:30]}")
+        else:
+            print(f"[\033[32mMETRIC\033[0m] {key} = {val}")
+
     with open(out_summary, "w") as f:
+        header_fields = []
+        header_fields.append("geneID")
+        fields = []
+        fields.append(g_id)
         for key in print_order:
             val = results[key]
             if key == "false_negative_ids":
-                print(
-                    f"[\033[32mMETRIC\033[0m] {key} (30 examples) = {list(val)[0:30]}"
-                )
-                f.write(f"{key} (30 examples)\t{list(val)[0:30]}\n")
+                continue
             else:
-                print(f"[\033[32mMETRIC\033[0m] {key} = {val}")
-                f.write(f"{key}\t{val}\n")
+                header_fields.append(key)
+                fields.append(str(val))
+        f.write("\t".join(header_fields))
+        f.write("\n")
+        f.write("\t".join(fields))
 
-    # # generate_report(results)
-    del results["false_negative_ids"]
-    plot_metrics(results, plot_prefix)
+    # del results["false_negative_ids"]
+    # plot_metrics(results, plot_prefix)
