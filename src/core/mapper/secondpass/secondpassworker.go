@@ -777,7 +777,7 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 			}
 		}
 		if i > 1 || j > 1 {
-			logrus.Warn("Multiple paddings applied")
+			logrus.Warnf("Multiple paddings applied in read %s", read.Header)
 			logrus.Warnf("L or R paddings have several options. This case is not yet handled: l=%d, r=%d", lPaddings, rPaddings)
 		}
 
@@ -1285,7 +1285,7 @@ func fixPointRNARemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 		}
 	}
 	if i > 1 || j > 1 {
-		logrus.Warn("Multiple paddings applied")
+		logrus.Warnf("Multiple paddings applied in read %s", read.Header)
 		logrus.Warnf("L or R paddings have several options. This case is not yet handled: l=%d, r=%d", lPaddings, rPaddings)
 	}
 
