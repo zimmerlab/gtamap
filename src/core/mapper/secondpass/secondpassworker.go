@@ -1608,7 +1608,6 @@ func extractMMofAnchor(anchor regionvector.Region, mms []int) []int {
 }
 
 func fillGaps(readMatchResult *mapperutils.ReadMatchResult, genomeIndex *index.GenomeIndex, read *fastq.Read) {
-	mm := readMatchResult.MismatchesRead
 	// used to keep track of the read position for the next gap
 	readGapPos := 0
 	// returns the index of the first region after which a gap occurs (-1 if no gap)
@@ -1656,7 +1655,7 @@ func fillGaps(readMatchResult *mapperutils.ReadMatchResult, genomeIndex *index.G
 					for j := 0; j < bestSplit; j++ {
 						// add the mismatche to the readMatchResult
 						if readByte[j] != genomeByte[j] {
-							mm = append(mm, gapRead.Start+j)
+							readMatchResult.MismatchesRead = append(readMatchResult.MismatchesRead, gapRead.Start+j)
 						}
 					}
 				}
@@ -1677,8 +1676,8 @@ func fillGaps(readMatchResult *mapperutils.ReadMatchResult, genomeIndex *index.G
 					for j := 0; j < gapRead.Length()-bestSplit; j++ {
 						// add the mismatche to the readMatchResult
 						if readByte[j] != genomeByte[j] {
-							// mm = append(mm, gapRead.End-(bestSplit-i))
-							mm = append(mm, gapRead.Start+bestSplit+j) // NEW
+							// readMatchResult.MismatchesRead = append(readMatchResult.MismatchesRead, gapRead.End-(bestSplit-i))
+							readMatchResult.MismatchesRead = append(readMatchResult.MismatchesRead, gapRead.Start+bestSplit+j) // NEW
 						}
 					}
 					readMatchResult.NormalizeRegions()
