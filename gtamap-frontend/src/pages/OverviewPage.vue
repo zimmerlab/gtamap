@@ -74,6 +74,7 @@
       <Igv
         ref="igvAccepted"
         url="/api/accepted/igvConfig"
+        :callback="igvCallback"
         @read-click="handleReadClickAccepted"
       ></Igv>
     </div>
@@ -85,6 +86,8 @@
 <script>
   import { ref, inject } from 'vue'
   import { useRouter } from 'vue-router'
+
+  import { useDataStore } from '@/store/data.store'
 
   import * as UpSetJS from '@upsetjs/bundle'
 
@@ -108,6 +111,8 @@
     setup() {
       const ApiService = inject('http')
       const router = useRouter()
+
+      const dataStore = useDataStore()
 
       let igvSummary = ref(null)
       let igvAccepted = ref(null)
@@ -260,6 +265,10 @@
         updateIgvSummary()
       }
 
+      const igvCallback = function(browser) {
+        console.log("igv browser initialized", browser)
+      }
+
       return {
         igvSummary,
         igvAccepted,
@@ -273,6 +282,7 @@
         openReadDetailsPage,
         handleReadClick,
         handleReadClickAccepted,
+        igvCallback,
       }
     },
     mounted() {},

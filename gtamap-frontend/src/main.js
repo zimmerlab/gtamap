@@ -24,9 +24,12 @@ let API_BASEURL = location.protocol + '//' + location.hostname + ':8000'
 //    API_BASEURL = location.protocol + '//' + location.hostname + ':8080'
 //}
 
-import ApiService from "./services/api.service.js";
+import ApiService from "./services/api.service.js"
 app.use(ApiService, {
     API_BASEURL
 })
+
+import DataService from "@/services/data.service.js"
+app.use(DataService, {})
 
 app.mount('#app')

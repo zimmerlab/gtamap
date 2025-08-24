@@ -25,6 +25,10 @@
       type: Object,
       default: () => undefined,
     },
+    callback: {
+      type: Function,
+      default: undefined,
+    }
   })
 
   const emit = defineEmits(['read-click'])
@@ -83,6 +87,10 @@
     igv.createBrowser(igvDiv.value, options).then(function (browser) {
       // igvBrowser = ref(browser)
       igvBrowser.value = browser
+
+      if (props.callback && typeof props.callback === 'function') {
+        props.callback(browser)
+      }
 
       // initialize tracks by track config loaded from API
       for (const trackConfig of igvInfo.value.tracks) {
@@ -187,10 +195,15 @@
     }
   }
 
+  const getIgvBrowser = function() {
+    return igvBrowser.value
+  }
+
   defineExpose({
     init,
     update,
     highlightRead,
+    getIgvBrowser,
   })
 
   onMounted(() => {

@@ -18,7 +18,7 @@
       <div class="tw:w-fit my-card">
         <div class="tw:text-sm tw:font-semibold tw:text-gray-600">Read ID</div>
         <div class="tw:text-lg tw:font-bold">{{ readId }}</div>
-        <w-button bg-color="red" sm>discard</w-button>
+        <w-button bg-color="red" sm @click="discardRead">discard</w-button>
       </div>
 
       <div class="tw:w-fit my-card">
@@ -648,6 +648,10 @@ export default {
       })
     }
 
+    const discardRead = function() {
+      console.log("discard this")
+    }
+
     return {
       readId,
       goBack,
@@ -664,6 +668,7 @@ export default {
       drawDendrogramLines,
       highlightEquivalentRows,
       clearHighlight,
+      discardRead,
     }
   },
   components: {
