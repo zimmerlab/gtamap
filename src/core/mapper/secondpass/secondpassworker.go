@@ -76,16 +76,20 @@ func remapReadPair(readPairMapping *mapperutils.ReadPairMatchResults, annotation
 
 	// get valid mappings
 	if len(uniqFwRemaps) > 0 {
-		readPairMapping.Fw = filterValidMaps(uniqFwRemaps, len(*readPairMapping.ReadPair.ReadR1.Sequence))
+		validMaps := filterValidMaps(uniqFwRemaps, len(*readPairMapping.ReadPair.ReadR1.Sequence))
+		readPairMapping.Fw = validMaps
 	} else {
-		readPairMapping.Fw = filterValidMaps(readPairMapping.Fw, len(*readPairMapping.ReadPair.ReadR1.Sequence))
+		validMaps := filterValidMaps(readPairMapping.Fw, len(*readPairMapping.ReadPair.ReadR1.Sequence))
+		readPairMapping.Fw = validMaps
 	}
 
 	// get valid mappings
 	if len(uniqRvRemaps) > 0 {
-		readPairMapping.Rv = filterValidMaps(uniqRvRemaps, len(*readPairMapping.ReadPair.ReadR2.Sequence))
+		validMaps := filterValidMaps(uniqRvRemaps, len(*readPairMapping.ReadPair.ReadR2.Sequence))
+		readPairMapping.Rv = validMaps
 	} else {
-		readPairMapping.Rv = filterValidMaps(readPairMapping.Rv, len(*readPairMapping.ReadPair.ReadR2.Sequence))
+		validMaps := filterValidMaps(readPairMapping.Rv, len(*readPairMapping.ReadPair.ReadR2.Sequence))
+		readPairMapping.Rv = validMaps
 	}
 }
 
@@ -108,12 +112,17 @@ func filterValidMaps(mappings []*mapperutils.ReadMatchResult, readLength int) []
 	for _, mapping := range mappings {
 		if mapping.MatchedRead.Regions[0].Start == 0 && mapping.MatchedRead.Regions[len(mapping.MatchedRead.Regions)-1].End == readLength && mapping.MatchedGenome.Length() == readLength {
 			// only append complete remaps (remap can still be shorter than read length but only if insert)
-			if uint8(float64(len(mapping.MismatchesRead))*100/float64(readLength)) < config.MaxMismatchPercentage() {
+			if uint8(float64(len(mapping.MismatchesRead))*100/float64(readLength)) <= config.MaxMismatchPercentage() {
 				// last check to make sure we do not append remaps which exeed max mm prec (this is required again because fillGaps potentially adds more mm in a remap)
 				valid = append(valid, mapping)
 			}
 		}
 	}
+	// if len(valid) == 0 {
+	// 	return mappings, false
+	// } else {
+	// 	return valid, true
+	// }
 	return valid
 }
 
@@ -151,6 +160,13 @@ func remapRead(readMapping *mapperutils.ReadMatchResult, annotation *mapperutils
 	// fill potential gaps in all remaps
 	for _, alternativeMap := range alternativeReadMatchResults {
 		if alternativeMap.MatchedRead.Regions[0].Start == 0 && alternativeMap.MatchedRead.Regions[len(alternativeMap.MatchedRead.Regions)-1].End == len(*read.Sequence) && alternativeMap.MatchedRead.Length() != len(*read.Sequence) {
+			// For some reason go decides to share arr space of these objects in alternativeReadMatchResults which
+			// leads to unexpected behavior when appending to the mismatch slices of the objects
+			// this seems to have fixed it. Before the behavior was that when i appened a mm to the last obj, the last-1 obj
+			// somehow also appended this mm and this lead to duplicated mms and a mismatch between query len and cigar len....
+			originalMismatches := alternativeMap.MismatchesRead
+			alternativeMap.MismatchesRead = make([]int, len(originalMismatches))
+			copy(alternativeMap.MismatchesRead, originalMismatches)
 			fillGaps(alternativeMap, genomeIndex, read)
 		}
 	}
