@@ -232,14 +232,12 @@
       // }
 
       const openReadDetailsPage = function (readItem) {
-        const url = router.resolve({
+        router.push({
           name: 'readDetailsPage',
           query: {
             readId: readItem.qname,
           },
-        }).href
-
-        window.open(url, '_blank')
+        })
       }
 
       const updateIgvSummary = function () {

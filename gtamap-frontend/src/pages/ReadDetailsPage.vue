@@ -286,7 +286,7 @@
 
 <script>
 import { ref, onMounted, inject, nextTick } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import igv from '../js/igv/dist/igv.esm.js'
 
@@ -297,6 +297,7 @@ export default {
   name: 'ReadDetailsPage',
   data() {
     const route = useRoute()
+    const router = useRouter()
     const ApiService = inject('http')
 
     let readId = ref('state:read-id-loading')
@@ -312,8 +313,7 @@ export default {
 
     // NAVIGATION
     const goBack = function () {
-      // Navigate back to the previous page by closing this tab
-      window.close()
+      router.push({ name: 'index' })
     }
 
     // READ TABLE

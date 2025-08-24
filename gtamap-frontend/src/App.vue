@@ -44,7 +44,11 @@
       </div>
     </w-toolbar>
     <div class="tw:pt-10">
-      <router-view class="grow"></router-view>
+      <router-view class="grow" v-slot="{ Component }">
+        <keep-alive>
+          <component :is="Component" />
+        </keep-alive>
+      </router-view>
     </div>
   </div>
 </template>
