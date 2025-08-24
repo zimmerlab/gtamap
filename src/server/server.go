@@ -1060,16 +1060,17 @@ func getTargetRegionIgvConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	track := IgvTrackConfig{
-		Name:        "Read Selection",
-		Format:      "sam",
-		DisplayMode: "EXPANDED",
-		Url:         "http://localhost:8000/api/summary/bam",
-		IndexUrl:    "http://localhost:8000/api/summary/bamIndex",
-		Type:        "alignment",
-		Height:      800,
-		MaxHeight:   1000,
-		MaxRows:     20000,
-		ColorBy:     "none",
+		Name:         "Read Selection",
+		Format:       "sam",
+		DisplayMode:  "EXPANDED",
+		Url:          "http://localhost:8000/api/summary/bam",
+		IndexUrl:     "http://localhost:8000/api/summary/bamIndex",
+		Type:         "alignment",
+		Height:       800,
+		MaxHeight:    1000,
+		MaxRows:      20000,
+		ColorBy:      "none",
+		ShowCoverage: true,
 	}
 
 	tracks := make([]IgvTrackConfig, 0)
@@ -1099,16 +1100,17 @@ func (s *Server) getAcceptedRecordsIgvConfig(w http.ResponseWriter, r *http.Requ
 	}
 
 	track := IgvTrackConfig{
-		Name:        "Accepted Reads",
-		Format:      "sam",
-		DisplayMode: "EXPANDED",
-		Url:         "http://localhost:8000/api/accepted/bam",
-		IndexUrl:    "http://localhost:8000/api/accepted/bamIndex",
-		Type:        "alignment",
-		Height:      800,
-		MaxHeight:   1000,
-		MaxRows:     20000,
-		ColorBy:     "none",
+		Name:         "Accepted Reads",
+		Format:       "sam",
+		DisplayMode:  "EXPANDED",
+		Url:          "http://localhost:8000/api/accepted/bam",
+		IndexUrl:     "http://localhost:8000/api/accepted/bamIndex",
+		Type:         "alignment",
+		Height:       800,
+		MaxHeight:    1000,
+		MaxRows:      20000,
+		ColorBy:      "none",
+		ShowCoverage: true,
 	}
 
 	tracks := make([]IgvTrackConfig, 0)
