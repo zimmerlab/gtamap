@@ -834,7 +834,7 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 		}
 
 		var rightRemaps []*RemapSection
-		if len(rightSections) != 0 {
+		if len(rightSections) > 1 {
 			// we need to choose best option
 			s := chooseBestRemapSection(rightSections)
 			rightRemaps = s
@@ -842,10 +842,9 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 
 		var leftRemaps []*RemapSection
 		if len(leftSections) > 1 {
+			// we need to choose best option
 			s := chooseBestRemapSection(leftSections)
-			if s != nil {
-				leftRemaps = s
-			}
+			leftRemaps = s
 		}
 
 		// pair remaining sections in leftRemaps and rightRemaps
