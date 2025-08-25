@@ -65,6 +65,7 @@
       <Igv
         ref="igvSummary"
         url="/api/summary/igvConfig"
+        :callback="setIgvBrowserSummary"
         @read-click="handleReadClick"
       ></Igv>
     </div>
@@ -74,7 +75,7 @@
       <Igv
         ref="igvAccepted"
         url="/api/accepted/igvConfig"
-        :callback="igvCallback"
+        :callback="setIgvBrowserAccepted"
         @read-click="handleReadClickAccepted"
       ></Igv>
     </div>
@@ -265,8 +266,12 @@
         updateIgvSummary()
       }
 
-      const igvCallback = function(browser) {
-        console.log("igv browser initialized", browser)
+      const setIgvBrowserSummary = function(igvDiv, igvBrowser, config) {
+        dataStore.setIgvSummary(igvDiv, igvBrowser, config)
+      }
+
+      const setIgvBrowserAccepted = function(igvDiv, igvBrowser, config) {
+        dataStore.setIgvAccepted(igvDiv, igvBrowser, config)
       }
 
       return {
@@ -282,7 +287,8 @@
         openReadDetailsPage,
         handleReadClick,
         handleReadClickAccepted,
-        igvCallback,
+        setIgvBrowserSummary,
+        setIgvBrowserAccepted,
       }
     },
     mounted() {},

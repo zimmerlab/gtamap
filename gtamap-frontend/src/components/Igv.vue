@@ -89,7 +89,7 @@
       igvBrowser.value = browser
 
       if (props.callback && typeof props.callback === 'function') {
-        props.callback(browser)
+        props.callback(igvDiv, browser, igvInfo.value)
       }
 
       // initialize tracks by track config loaded from API
@@ -127,8 +127,8 @@
             }
           })
 
-          track.alignmentTrack.setHighlightedReads([readInfo.qname], '#0000ff')
-          track.updateViews()
+          // track.alignmentTrack.setHighlightedReads([readInfo.qname], '#0000ff')
+          // track.updateViews()
 
           handleReadClick(readInfo)
         }

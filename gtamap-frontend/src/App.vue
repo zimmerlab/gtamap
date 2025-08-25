@@ -50,6 +50,8 @@ export default {
   setup() {
     const dataStore = useDataStore()
     const progressStore = useProgressStore()
+
+    const DataService = inject('data')
     const ApiService = inject('http')
 
     const routes = ref([
@@ -98,6 +100,15 @@ export default {
       ApiService.get("/api/summary/table")
         .then((response) => {
           if (response.status === 200) {
+
+            // set parents
+            for (const item of response.data) {
+              item.isSelected = false
+              for (const l of item.locations) {
+                l.parent = item
+              }
+            }
+
             dataStore.setReads(response.data)
 
             // summaryTableData.value.items = response.data
@@ -128,7 +139,7 @@ export default {
     }
 
     onMounted(() => {
-      fetchReads()
+      DataService.fetchReads()
     })
 
     return { routes, progressStore, downloadAcceptedBam }

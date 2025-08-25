@@ -4,14 +4,23 @@ export const useDataStore = defineStore('data', {
 	state: () => ({
 		reads: [],
 		qnameToReadMap: {},
+		indexToRecordMap: {},
 		summaryTableFilters: {
 			hideAcceptedRecords: false,
 			hideDiscardedRecords: false,
 			hideNonInProgressRecords: false,
 		},
 		summaryTableSortKey: '',
-		summaryIgv: null,
-		acceptedIgv: null,
+		igvSummary: {
+			div: null,
+			browser: null,
+			config: null,
+		},
+		igvAccepted: {
+			div: null,
+			browser: null,
+			config: null,
+		},
 	}),
 	getters: {
 		getReads() {
@@ -76,6 +85,9 @@ export const useDataStore = defineStore('data', {
 					}
 				})
 		},
+		getSummaryTableFilters: (state) => {
+			return state.summaryTableFilters
+		},
 		isSummaryTableFilterHideAcceptedRecords: (state) => {
 			return state.summaryTableFilters.hideAcceptedRecords
 		},
@@ -85,6 +97,12 @@ export const useDataStore = defineStore('data', {
 		isSummaryTableFilterHideNonInProgressRecords: (state) => {
 			return state.summaryTableFilters.hideNonInProgressRecords
 		},
+		getIgvSummary: (state) => {
+			return state.igvSummary
+		},
+		getIgvAccepted: (state) => {
+			return state.igvAccepted
+		},
 	},
 	actions: {
 		setReads(reads) {
@@ -92,23 +110,33 @@ export const useDataStore = defineStore('data', {
 
 			for (const read of reads) {
 				this.qnameToReadMap[read.qname] = read
+
+				for (const record of read.locations) {
+					for (const index of record.readIndices) {
+						this.indexToRecordMap[index] = record
+					}
+				}
 			}
 		},
-		setSummaryIgv(igv) {
-			this.summaryIgv = igv
+		setIgvSummary(igvDiv, igvBrowser, config) {
+			this.igvSummary.div = igvDiv
+			this.igvSummary.browser = igvBrowser
+			this.igvSummary.config = config
 		},
-		setAcceptedIgv(igv) {
-			this.acceptedIgv = igv
+		setIgvAccepted(igvDiv, igvBrowser, config) {
+			this.igvAccepted.div = igvDiv
+			this.igvAccepted.browser = igvBrowser
+			this.igvAccepted.config = config
 		},
-		toggleSummaryTableFilterHideAcceptedRecords() {
+		toggleSummaryTableFiltersHideAcceptedRecords() {
 			this.summaryTableFilters.hideAcceptedRecords =
 				!this.summaryTableFilters.hideAcceptedRecords
 		},
-		toggleSummaryTableFilterHideDiscardedRecords() {
+		toggleSummaryTableFiltersHideDiscardedRecords() {
 			this.summaryTableFilters.hideDiscardedRecords =
 				!this.summaryTableFilters.hideDiscardedRecords
 		},
-		toggleSummaryTableFilterHideNonInProgressRecords() {
+		toggleSummaryTableFiltersHideNonInProgressRecords() {
 			this.summaryTableFilters.hideNonInProgressRecords =
 				!this.summaryTableFilters.hideNonInProgressRecords
 		},
