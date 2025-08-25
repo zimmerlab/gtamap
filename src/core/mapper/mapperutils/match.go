@@ -41,7 +41,7 @@ type ReadMatchResult struct {
 	MismatchesRead  []int                      // the positions of the mismatches in the read
 	diagonalHandler *DiagonalHandler
 	IncompleteMap   bool
-	SpliceSitesInfo []bool // corresponds to the number of junctions of match result. is true if junction follows known SpliceSites
+	SpliceSitesInfo []int // corresponds to the number of junctions of match result. canonical splice site -> 2 = canonical, 1 = non-can, 0 = no splice site
 }
 
 func (r *ReadMatchResult) HasUnknownSpliceSites() bool {
@@ -49,7 +49,7 @@ func (r *ReadMatchResult) HasUnknownSpliceSites() bool {
 		return false
 	}
 	for _, site := range r.SpliceSitesInfo {
-		if !site {
+		if site > 0 {
 			return true
 		}
 	}

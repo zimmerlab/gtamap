@@ -532,15 +532,15 @@ func annotateSpliceSites(read *fastq.Read, genomeIndex *index.GenomeIndex, resul
 			}
 		}
 
-		_, isKnownSpliceSite := utils.ScoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
+		score, _ := utils.ScoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
 			acceptorSiteSeq[0], acceptorSiteSeq[1], lookOnPlusStrand)
 
 		// annotate split with spliceSite info
 		if result.SpliceSitesInfo == nil {
-			result.SpliceSitesInfo = make([]bool, 0)
-			result.SpliceSitesInfo = append(result.SpliceSitesInfo, isKnownSpliceSite)
+			result.SpliceSitesInfo = make([]int, 0)
+			result.SpliceSitesInfo = append(result.SpliceSitesInfo, 2-score)
 		} else {
-			result.SpliceSitesInfo = append(result.SpliceSitesInfo, isKnownSpliceSite)
+			result.SpliceSitesInfo = append(result.SpliceSitesInfo, 2-score)
 		}
 
 		readGapPos = gapGenome.End + 1
