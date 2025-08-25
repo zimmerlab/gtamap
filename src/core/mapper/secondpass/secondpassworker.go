@@ -788,7 +788,7 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 
 		i := 0
 		for l := range lPaddings {
-			if firstRegionRead.Start+l < firstRegion.End {
+			if firstRegionRead.Start+l < firstRegionRead.End {
 				firstRegion.Start += l
 				firstRegionRead.Start += l
 				mmFirstRegion = extractMMofAnchor(firstRegionRead, mmFirstRegion)
