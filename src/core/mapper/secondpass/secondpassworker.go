@@ -890,17 +890,21 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 		finalRemaps := make([]*mapperutils.ReadMatchResult, 0)
 
 		if rightRemaps != nil && leftRemaps != nil {
-			for i, lSection := range leftRemaps {
-				for j, rSection := range rightRemaps {
+			for _, lSection := range leftRemaps {
+				lExtStop := lSection.MatchedGenome[0].End
+				lExtStopRead := lSection.MatchedRead[0].End
+				for _, rSection := range rightRemaps {
+					rExtStart := rSection.MatchedGenome[len(rSection.MatchedGenome)-1].Start
+					rExtStartRead := rSection.MatchedRead[len(rSection.MatchedRead)-1].Start
 
 					// create template correction once (readMatchResult with regions removed which got remapped)
 					correctedTemplate := readMatchResult.Copy()
 					// remove left regions
-					correctedTemplate.MatchedGenome.RemoveRegion(0, adjustedAnchorsLeft[i].Start)
+					correctedTemplate.MatchedGenome.RemoveRegion(0, lExtStop)
 					// remove right regions
-					correctedTemplate.MatchedGenome.RemoveRegion(adjustedAnchorsRight[j].End, len(*genomeIndex.Sequences[readMatchResult.SequenceIndex]))
+					correctedTemplate.MatchedGenome.RemoveRegion(rExtStart, len(*genomeIndex.Sequences[readMatchResult.SequenceIndex]))
 
-					templateMappedRead := regionvector.Region{Start: adjustedReadAnchorsLeft[i].Start, End: adjustedReadAnchorsRight[j].End}
+					templateMappedRead := regionvector.Region{Start: lExtStopRead, End: rExtStartRead}
 					templateMM := extractMMofAnchor(templateMappedRead, correctedTemplate.MismatchesRead)
 					corrected := correctedTemplate.Copy()
 
@@ -1351,19 +1355,59 @@ func fixPointRNARemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 			for r := range rPaddings {
 				adjustedAnchor := oriMainAnchor.Copy()
 				adjustedReadAnchor := oriReadMainAnchor.Copy()
-				if oriReadMainAnchor.Start+l < oriReadMainAnchor.End {
+
+				// try left pad
+				appliedL := false
+				if adjustedAnchor.Start+l < adjustedReadAnchor.End {
 					adjustedAnchor.Start += l
 					adjustedReadAnchor.Start += l
+					appliedL = true
 				}
-				if oriMainAnchor.End-r > oriMainAnchor.Start {
+
+				// try right pad
+				appliedR := false
+				if adjustedAnchor.End-r > adjustedAnchor.Start {
 					adjustedAnchor.End -= r
 					adjustedReadAnchor.End -= r
+					appliedR = true
 				}
+
 				adjustedMM := extractMMofAnchor(adjustedReadAnchor, oriMmMainAnchor)
 
-				adjustedAnchors = append(adjustedAnchors, adjustedAnchor)
-				adjustedReadAnchors = append(adjustedReadAnchors, adjustedReadAnchor)
-				adjustedMms = append(adjustedMms, adjustedMM)
+				// we need to account for case where applying l pad makes it impossible to also apply r pad
+
+				// case 1: both paddings applied successfully
+				if appliedL && appliedR {
+					adjustedAnchors = append(adjustedAnchors, adjustedAnchor)
+					adjustedReadAnchors = append(adjustedReadAnchors, adjustedReadAnchor)
+					adjustedMms = append(adjustedMms, adjustedMM)
+					continue
+				}
+
+				// case 2: only left applied and r pad could not be applied
+				if appliedL && !appliedR {
+					anchorL := adjustedAnchor.Copy()
+					readL := adjustedReadAnchor.Copy()
+					mmL := extractMMofAnchor(readL, oriMmMainAnchor)
+
+					adjustedAnchors = append(adjustedAnchors, anchorL)
+					adjustedReadAnchors = append(adjustedReadAnchors, readL)
+					adjustedMms = append(adjustedMms, mmL)
+				}
+
+				// case 3: only right applied
+				if appliedR && !appliedL {
+					anchorR := oriMainAnchor.Copy()
+					readR := oriReadMainAnchor.Copy()
+
+					anchorR.End -= r
+					readR.End -= r
+					mmR := extractMMofAnchor(readR, oriMmMainAnchor)
+
+					adjustedAnchors = append(adjustedAnchors, anchorR)
+					adjustedReadAnchors = append(adjustedReadAnchors, readR)
+					adjustedMms = append(adjustedMms, mmR)
+				}
 			}
 		}
 	} else if len(rPaddings) > 0 {
