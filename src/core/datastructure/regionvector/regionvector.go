@@ -14,6 +14,13 @@ type Region struct {
 	End   int // end-exlusive
 }
 
+func (r Region) Copy() Region {
+	return Region{
+		Start: r.Start,
+		End:   r.End,
+	}
+}
+
 type Gap struct {
 	Start           int // 0-based
 	End             int // end-exlusive

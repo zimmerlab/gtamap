@@ -786,49 +786,88 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 		lPaddings, _ := getPadding(firstRegion, targetSeqIntronSet)
 		_, rPaddings := getPadding(lastRegion, targetSeqIntronSet)
 
-		i := 0
-		for l := range lPaddings {
-			if firstRegionRead.Start+l < firstRegionRead.End {
-				firstRegion.Start += l
-				firstRegionRead.Start += l
-				mmFirstRegion = extractMMofAnchor(firstRegionRead, mmFirstRegion)
-				i++
+		// i := 0
+		// for l := range lPaddings {
+		// 	if firstRegionRead.Start+l < firstRegionRead.End {
+		// 		firstRegion.Start += l
+		// 		firstRegionRead.Start += l
+		// 		mmFirstRegion = extractMMofAnchor(firstRegionRead, mmFirstRegion)
+		// 		i++
+		// 	}
+		// }
+		// j := 0
+		// for r := range rPaddings {
+		// 	if lastRegionRead.End-r > lastRegionRead.Start {
+		// 		lastRegion.End -= r
+		// 		lastRegionRead.End -= r
+		// 		mmLastRegion = extractMMofAnchor(lastRegionRead, mmLastRegion)
+		// 		j++
+		// 	}
+		// }
+		// if i > 1 || j > 1 {
+		// 	// logrus.Warnf("Multiple paddings applied in read %s", read.Header)
+		// 	// logrus.Warnf("L or R paddings have several options. This case is not yet handled: l=%d, r=%d", lPaddings, rPaddings)
+		// }
+
+		adjustedAnchorsRight := make([]regionvector.Region, 0)
+		adjustedReadAnchorsRight := make([]regionvector.Region, 0)
+		adjustedMmsRight := make([][]int, 0)
+
+		adjustedAnchorsLeft := make([]regionvector.Region, 0)
+		adjustedReadAnchorsLeft := make([]regionvector.Region, 0)
+		adjustedMmsLeft := make([][]int, 0)
+
+		if len(rPaddings) > 0 {
+			for r := range rPaddings {
+				adjustedAnchor := lastRegion.Copy()
+				adjustedReadAnchor := lastRegionRead.Copy()
+				if lastRegionRead.End-r > lastRegionRead.Start {
+					adjustedAnchor.End -= r
+					adjustedReadAnchor.End -= r
+				}
+				adjustedMM := extractMMofAnchor(adjustedReadAnchor, mmLastRegion)
+
+				adjustedAnchorsRight = append(adjustedAnchorsRight, adjustedAnchor)
+				adjustedReadAnchorsRight = append(adjustedReadAnchorsRight, adjustedReadAnchor)
+				adjustedMmsRight = append(adjustedMmsRight, adjustedMM)
 			}
 		}
-		j := 0
-		for r := range rPaddings {
-			if lastRegionRead.End-r > lastRegionRead.Start {
-				lastRegion.End -= r
-				lastRegionRead.End -= r
-				mmLastRegion = extractMMofAnchor(lastRegionRead, mmLastRegion)
-				j++
+
+		if len(lPaddings) > 0 {
+			for l := range lPaddings {
+				adjustedAnchor := firstRegion.Copy()
+				adjustedReadAnchor := firstRegionRead.Copy()
+				if firstRegionRead.Start+l < firstRegionRead.End {
+					adjustedAnchor.Start += l
+					adjustedReadAnchor.Start += l
+				}
+				adjustedMM := extractMMofAnchor(adjustedReadAnchor, mmFirstRegion)
+
+				adjustedAnchorsLeft = append(adjustedAnchorsLeft, adjustedAnchor)
+				adjustedReadAnchorsLeft = append(adjustedReadAnchorsLeft, adjustedReadAnchor)
+				adjustedMmsLeft = append(adjustedMmsLeft, adjustedMM)
 			}
-		}
-		if i > 1 || j > 1 {
-			logrus.Warnf("Multiple paddings applied in read %s", read.Header)
-			logrus.Warnf("L or R paddings have several options. This case is not yet handled: l=%d, r=%d", lPaddings, rPaddings)
 		}
 
 		leftSections := make([]*RemapSection, 0)
-		if len(lPaddings) > 0 {
+		for i := 0; i < len(adjustedAnchorsLeft); i++ {
 			// correct first region
-			missingBases := firstRegionRead.Start
-			startPos := firstRegion.Start
+			missingBases := adjustedReadAnchorsLeft[i].Start
+			startPos := adjustedAnchorsLeft[i].Start
 			leftPaths := targetSeqIntronSet.TranscriptomeGraph.FindPathsLeft(startPos, missingBases)
 			if leftPaths != nil {
-				remapSectionsLeft := scoreLeftOptions(leftPaths, firstRegionRead.Start, read.Sequence, genomeIndex.Sequences[readMatchResult.SequenceIndex])
+				remapSectionsLeft := scoreLeftOptions(leftPaths, adjustedReadAnchorsLeft[i].Start, read.Sequence, genomeIndex.Sequences[readMatchResult.SequenceIndex])
 				leftSections = remapSectionsLeft
 			}
-
 		}
 		// correct last region
 		rightSections := make([]*RemapSection, 0)
-		if len(rPaddings) > 0 {
-			missingBases := len(*read.Sequence) - lastRegionRead.End
-			startPos := lastRegion.End
+		for i := 0; i < len(adjustedReadAnchorsRight); i++ {
+			missingBases := len(*read.Sequence) - adjustedReadAnchorsRight[i].End
+			startPos := adjustedAnchorsRight[i].End
 			rightPaths := targetSeqIntronSet.TranscriptomeGraph.FindPathsRight(startPos, missingBases)
 			if rightPaths != nil {
-				remapSectionsRight := scoreRightOptions(rightPaths, lastRegionRead.End, read.Sequence, genomeIndex.Sequences[readMatchResult.SequenceIndex])
+				remapSectionsRight := scoreRightOptions(rightPaths, adjustedReadAnchorsRight[i].End, read.Sequence, genomeIndex.Sequences[readMatchResult.SequenceIndex])
 				rightSections = remapSectionsRight
 			}
 		}
@@ -851,17 +890,20 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 		finalRemaps := make([]*mapperutils.ReadMatchResult, 0)
 
 		if rightRemaps != nil && leftRemaps != nil {
-			// create template correction once (readMatchResult with regions removed which got remapped)
-			correctedTemplate := readMatchResult.Copy()
-			// remove left regions
-			correctedTemplate.MatchedGenome.RemoveRegion(0, firstRegion.Start)
-			// remove right regions
-			correctedTemplate.MatchedGenome.RemoveRegion(lastRegion.End, len(*genomeIndex.Sequences[readMatchResult.SequenceIndex]))
-			templateMappedRead := regionvector.Region{Start: firstRegionRead.Start, End: lastRegionRead.End}
-			templateMM := extractMMofAnchor(templateMappedRead, correctedTemplate.MismatchesRead)
-			for _, lSection := range leftRemaps {
-				for _, rSection := range rightRemaps {
+			for i, lSection := range leftRemaps {
+				for j, rSection := range rightRemaps {
+
+					// create template correction once (readMatchResult with regions removed which got remapped)
+					correctedTemplate := readMatchResult.Copy()
+					// remove left regions
+					correctedTemplate.MatchedGenome.RemoveRegion(0, adjustedAnchorsLeft[i].Start)
+					// remove right regions
+					correctedTemplate.MatchedGenome.RemoveRegion(adjustedAnchorsRight[j].End, len(*genomeIndex.Sequences[readMatchResult.SequenceIndex]))
+
+					templateMappedRead := regionvector.Region{Start: adjustedReadAnchorsLeft[i].Start, End: adjustedReadAnchorsRight[j].End}
+					templateMM := extractMMofAnchor(templateMappedRead, correctedTemplate.MismatchesRead)
 					corrected := correctedTemplate.Copy()
+
 					for _, region := range lSection.MatchedGenome {
 						corrected.MatchedGenome.AddRegionNonOverlappingPanic(region.Start, region.End)
 					}
@@ -876,13 +918,15 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 				}
 			}
 		} else if rightRemaps != nil {
-			// create template correction once (readMatchResult with regions removed which got remapped)
-			correctedTemplate := readMatchResult.Copy()
-			// remove right regions
-			correctedTemplate.MatchedGenome.RemoveRegion(lastRegion.End, len(*genomeIndex.Sequences[readMatchResult.SequenceIndex]))
-			templateMappedRead := regionvector.Region{Start: 0, End: lastRegionRead.End}
-			templateMM := extractMMofAnchor(templateMappedRead, correctedTemplate.MismatchesRead)
 			for _, rSection := range rightRemaps {
+				rExtStart := rSection.MatchedGenome[len(rSection.MatchedGenome)-1].Start
+				rExtStartRead := rSection.MatchedRead[len(rSection.MatchedRead)-1].Start
+				// create template correction once (readMatchResult with regions removed which got remapped)
+				correctedTemplate := readMatchResult.Copy()
+				// remove right regions
+				correctedTemplate.MatchedGenome.RemoveRegion(rExtStart, len(*genomeIndex.Sequences[readMatchResult.SequenceIndex]))
+				templateMappedRead := regionvector.Region{Start: 0, End: rExtStartRead}
+				templateMM := extractMMofAnchor(templateMappedRead, correctedTemplate.MismatchesRead)
 				corrected := correctedTemplate.Copy()
 				for _, region := range rSection.MatchedGenome {
 					corrected.MatchedGenome.AddRegionNonOverlappingPanic(region.Start, region.End)
@@ -892,13 +936,15 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 				finalRemaps = append(finalRemaps, corrected)
 			}
 		} else if leftRemaps != nil {
-			// create template correction once (readMatchResult with regions removed which got remapped)
-			correctedTemplate := readMatchResult.Copy()
-			// remove left regions
-			correctedTemplate.MatchedGenome.RemoveRegion(0, firstRegion.Start)
-			templateMappedRead := regionvector.Region{Start: firstRegionRead.Start, End: len(*read.Sequence)}
-			templateMM := extractMMofAnchor(templateMappedRead, correctedTemplate.MismatchesRead)
 			for _, lSection := range leftRemaps {
+				lExtStop := lSection.MatchedGenome[0].End
+				lExtStopRead := lSection.MatchedRead[0].End
+				// create template correction once (readMatchResult with regions removed which got remapped)
+				correctedTemplate := readMatchResult.Copy()
+				// remove left regions
+				correctedTemplate.MatchedGenome.RemoveRegion(0, lExtStop)
+				templateMappedRead := regionvector.Region{Start: lExtStopRead, End: len(*read.Sequence)}
+				templateMM := extractMMofAnchor(templateMappedRead, correctedTemplate.MismatchesRead)
 				corrected := correctedTemplate.Copy()
 				for _, region := range lSection.MatchedGenome {
 					corrected.MatchedGenome.AddRegionNonOverlappingPanic(region.Start, region.End)
@@ -1285,47 +1331,83 @@ func fixPointRNARemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 	remaps := make([]*Remap, 0)
 
 	// get main anchor of original map
-	mainAnchor, _, mainAnchorIndex := readMatchResult.GetLargestAnchor(targetSeqIntronSet)
-	readMainAnchor := readMatchResult.MatchedRead.Regions[mainAnchorIndex]
-	mmMainAnchor := extractMMofAnchor(readMainAnchor, readMatchResult.MismatchesRead)
+	oriMainAnchor, _, mainAnchorIndex := readMatchResult.GetLargestAnchor(targetSeqIntronSet)
+	oriReadMainAnchor := readMatchResult.MatchedRead.Regions[mainAnchorIndex]
+	oriMmMainAnchor := extractMMofAnchor(oriReadMainAnchor, readMatchResult.MismatchesRead)
 
 	// get possible padding of l and r (we expect only one padding each)
-	lPaddings, rPaddings := getPadding(mainAnchor, targetSeqIntronSet)
+	lPaddings, rPaddings := getPadding(oriMainAnchor, targetSeqIntronSet)
 
-	// just in case there are more than one padding option each for l and r (but i doubt that happenes)
-	i := 0
-	for l := range lPaddings {
-		if readMainAnchor.Start+l < readMainAnchor.End {
-			mainAnchor.Start += l
-			readMainAnchor.Start += l
-			mmMainAnchor = extractMMofAnchor(readMainAnchor, mmMainAnchor)
-			i++
+	adjustedAnchors := make([]regionvector.Region, 0)
+	adjustedReadAnchors := make([]regionvector.Region, 0)
+	adjustedMms := make([][]int, 0)
+
+	adjustedAnchors = append(adjustedAnchors, oriMainAnchor)
+	adjustedReadAnchors = append(adjustedReadAnchors, oriReadMainAnchor)
+	adjustedMms = append(adjustedMms, oriMmMainAnchor)
+
+	if len(lPaddings) > 0 && len(rPaddings) > 0 {
+		for l := range lPaddings {
+			for r := range rPaddings {
+				adjustedAnchor := oriMainAnchor.Copy()
+				adjustedReadAnchor := oriReadMainAnchor.Copy()
+				if oriReadMainAnchor.Start+l < oriReadMainAnchor.End {
+					adjustedAnchor.Start += l
+					adjustedReadAnchor.Start += l
+				}
+				if oriMainAnchor.End-r > oriMainAnchor.Start {
+					adjustedAnchor.End -= r
+					adjustedReadAnchor.End -= r
+				}
+				adjustedMM := extractMMofAnchor(adjustedReadAnchor, oriMmMainAnchor)
+
+				adjustedAnchors = append(adjustedAnchors, adjustedAnchor)
+				adjustedReadAnchors = append(adjustedReadAnchors, adjustedReadAnchor)
+				adjustedMms = append(adjustedMms, adjustedMM)
+			}
+		}
+	} else if len(rPaddings) > 0 {
+		for r := range rPaddings {
+			adjustedAnchor := oriMainAnchor.Copy()
+			adjustedReadAnchor := oriReadMainAnchor.Copy()
+			if oriMainAnchor.End-r > oriMainAnchor.Start {
+				adjustedAnchor.End -= r
+				adjustedReadAnchor.End -= r
+			}
+			adjustedMM := extractMMofAnchor(adjustedReadAnchor, oriMmMainAnchor)
+
+			adjustedAnchors = append(adjustedAnchors, adjustedAnchor)
+			adjustedReadAnchors = append(adjustedReadAnchors, adjustedReadAnchor)
+			adjustedMms = append(adjustedMms, adjustedMM)
+		}
+	} else if len(lPaddings) > 0 {
+		for l := range lPaddings {
+			adjustedAnchor := oriMainAnchor.Copy()
+			adjustedReadAnchor := oriReadMainAnchor.Copy()
+			if oriReadMainAnchor.Start+l < oriReadMainAnchor.End {
+				adjustedAnchor.Start += l
+				adjustedReadAnchor.Start += l
+			}
+			adjustedMM := extractMMofAnchor(adjustedReadAnchor, oriMmMainAnchor)
+
+			adjustedAnchors = append(adjustedAnchors, adjustedAnchor)
+			adjustedReadAnchors = append(adjustedReadAnchors, adjustedReadAnchor)
+			adjustedMms = append(adjustedMms, adjustedMM)
 		}
 	}
-	j := 0
-	for r := range rPaddings {
-		if mainAnchor.End-r > mainAnchor.Start {
-			mainAnchor.End -= r
-			readMainAnchor.End -= r
-			mmMainAnchor = extractMMofAnchor(readMainAnchor, mmMainAnchor)
-			j++
+
+	for i := 0; i < len(adjustedReadAnchors); i++ {
+		remap := Remap{
+			SequenceIndex:    readMatchResult.SequenceIndex,
+			Mm:               adjustedMms[i],
+			MainAnchorRead:   adjustedReadAnchors[i],
+			MainAnchorGenome: adjustedAnchors[i],
+			LeftSections:     make([]*RemapSection, 0),
+			RightSections:    make([]*RemapSection, 0),
 		}
-	}
-	if i > 1 || j > 1 {
-		logrus.Warnf("Multiple paddings applied in read %s", read.Header)
-		logrus.Warnf("L or R paddings have several options. This case is not yet handled: l=%d, r=%d", lPaddings, rPaddings)
-	}
 
-	remap := Remap{
-		SequenceIndex:    readMatchResult.SequenceIndex,
-		Mm:               mmMainAnchor,
-		MainAnchorRead:   readMainAnchor,
-		MainAnchorGenome: mainAnchor,
-		LeftSections:     make([]*RemapSection, 0),
-		RightSections:    make([]*RemapSection, 0),
+		remaps = append(remaps, &remap)
 	}
-
-	remaps = append(remaps, &remap)
 
 	for _, anchorToRemap := range remaps {
 		// is left remap possible from mainAnchor?
@@ -1348,7 +1430,7 @@ func fixPointRNARemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 				}
 			}
 			if leftPaths != nil {
-				remapSectionsLeft := scoreLeftOptions(leftPaths, anchorToRemap.MainAnchorRead.Start, read.Sequence, genomeIndex.Sequences[remap.SequenceIndex])
+				remapSectionsLeft := scoreLeftOptions(leftPaths, anchorToRemap.MainAnchorRead.Start, read.Sequence, genomeIndex.Sequences[anchorToRemap.SequenceIndex])
 				anchorToRemap.LeftSections = remapSectionsLeft
 			}
 		}
@@ -1373,7 +1455,7 @@ func fixPointRNARemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 				}
 			}
 			if rightPaths != nil {
-				remapSectionsRight := scoreRightOptions(rightPaths, anchorToRemap.MainAnchorRead.End, read.Sequence, genomeIndex.Sequences[remap.SequenceIndex])
+				remapSectionsRight := scoreRightOptions(rightPaths, anchorToRemap.MainAnchorRead.End, read.Sequence, genomeIndex.Sequences[anchorToRemap.SequenceIndex])
 				anchorToRemap.RightSections = remapSectionsRight
 			}
 		}
