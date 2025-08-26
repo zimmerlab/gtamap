@@ -176,6 +176,9 @@ func remapRead(readMapping *mapperutils.ReadMatchResult, annotation *mapperutils
 		// before we do anything, check if the missing part of the map is a gap in the mapping (lets say 10 bases are missing
 		// in the middle of the read). We want to use the already mapped part of the read before dicarding them in the remap
 		r := readMapping.Copy()
+		originalMismatches := r.MismatchesRead
+		r.MismatchesRead = make([]int, len(originalMismatches))
+		copy(r.MismatchesRead, originalMismatches)
 		fillGaps(r, genomeIndex, read)
 		alternativeReadMatchResults = append(alternativeReadMatchResults, r)
 	}
