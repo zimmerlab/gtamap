@@ -1658,6 +1658,7 @@ func getBestCandidateSections(sections []*RemapSection) []*RemapSection {
 
 func scoreRightOptions(rightPaths [][]regionvector.Region, startInRead int, readSeq *[]byte, refSeq *[]byte) []*RemapSection {
 	remapSectionsRight := make([]*RemapSection, 0)
+	lenReadSeq := len(*readSeq)
 PathLoop:
 	for _, path := range rightPaths {
 		currSection := RemapSection{
@@ -1680,6 +1681,9 @@ PathLoop:
 				if (*refSeq)[refPos] != (*readSeq)[lastStart] && lastStart != startInRead {
 					currSection.Mm = append(currSection.Mm, lastStart)
 				}
+				if uint8(float64(len(currSection.Mm))*100/float64(lenReadSeq)) >= config.MaxMismatchPercentage() {
+					continue PathLoop // skip this path and don't append to remapSectionsLeft since mms already too many
+				}
 				lastStart++
 			}
 
@@ -1693,6 +1697,7 @@ PathLoop:
 
 func scoreLeftOptions(leftPaths [][]regionvector.Region, startInRead int, readSeq *[]byte, refSeq *[]byte) []*RemapSection {
 	remapSectionsLeft := make([]*RemapSection, 0)
+	lenReadSeq := len(*readSeq)
 PathLoop:
 	for _, path := range leftPaths {
 		// WARN: left pasths are inverted ;)
@@ -1710,12 +1715,17 @@ PathLoop:
 
 			// score mm
 			for refPos := genomicRegion.End - 1; refPos >= genomicRegion.Start; refPos-- {
-				if refPos < 0 || lastStart >= len(*readSeq) || lastStart < 0 {
+				if refPos < 0 || lastStart >= lenReadSeq || lastStart < 0 {
 					continue PathLoop // skip this path and don't append to remapSectionsLeft since out of gene bounds
 				}
 				if (*refSeq)[refPos] != (*readSeq)[lastStart-1] && startInRead != lastStart {
 					currSection.Mm = append(currSection.Mm, lastStart-1)
 				}
+
+				if uint8(float64(len(currSection.Mm))*100/float64(lenReadSeq)) >= config.MaxMismatchPercentage() {
+					continue PathLoop // skip this path and don't append to remapSectionsLeft since mms already too many
+				}
+
 				lastStart--
 			}
 
