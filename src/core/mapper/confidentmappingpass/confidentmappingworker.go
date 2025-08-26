@@ -237,7 +237,7 @@ func repairIntrons(inferredIntrons []*regionvector.Intron, targetId int, genomeI
 				// this can be done more efficiently if i split method in two
 				score, isKnownSpliceSite := utils.ScoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
 					acceptorSiteSeq[0], acceptorSiteSeq[1], lookOnPlusStrand)
-				if isKnownSpliceSite {
+				if isKnownSpliceSite && intron.Start+i < intron.End+j-1 {
 					repairedIntrons = append(repairedIntrons, &regionvector.Intron{
 						Start:           intron.Start + i,
 						End:             intron.End + j,
@@ -248,10 +248,13 @@ func repairIntrons(inferredIntrons []*regionvector.Intron, targetId int, genomeI
 					repaired = true
 					break
 				}
+				if repaired {
+					break
+				}
 			}
 
 		}
-		// we checked all postitons but could not repair intron: append unrepaired intron
+		// we checked all positions but could not repair intron: append unrepaired intron
 		if !repaired {
 			repairedIntrons = append(repairedIntrons, intron)
 		}
