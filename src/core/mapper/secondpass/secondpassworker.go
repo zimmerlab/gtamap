@@ -1282,57 +1282,6 @@ type RemapSection struct {
 	MatchedGenome []regionvector.Region
 }
 
-func (r *RemapOption) UpdateRemap(remap []*regionvector.Region, mm []int, score int) {
-	r.RemapVector = append(r.RemapVector, remap...)
-	r.MismatchesRead = append(r.MismatchesRead, mm...)
-	r.Score += score
-}
-
-// chooseBestRemap returns the best possible remap from all remapOptions. If two options with same score are found, it currently
-// returns the remap which is located nearest to the anchorRegion
-// func chooseBestRemap(remapOptions map[int]*RemapOption) int {
-// 	// add best matching region back to result
-// 	bestOption := -1
-// 	bestScore := -1
-// 	distToAnchor := 100000
-// 	for start, remapOption := range remapOptions {
-// 		if remapOption.Score > bestScore {
-// 			bestScore = remapOption.Score
-// 			bestOption = start
-// 			distToAnchor = remapOption.DistToMainAnchor
-// 		} else if remapOption.Score == bestScore {
-// 			if remapOption.DistToMainAnchor < distToAnchor {
-// 				distToAnchor = remapOption.DistToMainAnchor
-// 				bestOption = start
-// 			}
-// 		}
-// 	}
-// 	return bestOption
-// }
-//
-// // alignMismatches combines the mm of a readMatchResult with the mm of a remap
-// func alignMismatches(mmOld []int, remapMMs []int, isRightRemap bool, remapStart int) []int {
-// 	remapMM := make([]int, 0)
-// 	if isRightRemap {
-// 		// update mm
-// 		for _, mm := range mmOld {
-// 			if mm < remapStart {
-// 				remapMM = append(remapMM, mm)
-// 			}
-// 		}
-// 		remapMM = append(remapMM, remapMMs...)
-// 	} else {
-// 		for i := len(mmOld) - 1; i >= 0; i-- {
-// 			if mmOld[i] > remapStart {
-// 				remapMM = append(remapMM, mmOld[i])
-// 			}
-// 		}
-// 		remapMM = append(remapMM, remapMMs...)
-// 	}
-//
-// 	return remapMM
-// }
-
 func fixPointRNARemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet *regionvector.RegionSet, read *fastq.Read, genomeIndex *index.GenomeIndex) []*mapperutils.ReadMatchResult {
 	// init list of remaps
 	remaps := make([]*Remap, 0)
