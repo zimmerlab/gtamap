@@ -915,7 +915,7 @@ func isPartOfRepeat(res *mapperutils.ReadMatchResult, genomeIndex *index.GenomeI
 
 	for _, genomicRegion := range res.MatchedGenome.Regions {
 		repeats := genomeIndex.Blacklist[res.SequenceIndex].Including(float64(genomicRegion.Start))
-		if len(repeats) != 0 && genomicRegion.Length() > 70 {
+		if len(repeats) != 0 {
 			return true
 		}
 	}
