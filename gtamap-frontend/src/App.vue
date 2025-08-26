@@ -1,6 +1,6 @@
 <template>
   <div class="tw:min-h-screen app-background">
-    <w-toolbar class="tw:h-10" fixed>
+    <w-toolbar class="tw:h-10 high-z-index" fixed>
       <div class="tw:flex tw:items-center tw:justify-between tw:w-full">
         <!-- Left section -->
         <div class="tw:flex tw:items-center tw:gap-4">
@@ -148,6 +148,10 @@ export default {
 </script>
 
 <style scoped>
+.high-z-index {
+  z-index: 9999 !important;
+}
+
 .app-background {
   background-color: #f8fafc;
   background-image: radial-gradient(circle, #e2e8f0 1px, transparent 1px);

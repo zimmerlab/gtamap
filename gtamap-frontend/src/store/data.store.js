@@ -29,6 +29,11 @@ export const useDataStore = defineStore('data', {
 		getRead: (state) => {
 			return (qname) => state.qnameToReadMap[qname]
 		},
+
+		getRecordByIndex: (state) => {
+			return (index) => state.indexToRecordMap[index]
+		},
+
 		getSummaryTableReads() {
 			return this.reads
 				.filter((item) => {

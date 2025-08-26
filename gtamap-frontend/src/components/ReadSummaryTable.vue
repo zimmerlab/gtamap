@@ -523,32 +523,13 @@ const unacceptRecords = function (records) {
 }
 
 const updateItemAcceptance = function (record, isAccepted) {
-  console.log('update item acceptance')
-  console.log(record)
-  console.log(isAccepted)
-
   DataService.updateRecordAcceptance(record, isAccepted)
-
-  // const recordsToUnaccept = item.parent.locations.filter(
-  //   (o) => o.pairType === item.pairType && o.isAccepted
-  // )
-  //
-  // unacceptRecords(recordsToUnaccept)
-  //
-  // if (isAccepted) {
-  //   item.isAccepted = isAccepted
-  //   acceptRecord(item)
-  // }
 }
 
 // QUICK ACTIONS
 
 const acceptAllMaxConfidenceReads = function () {
-  const reads = summaryTableData.value.items.filter(
-    (item) => item.confidenceLevel === 5 && !item.isAccepted
-  )
-  const records = reads.map((item) => item.locations).flat()
-  acceptRecords(records)
+  DataService.acceptAllMaxConfidenceReads()
 }
 
 // FILTERS

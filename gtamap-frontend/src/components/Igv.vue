@@ -7,6 +7,7 @@
   </div>
   <div
     ref="igvDiv"
+    class="tw:z-1"
   ></div>
 </template>
 

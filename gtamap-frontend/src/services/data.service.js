@@ -39,7 +39,19 @@ const DataService = {
 		igvAccepted.browser.loadTrack(igvAccepted.config.tracks[0])
 	},
 
-	updateRecordAcceptance(record, isAccepted) {
+	acceptAllMaxConfidenceReads: function() {
+		const records = this.DataStore.getReads
+			.filter((read) => read.confidenceLevel === 5 && !read.isAccepted)
+			.map((read) => read.locations)
+			.flat()
+
+		this.acceptRecords(records)
+
+		this.updateSummaryIgvTrack()
+		this.updateAcceptedIgvTrack()
+	},
+
+	updateRecordAcceptance: function(record, isAccepted) {
 		// get records of the same read with the same pair type
 		const recordsToUnaccept = record.parent.locations.filter(
 			(o) => o.pairType === record.pairType && o.isAccepted
@@ -53,6 +65,12 @@ const DataService = {
 
 		this.updateSummaryIgvTrack()
 		this.updateAcceptedIgvTrack()
+	},
+
+	updateRecordAcceptanceByIndex: function(index, isAccepted) {
+		const record = this.DataStore.getRecordByIndex(index)
+		console.log(record)
+		this.updateRecordAcceptance(record, isAccepted)
 	},
 
 	acceptRecords: function(records) {
@@ -71,7 +89,7 @@ const DataService = {
 			recordIds: recordIds,
 		})
 			.then((response) => {
-				console.log(response)
+				// console.log(response)
 			})
 			.catch((err) => {
 				console.error('Error accepting record:', err)
@@ -101,7 +119,7 @@ const DataService = {
 			recordIds: recordIds,
 		})
 			.then((response) => {
-				console.log(response)
+				// console.log(response)
 			})
 			.catch((err) => {
 				console.error('Error unaccepting record:', err)
@@ -124,7 +142,7 @@ const DataService = {
 			qnames: qnames,
 		})
 			.then((response) => {
-				console.log(response)
+				// console.log(response)
 			})
 			.catch((err) => {
 				console.error('Error discarding records:', err)
@@ -147,7 +165,7 @@ const DataService = {
 			qnames: qnames,
 		})
 			.then((response) => {
-				console.log(response)
+				// console.log(response)
 			})
 			.catch((err) => {
 				console.error('Error resetting records:', err)

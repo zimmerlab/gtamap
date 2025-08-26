@@ -298,6 +298,8 @@ export default {
   data() {
     const route = useRoute()
     const router = useRouter()
+
+    const DataService = inject('data')
     const ApiService = inject('http')
 
     let readId = ref('state:read-id-loading')
@@ -648,7 +650,12 @@ export default {
       })
     }
 
-    const discardRead = function() {
+    const updateItemAcceptance = function (record, isAccepted) {
+      console.log(record)
+      DataService.updateRecordAcceptanceByIndex(record.readIndices[0], isAccepted)
+    }
+
+    const discardRead = function () {
       console.log("discard this")
     }
 
@@ -669,6 +676,7 @@ export default {
       highlightEquivalentRows,
       clearHighlight,
       discardRead,
+      updateItemAcceptance,
     }
   },
   components: {
