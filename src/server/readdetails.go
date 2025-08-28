@@ -10,6 +10,7 @@ import (
 )
 
 type ReadDetailsDto struct {
+	IsDiscarded  bool                `json:"isDiscarded"`
 	IsAcceptedR1 bool                `json:"isAcceptedR1"`
 	IsAcceptedR2 bool                `json:"isAcceptedR2"`
 	Locations    []*ReadLocationInfo `json:"locations"`
@@ -18,12 +19,15 @@ type ReadDetailsDto struct {
 func (h *MappingDataHandler) GetReadDetailsTable(qname string) *ReadDetailsDto {
 
 	details := &ReadDetailsDto{
+		IsDiscarded:  false,
 		IsAcceptedR1: false,
 		IsAcceptedR2: false,
 		Locations:    make([]*ReadLocationInfo, 0),
 	}
 
 	qnameCluster := h.QnameCluster[qname]
+
+	details.IsDiscarded = qnameCluster.IsDiscarded
 
 	// numClusterR1 := len(qnameCluster.ClusterR1.SimilarRecords)
 	// numClusterR2 := len(qnameCluster.ClusterR2.SimilarRecords)
@@ -118,10 +122,13 @@ func (h *MappingDataHandler) GetReadDetailsTable(qname string) *ReadDetailsDto {
 }
 
 type ReadDetailsData struct {
-	Confidence int            `json:"confidence"`
-	ReadGroups []*ReadGroup   `json:"readGroups"`
-	R1Mapped   []*MapperState `json:"r1Mapped"`
-	R2Mapped   []*MapperState `json:"r2Mapped"`
+	Confidence   int            `json:"confidence"`
+	ReadGroups   []*ReadGroup   `json:"readGroups"`
+	R1Mapped     []*MapperState `json:"r1Mapped"`
+	R2Mapped     []*MapperState `json:"r2Mapped"`
+	IsDiscarded  bool           `json:"isDiscarded"`
+	IsAcceptedR1 bool           `json:"isAcceptedR1"`
+	IsAcceptedR2 bool           `json:"isAcceptedR2"`
 }
 
 type MapperState struct {
@@ -322,11 +329,16 @@ func (h *MappingDataHandler) GetReadDetailsData(qname string) *ReadDetailsData {
 		readGroups = append(readGroups, group)
 	}
 
+	// acceptance state
+
 	return &ReadDetailsData{
-		Confidence: qclust.ConfidenceLevel,
-		ReadGroups: readGroups,
-		R1Mapped:   r1Mapped,
-		R2Mapped:   r2Mapped,
+		IsDiscarded:  qclust.IsDiscarded,
+		IsAcceptedR1: qclust.ClusterR1.AcceptedRecord != nil,
+		IsAcceptedR2: qclust.ClusterR2.AcceptedRecord != nil,
+		Confidence:   qclust.ConfidenceLevel,
+		ReadGroups:   readGroups,
+		R1Mapped:     r1Mapped,
+		R2Mapped:     r2Mapped,
 	}
 }
 

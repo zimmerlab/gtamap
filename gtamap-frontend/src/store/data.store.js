@@ -26,7 +26,7 @@ export const useDataStore = defineStore('data', {
 		getReads() {
 			return this.reads
 		},
-		getRead: (state) => {
+		getReadByQname: (state) => {
 			return (qname) => state.qnameToReadMap[qname]
 		},
 

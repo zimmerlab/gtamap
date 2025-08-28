@@ -18,8 +18,19 @@
       <div class="tw:w-fit my-card">
         <div class="tw:text-sm tw:font-semibold tw:text-gray-600">Read ID</div>
         <div class="tw:text-lg tw:font-bold">{{ readId }}</div>
-        <w-button bg-color="red" sm @click="discardRead">discard</w-button>
+        <w-button v-if="acceptanceState !== 'discarded'" bg-color="red" color="white" class="tw:font-bold" sm
+          @click="discardRead"><w-icon class="mr1">mdi mdi-trash-can-outline</w-icon>discard</w-button>
+        <w-button v-else outline sm @click="resetRead"><w-icon class="mr1">mdi mdi-broom</w-icon>reset</w-button>
       </div>
+
+      <div class="tw:w-fit my-card">
+        <div class="tw:text-sm tw:font-semibold tw:text-gray-600 tw:mb-2">Acceptance</div>
+        <w-tag v-if="acceptanceState === 'discarded'" lg bg-color="red">discarded</w-tag>
+        <w-tag v-else-if="acceptanceState === 'accepted'" lg bg-color="green">accepted</w-tag>
+        <w-tag v-else-if="acceptanceState === 'in-progress'" lg bg-color="yellow">in progress</w-tag>
+        <w-tag v-else lg>not reviewed</w-tag>
+      </div>
+
 
       <div class="tw:w-fit my-card">
         <div class="tw:text-sm tw:font-semibold tw:text-gray-600 tw:mb-2">Confidence Score</div>
@@ -136,7 +147,7 @@
       <div class="tw:border tw:rounded-sm tw:border-gray-200 tw:relative">
         <!-- Table Header -->
         <div
-          class="tw:bg-gray-50 tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:py-2 tw:text-xs tw:font-semibold tw:text-gray-600 tw:border-b tw:border-gray-200">
+          class="tw:bg-gray-50 tw:text-left tw:grid tw:grid-cols-9 tw:gap-2 tw:px-6 tw:py-2 tw:text-xs tw:font-semibold tw:text-gray-600 tw:border-b tw:border-gray-200">
           <div></div>
           <div>Pair Type</div>
           <div>In Target Region?</div>
@@ -304,14 +315,17 @@ export default {
 
     let readId = ref('state:read-id-loading')
 
-    const initPage = function() {
+    let acceptanceState = ref('not-reviewed') // 'accepted', 'in-progress', 'discarded', 'not-reviewed'
+
+    const initPage = function () {
+      acceptanceState.value = 'not-reviewed'
       tableItems.value = []
       tableData.value.loading = true
       readGroups.value = []
 
       getReadIdFromQuery()
       getReadDetails()
-      getViewerData()
+      getReadData()
     }
 
     const getReadIdFromQuery = function () {
@@ -372,6 +386,58 @@ export default {
         })
     }
 
+    const updateItemAcceptance = function (record, isAccepted) {
+
+      // unaccept other records with the same pair type
+      tableItems.value.filter(r => {
+        if (r.pairType !== record.pairType) {
+          return false
+        }
+        return r.readIndices !== record.readIndices
+      }).forEach(r => {
+        r.isAccepted = false
+      })
+
+      record.isAccepted = isAccepted
+
+      // update acceptance state
+      const isFirstAccepted = tableItems.value.some(r => r.pairType === 'first' && r.isAccepted)
+      const isSecondAccepted = tableItems.value.some(r => r.pairType === 'second' && r.isAccepted)
+
+      if (isFirstAccepted && isSecondAccepted) {
+        acceptanceState.value = 'accepted'
+      } else if (isFirstAccepted || isSecondAccepted) {
+        acceptanceState.value = 'in-progress'
+      } else {
+        acceptanceState.value = 'not-reviewed'
+      }
+
+      DataService.updateRecordAcceptanceByIndex(record.readIndices[0], isAccepted)
+    }
+
+    const discardRead = function () {
+
+      // unaccept all records
+      tableItems.value.forEach(r => r.isAccepted = false)
+
+      acceptanceState.value = 'discarded'
+
+      DataService.discardReadByQname(readId.value)
+
+      // goBack()
+    }
+
+    const resetRead = function() {
+
+      tableItems.value.forEach(r => r.isAccepted = false)
+
+      acceptanceState.value = 'not-reviewed'
+
+      DataService.resetReadByQname(readId.value)
+
+      // goBack()
+    }
+
     // READ GROUPS DATA
 
     let readGroups = ref([])
@@ -412,7 +478,7 @@ export default {
       }
     }
 
-    const getViewerData = function () {
+    const getReadData = function () {
       ApiService.get('/api/details/data', {
         params: {
           qname: readId.value,
@@ -420,6 +486,17 @@ export default {
       })
         .then(async (response) => {
           if (response.status === 200) {
+
+            acceptanceState.value = "not-reviewed"
+            if (response.data.isDiscarded) {
+              acceptanceState.value = 'discarded'
+            } else if (response.data.isAcceptedR1 || response.data.isAcceptedR2) {
+              if (response.data.isAcceptedR1 && response.data.isAcceptedR2) {
+                acceptanceState.value = 'accepted'
+              } else {
+                acceptanceState.value = 'in-progress'
+              }
+            }
 
             detailsData.value.confidence = response.data.confidence
             detailsData.value.r1Mapped = response.data.r1Mapped
@@ -654,15 +731,6 @@ export default {
       })
     }
 
-    const updateItemAcceptance = function (record, isAccepted) {
-      console.log(record)
-      DataService.updateRecordAcceptanceByIndex(record.readIndices[0], isAccepted)
-    }
-
-    const discardRead = function () {
-      console.log("discard this")
-    }
-
     watch(() => route.query.readId, (newReadId) => {
       if (newReadId && newReadId !== readId.value) {
         initPage()
@@ -671,9 +739,6 @@ export default {
 
     onMounted(() => {
       initPage()
-      // getReadIdFromQuery()
-      // getReadDetails()
-      // getViewerData()
     })
 
     return {
@@ -686,14 +751,16 @@ export default {
       readGroupTableData,
       getReadDetails,
       viewerData,
-      getViewerData,
+      getViewerData: getReadData,
       igvRefs,
       setIgvRef,
       drawDendrogramLines,
       highlightEquivalentRows,
       clearHighlight,
       discardRead,
+      resetRead,
       updateItemAcceptance,
+      acceptanceState,
     }
   },
   components: {

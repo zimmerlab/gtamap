@@ -69,8 +69,15 @@ const DataService = {
 
 	updateRecordAcceptanceByIndex: function(index, isAccepted) {
 		const record = this.DataStore.getRecordByIndex(index)
-		console.log(record)
 		this.updateRecordAcceptance(record, isAccepted)
+	},
+	discardReadByQname: function(qname) {
+		const read = this.DataStore.getReadByQname(qname)
+		this.discardReads([read])
+	},
+	resetReadByQname: function(qname) {
+		const read = this.DataStore.getReadByQname(qname)
+		this.resetReads([read])
 	},
 
 	acceptRecords: function(records) {
