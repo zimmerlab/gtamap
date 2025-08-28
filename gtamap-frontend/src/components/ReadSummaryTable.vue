@@ -273,7 +273,13 @@ const customSortFunction = function(sortKeys) {
 
   resetHighlight()
 
-  const sortKey = sortKeys[0] ? sortKeys[0] : ''
+  let sortKey = sortKeys[0] ? sortKeys[0] : ''
+
+  // change the sortKey to match the data property name for confidence level
+  if (sortKey && sortKey.slice(1) === 'confidence') {
+    sortKey = sortKey[0] + 'confidenceLevel'
+  }
+
   dataStore.setSummaryTableSortKey(sortKey)
 }
 
@@ -522,6 +528,8 @@ watch(
   filteredReads,
   (newReads, oldReads) => {
     updatePagination()
+
+    // if the number of reads changed, reset any selection/highlight
     if (newReads && oldReads && newReads.length !== oldReads.length) {
       // emit('summary-table-update', newReads.length)
       resetHighlight()
