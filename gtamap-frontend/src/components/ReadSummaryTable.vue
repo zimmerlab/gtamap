@@ -30,9 +30,9 @@
       </div>
     </div>
 
-    <w-table loading="false" :headers="tableData.headers" :items="filteredReads" :pagination="pagination"
+    <w-table loading="false" :headers="tableData.headers" :items="filteredReads" :pagination="tableData.pagination"
       :selectable-rows="1" :selected-rows="tableData.selectedRows" :expanded-rows="tableData.expandedRows"
-      @row-expand="expandRowClickHandler" :sort="tableData.sortKey" @update:sort="handleSort" class="tw:text-xs"
+      :sort="tableData.sortKey" @row-expand="expandRowClickHandler" @update:sort="handleSort" class="tw:text-xs"
       fixed-headers expandable-rows>
       <template #item-cell.isSelected="{ item }">
         <w-checkbox :model-value="item.isSelected" @update:model-value="(value) => toggleItemSelection(item, value)" />
@@ -112,6 +112,40 @@
           </template>
         </w-table>
       </template>
+
+      <template #pagination="{ range, total }">
+        <div class="tw:flex tw:flex-1 tw:flex-row">
+          <div class="tw:flex-1"></div>
+
+          <div>
+            <w-button :disabled="tableData.pagination.page <= 1" outline sm color="grey" class="tw:pl-0"
+              @click="goToPageCustom(tableData.pagination.page - 1)"><w-icon class="tw:mx-0">mdi
+                mdi-chevron-left</w-icon>Back</w-button>
+
+            <w-button outline sm color="grey" class="tw:px-2 tw:ml-1" :class="paginationColor(1)"
+              @click="goToPageCustom(1)">1</w-button>
+
+            <span v-if="tableData.pagination.showLeft" class="tw:ml-1">...</span>
+
+            <w-button v-for="p in tableData.pagination.middle" :key="p" outline sm color="grey" class="tw:px-2 tw:ml-1"
+              :class="paginationColor(p)" @click="goToPageCustom(p)">{{ p }}</w-button>
+
+            <span v-if="tableData.pagination.showRight" class="tw:ml-1">...</span>
+
+            <w-button v-if="tableData.pagination.last > 1" outline sm color="grey" class="tw:px-1 tw:ml-1"
+              :class="paginationColor(tableData.pagination.last)" @click="goToPageCustom(tableData.pagination.last)">{{
+                tableData.pagination.last }}</w-button>
+
+            <w-button :disabled="tableData.pagination.page >= tableData.pagination.last" outline sm color="grey"
+              class="tw:pl-2 tw:pr-0 tw:ml-1" @click="goToPageCustom(tableData.pagination.page + 1)">Next<w-icon
+                class="tw:mx-0">mdi mdi-chevron-right</w-icon></w-button>
+          </div>
+
+          <div class="tw:flex tw:flex-1 tw:justify-end">
+            <div class="tw:ml-1">showing {{ range }} of {{ total }} reads (total {{ total }})</div>
+          </div>
+        </div>
+      </template>
     </w-table>
   </div>
 </template>
@@ -135,13 +169,6 @@ const dataStore = useDataStore()
 const ApiService = inject('http')
 const DataService = inject('data')
 
-const props = defineProps({
-  url: {
-    type: String,
-    required: true,
-  },
-})
-
 let filteredReads = computed(() => dataStore.getSummaryTableReads)
 
 // let pagination = computed(() => {
@@ -152,26 +179,11 @@ let filteredReads = computed(() => dataStore.getSummaryTableReads)
 //   }
 // })
 
-const pagination = ref({
-  total: 0,
-  itemsPerPage: 30,
-  itemsPerPageOptions: [{ value: 15 }, { value: 30 }],
-})
-
-const updatePagination = function () {
-  pagination.value.total = filteredReads.value.length
-  const currentItemsPerPage = pagination.value.itemsPerPage
-  pagination.value.itemsPerPage = 1
-  pagination.value.itemsPerPage = currentItemsPerPage
-}
-
-watch(
-  filteredReads,
-  () => {
-    updatePagination()
-  },
-  { immediate: true }
-)
+// const pagination = ref({
+//   total: 0,
+//   itemsPerPage: 30,
+//   itemsPerPageOptions: [{ value: 15 }, { value: 30 }],
+// })
 
 const tableData = ref({
   loading: true,
@@ -208,7 +220,66 @@ const tableData = ref({
     accept: true,
     discard: true,
   },
+  pagination: {
+    total: 0,
+    itemsPerPage: 15,
+    page: 1,
+    pagesCount: 1,
+    // itemsPerPageOptions: [{ value: 15 }, { value: 30 }],
+    showLeft: false,
+    showRight: false,
+    first: 1,
+    middle: [],
+    last: 1,
+  },
 })
+
+const updatePagination = function () {
+  tableData.value.pagination.total = filteredReads.value.length
+
+  if (tableData.value.pagination.page === 0) {
+    tableData.value.pagination.page = 1
+  }
+
+  tableData.value.pagination.pagesCount = Math.ceil(
+    tableData.value.pagination.total / tableData.value.pagination.itemsPerPage
+  )
+
+  tableData.value.pagination.last = tableData.value.pagination.pagesCount
+
+  if (tableData.value.pagination.page > tableData.value.pagination.pagesCount) {
+    tableData.value.pagination.page = tableData.value.pagination.pagesCount
+  }
+
+  if (tableData.value.pagination.pagesCount <= 6) {
+    tableData.value.pagination.middle = []
+    for (let i = 2; i < tableData.value.pagination.pagesCount; i++) {
+      tableData.value.pagination.middle.push(i)
+    }
+  } else {
+    tableData.value.pagination.middle = []
+    let start = Math.max(2, tableData.value.pagination.page - 2)
+    let end = Math.min(
+      tableData.value.pagination.pagesCount - 1,
+      tableData.value.pagination.page + 2
+    )
+    if (start === 2) {
+      end = 5
+    } else if (end === tableData.value.pagination.pagesCount - 1) {
+      start = tableData.value.pagination.pagesCount - 4
+    }
+    for (let i = start; i <= end; i++) {
+      tableData.value.pagination.middle.push(i)
+    }
+  }
+
+  tableData.value.pagination.showLeft =
+    tableData.value.pagination.middle.length > 0 && tableData.value.pagination.middle[0] > 2
+  tableData.value.pagination.showRight =
+    tableData.value.pagination.middle.length > 0 &&
+    tableData.value.pagination.middle[tableData.value.pagination.middle.length - 1] <
+    tableData.value.pagination.pagesCount - 1
+}
 
 const handleSort = function (sortInfo) {
   tableData.value.sortKey = sortInfo[0] ? sortInfo[0] : ''
@@ -396,11 +467,11 @@ const isItemSelected = function (item) {
   return tableData.value.customSelectedItems.includes(item._uid)
 }
 
-const discardReads = function(reads) {
+const discardReads = function (reads) {
   DataService.discardReads(reads)
 }
 
-const resetReads = function(reads) {
+const resetReads = function (reads) {
   DataService.resetReads(reads)
 }
 
@@ -582,7 +653,6 @@ const deselectAll = function () {
 }
 
 const acceptSelected = function () {
-  let items = []
   const selected = summaryTableData.value.filteredItems.filter((item) => item.isSelected)
 
   acceptReads(selected)
@@ -594,11 +664,29 @@ const resetSelected = function () {
   resetReads(selected)
 }
 
+const goToPageCustom = function (page) {
+  tableData.value.pagination.page = page
+  updatePagination()
+}
+
+const paginationColor = function (page) {
+  if (page === tableData.value.pagination.page) {
+    return 'tw:bg-[#234781] tw:text-white tw:border-[#234781]'
+  }
+}
+
+watch(
+  filteredReads,
+  () => {
+    updatePagination()
+  },
+  { immediate: true }
+)
+
 defineExpose({ selectAndScrollToRead })
 
-onMounted(() => {
-  // getSummaryTableData()
-})
+// onMounted(() => {
+// })
 </script>
 
 <style scoped></style>

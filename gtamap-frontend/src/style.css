@@ -5,6 +5,10 @@
 /* Custom component classes using @apply */
 @layer components {
 
+	.w-table__pagination {
+		@apply tw:justify-center
+	}
+
 	.my-card {
 		@apply tw:border tw:border-gray-300 tw:rounded tw:px-6 tw:py-4 tw:text-center tw:bg-white
 	}

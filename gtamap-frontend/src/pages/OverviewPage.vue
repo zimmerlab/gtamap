@@ -56,7 +56,6 @@
       <ReadSummaryTable
         ref="readSummaryTableRef"
         class="tw:flex-1"
-        url="/api/summary/table"
         @open-read-details="openReadDetailsPage"
         @accepted-table-update="tableUpdated"
         @summary-table-update="summaryTableUpdate"
