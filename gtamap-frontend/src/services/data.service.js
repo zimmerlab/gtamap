@@ -20,7 +20,7 @@ const DataService = {
 			return
 		}
 
-		console.log(response.data)
+		// console.log(response.data)
 	},
 
 	fetchReads: async function() {
@@ -210,6 +210,20 @@ const DataService = {
 
 		this.updateSummaryTableFilters()
 		this.updateSummaryIgvTrack()
+	},
+
+	resetSummaryTableFilters: function() {
+		this.DataStore.resetSummaryTableFilters()
+
+		this.updateSummaryTableFilters()
+		this.updateSummaryIgvTrack()
+	},
+
+	setSummaryTableSpecificFilters: function(name, targetRegion, contigPos, cigar, qnames) {
+		this.DataStore.setSummaryTableSpecificFilters(name, targetRegion, contigPos, cigar, qnames)
+	},
+	resetSummaryTableSpecificFilters: function() {
+		this.DataStore.resetSummaryTableSpecificFilters()
 	},
 
 	updateSummaryTableFilters: function() {

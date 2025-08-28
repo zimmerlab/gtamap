@@ -10,7 +10,7 @@
           <w-checkbox v-model="checkboxes.cigar" label="CIGAR" @update:model-value="onCigarChange" />
         </div>
       </div>
-      
+
       <!-- Read Filter Group -->
       <div class="tw:flex tw:flex-col tw:items-center">
         <div class="tw:text-sm tw:font-medium tw:mb-2">Read Filter</div>
@@ -19,34 +19,31 @@
         </div>
       </div>
     </div>
-    
-    <UpsetPlot
-      :upset-data="upsetData"
-      :title="computedTitle"
-      @on-set-click="onSetClick">
+
+    <UpsetPlot :upset-data="upsetData" :title="computedTitle" @onSetClick="onSetClick" @onSetHover="onSetHover">
     </UpsetPlot>
   </div>
 </template>
 
 <script setup>
-
 import { ref, inject, onMounted, defineProps, defineEmits, computed, watch } from 'vue'
-import UpsetPlot from "./UpsetPlot.vue";
+import UpsetPlot from './UpsetPlot.vue'
 
 const props = defineProps({
   url: {
     type: String,
-    default: "/api/upsetData"
+    default: '/api/upsetData',
   },
   title: {
     type: String,
-    default: "Upset Plot"
-  }
+    default: 'Upset Plot',
+  },
 })
 
-const emit = defineEmits(['onSetClick'])
+const emit = defineEmits(['onSetClick', 'onSetHover'])
 
-const ApiService = inject("http")
+const DataService = inject('data')
+const ApiService = inject('http')
 
 const upsetData = ref([])
 
@@ -54,63 +51,82 @@ const checkboxes = ref({
   read: true,
   contigPos: false,
   cigar: false,
-  targetRegion: false
+  targetRegion: false,
 })
 
 const computedTitle = computed(() => {
   const parts = []
-  
-  if (checkboxes.value.read) parts.push("Read")
-  if (checkboxes.value.contigPos) parts.push("Contig + Position")
-  if (checkboxes.value.cigar) parts.push("CIGAR")
-  
+
+  if (checkboxes.value.read) parts.push('Read')
+  if (checkboxes.value.contigPos) parts.push('Contig + Position')
+  if (checkboxes.value.cigar) parts.push('CIGAR')
+
   // return "Mapper Agreement (" + parts.join(" + ") + ")"
-  return ""
+  return ''
 })
 
-const fetchData = function(url) {
+const fetchData = function (url) {
   ApiService.get(props.url, {
     params: {
       onlyTargetRegion: checkboxes.value.targetRegion,
       usePosition: checkboxes.value.contigPos,
-      useCigar: checkboxes.value.cigar
-    }
+      useCigar: checkboxes.value.cigar,
+    },
   })
-    .then(response => {
+    .then((response) => {
       if (response.status === 200) {
         upsetData.value = response.data
       } else {
-        console.error("Failed to fetch upset data")
+        console.error('Failed to fetch upset data')
         console.error(response)
         upsetData.value = []
       }
-    }).catch(err => {
-      console.log(err);
+    })
+    .catch((err) => {
+      console.log(err)
     })
 }
 
-watch([() => checkboxes.value.targetRegion,
-  () => checkboxes.value.contigPos,
-  () => checkboxes.value.cigar], () => {
-  fetchData()
-})
+watch(
+  [
+    () => checkboxes.value.targetRegion,
+    () => checkboxes.value.contigPos,
+    () => checkboxes.value.cigar,
+  ],
+  () => {
+    fetchData()
+  }
+)
 
-const onCigarChange = function(value) {
+const onCigarChange = function (value) {
   if (value) {
     checkboxes.value.contigPos = true
   }
 }
 
-const onSetClick = function(set) {
-  emit("onSetClick", set)
+const onSetHover = function (set) {
+  emit('onSetHover', set)
+}
+
+const onSetClick = function (set) {
+  // emit('onSetClick', set)
+
+  const qnames = set.elems.map((e) => {
+    return e.name.split('::')[1]
+  })
+
+  DataService.setSummaryTableSpecificFilters(
+    set.name,
+    checkboxes.value.targetRegion,
+    checkboxes.value.contigPos,
+    checkboxes.value.cigar,
+    qnames
+  )
 }
 
 onMounted(() => {
   fetchData()
 })
-
 </script>
 
-<style scoped>
-
-</style>
+<style scoped></style>

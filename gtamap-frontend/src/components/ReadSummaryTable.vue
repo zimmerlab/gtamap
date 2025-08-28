@@ -9,6 +9,20 @@
       </div>
     </div>
 
+    <div v-if="dataStore.getSummaryTableSpecificFilterAsString !== undefined"
+      class="filter-section tw:mb-3 tw:px-3 tw:py-2 tw:border tw:border-gray-200 tw:rounded tw:bg-gray-25">
+      <h4 class="tw:text-sm tw:font-medium tw:mb-2 tw:text-gray-600">
+        Table Filters from Upset Plot
+      </h4>
+      <div class="tw:flex tw:items-center tw:gap-3 tw:text-sm">
+        Showing only Read Mappings for
+        <span class="tw:font-bold">{{ dataStore.getSummaryTableSpecificFilterSetName }}</span> with
+        filters
+        <span class="tw:font-bold">{{ dataStore.getSummaryTableSpecificFilterAsString }}</span>
+      </div>
+      <w-button outline sm @click="resetSummaryTableSpecificFilters">Reset</w-button>
+    </div>
+
     <div class="filter-section tw:mb-3 tw:px-3 tw:py-2 tw:border tw:border-gray-200 tw:rounded tw:bg-gray-25">
       <h4 class="tw:text-sm tw:font-medium tw:mb-2 tw:text-gray-600">Quick Actions</h4>
       <div class="tw:flex tw:items-center tw:gap-3">
@@ -31,9 +45,9 @@
     </div>
 
     <w-table loading="false" :headers="tableData.headers" :items="filteredReads" :pagination="tableData.pagination"
-      :selectable-rows="1" :selected-rows="tableData.selectedRows" :expanded-rows="tableData.expandedRows" :sort-function="customSortFunction"
-      @row-expand="expandRowClickHandler" class="tw:text-xs"
-      fixed-headers expandable-rows>
+      :selectable-rows="1" :selected-rows="tableData.selectedRows" :expanded-rows="tableData.expandedRows"
+      :sort-function="customSortFunction" @row-expand="expandRowClickHandler" class="tw:text-xs" fixed-headers
+      expandable-rows>
       <template #item-cell.isSelected="{ item }">
         <w-checkbox :model-value="item.isSelected" @update:model-value="(value) => toggleItemSelection(item, value)" />
       </template>
@@ -269,8 +283,7 @@ const updatePagination = function () {
     tableData.value.pagination.pagesCount - 1
 }
 
-const customSortFunction = function(sortKeys) {
-
+const customSortFunction = function (sortKeys) {
   resetHighlight()
 
   let sortKey = sortKeys[0] ? sortKeys[0] : ''
@@ -349,7 +362,6 @@ let openReadDetails = function (readItem) {
  * @param readInfo - Object containing the read name (qname) and record indices to identify the specific mapping record.
  */
 const selectAndScrollToRead = async function (readInfo) {
-
   resetHighlight()
 
   const targetReadIndex = filteredReads.value.findIndex((item) => item.qname === readInfo.qname)
@@ -381,7 +393,7 @@ const selectAndScrollToRead = async function (readInfo) {
 
   tableData.value.selectedRowsInExpanded = [targetRecord._uid]
 
-  console.log("scrolled to record:", targetRecord)
+  console.log('scrolled to record:', targetRecord)
 }
 
 const resetHighlight = function () {
@@ -522,6 +534,10 @@ const paginationColor = function (page) {
   if (page === tableData.value.pagination.page) {
     return 'tw:bg-[#234781] tw:text-white tw:border-[#234781]'
   }
+}
+
+const resetSummaryTableSpecificFilters = function () {
+  DataService.resetSummaryTableSpecificFilters()
 }
 
 watch(

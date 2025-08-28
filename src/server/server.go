@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 	"time"
 
@@ -163,11 +162,6 @@ func (s *Server) InitMappingDataHandler(fastaFilePath string, fastaIndexFilePath
 	s.Handler = handler
 }
 
-type UpsetElement struct {
-	Name string   `json:"name"`
-	Sets []string `json:"sets"`
-}
-
 func (s *Server) upsetData(w http.ResponseWriter, r *http.Request) {
 
 	onlyTargetRegion := false
@@ -183,63 +177,10 @@ func (s *Server) upsetData(w http.ResponseWriter, r *http.Request) {
 		useCigar = true
 	}
 
-	data := make([]UpsetElement, 0)
-
-	for _, qnameClust := range s.Handler.QnameCluster {
-
-		set := make(map[string][]string)
-
-		for _, c1 := range qnameClust.ClusterR1.Records {
-
-			// skip reads that do not map to the target region of flag is set
-			if onlyTargetRegion && (c1.Rname != config.GetTargetContig() ||
-				!c1.MappedGenome.Overlaps(config.GetTargetStart(), config.GetTargetEnd())) {
-				continue
-			}
-
-			readKey := getReadKey(c1, "R1", usePosition, useCigar)
-
-			if _, exists := set[readKey]; !exists {
-				set[readKey] = make([]string, 0)
-			}
-			set[readKey] = append(set[readKey], s.Handler.MapperInfos[c1.MapperIndex].MapperName)
-		}
-		for _, c2 := range qnameClust.ClusterR2.Records {
-			// skip reads that do not map to the target region of flag is set
-			if onlyTargetRegion && (c2.Rname != config.GetTargetContig() ||
-				!c2.MappedGenome.Overlaps(config.GetTargetStart(), config.GetTargetEnd())) {
-				continue
-			}
-
-			readKey := getReadKey(c2, "R2", usePosition, useCigar)
-
-			if _, exists := set[readKey]; !exists {
-				set[readKey] = make([]string, 0)
-			}
-			set[readKey] = append(set[readKey], s.Handler.MapperInfos[c2.MapperIndex].MapperName)
-		}
-
-		for qname, mapperNames := range set {
-			data = append(data, UpsetElement{
-				Name: qname,
-				Sets: mapperNames,
-			})
-		}
-	}
+	data := s.Handler.GetUpsetData(onlyTargetRegion, usePosition, useCigar)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(data)
-}
-
-func getReadKey(record *EnhancedRecord, prefix string, usePosition bool, useCigar bool) string {
-	readKey := prefix + "::" + record.Qname
-	if usePosition {
-		readKey += "::" + strconv.Itoa(record.Pos)
-	}
-	if useCigar {
-		readKey += "::" + record.UniformCigar()
-	}
-	return readKey
 }
 
 type UpsetElementNamesDto struct {

@@ -10,6 +10,13 @@ export const useDataStore = defineStore('data', {
 			hideDiscardedRecords: false,
 			hideNonInProgressRecords: false,
 		},
+		summaryTableSpecificFilters: {
+			qnames: new Set(),
+			name: '',
+			targetRegion: false,
+			contigPos: false,
+			cigar: false,
+		},
 		summaryTableSortKey: '',
 		igvSummary: {
 			div: null,
@@ -41,18 +48,33 @@ export const useDataStore = defineStore('data', {
 						this.summaryTableFilters.hideAcceptedRecords &&
 						item.isAcceptedR1 &&
 						item.isAcceptedR2
-					)
+					) {
 						return false
-					if (this.summaryTableFilters.hideDiscardedRecords && item.isDiscarded)
+					}
+					if (
+						this.summaryTableFilters.hideDiscardedRecords &&
+						item.isDiscarded
+					) {
 						return false
+					}
 					if (
 						this.summaryTableFilters.hideNonInProgressRecords &&
 						!(
 							(item.isAcceptedR1 || item.isAcceptedR2) &&
 							!(item.isAcceptedR1 && item.isAcceptedR2)
 						)
-					)
+					) {
 						return false
+					}
+
+					if (
+						this.summaryTableSpecificFilters.qnames &&
+						this.summaryTableSpecificFilters.qnames.size > 0 &&
+						!this.summaryTableSpecificFilters.qnames.has(item.qname)
+					) {
+						return false
+					}
+
 					return true
 				})
 				.sort((a, b) => {
@@ -98,16 +120,24 @@ export const useDataStore = defineStore('data', {
 			return state.reads.length
 		},
 		numReadsAccepted: (state) => {
-			return state.reads.filter((read) => read.isAcceptedR1 && read.isAcceptedR2).length
+			return state.reads.filter(
+				(read) => read.isAcceptedR1 && read.isAcceptedR2
+			).length
 		},
 		numReadsDiscarded: (state) => {
 			return state.reads.filter((read) => read.isDiscarded).length
 		},
 		numReadsInProgress: (state) => {
-			return state.reads.filter((read) => !(read.isAcceptedR1 && read.isAcceptedR2) && (read.isAcceptedR1 || read.isAcceptedR2)).length
+			return state.reads.filter(
+				(read) =>
+					!(read.isAcceptedR1 && read.isAcceptedR2) &&
+					(read.isAcceptedR1 || read.isAcceptedR2)
+			).length
 		},
 		numReadsTodo: (state) => {
-			return state.numReadsTotal - (state.numReadsAccepted + state.numReadsDiscarded)
+			return (
+				state.numReadsTotal - (state.numReadsAccepted + state.numReadsDiscarded)
+			)
 		},
 
 		getSummaryTableFilters: (state) => {
@@ -122,6 +152,36 @@ export const useDataStore = defineStore('data', {
 		isSummaryTableFilterHideNonInProgressRecords: (state) => {
 			return state.summaryTableFilters.hideNonInProgressRecords
 		},
+
+		getSummaryTableSpecificFilters: (state) => {
+			return state.summaryTableSpecificFilters
+		},
+
+		getSummaryTableSpecificFilterSetName: (state) => {
+			return state.summaryTableSpecificFilters.name
+		},
+		getSummaryTableSpecificFilterAsString: (state) => {
+			if (
+				!state.summaryTableSpecificFilters.qnames ||
+				state.summaryTableSpecificFilters.qnames.size === 0
+			) {
+				return undefined
+			}
+
+			let s = 'Read Name'
+			if (state.summaryTableSpecificFilters.contigPos) {
+				s += ' and Contig + Position'
+			}
+			if (state.summaryTableSpecificFilters.cigar) {
+				s += ' and CIGAR'
+			}
+			if (state.summaryTableSpecificFilters.targetRegion) {
+				s += ' only in Target Region'
+			}
+
+			return s
+		},
+
 		getIgvSummary: (state) => {
 			return state.igvSummary
 		},
@@ -174,6 +234,27 @@ export const useDataStore = defineStore('data', {
 		setSummaryTableFilterHideNonInProgressRecords(value) {
 			this.summaryTableFilters.hideNonInProgressRecords = value
 		},
+		resetSummaryTableFilters() {
+			this.summaryTableFilters.hideAcceptedRecords = false
+			this.summaryTableFilters.hideDiscardedRecords = false
+			this.summaryTableFilters.hideNonInProgressRecords = false
+		},
+
+		setSummaryTableSpecificFilters(name, targetRegion, contigPos, cigar, qnames) {
+			this.summaryTableSpecificFilters.name = name
+			this.summaryTableSpecificFilters.targetRegion = targetRegion
+			this.summaryTableSpecificFilters.contigPos = contigPos
+			this.summaryTableSpecificFilters.cigar = cigar
+			this.summaryTableSpecificFilters.qnames = new Set(qnames)
+		},
+		resetSummaryTableSpecificFilters() {
+			this.summaryTableSpecificFilters.name = ''
+			this.summaryTableSpecificFilters.targetRegion = false
+			this.summaryTableSpecificFilters.contigPos = false
+			this.summaryTableSpecificFilters.cigar = false
+			this.summaryTableSpecificFilters.qnames = new Set()
+		},
+
 		setSummaryTableSortKey(sortKey) {
 			this.summaryTableSortKey = sortKey
 		},
