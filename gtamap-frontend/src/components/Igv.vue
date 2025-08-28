@@ -42,11 +42,11 @@
 
   const getIgvConfig = function () {
     if (!props.url && !props.config) {
-      console.error('IGV prop url or config is required')
+      // console.error('IGV prop url or config is required')
       return
     }
     if (props.url && props.config) {
-      console.error('IGV prop url and config cannot be used together')
+      // console.error('IGV prop url and config cannot be used together')
       return
     }
 
