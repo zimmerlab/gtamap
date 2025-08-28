@@ -467,6 +467,18 @@ func serializePath(path []Region) string {
 	return sb.String()
 }
 
+func hashPath(path []Region) uint64 {
+	var h uint64 = 14695981039346656037
+	const prime uint64 = 1099511628211
+	for _, r := range path {
+		h ^= uint64(r.Start)
+		h *= prime
+		h ^= uint64(r.End)
+		h *= prime
+	}
+	return h
+}
+
 type TranscriptomeGraph struct {
 	Length      int
 	IntronNodes []*TranscriptomeNode
@@ -594,7 +606,8 @@ func (rs *RegionSet) SpansIntron(region Region) []*Intron {
 
 func (t *TranscriptomeGraph) FindPathsRight(startPos int, length int) [][]Region {
 	var results [][]Region
-	seen := make(map[string]bool)
+	// seen := make(map[string]bool)
+	seen := make(map[uint64]bool)
 
 	foundStartNode := false
 	for _, startNode := range t.ExonNodes {
@@ -623,7 +636,7 @@ func (t *TranscriptomeGraph) FindPathsRight(startPos int, length int) [][]Region
 
 func (t *TranscriptomeGraph) FindPathsLeft(startPos int, length int) [][]Region {
 	var results [][]Region
-	seen := make(map[string]bool)
+	seen := make(map[uint64]bool)
 
 	foundStartNode := false
 	for _, startNode := range t.ExonNodes {
@@ -657,7 +670,7 @@ func LengthOfPath(regions []Region) int {
 	return i
 }
 
-func (t *TranscriptomeGraph) dfsRight(node *TranscriptomeNode, path []Region, length int, results *[][]Region, start int, seen map[string]bool) {
+func (t *TranscriptomeGraph) dfsRight(node *TranscriptomeNode, path []Region, length int, results *[][]Region, start int, seen map[uint64]bool) {
 	if node.IsIntron == 1 {
 		for _, next := range node.Next {
 			t.dfsRight(next, path, length, results, next.Start, seen)
@@ -669,7 +682,8 @@ func (t *TranscriptomeGraph) dfsRight(node *TranscriptomeNode, path []Region, le
 	lengthOfCurrentPath := LengthOfPath(path)
 
 	if lengthOfCurrentPath == length {
-		key := serializePath(path)
+		// key := serializePath(path)
+		key := hashPath(path)
 		if !seen[key] {
 			*results = append(*results, append([]Region{}, path...))
 			seen[key] = true
@@ -680,7 +694,8 @@ func (t *TranscriptomeGraph) dfsRight(node *TranscriptomeNode, path []Region, le
 			Start: start,
 			End:   start + length - lengthOfCurrentPath,
 		})
-		key := serializePath(clipped)
+		// key := serializePath(clipped)
+		key := hashPath(clipped)
 		if !seen[key] {
 			*results = append(*results, clipped)
 			seen[key] = true
@@ -703,7 +718,7 @@ func (t *TranscriptomeGraph) dfsRight(node *TranscriptomeNode, path []Region, le
 	}
 }
 
-func (t *TranscriptomeGraph) dfsLeft(node *TranscriptomeNode, path []Region, length int, results *[][]Region, end int, seen map[string]bool) {
+func (t *TranscriptomeGraph) dfsLeft(node *TranscriptomeNode, path []Region, length int, results *[][]Region, end int, seen map[uint64]bool) {
 	if node.IsIntron == 1 {
 		for _, prev := range node.Prev {
 			t.dfsLeft(prev, path, length, results, prev.Stop, seen)
@@ -715,7 +730,8 @@ func (t *TranscriptomeGraph) dfsLeft(node *TranscriptomeNode, path []Region, len
 	lengthOfCurrentPath := LengthOfPath(path)
 
 	if lengthOfCurrentPath == length {
-		key := serializePath(path)
+		// key := serializePath(path)
+		key := hashPath(path)
 		if !seen[key] {
 			*results = append(*results, append([]Region{}, path...))
 			seen[key] = true
@@ -726,7 +742,8 @@ func (t *TranscriptomeGraph) dfsLeft(node *TranscriptomeNode, path []Region, len
 			Start: end + lengthOfCurrentPath - length,
 			End:   end,
 		})
-		key := serializePath(clipped)
+		// key := serializePath(clipped)
+		key := hashPath(clipped)
 		if !seen[key] {
 			*results = append(*results, clipped)
 			seen[key] = true
