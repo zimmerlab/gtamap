@@ -19,7 +19,6 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	timerChannel chan<- *timer.Timer,
 	progressChan chan<- Event,
 	progressStats *ProgressStats,
-	// paralogMappingChan chan<- *mapperutils.ReadPairMatchResults,
 ) {
 	keepFw := GlobalFilter(readPair.ReadR1.Sequence, genomeIndex)
 	keepRw := GlobalFilter(readPair.ReadR2.Sequence, genomeIndex)
