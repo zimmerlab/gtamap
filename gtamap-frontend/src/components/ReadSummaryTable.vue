@@ -31,8 +31,8 @@
     </div>
 
     <w-table loading="false" :headers="tableData.headers" :items="filteredReads" :pagination="tableData.pagination"
-      :selectable-rows="1" :selected-rows="tableData.selectedRows" :expanded-rows="tableData.expandedRows"
-      :sort="tableData.sortKey" @row-expand="expandRowClickHandler" @update:sort="handleSort" class="tw:text-xs"
+      :selectable-rows="1" :selected-rows="tableData.selectedRows" :expanded-rows="tableData.expandedRows" :sort-function="customSortFunction"
+      @row-expand="expandRowClickHandler" class="tw:text-xs"
       fixed-headers expandable-rows>
       <template #item-cell.isSelected="{ item }">
         <w-checkbox :model-value="item.isSelected" @update:model-value="(value) => toggleItemSelection(item, value)" />
@@ -142,7 +142,9 @@
           </div>
 
           <div class="tw:flex tw:flex-1 tw:justify-end">
-            <div class="tw:ml-1">showing {{ range }} of {{ total }} reads (total {{ allReadsCount }})</div>
+            <div class="tw:ml-1">
+              showing {{ range }} of {{ total }} reads (total {{ allReadsCount }})
+            </div>
           </div>
         </div>
       </template>
@@ -174,7 +176,7 @@ let allReadsCount = computed(() => dataStore.getReads.length)
 
 const tableData = ref({
   loading: true,
-  sortKey: '+qname',
+  // sortKey: '+qname',
   headers: [
     { label: 'Select', key: 'isSelected', sortable: false, type: 'boolean' },
     { label: '', key: 'actions', sortable: false },
@@ -267,9 +269,12 @@ const updatePagination = function () {
     tableData.value.pagination.pagesCount - 1
 }
 
-const handleSort = function (sortInfo) {
-  tableData.value.sortKey = sortInfo[0] ? sortInfo[0] : ''
-  dataStore.setSummaryTableSortKey(tableData.value.sortKey)
+const customSortFunction = function(sortKeys) {
+
+  resetHighlight()
+
+  const sortKey = sortKeys[0] ? sortKeys[0] : ''
+  dataStore.setSummaryTableSortKey(sortKey)
 }
 
 // content of the inner table (mapping location records per qname)
@@ -332,46 +337,52 @@ let openReadDetails = function (readItem) {
   emit('open-read-details', readItem)
 }
 
+/**
+ * Scroll to a record in the summary table, expand its parent qname row and highlight both.
+ *
+ * @param readInfo - Object containing the read name (qname) and record indices to identify the specific mapping record.
+ */
 const selectAndScrollToRead = async function (readInfo) {
-  const targetRead = summaryTableData.value.items.find((item) => item.qname === readInfo.qname)
-  if (!targetRead) {
+
+  resetHighlight()
+
+  const targetReadIndex = filteredReads.value.findIndex((item) => item.qname === readInfo.qname)
+
+  if (!targetReadIndex || targetReadIndex === -1) {
     console.warn('Read not found in the table data')
     return
   }
 
-  pagination.value.page = Math.floor(targetRead._uid / pagination.value.itemsPerPage) + 1
+  const targetPage = Math.floor(targetReadIndex / tableData.value.pagination.itemsPerPage) + 1
+
+  goToPageCustom(targetPage)
+
+  const targetRead = filteredReads.value[targetReadIndex]
 
   tableData.value.selectedRows = [targetRead._uid]
-
   expandRow(targetRead)
+
   await nextTick()
 
-  let selectedMappingRow = undefined
+  const targetRecord = targetRead.locations.find((record) =>
+    record.readIndices.includes(readInfo.recordIndices[0])
+  )
 
-  for (const mapping of readMappingTableData.value.items) {
-    for (let i = 0; i < mapping.mappedBy.length; i++) {
-      for (let j = 0; j < readInfo.mapperNames.length; j++) {
-        if (
-          mapping.mappedBy[i] === readInfo.mapperNames[j] &&
-          mapping.readIndices[i] === readInfo.samIndices[j]
-        ) {
-          if (selectedMappingRow !== undefined) {
-            console.warn('Multiple mappings found for the selected read, selecting the first one')
-            break
-          }
-          selectedMappingRow = mapping
-          break
-        }
-      }
-    }
-  }
-
-  if (!selectedMappingRow) {
-    console.warn('No matching mapping found for the selected read')
+  if (!targetRecord) {
+    console.warn('Mapping record not found in the expanded table data')
     return
   }
 
-  tableData.value.selectedRowsInExpanded = [selectedMappingRow._uid]
+  tableData.value.selectedRowsInExpanded = [targetRecord._uid]
+
+  console.log("scrolled to record:", targetRecord)
+}
+
+const resetHighlight = function () {
+  tableData.value.selectedRows = []
+  tableData.value.selectedRowsInExpanded = []
+  tableData.value.expandedRows = []
+  readMappingTableData.value.items = []
 }
 
 const isItemSelected = function (item) {
@@ -495,6 +506,8 @@ const resetSelected = function () {
 }
 
 const goToPageCustom = function (page) {
+  resetHighlight()
+
   tableData.value.pagination.page = page
   updatePagination()
 }
@@ -507,14 +520,17 @@ const paginationColor = function (page) {
 
 watch(
   filteredReads,
-  () => {
+  (newReads, oldReads) => {
     updatePagination()
+    if (newReads && oldReads && newReads.length !== oldReads.length) {
+      // emit('summary-table-update', newReads.length)
+      resetHighlight()
+    }
   },
   { immediate: true }
 )
 
 defineExpose({ selectAndScrollToRead })
-
 </script>
 
 <style scoped></style>

@@ -125,8 +125,6 @@
        * @param readInfo
        */
       const handleReadClick = function (readInfo) {
-        console.log('handle read')
-        console.log(readInfo)
         readSummaryTableRef.value.selectAndScrollToRead(readInfo)
       }
 
