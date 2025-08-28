@@ -54,6 +54,10 @@ func (s *Server) InitRoutes() {
 	api.HandleFunc("/mapperMultimappingParallel", s.mapperMultimappingParallel).Methods("GET")
 	api.HandleFunc("/mapperDistances", s.mapperDistances).Methods("GET")
 
+	// GENERAL
+	general := api.PathPrefix("/general").Subrouter()
+	general.HandleFunc("/info", s.getGeneralInfo).Methods("GET")
+
 	// SUMMARY
 	summary := api.PathPrefix("/summary").Subrouter()
 	summary.HandleFunc("/table", s.getReadSummaryTable).Methods("GET")
@@ -1617,4 +1621,12 @@ func (s *Server) serveDetailsViewerBamIndex(w http.ResponseWriter, r *http.Reque
 
 	w.Header().Set("Content-Type", "plain/text")
 	w.Write([]byte(bamIndex))
+}
+
+func (s *Server) getGeneralInfo(w http.ResponseWriter, r *http.Request) {
+
+	data := s.Handler.GetGeneralInfo()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(data)
 }
