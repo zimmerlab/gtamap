@@ -61,7 +61,7 @@ var (
 	IntronClusterRepairWindow int = 10
 )
 
-var MaxRepeatMM int = 4
+var MaxMismatchPercentageRepeat uint8 = 5
 
 // SAM options
 var (
