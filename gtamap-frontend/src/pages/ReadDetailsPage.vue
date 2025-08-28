@@ -281,14 +281,14 @@
 
     </div>
 
+    {{ igvRefs }}
+
   </div>
 </template>
 
 <script>
-import { ref, onMounted, inject, nextTick } from 'vue'
+import { ref, onMounted, inject, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-
-import igv from '../js/igv/dist/igv.esm.js'
 
 import Igv from '../components/Igv.vue'
 import CustomTag from '../components/CustomTag.vue'
@@ -303,6 +303,16 @@ export default {
     const ApiService = inject('http')
 
     let readId = ref('state:read-id-loading')
+
+    const initPage = function() {
+      tableItems.value = []
+      tableData.value.loading = true
+      readGroups.value = []
+
+      getReadIdFromQuery()
+      getReadDetails()
+      getViewerData()
+    }
 
     const getReadIdFromQuery = function () {
       if (route.query.readId) {
@@ -564,12 +574,6 @@ export default {
       })
     }
 
-    onMounted(() => {
-      getReadIdFromQuery()
-      getReadDetails()
-      getViewerData()
-    })
-
     const highlightEquivalentRows = function (contigCigar, item, group, groupIndex) {
 
       // find all rows with matching data-contig-cigar attribute
@@ -658,6 +662,19 @@ export default {
     const discardRead = function () {
       console.log("discard this")
     }
+
+    watch(() => route.query.readId, (newReadId) => {
+      if (newReadId && newReadId !== readId.value) {
+        initPage()
+      }
+    }, { immediate: false })
+
+    onMounted(() => {
+      initPage()
+      // getReadIdFromQuery()
+      // getReadDetails()
+      // getViewerData()
+    })
 
     return {
       readId,
