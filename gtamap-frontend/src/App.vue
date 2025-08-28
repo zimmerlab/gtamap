@@ -15,11 +15,15 @@
         </div>
 
         <!-- Center section -->
-        <div class="tw:flex tw:items-center tw:text-sm tw:bg-gray-100 tw:px-4 tw:py-1 tw:rounded">
-          <span class="tw:mr-4">Total: {{ progressStore.getReadsTotal }}</span>
-          <span class="tw:mr-4 tw:text-green-600">Accepted: {{ progressStore.getReadsAccepted }}</span>
-          <span class="tw:text-blue-600">Todo: {{ progressStore.getReadsTodo }}</span>
+        <div v-if="dataStore.isProgressLoaded"
+          class="tw:flex tw:items-center tw:text-sm tw:bg-gray-100 tw:px-4 tw:py-1 tw:rounded">
+          <span class="tw:mr-4">Total: {{ dataStore.numReadsTotal }}</span>
+          <span class="tw:mr-4 tw:text-green-600">Accepted: {{ dataStore.numReadsAccepted }}</span>
+          <span class="tw:mr-4 tw:text-yellow-600">In Progress: {{ dataStore.numReadsInProgress }}</span>
+          <span class="tw:mr-4 tw:text-red-600">Discarded: {{ dataStore.numReadsDiscarded }}</span>
+          <span class="tw:text-blue-600">Todo: {{ dataStore.numReadsTodo }}</span>
         </div>
+        <w-progress v-else class="tw:m-2 tw:p-3 tw:flex tw:items-center" circle></w-progress>
 
         <!-- Right section -->
         <div class="tw:flex tw:items-center">
@@ -43,13 +47,11 @@
 <script>
 import { ref, inject, onMounted } from 'vue'
 import { useDataStore } from './store/data.store'
-import { useProgressStore } from './store/progress.store'
 
 export default {
   name: 'App',
   setup() {
     const dataStore = useDataStore()
-    const progressStore = useProgressStore()
 
     const DataService = inject('data')
     const ApiService = inject('http')
@@ -96,53 +98,12 @@ export default {
       }
     }
 
-    const fetchReads = function () {
-      ApiService.get("/api/summary/table")
-        .then((response) => {
-          if (response.status === 200) {
-
-            // set parents
-            for (const item of response.data) {
-              item.isSelected = false
-              for (const l of item.locations) {
-                l.parent = item
-              }
-            }
-
-            dataStore.setReads(response.data)
-
-            // summaryTableData.value.items = response.data
-            //
-            // applyFilters()
-            //
-            // pagination.value.total = summaryTableData.value.filteredItems.length
-            // pagination.value.itemsPerPage = 15
-            //
-            // // add parent information to each location
-            // for (const item of summaryTableData.value.items) {
-            //   item.isSelected = false
-            //   for (const l of item.locations) {
-            //     l.parent = item
-            //   }
-            // }
-            //
-            // customSort()
-          } else {
-            console.error('Failed to fetch read summary table data')
-          }
-
-          // tableData.value.loading = false
-        })
-        .catch((err) => {
-          console.log(err)
-        })
-    }
-
     onMounted(() => {
+      // DataService.fetchGeneralInfo()
       DataService.fetchReads()
     })
 
-    return { routes, progressStore, downloadAcceptedBam }
+    return { routes, dataStore, downloadAcceptedBam }
   },
 }
 </script>

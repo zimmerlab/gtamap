@@ -1,12 +1,26 @@
 import { useDataStore } from '@/store/data.store'
+import { useProgressStore } from '@/store/progress.store'
 
 const DataService = {
 	ApiService: undefined,
 	DataStore: undefined,
+	ProgressStore: undefined,
 
 	init: function(ApiService) {
 		this.ApiService = ApiService
 		this.DataStore = useDataStore()
+		this.ProgressStore = useProgressStore()
+	},
+
+	fetchGeneralInfo: async function() {
+		const response = await this.ApiService.get('/api/general/info')
+		if (!response || response.status !== 200 || !response.data) {
+			console.error('Error fetching general info')
+			console.error(response)
+			return
+		}
+
+		console.log(response.data)
 	},
 
 	fetchReads: async function() {

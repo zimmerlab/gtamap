@@ -90,6 +90,26 @@ export const useDataStore = defineStore('data', {
 					}
 				})
 		},
+
+		isProgressLoaded: (state) => {
+			return state.reads && state.reads.length > 0
+		},
+		numReadsTotal: (state) => {
+			return state.reads.length
+		},
+		numReadsAccepted: (state) => {
+			return state.reads.filter((read) => read.isAcceptedR1 && read.isAcceptedR2).length
+		},
+		numReadsDiscarded: (state) => {
+			return state.reads.filter((read) => read.isDiscarded).length
+		},
+		numReadsInProgress: (state) => {
+			return state.reads.filter((read) => !(read.isAcceptedR1 && read.isAcceptedR2) && (read.isAcceptedR1 || read.isAcceptedR2)).length
+		},
+		numReadsTodo: (state) => {
+			return state.numReadsTotal - (state.numReadsAccepted + state.numReadsDiscarded)
+		},
+
 		getSummaryTableFilters: (state) => {
 			return state.summaryTableFilters
 		},
