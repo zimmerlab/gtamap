@@ -142,7 +142,7 @@
           </div>
 
           <div class="tw:flex tw:flex-1 tw:justify-end">
-            <div class="tw:ml-1">showing {{ range }} of {{ total }} reads (total {{ total }})</div>
+            <div class="tw:ml-1">showing {{ range }} of {{ total }} reads (total {{ allReadsCount }})</div>
           </div>
         </div>
       </template>
@@ -170,20 +170,7 @@ const ApiService = inject('http')
 const DataService = inject('data')
 
 let filteredReads = computed(() => dataStore.getSummaryTableReads)
-
-// let pagination = computed(() => {
-//   return {
-//     total: filteredReads.value.length,
-//     itemsPerPage: 30,
-//     itemsPerPageOptions: [{ value: 15 }, { value: 30 }],
-//   }
-// })
-
-// const pagination = ref({
-//   total: 0,
-//   itemsPerPage: 30,
-//   itemsPerPageOptions: [{ value: 15 }, { value: 30 }],
-// })
+let allReadsCount = computed(() => dataStore.getReads.length)
 
 const tableData = ref({
   loading: true,
@@ -225,7 +212,6 @@ const tableData = ref({
     itemsPerPage: 15,
     page: 1,
     pagesCount: 1,
-    // itemsPerPageOptions: [{ value: 15 }, { value: 30 }],
     showLeft: false,
     showRight: false,
     first: 1,
@@ -284,45 +270,7 @@ const updatePagination = function () {
 const handleSort = function (sortInfo) {
   tableData.value.sortKey = sortInfo[0] ? sortInfo[0] : ''
   dataStore.setSummaryTableSortKey(tableData.value.sortKey)
-  // customSort()
 }
-
-// const customSort = function () {
-//   const items = summaryTableData.value.items
-//
-//   if (!tableData.value.sortKey || tableData.value.sortKey === '') {
-//     return items
-//   }
-//
-//   const desc = tableData.value.sortKey[0] === '-'
-//   const key = tableData.value.sortKey.slice(1)
-//
-//   if (!key) {
-//     return items
-//   }
-//
-//   const sortLikeNumber = function (a, b) {
-//     return a[key] < b[key] ? -1 : a[key] > b[key] ? 1 : 0
-//   }
-//
-//   const sortLikeString = function (a, b) {
-//     return a[key].localeCompare(b[key])
-//   }
-//
-//   const isNumber = tableData.value.headers.some((header) => {
-//     return header.key === key && header.type === 'number'
-//   })
-//
-//   items.sort((a, b) => {
-//     if (isNumber) {
-//       return sortLikeNumber(a, b) * (desc ? -1 : 1)
-//     } else {
-//       return sortLikeString(a, b) * (desc ? -1 : 1)
-//     }
-//   })
-//
-//   return items
-// }
 
 // content of the inner table (mapping location records per qname)
 const readMappingTableData = ref({ items: [] })
@@ -332,7 +280,7 @@ const filterHideAcceptedRecords = computed({
   get() {
     return dataStore.isSummaryTableHideAcceptedRecords
   },
-  set(value) {
+  set() {
     DataService.toggleSummaryTableFiltersHideAcceptedRecords()
   },
 })
@@ -341,8 +289,7 @@ const filterHideDiscardedRecords = computed({
   get() {
     return dataStore.isSummaryTableHideDiscardedRecords
   },
-  set(value) {
-    // dataStore.toggleSummaryTableFilterHideDiscardedRecords()
+  set() {
     DataService.toggleSummaryTableFiltersHideDiscardedRecords()
   },
 })
@@ -351,38 +298,10 @@ const filterHideNonInProgressRecords = computed({
   get() {
     return dataStore.isSummaryTableHideNonInProgressRecords
   },
-  set(value) {
-    // dataStore.toggleSummaryTableFilterHideNonInProgressRecords()
+  set() {
     DataService.toggleSummaryTableFiltersHideNonInProgressRecords()
   },
 })
-
-const applyFilters = function () {
-  // let items = summaryTableData.value.items
-  // let items = dataStore.getReads()
-  //
-  // if (filterOptions.value.hideAcceptedRecords) {
-  //   items = items.filter((item) => !(item.isAcceptedR1 && item.isAcceptedR2))
-  // }
-  // if (filterOptions.value.hideDiscardedRecords) {
-  //   items = items.filter((item) => !item.isDiscarded)
-  // }
-  // if (filterOptions.value.hideNonInProgressRecords) {
-  //   items = items.filter(
-  //     (item) =>
-  //       (item.isAcceptedR1 || item.isAcceptedR2) && !(item.isAcceptedR1 && item.isAcceptedR2)
-  //   )
-  // }
-  //
-  // // emit the table update only once the server was notified about the new filters
-  // updateSummaryFilters().then(() => {
-  //   emit('summary-table-update')
-  // })
-  //
-  // deselectRows()
-  //
-  // summaryTableData.value.filteredItems = items
-}
 
 const deselectRows = function () {
   tableData.value.selectedRows = []
@@ -408,14 +327,6 @@ const expandRow = function (rowItem) {
   tableData.value.expandedRows = [rowItem._uid]
   readMappingTableData.value.items = rowItem.locations.slice() || []
 }
-
-// const updateSummaryFilters = function () {
-//   return ApiService.post('/api/summary/filterUpdate', {
-//     hideAccepted: filterOptions.value.hideAcceptedRecords,
-//     hideDiscarded: filterOptions.value.hideDiscardedRecords,
-//     hideNonInProgress: filterOptions.value.hideNonInProgressRecords,
-//   })
-// }
 
 let openReadDetails = function (readItem) {
   emit('open-read-details', readItem)
@@ -475,61 +386,6 @@ const resetReads = function (reads) {
   DataService.resetReads(reads)
 }
 
-// const discardRead = function (item) {
-//   discardReads([item])
-// }
-//
-// const discardReads = function (items) {
-//   for (const item of items) {
-//     item.isDiscarded = true
-//     item.isAcceptedR1 = false
-//     item.isAcceptedR2 = false
-//     for (const l of item.locations) {
-//       l.isAccepted = false
-//     }
-//   }
-//
-//   const qnames = items.map((item) => item.qname).flat()
-//   ApiService.post('/api/summary/discardReads', {
-//     qnames: qnames,
-//   })
-//     .then((response) => {
-//       console.log(response)
-//     })
-//     .catch((err) => {
-//       console.error('Error discarding records:', err)
-//     })
-// }
-
-// const resetRead = function (item) {
-//   resetReads([item])
-// }
-//
-// const resetReads = function (items) {
-//   for (const item of items) {
-//     item.isDiscarded = false
-//     item.isAcceptedR1 = false
-//     item.isAcceptedR2 = false
-//
-//     for (const l of item.locations) {
-//       l.isAccepted = false
-//     }
-//   }
-//
-//   emit('accepted-table-update')
-//
-//   const qnames = items.map((item) => item.qname).flat()
-//   ApiService.post('/api/summary/resetReads', {
-//     qnames: qnames,
-//   })
-//     .then((response) => {
-//       console.log(response)
-//     })
-//     .catch((err) => {
-//       console.error('Error resetting discarded reads:', err)
-//     })
-// }
-
 const acceptReads = function (reads) {
   const records = reads.map((item) => item.locations).flat()
   acceptRecords(records)
@@ -541,32 +397,6 @@ const acceptRecord = function (record) {
 
 const acceptRecords = function (records) {
   DataService.acceptRecords(records)
-
-  // for (const r of records) {
-  //   r.parent.isDiscarded = false
-  //
-  //   r.isAccepted = true
-  //
-  //   if (r.pairType === 'first') {
-  //     r.parent.isAcceptedR1 = true
-  //   } else if (r.pairType === 'second') {
-  //     r.parent.isAcceptedR2 = true
-  //   }
-  // }
-  //
-  // emit('accepted-table-update')
-  //
-  // const recordIds = records.map((r) => r.readIndices).flat()
-  //
-  // ApiService.post('/api/summary/acceptRecords', {
-  //   recordIds: recordIds,
-  // })
-  //   .then((response) => {
-  //     console.log(response)
-  //   })
-  //   .catch((err) => {
-  //     console.error('Error accepting records:', err)
-  //   })
 }
 
 const unacceptRecord = function (record) {
@@ -685,8 +515,6 @@ watch(
 
 defineExpose({ selectAndScrollToRead })
 
-// onMounted(() => {
-// })
 </script>
 
 <style scoped></style>
