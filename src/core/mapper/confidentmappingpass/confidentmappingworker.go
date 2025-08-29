@@ -340,14 +340,19 @@ func getGapsPlusOrientation(sId int, cMapsPerSeq []*ConfidentTask, index *index.
 			minusStrandednessEvidence++
 		}
 
+		skippedGaps := 0
 		// iterate over the fw matches (pairwise) and check if there is a gap
 		for i := 0; i < len(confMap.ResultFw.MatchedGenome.Regions)-1; i++ {
 			lStop := confMap.ResultFw.MatchedGenome.Regions[i].End
 			rStart := confMap.ResultFw.MatchedGenome.Regions[i+1].Start
+			if lStop == rStart {
+				skippedGaps++
+				continue // no gap in genome, only in read
+			}
 
 			var knownSpliceSite bool = false
-			if config.IsOriginRNA {
-				knownSpliceSite = confMap.ResultFw.SpliceSitesInfo[i]
+			if config.IsOriginRNA && len(confMap.ResultFw.SpliceSitesInfo) != 0 {
+				knownSpliceSite = confMap.ResultFw.SpliceSitesInfo[i-skippedGaps]
 			}
 			if rStart > lStop {
 				if confMap.ResultFw.SequenceIndex%2 == 0 {
@@ -367,13 +372,19 @@ func getGapsPlusOrientation(sId int, cMapsPerSeq []*ConfidentTask, index *index.
 		}
 
 		// the reverse gaps get mirrored to match fw coords
+		skippedGaps = 0
 		for i := 0; i < len(confMap.ResultRv.MatchedGenome.Regions)-1; i++ {
 			lStop := confMap.ResultRv.MatchedGenome.Regions[i].End
 			rStart := confMap.ResultRv.MatchedGenome.Regions[i+1].Start
 
+			if lStop == rStart {
+				skippedGaps++
+				continue // no gap in genome, only in read
+			}
+
 			var knownSpliceSite bool = false
-			if config.IsOriginRNA {
-				knownSpliceSite = confMap.ResultRv.SpliceSitesInfo[i]
+			if config.IsOriginRNA && len(confMap.ResultRv.SpliceSitesInfo) != 0 {
+				knownSpliceSite = confMap.ResultRv.SpliceSitesInfo[i-skippedGaps]
 			}
 			if rStart > lStop {
 				if confMap.ResultRv.SequenceIndex%2 == 0 {
