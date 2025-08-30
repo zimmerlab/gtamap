@@ -554,8 +554,9 @@ type GenomeIndex struct {
 	KeywordMap      map[[10]byte][]*keywordtreebyte.Position
 	KeywordMapSmall map[[5]byte][]*keywordtreebyte.Position
 	// ParalogRegions  map[string]*GenomeIndex // additional index per target region of paralog regions
-	Blacklist     map[int]*datastructure.INTree  // interval tree used to store repeat regions. Tree at 0 -> for target region 0 etc...
-	RepeatRegions map[int][]datastructure.Bounds // interval tree used to store repeat regions. Tree at 0 -> for target region 0 etc...
+	// Blacklist        map[int]*datastructure.INTree  // interval tree used to store repeat regions. Tree at 0 -> for target region 0 etc...
+	// RepeatRegions    map[int][]datastructure.Bounds // interval tree used to store repeat regions. Tree at 0 -> for target region 0 etc...
+	ContigRepeatmask map[string]*ContigRepeatmask
 }
 
 func (i *GenomeIndex) AddKeywordToMap(keyword [10]byte, sequenceIndex uint8, position uint32) {
@@ -792,6 +793,8 @@ func (i *GenomeIndex) GetSequenceInfo(sequenceIndex int) *gtf.GeneBasic {
 	} else {
 		return i.SequenceInfo[sequenceIndex-1]
 	}
+	// TODO: might be more efficient
+	// return i.SequenceInfo[sequenceIndex+(sequenceIndex%2)]
 }
 
 func (i *GenomeIndex) GetSequenceContig(sequenceIndex int) string {
@@ -806,16 +809,24 @@ func (i *GenomeIndex) NumSequences() int {
 	return len(i.SequenceHeaders)
 }
 
-func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry, repeatMaskerFile *os.File) *GenomeIndex {
+func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry, repeatmaskFile *os.File) *GenomeIndex {
+
+	timerStart := time.Now()
+
 	index := GenomeIndex{
 		SequenceHeaders: make([]string, len(fastaEntries)),
 		SequenceInfo:    make([]*gtf.GeneBasic, len(fastaEntries)),
 		Sequences:       make([]*[]byte, len(fastaEntries)*2),
 		KeywordMap:      make(map[[10]byte][]*keywordtreebyte.Position, int(math.Pow(4, 10))),
 		KeywordMapSmall: make(map[[5]byte][]*keywordtreebyte.Position, int(math.Pow(4, 5))),
-		Blacklist:       make(map[int]*datastructure.INTree),
-		RepeatRegions:   make(map[int][]datastructure.Bounds),
+		// Blacklist:        make(map[int]*datastructure.INTree),
+		// RepeatRegions:    make(map[int][]datastructure.Bounds),
+		ContigRepeatmask: make(map[string]*ContigRepeatmask),
 	}
+
+	// key = contig, value = list of bounds (start+end of targets)
+	// used to build interval trees per contig to speed up repeatmasker loading
+	contigMapTargets := make(map[string][]datastructure.Bounds)
 
 	for i, entry := range fastaEntries {
 		sequence := entry.Sequence
@@ -832,31 +843,62 @@ func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry, repeatMaskerFile *o
 		index.Sequences[i*2] = &sequence
 		index.Sequences[i*2+1] = &sequenceRevComp
 
-		if repeatMaskerFile != nil {
-
-			logrus.WithFields(logrus.Fields{
-				"file": repeatMaskerFile.Name(),
-			}).Info("Using repeatmasker file")
-
-			tree, treeRv, repeats, repeatsRv, err := BuildBlacklistInTree(info.StartGenomic, info.EndGenomic, info.Contig, repeatMaskerFile)
-			logrus.Debugf("Loaded %d annotated repeats into index.\n", len(repeats))
-			if err != nil {
-				logrus.Fatal("Error loading balcklist into interval tree", err)
-				panic(err)
+		if repeatmaskFile != nil {
+			if _, exists := contigMapTargets[info.Contig]; !exists {
+				contigMapTargets[info.Contig] = make([]datastructure.Bounds, 0)
 			}
-			index.Blacklist[i*2] = tree
-			index.RepeatRegions[i*2] = repeats
-			index.Blacklist[i*2+1] = treeRv
-			index.RepeatRegions[i*2+1] = repeatsRv
-		} else {
-			logrus.Info("No repeatmasker file provided, repeat regions are not detected")
+			contigMapTargets[info.Contig] = append(
+				contigMapTargets[info.Contig],
+				&datastructure.RepeatRegion{
+					Lower: int(info.StartGenomic),
+					Upper: int(info.EndGenomic),
+				})
 		}
+
+		// if repeatMaskerFile != nil {
+		//
+		// 	logrus.WithFields(logrus.Fields{
+		// 		"file": repeatMaskerFile.Name(),
+		// 	}).Info("Using repeatmasker file")
+		//
+		// 	tree, treeRv, repeats, repeatsRv, err := BuildBlacklistInTree(info.StartGenomic, info.EndGenomic, info.Contig, repeatMaskerFile)
+		// 	logrus.Debugf("Loaded %d annotated repeats into index.\n", len(repeats))
+		// 	if err != nil {
+		// 		logrus.Fatal("Error loading balcklist into interval tree", err)
+		// 		panic(err)
+		// 	}
+		// 	index.Blacklist[i*2] = tree
+		// 	index.RepeatRegions[i*2] = repeats
+		// 	index.Blacklist[i*2+1] = treeRv
+		// 	index.RepeatRegions[i*2+1] = repeatsRv
+		// } else {
+		// 	logrus.Info("No repeatmasker file provided, repeat regions are not detected")
+		// }
+	}
+
+	if repeatmaskFile != nil {
+		// build interval trees (containing target regions) per contig
+		contigMapTargetTrees := make(map[string]*datastructure.INTree)
+		for contig, targets := range contigMapTargets {
+			contigMapTargetTrees[contig] = datastructure.NewINTree(targets)
+		}
+
+		// load repeatmasker file and build contig repeatmask map for target regions
+		index.ContigRepeatmask = BuildContigRepeatmaskTrees(repeatmaskFile, contigMapTargetTrees)
+
+		logrus.Info("Loaded repeatmasker file")
+	} else {
+		logrus.Info("No repeatmasker file provided, repeat regions are not detected")
 	}
 
 	for i, seq := range index.Sequences {
 		index.AddSequenceToMap(seq, uint8(i))
 		index.AddSequenceToMapSmall(seq, uint8(i))
 	}
+
+	logrus.WithFields(logrus.Fields{
+		"duration": utils.FormatDuration(time.Since(timerStart)),
+	}).Info("Built index")
 
 	return &index
 }
@@ -960,7 +1002,7 @@ func BuildAndSerializeGenomeIndex(fastaFile *os.File, blackListFile *os.File, ou
 	WriteGenomeIndex(genomeIndex, outputFile)
 }
 
-func BuildBlacklistInTree(start, end uint32, contig string, blackListFile *os.File) (*datastructure.INTree, *datastructure.INTree, []datastructure.Bounds, []datastructure.Bounds, error) {
+func BuildBlacklistInTree(start uint32, end uint32, contig string, blackListFile *os.File) (*datastructure.INTree, *datastructure.INTree, []datastructure.Bounds, []datastructure.Bounds, error) {
 	repeatRegions := make([]datastructure.Bounds, 0)
 	repeatRegionsRev := make([]datastructure.Bounds, 0)
 	regionLength := end - start
@@ -992,17 +1034,97 @@ func BuildBlacklistInTree(start, end uint32, contig string, blackListFile *os.Fi
 		regionStartConv := uint32(regionStart)
 		regionEndConv := uint32(regionEnd)
 		if regionStartConv >= start && regionEndConv <= end {
-			repeatRegions = append(repeatRegions, &datastructure.RepeatRegion{Lower: float64(regionStartConv - start), Upper: float64(regionEndConv - start)})
-			repeatRegionsRev = append(repeatRegionsRev, &datastructure.RepeatRegion{Lower: float64(regionLength - (regionEndConv - start)), Upper: float64(regionLength - (regionStartConv - start))})
+			repeatRegions = append(repeatRegions, &datastructure.RepeatRegion{Lower: int(regionStartConv - start), Upper: int(regionEndConv - start)})
+			repeatRegionsRev = append(repeatRegionsRev, &datastructure.RepeatRegion{Lower: int(regionLength - (regionEndConv - start)), Upper: int(regionLength - (regionStartConv - start))})
 		}
 		if regionStartConv > end && regionEndConv > end {
+			// TODO: should repeatRegionsRev be reversed here too?
 			return datastructure.NewINTree(repeatRegions), datastructure.NewINTree(repeatRegionsRev), repeatRegions, repeatRegionsRev, nil
 		}
 
 	}
 
+	// TODO: why is this reversed here but not in early termination case above?
 	slices.Reverse(repeatRegionsRev)
 	return datastructure.NewINTree(repeatRegions), datastructure.NewINTree(repeatRegionsRev), repeatRegions, repeatRegionsRev, nil
+}
+
+type ContigRepeatmask struct {
+	Contig    string
+	TreeFw    *datastructure.INTree
+	TreeRv    *datastructure.INTree
+	RegionsFw []datastructure.Bounds
+	RegionsRv []datastructure.Bounds
+}
+
+func BuildContigRepeatmaskTrees(repeatmaskFile *os.File, targetTrees map[string]*datastructure.INTree) map[string]*ContigRepeatmask {
+
+	scanner, err := dataloader.OpenFileScanner(repeatmaskFile)
+	if err != nil {
+		logrus.Fatal(err)
+	}
+
+	contigMap := make(map[string]*ContigRepeatmask)
+
+	for scanner.Scan() {
+
+		line := scanner.Text()
+		lineParts := strings.Fields(line)
+
+		if len(lineParts) < 7 {
+			continue
+		}
+
+		chr := lineParts[4]
+		if strings.Contains(chr, "chr") {
+			chr = strings.Trim(chr, "chr")
+		}
+
+		if targetTrees != nil {
+			if _, exists := targetTrees[chr]; !exists {
+				continue
+			}
+		}
+
+		regionStart, errStart := strconv.ParseUint(lineParts[5], 10, 32)
+		if errStart != nil {
+			// logrus.Fatal(errStart)
+			continue
+		}
+		regionEnd, errEnd := strconv.ParseUint(lineParts[6], 10, 32)
+		if errEnd != nil {
+			// logrus.Fatal(errEnd)
+			continue
+		}
+
+		regionStartInt := int(regionStart)
+		regionEndInt := int(regionEnd)
+
+		targetTree := targetTrees[chr]
+
+		if len(targetTree.Including(regionStartInt)) == 0 {
+			continue
+		}
+
+		if _, exists := contigMap[chr]; !exists {
+			contigMap[chr] = &ContigRepeatmask{
+				Contig:    chr,
+				RegionsFw: make([]datastructure.Bounds, 0),
+			}
+		}
+
+		contigMap[chr].RegionsFw = append(contigMap[chr].RegionsFw,
+			&datastructure.RepeatRegion{
+				Lower: regionStartInt,
+				Upper: regionEndInt,
+			})
+	}
+
+	for _, contigRepeatmask := range contigMap {
+		contigRepeatmask.TreeFw = datastructure.NewINTree(contigRepeatmask.RegionsFw)
+	}
+
+	return contigMap
 }
 
 func extractFieldFromBlacklist(field int, line string) string {

@@ -898,17 +898,48 @@ func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.Genome
 	return finalResults
 }
 
+// func isPartOfRepeat(res *mapperutils.ReadMatchResult, genomeIndex *index.GenomeIndex) bool {
+// 	if len(genomeIndex.Blacklist) == 0 {
+// 		return false // no blacklist provided
+// 	}
+//
+// 	for _, genomicRegion := range res.MatchedGenome.Regions {
+// 		repeats := genomeIndex.Blacklist[res.SequenceIndex].Including(float64(genomicRegion.Start))
+// 		if len(repeats) != 0 && genomicRegion.Length() > 70 {
+// 			return true
+// 		}
+// 	}
+// 	return false
+// }
+
 func isPartOfRepeat(res *mapperutils.ReadMatchResult, genomeIndex *index.GenomeIndex) bool {
-	if len(genomeIndex.Blacklist) == 0 {
-		return false // no blacklist provided
+
+	seqInfo := genomeIndex.GetSequenceInfo(res.SequenceIndex)
+
+	// no repeatmask for this contig
+	if _, found := genomeIndex.ContigRepeatmask[seqInfo.Contig]; !found {
+		return false
 	}
 
+	length := int(seqInfo.EndGenomic - seqInfo.StartGenomic)
+	isForward := genomeIndex.IsSequenceForward(res.SequenceIndex)
+
 	for _, genomicRegion := range res.MatchedGenome.Regions {
-		repeats := genomeIndex.Blacklist[res.SequenceIndex].Including(float64(genomicRegion.Start))
+
+		var startGenomic int
+		if isForward {
+			startGenomic = int(seqInfo.StartGenomic) + genomicRegion.Start
+		} else {
+			startGenomic = int(seqInfo.StartGenomic) + (length - genomicRegion.End)
+		}
+
+		repeats := genomeIndex.ContigRepeatmask[seqInfo.Contig].TreeFw.Including(startGenomic)
+
 		if len(repeats) != 0 && genomicRegion.Length() > 70 {
 			return true
 		}
 	}
+
 	return false
 }
 
