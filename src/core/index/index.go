@@ -804,6 +804,55 @@ func (i *GenomeIndex) NumSequences() int {
 	return len(i.SequenceHeaders)
 }
 
+func (i *GenomeIndex) IsPartOfRepeat(result *mapperutils.ReadMatchResult) bool {
+
+	seqInfo := i.GetSequenceInfo(result.SequenceIndex)
+
+	// no repeatmask for this contig
+	if _, found := i.ContigRepeatmask[seqInfo.Contig]; !found {
+		return false
+	}
+
+	length := int(seqInfo.EndGenomic - seqInfo.StartGenomic)
+	isForward := i.IsSequenceForward(result.SequenceIndex)
+
+	for _, genomicRegion := range result.MatchedGenome.Regions {
+
+		var startGenomic int
+		if isForward {
+			startGenomic = int(seqInfo.StartGenomic) + genomicRegion.Start
+		} else {
+			startGenomic = int(seqInfo.StartGenomic) + (length - genomicRegion.End)
+		}
+
+		repeats := i.ContigRepeatmask[seqInfo.Contig].TreeFw.Including(startGenomic)
+
+		if len(repeats) != 0 && genomicRegion.Length() > 70 {
+			return true
+		}
+	}
+
+	return false
+}
+
+// CleanResults removes results that do not match contraints.
+// Removes results that are part of a repeat and have more than the allowed
+// number of mismatches.
+func (i *GenomeIndex) CleanResults(results []*mapperutils.ReadMatchResult) []*mapperutils.ReadMatchResult {
+
+	cleaned := make([]*mapperutils.ReadMatchResult, 0)
+
+	for _, result := range results {
+		// skip results that are part of a repeat region and have more than 4 mismatches
+		if i.IsPartOfRepeat(result) && len(result.MismatchesRead) > 4 {
+			continue
+		}
+		cleaned = append(cleaned, result)
+	}
+
+	return cleaned
+}
+
 func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry, repeatmaskFile *os.File) *GenomeIndex {
 
 	timerStart := time.Now()
