@@ -39,6 +39,7 @@ func SecondpassMappingWorker(secondPassChan *SecondPassChannel, wgIncompleteMapp
 		}
 
 		wgRemap.Add(1)
+		// TODO: limit number of goroutines here to respect --threads parameter
 		go func(t *mapperutils.ReadPairMatchResults) {
 			defer wgRemap.Done()
 
@@ -76,20 +77,28 @@ func remapReadPair(readPairMapping *mapperutils.ReadPairMatchResults, annotation
 
 	// get valid mappings
 	if len(uniqFwRemaps) > 0 {
-		validMaps := filterValidMaps(uniqFwRemaps, len(*readPairMapping.ReadPair.ReadR1.Sequence))
+		validMaps := filterValidMaps(uniqFwRemaps, len(*readPairMapping.ReadPair.ReadR1.Sequence), genomeIndex)
 		readPairMapping.Fw = validMaps
 	} else {
-		validMaps := filterValidMaps(readPairMapping.Fw, len(*readPairMapping.ReadPair.ReadR1.Sequence))
+		// FIX: u sure this can happen here? the origin fw mapping should be in uniqfwremaps and it
+		// can therefore not be empty? which makes this else clause irrelevant?
+		validMaps := filterValidMaps(readPairMapping.Fw, len(*readPairMapping.ReadPair.ReadR1.Sequence), genomeIndex)
 		readPairMapping.Fw = validMaps
 	}
 
 	// get valid mappings
 	if len(uniqRvRemaps) > 0 {
-		validMaps := filterValidMaps(uniqRvRemaps, len(*readPairMapping.ReadPair.ReadR2.Sequence))
+		validMaps := filterValidMaps(uniqRvRemaps, len(*readPairMapping.ReadPair.ReadR2.Sequence), genomeIndex)
 		readPairMapping.Rv = validMaps
 	} else {
-		validMaps := filterValidMaps(readPairMapping.Rv, len(*readPairMapping.ReadPair.ReadR2.Sequence))
+		validMaps := filterValidMaps(readPairMapping.Rv, len(*readPairMapping.ReadPair.ReadR2.Sequence), genomeIndex)
 		readPairMapping.Rv = validMaps
+	}
+
+	for _, m := range readPairMapping.Fw {
+		if genomeIndex.IsPartOfRepeat(m) && len(m.MismatchesRead) > 4 {
+			fmt.Println("FW Read in repeat region with >4 mm found:", m.MismatchesRead)
+		}
 	}
 }
 
@@ -107,16 +116,36 @@ func getUniqRemaps(r []*mapperutils.ReadMatchResult) []*mapperutils.ReadMatchRes
 	return uniq
 }
 
-func filterValidMaps(mappings []*mapperutils.ReadMatchResult, readLength int) []*mapperutils.ReadMatchResult {
+func filterValidMaps(mappings []*mapperutils.ReadMatchResult, readLength int, genomeIndex *index.GenomeIndex) []*mapperutils.ReadMatchResult {
+
 	valid := make([]*mapperutils.ReadMatchResult, 0)
+
 	for _, mapping := range mappings {
-		if mapping.MatchedRead.Regions[0].Start == 0 && mapping.MatchedRead.Regions[len(mapping.MatchedRead.Regions)-1].End == readLength && mapping.MatchedGenome.Length() == readLength {
-			// only append complete remaps (remap can still be shorter than read length but only if insert)
-			if uint8(float64(len(mapping.MismatchesRead))*100/float64(readLength)) <= config.MaxMismatchPercentage() {
-				// last check to make sure we do not append remaps which exeed max mm prec (this is required again because fillGaps potentially adds more mm in a remap)
-				valid = append(valid, mapping)
-			}
+
+		// skip mappings that are not fully mapped
+		if mapping.MatchedRead.Regions[0].Start != 0 || mapping.MatchedRead.Regions[len(mapping.MatchedRead.Regions)-1].End != readLength {
+			continue
 		}
+
+		// skip mappings that exceed mismatch percentage
+		if uint8(float64(len(mapping.MismatchesRead))*100/float64(readLength)) > config.MaxMismatchPercentage() {
+			continue
+		}
+
+		// skip mappings that are in a repeat region and exceed repeat mismatch count
+		if genomeIndex.IsPartOfRepeat(mapping) && len(mapping.MismatchesRead) > 4 {
+			continue
+		}
+
+		valid = append(valid, mapping)
+
+		// if mapping.MatchedRead.Regions[0].Start == 0 && mapping.MatchedRead.Regions[len(mapping.MatchedRead.Regions)-1].End == readLength && mapping.MatchedGenome.Length() == readLength {
+		// 	// only append complete remaps (remap can still be shorter than read length but only if insert)
+		// 	if uint8(float64(len(mapping.MismatchesRead))*100/float64(readLength)) <= config.MaxMismatchPercentage() {
+		// 		// last check to make sure we do not append remaps which exeed max mm prec (this is required again because fillGaps potentially adds more mm in a remap)
+		// 		valid = append(valid, mapping)
+		// 	}
+		// }
 	}
 	// if len(valid) == 0 {
 	// 	return mappings, false
@@ -145,6 +174,7 @@ func remapRead(readMapping *mapperutils.ReadMatchResult, annotation *mapperutils
 	// do we have an annotation?
 	if annotation != nil {
 		if readMapping.IncompleteMap {
+			// TODO: even in DNA mode?
 			remaps := fixPointRNARemap(readMapping, annotation.Introns[readMapping.SequenceIndex], read, genomeIndex)
 			for _, remap := range remaps {
 				overhangCorrected := correctOverhangs(remap, annotation.Introns[readMapping.SequenceIndex], read, genomeIndex)
