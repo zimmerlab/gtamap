@@ -19,7 +19,6 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	timerChannel chan<- *timer.Timer,
 	progressChan chan<- Event,
 	progressStats *ProgressStats,
-	// paralogMappingChan chan<- *mapperutils.ReadPairMatchResults,
 ) {
 	keepFw := GlobalFilter(readPair.ReadR1.Sequence, genomeIndex)
 	keepRw := GlobalFilter(readPair.ReadR2.Sequence, genomeIndex)
@@ -220,7 +219,7 @@ func determineLeftNormalizationShiftFw(
 		gapGenome, _ := result.MatchedGenome.GetGapAfterRegionIndex(regionIndexBeforeGap)
 
 		// skip gaps which have known splice sites
-		if result.SpliceSitesInfo[gapRank] {
+		if result.SpliceSitesInfo[gapRank] > 0 {
 			gapRank++
 			regionIndexBeforeGap = result.MatchedGenome.GetGapIndexAfterPos(gapGenome.End + 1)
 			continue
@@ -300,7 +299,7 @@ func determineLeftNormalizationShiftRv(
 		gapGenome, _ := result.MatchedGenome.GetGapAfterRegionIndex(regionIndexBeforeGap)
 
 		// skip gaps which have known splice sites
-		if result.SpliceSitesInfo[gapRank] {
+		if result.SpliceSitesInfo[gapRank] > 0 {
 			gapRank++
 			regionIndexBeforeGap = result.MatchedGenome.GetGapIndexAfterPos(gapGenome.End + 1)
 			continue

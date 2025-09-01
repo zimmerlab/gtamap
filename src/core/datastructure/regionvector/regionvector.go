@@ -14,10 +14,17 @@ type Region struct {
 	End   int // end-exlusive
 }
 
+func (r Region) Copy() Region {
+	return Region{
+		Start: r.Start,
+		End:   r.End,
+	}
+}
+
 type Gap struct {
 	Start           int // 0-based
 	End             int // end-exlusive
-	KnownSpliceSite bool
+	SpliceSiteScore int // canonical splice site -> 2 = canonical, 1 = non-can, 0 = no splice site
 }
 
 func (g Gap) Length() int {
@@ -25,11 +32,11 @@ func (g Gap) Length() int {
 }
 
 type Intron struct {
-	Start          int // 0-based
-	End            int // end-exclusive
-	Evidence       int
-	Rank           int // rank of intron in seq
-	TrueSpliceSite bool
+	Start           int // 0-based
+	End             int // end-exclusive
+	Evidence        int
+	Rank            int // rank of intron in seq
+	SpliceSiteScore int // canonical splice site -> 2 = canonical, 1 = non-can, 0 = no splice site
 }
 
 func (i Intron) Contains(r Region) bool {
@@ -751,7 +758,7 @@ func (t TranscriptomeNode) String() string {
 }
 
 func (i Intron) String() string {
-	return fmt.Sprintf("%d: [%d, %d) Confident SpliceSite: [%t] Evidence: [%d]", i.Rank, i.Start, i.End, i.TrueSpliceSite, i.Evidence)
+	return fmt.Sprintf("%d: [%d, %d) SpliceSiteScore: [%d] Evidence: [%d]", i.Rank, i.Start, i.End, i.SpliceSiteScore, i.Evidence)
 }
 
 func GenomicCoordToReadCoord(startInRead, genomeCoord int, genomeIntervals []Region, totalReadLength int) (int, error) {
@@ -1246,7 +1253,6 @@ func (rv *RegionVector) _RemoveRegion(start int, end int) { // optimized
 // c1: [0, 20], [20, 30]
 // c2: [0, 15], [16, 26]
 func CombineRegionVectorsConsecutiveInBoth(rv1 *RegionVector, rv2 *RegionVector) (*RegionVector, *RegionVector, error) {
-
 	if rv1.NumRegions() != rv2.NumRegions() {
 		return nil, nil, fmt.Errorf("region vectors must have the same number of regions to combine overlapping regions")
 	}

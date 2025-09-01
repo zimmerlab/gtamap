@@ -76,16 +76,10 @@ func (dh *DiagonalHandler) GetBestDiagonal() (int, int, bool) {
 			countUnused++
 		}
 
-		if countUnused >= maxMatches {
-			if countUnused == maxMatches && key < indexMax {
-				indexMax = key
-				maxMatches = countUnused
-				found = true
-			} else {
-				indexMax = key
-				maxMatches = countUnused
-				found = true
-			}
+		if countUnused > maxMatches || (countUnused == maxMatches && key < indexMax) {
+			indexMax = key
+			maxMatches = countUnused
+			found = true
 		}
 
 	}

@@ -2,15 +2,17 @@ package mapper
 
 import (
 	"encoding/csv"
-	"github.com/KleinSamuel/gtamap/src/config"
-	"github.com/KleinSamuel/gtamap/src/utils"
-	"github.com/sirupsen/logrus"
 	"math"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/KleinSamuel/gtamap/src/config"
+	"github.com/KleinSamuel/gtamap/src/utils"
+	"github.com/sirupsen/logrus"
 )
 
 type ProgressSnapshot struct {
@@ -73,8 +75,13 @@ func ProgressWorker(progressChan <-chan Event, wg *sync.WaitGroup) {
 	logrus.Debug("Started progressWorker")
 
 	timerStart := time.Now()
+	// Ensure parent dirs exist
+	if err := os.MkdirAll(filepath.Dir(config.LogOut), 0o755); err != nil {
+		logrus.Errorf("Failed to create directories for %s: %v", config.LogOut, err)
+		return
+	}
 
-	tsvFile, err := os.Create(config.OutputDirectory() + "/progress.tsv")
+	tsvFile, err := os.Create(config.LogOut)
 	if err != nil {
 		logrus.Errorf("Failed to create TSV file: %v", err)
 		return
@@ -215,7 +222,7 @@ func ProgressWorker(progressChan <-chan Event, wg *sync.WaitGroup) {
 			}
 			tsvWriter.Write(record)
 			numWriterRecords += 1
-			//if numWriterRecords%1 == 0 {
+			// if numWriterRecords%1 == 0 {
 			tsvWriter.Flush()
 			//}
 

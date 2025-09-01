@@ -269,13 +269,13 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 	// there is at least one diagonal that was excluded
 	wasExcluded := len(excluded) > 0
 
-	if wasExcluded {
-		// logrus.WithFields(logrus.Fields{
-		// 	"excluded": excluded,
-		// }).Debug("excluded diagonals were found")
-	} else {
-		// logrus.Debug("no diagonals were excluded")
-	}
+	// if wasExcluded {
+	// 	// logrus.WithFields(logrus.Fields{
+	// 	// 	"excluded": excluded,
+	// 	// }).Debug("excluded diagonals were found")
+	// } else {
+	// 	// logrus.Debug("no diagonals were excluded")
+	// }
 
 	// the current diagonal contains less than x kmers
 	belowScoreThreshold := score <= 1
@@ -532,15 +532,15 @@ func annotateSpliceSites(read *fastq.Read, genomeIndex *index.GenomeIndex, resul
 			}
 		}
 
-		_, isKnownSpliceSite := utils.ScoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
+		score, _ := utils.ScoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
 			acceptorSiteSeq[0], acceptorSiteSeq[1], lookOnPlusStrand)
 
 		// annotate split with spliceSite info
 		if result.SpliceSitesInfo == nil {
-			result.SpliceSitesInfo = make([]bool, 0)
-			result.SpliceSitesInfo = append(result.SpliceSitesInfo, isKnownSpliceSite)
+			result.SpliceSitesInfo = make([]int, 0)
+			result.SpliceSitesInfo = append(result.SpliceSitesInfo, 2-score)
 		} else {
-			result.SpliceSitesInfo = append(result.SpliceSitesInfo, isKnownSpliceSite)
+			result.SpliceSitesInfo = append(result.SpliceSitesInfo, 2-score)
 		}
 
 		readGapPos = gapGenome.End + 1
@@ -714,6 +714,9 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 			endRead := firstRegionRead.Start
 			extensionLength := endRead - startRead
 
+			mmBeforeLeftExtension := make([]int, len(result.MismatchesRead))
+			copy(mmBeforeLeftExtension, result.MismatchesRead)
+
 			firstRegionGenome, _ := result.MatchedGenome.GetFirstRegion()
 			startGenome := firstRegionGenome.Start - extensionLength
 
@@ -732,6 +735,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 			if startGenome < 0 {
 				// logrus.Debug("genome index out of bounds")
 
+				result.MismatchesRead = mmBeforeLeftExtension
 				result.IncompleteMap = true
 				return
 			}
@@ -761,6 +765,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 					// 	"numMismatches":         len(result.MismatchesRead),
 					// }).Debug("too many mismatches in left extension -> skip sequence")
 
+					result.MismatchesRead = mmBeforeLeftExtension
 					result.IncompleteMap = true
 					return
 				}
@@ -789,6 +794,9 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 
 		if lastRegionRead.End < len(*read.Sequence) {
 
+			mmBeforeRightExtension := make([]int, len(result.MismatchesRead))
+			copy(mmBeforeRightExtension, result.MismatchesRead)
+
 			startRead := lastRegionRead.End
 			endRead := len(*read.Sequence)
 			extensionLength := endRead - startRead
@@ -811,6 +819,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 			if startGenome+len(readSequence) > len(*genomeIndex.Sequences[result.SequenceIndex]) {
 				// logrus.Debug("genome index out of bounds")
 
+				result.MismatchesRead = mmBeforeRightExtension
 				result.IncompleteMap = true
 				return
 			}
@@ -835,6 +844,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 					// }).Debug("too many mismatches in right extension -> skip sequence")
 					// continue sequenceLoop
 
+					result.MismatchesRead = mmBeforeRightExtension
 					result.IncompleteMap = true
 					return
 				}
@@ -868,7 +878,7 @@ func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.Genome
 
 		// INFO: DNA RNA
 		// Only annotate if RNA
-		if res.MatchedGenome.HasGaps() {
+		if res.MatchedGenome.HasGaps() && config.IsOriginRNA {
 			res.NormalizeRegions()
 			annotateSpliceSites(read, genomeIndex, res)
 		}
@@ -884,9 +894,9 @@ func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.Genome
 
 		// INFO: Now apply blacklist
 		// If res in a repeat region, only append to finalResults when low mm
-		isInRepeat := isPartOfRepeat(res, genomeIndex)
+		isInRepeat := genomeIndex.IsPartOfRepeat(res)
 		if isInRepeat {
-			if len(res.MismatchesRead) < 4 {
+			if uint8(float64(len(res.MismatchesRead))*100/float64(len(*read.Sequence))) <= config.MaxMismatchPercentageRepeat {
 				finalResults = append(finalResults, res)
 			}
 		} else {
@@ -896,51 +906,6 @@ func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.Genome
 	}
 
 	return finalResults
-}
-
-// func isPartOfRepeat(res *mapperutils.ReadMatchResult, genomeIndex *index.GenomeIndex) bool {
-// 	if len(genomeIndex.Blacklist) == 0 {
-// 		return false // no blacklist provided
-// 	}
-//
-// 	for _, genomicRegion := range res.MatchedGenome.Regions {
-// 		repeats := genomeIndex.Blacklist[res.SequenceIndex].Including(float64(genomicRegion.Start))
-// 		if len(repeats) != 0 && genomicRegion.Length() > 70 {
-// 			return true
-// 		}
-// 	}
-// 	return false
-// }
-
-func isPartOfRepeat(res *mapperutils.ReadMatchResult, genomeIndex *index.GenomeIndex) bool {
-
-	seqInfo := genomeIndex.GetSequenceInfo(res.SequenceIndex)
-
-	// no repeatmask for this contig
-	if _, found := genomeIndex.ContigRepeatmask[seqInfo.Contig]; !found {
-		return false
-	}
-
-	length := int(seqInfo.EndGenomic - seqInfo.StartGenomic)
-	isForward := genomeIndex.IsSequenceForward(res.SequenceIndex)
-
-	for _, genomicRegion := range res.MatchedGenome.Regions {
-
-		var startGenomic int
-		if isForward {
-			startGenomic = int(seqInfo.StartGenomic) + genomicRegion.Start
-		} else {
-			startGenomic = int(seqInfo.StartGenomic) + (length - genomicRegion.End)
-		}
-
-		repeats := genomeIndex.ContigRepeatmask[seqInfo.Contig].TreeFw.Including(startGenomic)
-
-		if len(repeats) != 0 && genomicRegion.Length() > 70 {
-			return true
-		}
-	}
-
-	return false
 }
 
 // exceedsMismatchConstraint checks if the number of mismatches exceeds the maximum allowed percentage
