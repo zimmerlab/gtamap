@@ -788,21 +788,16 @@ func (i *GenomeIndex) GetSequenceHeader(sequenceIndex int) string {
 }
 
 func (i *GenomeIndex) GetSequenceInfo(sequenceIndex int) *gtf.GeneBasic {
-	if i.IsSequenceForward(sequenceIndex) {
-		return i.SequenceInfo[sequenceIndex]
-	} else {
-		return i.SequenceInfo[sequenceIndex-1]
-	}
-	// TODO: might be more efficient
-	// return i.SequenceInfo[sequenceIndex+(sequenceIndex%2)]
+	return i.SequenceInfo[sequenceIndex/2]
 }
 
 func (i *GenomeIndex) GetSequenceContig(sequenceIndex int) string {
-	if i.IsSequenceForward(sequenceIndex) {
-		return i.SequenceInfo[sequenceIndex].Contig
-	} else {
-		return i.SequenceInfo[sequenceIndex-1].Contig
-	}
+	// if i.IsSequenceForward(sequenceIndex) {
+	// 	return i.SequenceInfo[sequenceIndex].Contig
+	// } else {
+	// 	return i.SequenceInfo[sequenceIndex-1].Contig
+	// }
+	return i.SequenceInfo[sequenceIndex/2].Contig
 }
 
 func (i *GenomeIndex) NumSequences() int {
