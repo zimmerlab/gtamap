@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"runtime/pprof"
 	"strconv"
 
 	"github.com/KleinSamuel/gtamap/src/core/index"
@@ -58,18 +59,16 @@ func buildMultiFastaIndex(pathFasta string, pathOutput string, pathRepeatmasker 
 
 func mapTas2R4All(genomeIndexPath string, outputPath string) {
 
-	// genomeIndexPath := "/home/sam/Data/gtamap/tas2/tas2r4/index/ENSG00000127364.gtai"
-
-	readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.fastq.gz"
-	readsRvPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_2.fastq.gz"
-
-	// outputPath := "/home/sam/Data/gtamap/tas2/tas2r4/aligned.sam"
+	// readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.fastq.gz"
+	// readsRvPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_2.fastq.gz"
+	readsFwPath := "/home/sam/Data/genome-sam/30m.fw.fq"
+	readsRvPath := "/home/sam/Data/genome-sam/30m.rv.fq"
 
 	genomeIndex := index.ReadGenomeIndexByPath(genomeIndexPath)
 	reader, _ := fastq.InitFromPaths(&readsFwPath, &readsRvPath)
 	writer := datawriter.InitFromPath(outputPath)
 
-	numThreads := 1
+	numThreads := 18
 
 	mapper.MapAll(genomeIndex, reader, writer, &numThreads)
 }
@@ -107,6 +106,18 @@ func main() {
 	})
 	logrus.SetLevel(logrus.InfoLevel)
 
+	ff, errr := os.Create("cpu.pprof")
+	if errr != nil {
+		panic(errr)
+	}
+	defer ff.Close()
+	if err := pprof.StartCPUProfile(ff); err != nil {
+		panic(err)
+	}
+	defer pprof.StopCPUProfile()
+
 	// multiBuildSingle()
 	multiMapSingle()
+	// multiBuildAll()
+	// multiMapAll()
 }
