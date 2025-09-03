@@ -673,9 +673,12 @@ func LengthOfPath(regions []Region) int {
 func (t *TranscriptomeGraph) dfsRight(node *TranscriptomeNode, path []Region, length int, results *[][]Region, start int, seen map[uint64]bool) {
 	if node.IsIntron == 1 {
 		for _, next := range node.Next {
-			t.dfsRight(next, path, length, results, next.Start, seen)
+			t.dfsRight(next, path, length, results, next.Start, seen) // start from next exon node
 		}
 		return
+	}
+	if node.Start < start {
+		return // invalid node for right path
 	}
 
 	span := node.Stop - start
@@ -703,7 +706,7 @@ func (t *TranscriptomeGraph) dfsRight(node *TranscriptomeNode, path []Region, le
 		return
 	} else if span == 0 {
 		for _, next := range node.Next {
-			t.dfsRight(next, path, length, results, node.Start, seen)
+			t.dfsRight(next, path, length, results, node.Stop, seen)
 		}
 		return
 	}
@@ -724,6 +727,10 @@ func (t *TranscriptomeGraph) dfsLeft(node *TranscriptomeNode, path []Region, len
 			t.dfsLeft(prev, path, length, results, prev.Stop, seen)
 		}
 		return
+	}
+
+	if node.Stop > end {
+		return // invalid node for left path
 	}
 
 	span := end - node.Start
@@ -925,7 +932,7 @@ func (rs *RegionSet) GetIntersectingIntrons(b Region) []*Intron {
 
 // overlaps is needed to check if a region overlaps an intron and since intron is a different struct compared to region I made an extra func
 func overlaps(a *Intron, b Region) bool {
-	return a.Start < b.End && b.Start < a.End
+	return a.Start <= b.End && b.Start <= a.End
 }
 
 // OverlapsByRegion checks if the region vector overlaps with the given region.
