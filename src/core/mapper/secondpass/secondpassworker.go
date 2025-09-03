@@ -172,7 +172,7 @@ func remapRead(readMapping *mapperutils.ReadMatchResult, annotation *mapperutils
 	readMapping.NormalizeRegions() // NOTE: this is CRUCIAL and NEEDS to be called before ANY REMAP!!!
 
 	// do we have an annotation?
-	if annotation != nil {
+	if annotation != nil && config.IsOriginRNA {
 		if readMapping.IncompleteMap {
 			// TODO: even in DNA mode?
 			remaps := fixPointRNARemap(readMapping, annotation.Introns[readMapping.SequenceIndex], read, genomeIndex)
