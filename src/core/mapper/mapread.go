@@ -209,7 +209,7 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 		l := dh.Diagonals[diagonal][len(dh.Diagonals[diagonal])-1].ToRead - dh.Diagonals[diagonal][0].FromRead
 		if config.IsOriginRNA {
 			// RNA: check pot length of best initial diag is smaller than 30, if so, don't map read
-			if l < 30 {
+			if l < 20 {
 				return
 			}
 		} else if l < 50 {
@@ -223,7 +223,7 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 	// BAD: many remaining diags and best score < 2
 	// GOOD/OKAY: few remaining diags and best score < 2 (Happens if we already mapped large portion of reads
 	// thus eliminating many of the remaining diags)
-	if score < 2 && len(dh.Diagonals) > 3 {
+	if score < 2 && len(dh.Diagonals) > 10 {
 		// logrus.Debug("no suitable diagonal found")
 		// logrus.Debug("adding partial result to results")
 
@@ -706,6 +706,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 			}
 		}
 
+		return
 		// there are unmatched positions in front of the read
 		firstRegionRead, _ := result.MatchedRead.GetFirstRegion()
 		if firstRegionRead.Start > 0 {
@@ -890,6 +891,10 @@ func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.Genome
 				// skip this map if the final length is less than 70 precent of read length
 				continue
 			}
+		}
+
+		if res.MatchedGenome.Length() != len(*read.Sequence) {
+			res.IncompleteMap = true
 		}
 
 		// INFO: Now apply blacklist
