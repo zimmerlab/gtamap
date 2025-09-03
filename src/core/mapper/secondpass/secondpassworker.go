@@ -184,7 +184,7 @@ func remapRead(readMapping *mapperutils.ReadMatchResult, annotation *mapperutils
 	}
 
 	if !readMapping.IncompleteMap && readMapping.MatchedRead.Length() == len(*read.Sequence) {
-		// after all remap work, append original readMapping if is was completed
+		// after all remap work, append original readMapping if it is a complete remap
 		alternativeReadMatchResults = append(alternativeReadMatchResults, readMapping)
 	}
 
@@ -1290,6 +1290,10 @@ func fixPointRNARemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 	oriMainAnchor, _, mainAnchorIndex := readMatchResult.GetLargestAnchor(targetSeqIntronSet)
 	oriReadMainAnchor := readMatchResult.MatchedRead.Regions[mainAnchorIndex]
 	oriMmMainAnchor := extractMMofAnchor(oriReadMainAnchor, readMatchResult.MismatchesRead)
+
+	if oriMainAnchor.Length()*10 < len(*read.Sequence)*3 {
+		return nil // if the main anchor is super short, dont bother remapping
+	}
 
 	// get possible padding of l and r (we expect only one padding each)
 	lPaddings, rPaddings := getPadding(oriMainAnchor, targetSeqIntronSet)
