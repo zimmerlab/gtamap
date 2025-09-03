@@ -41,7 +41,7 @@ func ConfidentMappingWorker(confidentChan *ConfidentPassChan, wgConfidentMapping
 		annotation[targetId] = InferIntronsOfTarget(targetId, cMaps, index)
 
 		if len(annotation[targetId].Introns[0].Regions) == 0 {
-			annotation[targetId] = nil // if no junctions in conf maps, no introns can be inferred and no graph can be ctreated
+			annotation[targetId] = nil // if no junctions in conf maps, no introns can be inferred and no graph can be created
 		} else {
 			// build graphs
 			annotation[targetId].Introns[0].BuildTranscriptomeGraph(len(*index.Sequences[targetId]))
