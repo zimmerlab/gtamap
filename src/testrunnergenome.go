@@ -2,14 +2,15 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"strconv"
+
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
 	"github.com/KleinSamuel/gtamap/src/datawriter"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/sirupsen/logrus"
-	"os"
-	"strconv"
 )
 
 func buildAndSerializeIndexGenome(pathFasta string, pathOutput string) {
@@ -194,6 +195,35 @@ func testIndex() {
 	}
 }
 
+func testRegionmask() {
+
+	genomeIndexPath := "/home/sam/Data/gtamap/nsun5/ENSG00000130305.gtai"
+
+	bedFilePath := "/home/sam/Data/gtamap/regionmask/mask.bed"
+	prioFilePath := "/home/sam/Data/gtamap/regionmask/mask.priority"
+
+	readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.fastq.gz"
+	readsRvPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_2.fastq.gz"
+
+	outputPath := "/home/sam/Data/gtamap/nsun5/ENSG00000130305.goland.sam"
+
+	genomeIndex := index.ReadGenomeIndexByPath(genomeIndexPath)
+	reader, _ := fastq.InitFromPaths(&readsFwPath, &readsRvPath)
+	writer := datawriter.InitFromPath(outputPath)
+
+	numThreads := 1
+
+	// TODO: change from nil to actual values
+	regionMask, errRegionMask := index.NewRegionMaskFromPaths(prioFilePath, bedFilePath, nil)
+	if errRegionMask != nil {
+		logrus.Fatal("Error creating region mask from paths", errRegionMask)
+	}
+
+	fmt.Println(regionMask)
+
+	mapper.MapAll(genomeIndex, reader, writer, &numThreads)
+}
+
 func main() {
 
 	//f, _ := os.Create("cpu_profile.prof")
@@ -247,9 +277,10 @@ func main() {
 	//testSpecificRead()
 	//testTas2r4DeletionReads()
 	//testTas2ReadsAll()
-	testTas2ReadsAllOnNsun5()
+	// testTas2ReadsAllOnNsun5()
 	//testTas2ReadsAllOnActbRamBug()
 	//testIndex()
+	testRegionmask()
 
 	//analysis.CompareResults()
 }
