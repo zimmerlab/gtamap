@@ -2,6 +2,7 @@ package interval
 
 import (
 	"fmt"
+	"sort"
 )
 
 type PriorityListItem struct {
@@ -21,6 +22,30 @@ func NewList() *PriorityList {
 		Items:       make([]*PriorityListItem, 0),
 		MaxPriority: -1,
 	}
+}
+
+func NewListWithData(priorities map[string]int, entries []*PriorityListItem) *PriorityList {
+
+	pList := NewList()
+
+	// sort bed file entries by priorities descending
+	sort.Slice(entries, func(i int, j int) bool {
+		pI := 0
+		if p, exists := priorities[entries[i].Name]; exists {
+			pI = p
+		}
+		pJ := 0
+		if p, exists := priorities[entries[j].Name]; exists {
+			pJ = p
+		}
+		return pI > pJ
+	})
+
+	for _, interval := range entries {
+		pList.InsertInterval(interval.Start, interval.End, priorities[interval.Name], interval.Name)
+	}
+
+	return pList
 }
 
 func (l *PriorityList) ContainedIn(position int) int {
