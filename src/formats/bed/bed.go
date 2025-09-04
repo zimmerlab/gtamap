@@ -17,14 +17,26 @@ type Entry struct {
 }
 
 type File struct {
-	Entries []*Entry
-	NameMap map[string][]*Entry
+	Entries   []*Entry
+	ContigMap map[string][]*Entry
+	NameMap   map[string][]*Entry
+}
+
+func NewFromPath(filePath string) (*File, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	return New(file), nil
 }
 
 func New(file *os.File) *File {
 
 	entries := make([]*Entry, 0)
 	nameMap := make(map[string][]*Entry)
+	contigMap := make(map[string][]*Entry)
 
 	scanner := bufio.NewScanner(file)
 
@@ -57,10 +69,21 @@ func New(file *os.File) *File {
 		}
 
 		entries = append(entries, entry)
+
+		if _, exists := nameMap[entry.Name]; !exists {
+			nameMap[entry.Name] = make([]*Entry, 0)
+		}
+		nameMap[entry.Name] = append(nameMap[entry.Name], entry)
+
+		if _, exists := contigMap[entry.Contig]; !exists {
+			contigMap[entry.Contig] = make([]*Entry, 0)
+		}
+		contigMap[entry.Contig] = append(contigMap[entry.Contig], entry)
 	}
 
 	return &File{
-		Entries: entries,
-		NameMap: nameMap,
+		Entries:   entries,
+		ContigMap: contigMap,
+		NameMap:   nameMap,
 	}
 }
