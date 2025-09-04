@@ -55,18 +55,22 @@ func (r Region) Length() int {
 	return r.End - r.Start
 }
 
-type RegionVector struct {
-	Regions []Region
-}
-
 func (r Region) String() string {
 	return fmt.Sprintf("[%d, %d]", r.Start, r.End)
+}
+
+type RegionVector struct {
+	Regions []Region
 }
 
 func NewRegionVector() *RegionVector {
 	return &RegionVector{
 		Regions: make([]Region, 0),
 	}
+}
+
+func (rv *RegionVector) Size() int {
+	return rv.NumRegions()
 }
 
 // SortInPlace sorts the regions in ascending order based on their start position
@@ -224,10 +228,28 @@ func (rv *RegionVector) String() string {
 	return result
 }
 
+func (rv *RegionVector) StringTable() string {
+	sb := strings.Builder{}
+	sb.WriteString(fmt.Sprintf("\n%5s ", "index"))
+	for i := range rv.Regions {
+		sb.WriteString(fmt.Sprintf("%3d ", i))
+	}
+	sb.WriteString(fmt.Sprintf("\n%5s ", "start"))
+	for _, r := range rv.Regions {
+		sb.WriteString(fmt.Sprintf("%3d ", r.Start))
+	}
+	sb.WriteString(fmt.Sprintf("\n%5s ", "end"))
+	for _, r := range rv.Regions {
+		sb.WriteString(fmt.Sprintf("%3d ", r.End))
+	}
+	sb.WriteString("\n\n")
+	return sb.String()
+}
+
 func (rv *RegionVector) Length() int {
 	length := 0
 	for _, r := range rv.Regions {
-		length += r.End - r.Start
+		length += r.Length()
 	}
 	return length
 }
@@ -424,6 +446,30 @@ func (rv *RegionVector) GetRegionIndexContainingPosRelative(relPos int) (int, er
 	}
 
 	return -1, fmt.Errorf("relative position not found in any region")
+}
+
+func (rv *RegionVector) OverlapsAny(start int, end int) bool {
+
+	left := 0
+	right := rv.Size() - 1
+	mid := 0
+
+	for {
+
+		if left > right || left < 0 || right >= rv.Size() {
+			return false
+		}
+
+		mid = left + ((right - left) / 2)
+
+		if end < rv.Regions[mid].Start {
+			right = mid - 1
+		} else if start >= rv.Regions[mid].End {
+			left = mid + 1
+		} else {
+			return true
+		}
+	}
 }
 
 type RegionSet struct {
