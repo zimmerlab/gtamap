@@ -17,6 +17,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/genemodel"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/keywordtree"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/keywordtreebyte"
+	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/core/interval"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
@@ -556,7 +557,9 @@ type GenomeIndex struct {
 	// ParalogRegions  map[string]*GenomeIndex // additional index per target region of paralog regions
 	// Blacklist        map[int]*datastructure.INTree  // interval tree used to store repeat regions. Tree at 0 -> for target region 0 etc...
 	// RepeatRegions    map[int][]datastructure.Bounds // interval tree used to store repeat regions. Tree at 0 -> for target region 0 etc...
-	ContigRepeatmask map[string]*ContigRepeatmask
+	ContigRepeatmask      map[string]*ContigRepeatmask
+	RegionMask            *RegionMask
+	ContigToTargetRegions map[string]*regionvector.RegionVector // map to get the target region for a given contig
 }
 
 func (i *GenomeIndex) AddKeywordToMap(keyword [10]byte, sequenceIndex uint8, position uint32) {
@@ -853,7 +856,7 @@ func (i *GenomeIndex) CleanResults(results []*mapperutils.ReadMatchResult) []*ma
 	return cleaned
 }
 
-func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry, repeatmaskFile *os.File) *GenomeIndex {
+func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry) *GenomeIndex {
 
 	timerStart := time.Now()
 
@@ -865,12 +868,13 @@ func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry, repeatmaskFile *os.
 		KeywordMapSmall: make(map[[5]byte][]*keywordtreebyte.Position, int(math.Pow(4, 5))),
 		// Blacklist:        make(map[int]*datastructure.INTree),
 		// RepeatRegions:    make(map[int][]datastructure.Bounds),
-		ContigRepeatmask: make(map[string]*ContigRepeatmask),
+		ContigRepeatmask:      make(map[string]*ContigRepeatmask),
+		ContigToTargetRegions: make(map[string]*regionvector.RegionVector),
 	}
 
 	// key = contig, value = list of bounds (start+end of targets)
 	// used to build interval trees per contig to speed up repeatmasker loading
-	contigMapTargets := make(map[string][]datastructure.Bounds)
+	// contigMapTargets :=
 
 	for i, entry := range fastaEntries {
 		sequence := entry.Sequence
@@ -887,17 +891,23 @@ func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry, repeatmaskFile *os.
 		index.Sequences[i*2] = &sequence
 		index.Sequences[i*2+1] = &sequenceRevComp
 
-		if repeatmaskFile != nil {
-			if _, exists := contigMapTargets[info.Contig]; !exists {
-				contigMapTargets[info.Contig] = make([]datastructure.Bounds, 0)
-			}
-			contigMapTargets[info.Contig] = append(
-				contigMapTargets[info.Contig],
-				&datastructure.RepeatRegion{
-					Lower: int(info.StartGenomic),
-					Upper: int(info.EndGenomic),
-				})
+		// populate contig to target region map
+		if _, exists := index.ContigToTargetRegions[info.Contig]; !exists {
+			index.ContigToTargetRegions[info.Contig] = regionvector.NewRegionVector()
 		}
+		index.ContigToTargetRegions[info.Contig].AddRegionAndMerge(int(info.StartGenomic), int(info.EndGenomic))
+
+		// if repeatmaskFile != nil {
+		// 	if _, exists := contigMapTargets[info.Contig]; !exists {
+		// 		contigMapTargets[info.Contig] = make([]datastructure.Bounds, 0)
+		// 	}
+		// 	contigMapTargets[info.Contig] = append(
+		// 		contigMapTargets[info.Contig],
+		// 		&datastructure.RepeatRegion{
+		// 			Lower: int(info.StartGenomic),
+		// 			Upper: int(info.EndGenomic),
+		// 		})
+		// }
 
 		// if repeatMaskerFile != nil {
 		//
@@ -920,20 +930,20 @@ func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry, repeatmaskFile *os.
 		// }
 	}
 
-	if repeatmaskFile != nil {
-		// build interval trees (containing target regions) per contig
-		contigMapTargetTrees := make(map[string]*datastructure.INTree)
-		for contig, targets := range contigMapTargets {
-			contigMapTargetTrees[contig] = datastructure.NewINTree(targets)
-		}
-
-		// load repeatmasker file and build contig repeatmask map for target regions
-		index.ContigRepeatmask = BuildContigRepeatmaskTrees(repeatmaskFile, contigMapTargetTrees)
-
-		logrus.Info("Loaded repeatmasker file")
-	} else {
-		logrus.Info("No repeatmasker file provided, repeat regions are not detected")
-	}
+	// if repeatmaskFile != nil {
+	// 	// build interval trees (containing target regions) per contig
+	// 	contigMapTargetTrees := make(map[string]*datastructure.INTree)
+	// 	for contig, targets := range contigMapTargets {
+	// 		contigMapTargetTrees[contig] = datastructure.NewINTree(targets)
+	// 	}
+	//
+	// 	// load repeatmasker file and build contig repeatmask map for target regions
+	// 	index.ContigRepeatmask = BuildContigRepeatmaskTrees(repeatmaskFile, contigMapTargetTrees)
+	//
+	// 	logrus.Info("Loaded repeatmasker file")
+	// } else {
+	// 	logrus.Info("No repeatmasker file provided, repeat regions are not detected")
+	// }
 
 	for i, seq := range index.Sequences {
 		index.AddSequenceToMap(seq, uint8(i))
@@ -1024,7 +1034,13 @@ func ReadGenomeIndexByFile(indexFile *os.File) *GenomeIndex {
 	return &genomeIndex
 }
 
-func BuildAndSerializeGenomeIndex(fastaFile *os.File, blackListFile *os.File, outputFile *os.File) {
+func BuildAndSerializeGenomeIndex(
+	fastaFile *os.File,
+	outputFile *os.File,
+	regionmaskBedFile *os.File,
+	regionmaskPriorityFile *os.File,
+) {
+
 	fastaEntries, err := dataloader.ReadFasta(fastaFile)
 	if err != nil {
 		logrus.Fatal("Error extracting sequence from fasta file", err)
@@ -1041,7 +1057,30 @@ func BuildAndSerializeGenomeIndex(fastaFile *os.File, blackListFile *os.File, ou
 		}).Info("Added sequence #" + strconv.Itoa(i+1))
 	}
 
-	genomeIndex := BuildGenomeIndex(fastaEntries, blackListFile)
+	genomeIndex := BuildGenomeIndex(fastaEntries)
+
+	// add region mask to index if provided
+	if regionmaskBedFile != nil && regionmaskPriorityFile != nil {
+
+		mask, errMask := NewRegionMask(
+			regionmaskPriorityFile,
+			regionmaskBedFile,
+			genomeIndex.ContigToTargetRegions,
+		)
+
+		if errMask != nil {
+			logrus.Fatal("Error loading region mask", errMask)
+		}
+
+		genomeIndex.RegionMask = mask
+
+		logrus.WithFields(logrus.Fields{
+			"region mask":   regionmaskBedFile.Name(),
+			"priority file": regionmaskPriorityFile.Name(),
+		}).Info("Using region mask bed file and priority file")
+	} else {
+		logrus.Info("No region mask used")
+	}
 
 	WriteGenomeIndex(genomeIndex, outputFile)
 }
