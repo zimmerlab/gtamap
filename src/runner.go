@@ -104,6 +104,14 @@ func main() {
 			Required: false,
 			Help:     "Path to genome wide repeatmasker file (hg38.fa.out).",
 		})
+	var regionMaskBedFileIndex *os.File = cmdIndex.File("", "regionmaskBed", os.O_RDONLY, 0o600, &argparse.Options{
+		Required: false,
+		Help:     "Path to BED file containing regions to mask during index construction.",
+	})
+	var regionMaskPriorityFileIndex *os.File = cmdIndex.File("", "regionmaskPriorities", os.O_RDONLY, 0o600, &argparse.Options{
+		Required: false,
+		Help:     "Path to TSV file containing region names and their corresponding priority (higher number = higher priority).",
+	})
 	var outputFileName *string = cmdIndex.String("", "output", &argparse.Options{
 		Required: true,
 		Help:     "Output file (file extension: .gtai).",
@@ -278,11 +286,27 @@ func main() {
 			logrus.Fatalf("Could not open output sam file: %v", err)
 		}
 
+		if *regionMaskBedFileIndex == (os.File{}) {
+			regionMaskBedFileIndex = nil
+		}
+		if *regionMaskPriorityFileIndex == (os.File{}) {
+			regionMaskPriorityFileIndex = nil
+		}
+		if (regionMaskBedFileIndex == nil && regionMaskPriorityFileIndex != nil) ||
+			(regionMaskBedFileIndex != nil && regionMaskPriorityFileIndex == nil) {
+			logrus.Fatal("Both --regionmaskBed and --regionmaskPriorities need to be provided to use region masking.")
+		}
+
 		if *repeatMaskerFile == (os.File{}) {
 			repeatMaskerFile = nil
 		}
 
-		index.BuildAndSerializeGenomeIndex(fastaFile, repeatMaskerFile, outputFileIndex)
+		index.BuildAndSerializeGenomeIndex(
+			fastaFile,
+			outputFileIndex,
+			regionMaskBedFileIndex,
+			regionMaskPriorityFileIndex,
+		)
 
 	} else if cmdMap.Happened() {
 
