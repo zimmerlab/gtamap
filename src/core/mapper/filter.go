@@ -65,7 +65,7 @@ func BinnedFilter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
 	if config.IsOriginRNA {
 		// TODO: Needs to be dynamic based on read length
 		// return FilterWithBins(readSequence, genomeIndex, 80, 3)
-		return FilterWithOverlappingBins(readSequence, genomeIndex, 40, 3)
+		return FilterWithOverlappingBins(readSequence, genomeIndex, 30, 2)
 	} else {
 		// TODO: Needs to be dynamic based on read length
 		// return FilterWithBins(readSequence, genomeIndex, 150, 7)
