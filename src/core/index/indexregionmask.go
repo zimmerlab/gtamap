@@ -25,21 +25,6 @@ func NewEmptyRegionMask() *RegionMask {
 	}
 }
 
-// func NewRegionMask(priorities map[string]int, bedFile *bed.File) *RegionMask {
-//
-// 	rm := &RegionMask{
-// 		ContigMasks: make(map[string]*interval.PriorityList),
-// 		Priorities:  priorities,
-// 	}
-//
-// 	for contig, entries := range bedFile.NameMap {
-// 		plist := interval.NewListWithData(priorities, entries)
-// 		rm.ContigMasks[contig] = plist
-// 	}
-//
-// 	return rm
-// }
-
 func NewRegionMaskFromPaths(
 	prioritiesPath string,
 	bedFilePath string,
@@ -59,6 +44,10 @@ func NewRegionMaskFromPaths(
 	return NewRegionMask(prioritiesFile, bedFile, contigToTargetRegions)
 }
 
+// NewRegionMask creates a region mask from a BED file and a map of contig
+// to target regions. These target regions are used to filter out regions in
+// the BED. The priority file maps the name of a bed entry to an integer.
+// The priority is used to construct the priority list for regions.
 func NewRegionMask(
 	prioritiesFile *os.File,
 	bedFile *os.File,

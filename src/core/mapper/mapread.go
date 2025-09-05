@@ -856,9 +856,15 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 	}
 }
 
-func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.GenomeIndex,
-	diagonalHandler *mapperutils.DiagonalHandler, greedy bool, currDepth *int,
+func mapReadToSequence(
+	seqIndex int,
+	read *fastq.Read,
+	genomeIndex *index.GenomeIndex,
+	diagonalHandler *mapperutils.DiagonalHandler,
+	greedy bool,
+	currDepth *int,
 ) []*mapperutils.ReadMatchResult {
+
 	// list of read match results
 	results := make([]*mapperutils.ReadMatchResult, 0)
 
@@ -894,14 +900,21 @@ func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.Genome
 
 		// INFO: Now apply blacklist
 		// If res in a repeat region, only append to finalResults when low mm
-		isInRepeat := genomeIndex.IsPartOfRepeat(res)
-		if isInRepeat {
-			if uint8(float64(len(res.MismatchesRead))*100/float64(len(*read.Sequence))) <= config.MaxMismatchPercentageRepeat {
-				finalResults = append(finalResults, res)
-			}
-		} else {
-			finalResults = append(finalResults, res)
-		}
+
+		// TODO: adjust to region mask
+		// if genomeIndex.IsPartOfRepeat(res) {
+		//
+		// 	mmPercentage := uint8(float64(len(res.MismatchesRead)) * 100 /
+		// 		float64(len(*read.Sequence)))
+		//
+		// 	if mmPercentage <= config.MaxMismatchPercentageRepeat {
+		// 		finalResults = append(finalResults, res)
+		// 	}
+		// } else {
+		// 	finalResults = append(finalResults, res)
+		// }
+
+		finalResults = append(finalResults, res)
 
 	}
 

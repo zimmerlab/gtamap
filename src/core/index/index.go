@@ -557,9 +557,13 @@ type GenomeIndex struct {
 	// ParalogRegions  map[string]*GenomeIndex // additional index per target region of paralog regions
 	// Blacklist        map[int]*datastructure.INTree  // interval tree used to store repeat regions. Tree at 0 -> for target region 0 etc...
 	// RepeatRegions    map[int][]datastructure.Bounds // interval tree used to store repeat regions. Tree at 0 -> for target region 0 etc...
-	ContigRepeatmask      map[string]*ContigRepeatmask
+	// ContigRepeatmask      map[string]*ContigRepeatmask
 	RegionMask            *RegionMask
 	ContigToTargetRegions map[string]*regionvector.RegionVector // map to get the target region for a given contig
+}
+
+func (i *GenomeIndex) SetRegionMask(mask *RegionMask) {
+	i.RegionMask = mask
 }
 
 func (i *GenomeIndex) AddKeywordToMap(keyword [10]byte, sequenceIndex uint8, position uint32) {
@@ -807,49 +811,53 @@ func (i *GenomeIndex) NumSequences() int {
 	return len(i.SequenceHeaders)
 }
 
-func (i *GenomeIndex) IsPartOfRepeat(result *mapperutils.ReadMatchResult) bool {
-
-	seqInfo := i.GetSequenceInfo(result.SequenceIndex)
-
-	// no repeatmask for this contig
-	if _, found := i.ContigRepeatmask[seqInfo.Contig]; !found {
-		return false
-	}
-
-	length := int(seqInfo.EndGenomic - seqInfo.StartGenomic)
-	isForward := i.IsSequenceForward(result.SequenceIndex)
-
-	for _, genomicRegion := range result.MatchedGenome.Regions {
-
-		var startGenomic int
-		if isForward {
-			startGenomic = int(seqInfo.StartGenomic) + genomicRegion.Start
-		} else {
-			startGenomic = int(seqInfo.StartGenomic) + (length - genomicRegion.End)
-		}
-
-		repeats := i.ContigRepeatmask[seqInfo.Contig].TreeFw.Including(startGenomic)
-
-		if len(repeats) != 0 && genomicRegion.Length() > 70 {
-			return true
-		}
-	}
-
-	return false
-}
+// TODO: adjust to region mask
+// func (i *GenomeIndex) IsPartOfRepeat(result *mapperutils.ReadMatchResult) bool {
+//
+// 	seqInfo := i.GetSequenceInfo(result.SequenceIndex)
+//
+// 	// no repeatmask for this contig
+// 	if _, found := i.ContigRepeatmask[seqInfo.Contig]; !found {
+// 		return false
+// 	}
+//
+// 	length := int(seqInfo.EndGenomic - seqInfo.StartGenomic)
+// 	isForward := i.IsSequenceForward(result.SequenceIndex)
+//
+// 	for _, genomicRegion := range result.MatchedGenome.Regions {
+//
+// 		var startGenomic int
+// 		if isForward {
+// 			startGenomic = int(seqInfo.StartGenomic) + genomicRegion.Start
+// 		} else {
+// 			startGenomic = int(seqInfo.StartGenomic) + (length - genomicRegion.End)
+// 		}
+//
+// 		repeats := i.ContigRepeatmask[seqInfo.Contig].TreeFw.Including(startGenomic)
+//
+// 		if len(repeats) != 0 && genomicRegion.Length() > 70 {
+// 			return true
+// 		}
+// 	}
+//
+// 	return false
+// }
 
 // CleanResults removes results that do not match contraints.
 // Removes results that are part of a repeat and have more than the allowed
 // number of mismatches.
-func (i *GenomeIndex) CleanResults(results []*mapperutils.ReadMatchResult) []*mapperutils.ReadMatchResult {
+func (i *GenomeIndex) CleanResults(
+	results []*mapperutils.ReadMatchResult,
+) []*mapperutils.ReadMatchResult {
 
 	cleaned := make([]*mapperutils.ReadMatchResult, 0)
 
 	for _, result := range results {
 		// skip results that are part of a repeat region and have more than 4 mismatches
-		if i.IsPartOfRepeat(result) && len(result.MismatchesRead) > 4 {
-			continue
-		}
+		// TODO: adjust to region mask
+		// if i.IsPartOfRepeat(result) && len(result.MismatchesRead) > 4 {
+		// 	continue
+		// }
 		cleaned = append(cleaned, result)
 	}
 
@@ -868,7 +876,7 @@ func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry) *GenomeIndex {
 		KeywordMapSmall: make(map[[5]byte][]*keywordtreebyte.Position, int(math.Pow(4, 5))),
 		// Blacklist:        make(map[int]*datastructure.INTree),
 		// RepeatRegions:    make(map[int][]datastructure.Bounds),
-		ContigRepeatmask:      make(map[string]*ContigRepeatmask),
+		// ContigRepeatmask:      make(map[string]*ContigRepeatmask),
 		ContigToTargetRegions: make(map[string]*regionvector.RegionVector),
 	}
 
@@ -1061,28 +1069,37 @@ func BuildAndSerializeGenomeIndex(
 
 	// add region mask to index if provided
 	if regionmaskBedFile != nil && regionmaskPriorityFile != nil {
-
-		mask, errMask := NewRegionMask(
-			regionmaskPriorityFile,
-			regionmaskBedFile,
-			genomeIndex.ContigToTargetRegions,
-		)
-
-		if errMask != nil {
-			logrus.Fatal("Error loading region mask", errMask)
-		}
-
-		genomeIndex.RegionMask = mask
+		AddRegionmaskToIndex(regionmaskBedFile, regionmaskPriorityFile, genomeIndex)
 
 		logrus.WithFields(logrus.Fields{
 			"region mask":   regionmaskBedFile.Name(),
 			"priority file": regionmaskPriorityFile.Name(),
 		}).Info("Using region mask bed file and priority file")
+
 	} else {
 		logrus.Info("No region mask used")
 	}
 
 	WriteGenomeIndex(genomeIndex, outputFile)
+}
+
+func AddRegionmaskToIndex(
+	regionmaskBedFile *os.File,
+	regionmaskPriorityFile *os.File,
+	genomeIndex *GenomeIndex,
+) {
+
+	mask, errMask := NewRegionMask(
+		regionmaskPriorityFile,
+		regionmaskBedFile,
+		genomeIndex.ContigToTargetRegions,
+	)
+
+	if errMask != nil {
+		logrus.Fatal("Error loading region mask", errMask)
+	}
+
+	genomeIndex.SetRegionMask(mask)
 }
 
 func BuildBlacklistInTree(start uint32, end uint32, contig string, blackListFile *os.File) (*datastructure.INTree, *datastructure.INTree, []datastructure.Bounds, []datastructure.Bounds, error) {

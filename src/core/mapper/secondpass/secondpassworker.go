@@ -94,12 +94,6 @@ func remapReadPair(readPairMapping *mapperutils.ReadPairMatchResults, annotation
 		validMaps := filterValidMaps(readPairMapping.Rv, len(*readPairMapping.ReadPair.ReadR2.Sequence), genomeIndex)
 		readPairMapping.Rv = validMaps
 	}
-
-	for _, m := range readPairMapping.Fw {
-		if genomeIndex.IsPartOfRepeat(m) && len(m.MismatchesRead) > 4 {
-			fmt.Println("FW Read in repeat region with >4 mm found:", m.MismatchesRead)
-		}
-	}
 }
 
 func getUniqRemaps(r []*mapperutils.ReadMatchResult) []*mapperutils.ReadMatchResult {
@@ -116,7 +110,11 @@ func getUniqRemaps(r []*mapperutils.ReadMatchResult) []*mapperutils.ReadMatchRes
 	return uniq
 }
 
-func filterValidMaps(mappings []*mapperutils.ReadMatchResult, readLength int, genomeIndex *index.GenomeIndex) []*mapperutils.ReadMatchResult {
+func filterValidMaps(
+	mappings []*mapperutils.ReadMatchResult,
+	readLength int,
+	genomeIndex *index.GenomeIndex,
+) []*mapperutils.ReadMatchResult {
 
 	valid := make([]*mapperutils.ReadMatchResult, 0)
 
@@ -133,9 +131,10 @@ func filterValidMaps(mappings []*mapperutils.ReadMatchResult, readLength int, ge
 		}
 
 		// skip mappings that are in a repeat region and exceed repeat mismatch count
-		if genomeIndex.IsPartOfRepeat(mapping) && len(mapping.MismatchesRead) > 4 {
-			continue
-		}
+		// TODO: adjust to region mask
+		// if genomeIndex.IsPartOfRepeat(mapping) && len(mapping.MismatchesRead) > 4 {
+		// 	continue
+		// }
 
 		valid = append(valid, mapping)
 

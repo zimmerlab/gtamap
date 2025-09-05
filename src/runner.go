@@ -97,21 +97,35 @@ func main() {
 		Required: true,
 		Help:     "Nucleotide sequences (FASTA) file.",
 	})
-	repeatMaskerFile := cmdIndex.File(
-		"", "repeatmask",
-		os.O_RDONLY, 0o600,
+	// repeatMaskerFile := cmdIndex.File(
+	// 	"", "repeatmask",
+	// 	os.O_RDONLY, 0o600,
+	// 	&argparse.Options{
+	// 		Required: false,
+	// 		Help:     "Path to genome wide repeatmasker file (hg38.fa.out).",
+	// 	})
+	var regionMaskBedFileIndex *os.File = cmdIndex.File(
+		"",
+		"regionmaskBed",
+		os.O_RDONLY,
+		0o600,
 		&argparse.Options{
 			Required: false,
-			Help:     "Path to genome wide repeatmasker file (hg38.fa.out).",
-		})
-	var regionMaskBedFileIndex *os.File = cmdIndex.File("", "regionmaskBed", os.O_RDONLY, 0o600, &argparse.Options{
-		Required: false,
-		Help:     "Path to BED file containing regions to mask during index construction.",
-	})
-	var regionMaskPriorityFileIndex *os.File = cmdIndex.File("", "regionmaskPriorities", os.O_RDONLY, 0o600, &argparse.Options{
-		Required: false,
-		Help:     "Path to TSV file containing region names and their corresponding priority (higher number = higher priority).",
-	})
+			Help: "Path to BED file containing regions to mask during " +
+				"index construction.",
+		},
+	)
+	var regionMaskPriorityFileIndex *os.File = cmdIndex.File(
+		"",
+		"regionmaskPriorities",
+		os.O_RDONLY,
+		0o600,
+		&argparse.Options{
+			Required: false,
+			Help: "Path to TSV file containing region names and their " +
+				"corresponding priority (higher number = higher priority).",
+		},
+	)
 	var outputFileName *string = cmdIndex.String("", "output", &argparse.Options{
 		Required: true,
 		Help:     "Output file (file extension: .gtai).",
@@ -158,6 +172,28 @@ func main() {
 		Help:     "Number of threads to use (default: all)",
 		Default:  -1,
 	})
+	var regionmaskBedFileMap *os.File = cmdMap.File(
+		"",
+		"regionmaskBed",
+		os.O_RDONLY, 0o600,
+		&argparse.Options{
+			Required: false,
+			Help: "Path to BED file containing regions to mask during " +
+				"index construction.",
+		},
+	)
+	var regionmaskPriorityFileMap *os.File = cmdMap.File(
+		"",
+		"regionmaskPriorities",
+		os.O_RDONLY,
+		0o600,
+		&argparse.Options{
+			Required: false,
+			Help: "Path to TSV file containing region names and their " +
+				"corresponding priority (higher number = higher priority).",
+		},
+	)
+
 	// var paralogFilePathMap *string = cmdMap.String("", "paralogs", &argparse.Options{
 	// 	Required: false,
 	// 	Help:     "Paralog region meta file for target regions.",
@@ -213,6 +249,9 @@ func main() {
 	logrus.SetFormatter(&logrus.TextFormatter{
 		FullTimestamp: true,
 	})
+
+	mapperConfig, err := config.LoadMapperConfig()
+	fmt.Println(mapperConfig)
 
 	if cmdIndexPre.Happened() {
 
@@ -297,9 +336,9 @@ func main() {
 			logrus.Fatal("Both --regionmaskBed and --regionmaskPriorities need to be provided to use region masking.")
 		}
 
-		if *repeatMaskerFile == (os.File{}) {
-			repeatMaskerFile = nil
-		}
+		// if *repeatMaskerFile == (os.File{}) {
+		// 	repeatMaskerFile = nil
+		// }
 
 		index.BuildAndSerializeGenomeIndex(
 			fastaFile,
@@ -327,6 +366,32 @@ func main() {
 		logrus.Info("Mapping reads to given index")
 
 		genomeIndex := index.ReadGenomeIndexByFile(indexFile)
+
+		if *regionmaskBedFileMap == (os.File{}) {
+			regionmaskBedFileMap = nil
+		}
+		if *regionmaskPriorityFileMap == (os.File{}) {
+			regionmaskPriorityFileMap = nil
+		}
+		if (regionmaskBedFileMap == nil &&
+			regionmaskPriorityFileMap != nil) ||
+			(regionmaskBedFileMap != nil &&
+				regionmaskPriorityFileMap == nil) {
+			logrus.Fatal("Both --regionmaskBed and --regionmaskPriorities " +
+				"need to be provided to use region masking.")
+		}
+		// add region mask to index if provided
+		if regionmaskBedFileMap != nil && regionmaskPriorityFileMap != nil {
+			index.AddRegionmaskToIndex(regionmaskBedFileMap, regionmaskPriorityFileMap, genomeIndex)
+
+			logrus.WithFields(logrus.Fields{
+				"region mask":   regionmaskBedFileMap.Name(),
+				"priority file": regionmaskPriorityFileMap.Name(),
+			}).Info("Using region mask bed file and priority file")
+
+		} else {
+			logrus.Info("No region mask used")
+		}
 
 		reader, errFastq := fastq.InitFromFiles(fastqFwFile, fastqRwFile)
 		if errFastq != nil {
