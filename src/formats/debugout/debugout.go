@@ -32,7 +32,7 @@ func GenerateAlignmentView(genomeIndex *index.GenomeIndex, mappedRead mapperutil
 	file.WriteString("\n")
 	file.WriteString("Splice Sites (before second pass): ")
 	for _, s := range mappedRead.SpliceSitesInfo {
-		if s {
+		if s > 0 {
 			file.WriteString("True ")
 		} else {
 			file.WriteString("False ")

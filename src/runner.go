@@ -132,6 +132,10 @@ func main() {
 		Help:     "Output SAM file (file extension: .sam).",
 		Default:  "",
 	})
+	var logFileMap *string = cmdMap.String("", "log", &argparse.Options{
+		Help:    "Output log file.",
+		Default: "",
+	})
 	var readType *string = cmdMap.String("", "read-type", &argparse.Options{
 		Required: true,
 		Help:     "Specify read type (DNA or RNA).",
@@ -284,6 +288,10 @@ func main() {
 
 		level, _ := logrus.ParseLevel(*logLevelMap)
 		logrus.SetLevel(level)
+
+		if *logFileMap != "" {
+			config.LogOut = *logFileMap
+		}
 
 		if *readType != "DNA" && *readType != "RNA" {
 			log.Fatalf("Invalid read type: %s. Must be DNA or RNA.", *readType)

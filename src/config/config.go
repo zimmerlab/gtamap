@@ -49,17 +49,19 @@ var (
 
 // Mapping params
 var (
-	MaxBranchPoints int = 10 // how often if applyPossibleDiagonals allowed to branch
+	MaxBranchPoints int = 30 // how often if applyPossibleDiagonals allowed to branch
 )
 
 // ConfidentWorkerParams
 var (
-	MaxConfMm                 int = 8   // how many mm is a conf map allowed to have
-	MinConfAnchorLengthRNA    int = 20  // how long does each ali block in a conf map have to be to be considered conf in RNA
-	MinConfAnchorLengthDNA    int = 50  // how long does each ali block in a conf map have to be to be considered conf in DNA
+	MaxConfMm                 int = 6   // how many mm is a conf map allowed to have
+	MinConfAnchorLengthRNA    int = 20  // how long does each ali block in a conf map have to be considered conf in RNA
+	MinConfAnchorLengthDNA    int = 50  // how long does each ali block in a conf map have to be considered conf in DNA
 	IntronClusterDelta        int = 100 // by default, an intron cluster only absorbes an incoming gap (extending its reach) if the delta of gap.start/stop and cluster.start/stop is less than 100. This allows overlapping introns but also resolves intron coord confilct within close proximity
-	IntronClusterRepairWindow int = 5
+	IntronClusterRepairWindow int = 10
 )
+
+var MaxMismatchPercentageRepeat uint8 = 5
 
 // SAM options
 var (
@@ -69,6 +71,8 @@ var (
 
 // RNA/DNA Flag
 var IsOriginRNA bool = true
+
+var LogOut string = "gta_log.tsv"
 
 func Env() string {
 	return env

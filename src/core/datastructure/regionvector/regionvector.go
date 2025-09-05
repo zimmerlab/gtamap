@@ -14,10 +14,17 @@ type Region struct {
 	End   int // end-exlusive
 }
 
+func (r Region) Copy() Region {
+	return Region{
+		Start: r.Start,
+		End:   r.End,
+	}
+}
+
 type Gap struct {
 	Start           int // 0-based
 	End             int // end-exlusive
-	KnownSpliceSite bool
+	SpliceSiteScore int // canonical splice site -> 2 = canonical, 1 = non-can, 0 = no splice site
 }
 
 func (g Gap) Length() int {
@@ -25,11 +32,11 @@ func (g Gap) Length() int {
 }
 
 type Intron struct {
-	Start          int // 0-based
-	End            int // end-exclusive
-	Evidence       int
-	Rank           int // rank of intron in seq
-	TrueSpliceSite bool
+	Start           int // 0-based
+	End             int // end-exclusive
+	Evidence        int
+	Rank            int // rank of intron in seq
+	SpliceSiteScore int // canonical splice site -> 2 = canonical, 1 = non-can, 0 = no splice site
 }
 
 func (i Intron) Contains(r Region) bool {
@@ -460,6 +467,18 @@ func serializePath(path []Region) string {
 	return sb.String()
 }
 
+func hashPath(path []Region) uint64 {
+	var h uint64 = 14695981039346656037
+	const prime uint64 = 1099511628211
+	for _, r := range path {
+		h ^= uint64(r.Start)
+		h *= prime
+		h ^= uint64(r.End)
+		h *= prime
+	}
+	return h
+}
+
 type TranscriptomeGraph struct {
 	Length      int
 	IntronNodes []*TranscriptomeNode
@@ -587,7 +606,8 @@ func (rs *RegionSet) SpansIntron(region Region) []*Intron {
 
 func (t *TranscriptomeGraph) FindPathsRight(startPos int, length int) [][]Region {
 	var results [][]Region
-	seen := make(map[string]bool)
+	// seen := make(map[string]bool)
+	seen := make(map[uint64]bool)
 
 	foundStartNode := false
 	for _, startNode := range t.ExonNodes {
@@ -616,7 +636,7 @@ func (t *TranscriptomeGraph) FindPathsRight(startPos int, length int) [][]Region
 
 func (t *TranscriptomeGraph) FindPathsLeft(startPos int, length int) [][]Region {
 	var results [][]Region
-	seen := make(map[string]bool)
+	seen := make(map[uint64]bool)
 
 	foundStartNode := false
 	for _, startNode := range t.ExonNodes {
@@ -650,19 +670,23 @@ func LengthOfPath(regions []Region) int {
 	return i
 }
 
-func (t *TranscriptomeGraph) dfsRight(node *TranscriptomeNode, path []Region, length int, results *[][]Region, start int, seen map[string]bool) {
+func (t *TranscriptomeGraph) dfsRight(node *TranscriptomeNode, path []Region, length int, results *[][]Region, start int, seen map[uint64]bool) {
 	if node.IsIntron == 1 {
 		for _, next := range node.Next {
-			t.dfsRight(next, path, length, results, next.Start, seen)
+			t.dfsRight(next, path, length, results, next.Start, seen) // start from next exon node
 		}
 		return
+	}
+	if node.Start < start {
+		return // invalid node for right path
 	}
 
 	span := node.Stop - start
 	lengthOfCurrentPath := LengthOfPath(path)
 
 	if lengthOfCurrentPath == length {
-		key := serializePath(path)
+		// key := serializePath(path)
+		key := hashPath(path)
 		if !seen[key] {
 			*results = append(*results, append([]Region{}, path...))
 			seen[key] = true
@@ -673,7 +697,8 @@ func (t *TranscriptomeGraph) dfsRight(node *TranscriptomeNode, path []Region, le
 			Start: start,
 			End:   start + length - lengthOfCurrentPath,
 		})
-		key := serializePath(clipped)
+		// key := serializePath(clipped)
+		key := hashPath(clipped)
 		if !seen[key] {
 			*results = append(*results, clipped)
 			seen[key] = true
@@ -681,7 +706,7 @@ func (t *TranscriptomeGraph) dfsRight(node *TranscriptomeNode, path []Region, le
 		return
 	} else if span == 0 {
 		for _, next := range node.Next {
-			t.dfsRight(next, path, length, results, node.Start, seen)
+			t.dfsRight(next, path, length, results, node.Stop, seen)
 		}
 		return
 	}
@@ -696,7 +721,7 @@ func (t *TranscriptomeGraph) dfsRight(node *TranscriptomeNode, path []Region, le
 	}
 }
 
-func (t *TranscriptomeGraph) dfsLeft(node *TranscriptomeNode, path []Region, length int, results *[][]Region, end int, seen map[string]bool) {
+func (t *TranscriptomeGraph) dfsLeft(node *TranscriptomeNode, path []Region, length int, results *[][]Region, end int, seen map[uint64]bool) {
 	if node.IsIntron == 1 {
 		for _, prev := range node.Prev {
 			t.dfsLeft(prev, path, length, results, prev.Stop, seen)
@@ -704,11 +729,16 @@ func (t *TranscriptomeGraph) dfsLeft(node *TranscriptomeNode, path []Region, len
 		return
 	}
 
+	if node.Stop > end {
+		return // invalid node for left path
+	}
+
 	span := end - node.Start
 	lengthOfCurrentPath := LengthOfPath(path)
 
 	if lengthOfCurrentPath == length {
-		key := serializePath(path)
+		// key := serializePath(path)
+		key := hashPath(path)
 		if !seen[key] {
 			*results = append(*results, append([]Region{}, path...))
 			seen[key] = true
@@ -719,7 +749,8 @@ func (t *TranscriptomeGraph) dfsLeft(node *TranscriptomeNode, path []Region, len
 			Start: end + lengthOfCurrentPath - length,
 			End:   end,
 		})
-		key := serializePath(clipped)
+		// key := serializePath(clipped)
+		key := hashPath(clipped)
 		if !seen[key] {
 			*results = append(*results, clipped)
 			seen[key] = true
@@ -751,7 +782,7 @@ func (t TranscriptomeNode) String() string {
 }
 
 func (i Intron) String() string {
-	return fmt.Sprintf("%d: [%d, %d) Confident SpliceSite: [%t] Evidence: [%d]", i.Rank, i.Start, i.End, i.TrueSpliceSite, i.Evidence)
+	return fmt.Sprintf("%d: [%d, %d) SpliceSiteScore: [%d] Evidence: [%d]", i.Rank, i.Start, i.End, i.SpliceSiteScore, i.Evidence)
 }
 
 func GenomicCoordToReadCoord(startInRead, genomeCoord int, genomeIntervals []Region, totalReadLength int) (int, error) {
@@ -901,7 +932,7 @@ func (rs *RegionSet) GetIntersectingIntrons(b Region) []*Intron {
 
 // overlaps is needed to check if a region overlaps an intron and since intron is a different struct compared to region I made an extra func
 func overlaps(a *Intron, b Region) bool {
-	return a.Start < b.End && b.Start < a.End
+	return a.Start <= b.End && b.Start <= a.End
 }
 
 // OverlapsByRegion checks if the region vector overlaps with the given region.
@@ -1246,7 +1277,6 @@ func (rv *RegionVector) _RemoveRegion(start int, end int) { // optimized
 // c1: [0, 20], [20, 30]
 // c2: [0, 15], [16, 26]
 func CombineRegionVectorsConsecutiveInBoth(rv1 *RegionVector, rv2 *RegionVector) (*RegionVector, *RegionVector, error) {
-
 	if rv1.NumRegions() != rv2.NumRegions() {
 		return nil, nil, fmt.Errorf("region vectors must have the same number of regions to combine overlapping regions")
 	}

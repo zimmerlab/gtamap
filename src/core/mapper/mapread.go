@@ -209,7 +209,7 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 		l := dh.Diagonals[diagonal][len(dh.Diagonals[diagonal])-1].ToRead - dh.Diagonals[diagonal][0].FromRead
 		if config.IsOriginRNA {
 			// RNA: check pot length of best initial diag is smaller than 30, if so, don't map read
-			if l < 30 {
+			if l < 20 {
 				return
 			}
 		} else if l < 50 {
@@ -223,7 +223,7 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 	// BAD: many remaining diags and best score < 2
 	// GOOD/OKAY: few remaining diags and best score < 2 (Happens if we already mapped large portion of reads
 	// thus eliminating many of the remaining diags)
-	if score < 2 && len(dh.Diagonals) > 3 {
+	if score < 2 && len(dh.Diagonals) > 10 {
 		// logrus.Debug("no suitable diagonal found")
 		// logrus.Debug("adding partial result to results")
 
@@ -269,13 +269,13 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 	// there is at least one diagonal that was excluded
 	wasExcluded := len(excluded) > 0
 
-	if wasExcluded {
-		// logrus.WithFields(logrus.Fields{
-		// 	"excluded": excluded,
-		// }).Debug("excluded diagonals were found")
-	} else {
-		// logrus.Debug("no diagonals were excluded")
-	}
+	// if wasExcluded {
+	// 	// logrus.WithFields(logrus.Fields{
+	// 	// 	"excluded": excluded,
+	// 	// }).Debug("excluded diagonals were found")
+	// } else {
+	// 	// logrus.Debug("no diagonals were excluded")
+	// }
 
 	// the current diagonal contains less than x kmers
 	belowScoreThreshold := score <= 1
@@ -532,15 +532,15 @@ func annotateSpliceSites(read *fastq.Read, genomeIndex *index.GenomeIndex, resul
 			}
 		}
 
-		_, isKnownSpliceSite := utils.ScoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
+		score, _ := utils.ScoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
 			acceptorSiteSeq[0], acceptorSiteSeq[1], lookOnPlusStrand)
 
 		// annotate split with spliceSite info
 		if result.SpliceSitesInfo == nil {
-			result.SpliceSitesInfo = make([]bool, 0)
-			result.SpliceSitesInfo = append(result.SpliceSitesInfo, isKnownSpliceSite)
+			result.SpliceSitesInfo = make([]int, 0)
+			result.SpliceSitesInfo = append(result.SpliceSitesInfo, 2-score)
 		} else {
-			result.SpliceSitesInfo = append(result.SpliceSitesInfo, isKnownSpliceSite)
+			result.SpliceSitesInfo = append(result.SpliceSitesInfo, 2-score)
 		}
 
 		readGapPos = gapGenome.End + 1
@@ -564,12 +564,13 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 			indexRegionBeforeGap := result.MatchedRead.GetGapIndexAfterPos(readGapPos)
 
 			// loop through all gaps in the read (-1 means there is no more gap)
+		GapLoop:
 			for indexRegionBeforeGap > -1 {
 
 				gapRead, _ := result.MatchedRead.GetGapAfterRegionIndex(indexRegionBeforeGap)
 				gapGenome, gapGenomeOk := result.MatchedGenome.GetGapAfterRegionIndex(indexRegionBeforeGap)
 
-				if !gapGenomeOk {
+				if !gapGenomeOk || gapRead.Length() >= 20 {
 					// logrus.WithFields(logrus.Fields{
 					// 	"read":    result.MatchedRead,
 					// 	"genome":  result.MatchedGenome,
@@ -593,6 +594,9 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 						return
 					}
 
+					mmBeforeGapFill := make([]int, len(result.MismatchesRead))
+					copy(mmBeforeGapFill, result.MismatchesRead)
+
 					bestSplit := determineBestSplit(genomeIndex, read, result.SequenceIndex, gapRead, gapGenome)
 
 					if bestSplit == -1 {
@@ -615,10 +619,6 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 					// when bestSplit is 0 then there is nothing to be added to the left side of the gap
 					if bestSplit > 0 {
 
-						// add the split to the result
-						result.MatchedRead.AddRegionNonOverlappingPanic(gapRead.Start, gapRead.Start+bestSplit)
-						result.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.Start+bestSplit)
-
 						// the read and genome sequences from the start of the gap to the best split (left)
 						readByte := (*read.Sequence)[gapRead.Start : gapRead.Start+bestSplit]
 						genomeByte := (*genomeIndex.Sequences[result.SequenceIndex])[gapGenome.Start : gapGenome.Start+bestSplit]
@@ -631,19 +631,17 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 
 								// skip this match result if there are too many mismatches
 								if exceedsMismatchConstraint(read, result) {
-									// logrus.WithFields(logrus.Fields{
-									// 	"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
-									// 	"maxMismatchPercentage": config.MaxMismatchPercentage(),
-									// 	"mismatches":            result.MismatchesRead,
-									// 	"numMismatches":         len(result.MismatchesRead),
-									// }).Debug("too many mismatches in middle extension (left) -> skip sequence")
-									// continue sequenceLoop
-
-									result.IncompleteMap = true
-									return
+									result.MismatchesRead = mmBeforeGapFill
+									// determine the next gap (-1 if there is none)
+									readGapPos = gapRead.End + 1
+									indexRegionBeforeGap = result.MatchedRead.GetGapIndexAfterPos(readGapPos)
+									continue GapLoop
 								}
 							}
 						}
+						// add the split to the result only if threshold was not exeeded
+						result.MatchedRead.AddRegionNonOverlappingPanic(gapRead.Start, gapRead.Start+bestSplit)
+						result.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.Start+bestSplit)
 					}
 
 					// logrus.WithFields(logrus.Fields{
@@ -663,10 +661,6 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 						// 	"right":         gapRead.End,
 						// }).Debug("debug split right")
 
-						// add the split to the result
-						result.MatchedRead.AddRegionNonOverlappingPanic(gapRead.End-(gapRead.Length()-bestSplit), gapRead.End)
-						result.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.End-(gapRead.Length()-bestSplit), gapGenome.End)
-
 						// the read and genome sequences from the best split to the end of the gap (right)
 						readByte := (*read.Sequence)[gapRead.End-(gapRead.Length()-bestSplit) : gapRead.End]
 						genomeByte := (*genomeIndex.Sequences[result.SequenceIndex])[gapGenome.End-(gapRead.Length()-bestSplit) : gapGenome.End]
@@ -680,18 +674,17 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 
 								// skip this match result if there are too many mismatches
 								if exceedsMismatchConstraint(read, result) {
-									// logrus.WithFields(logrus.Fields{
-									// 	"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
-									// 	"maxMismatchPercentage": config.MaxMismatchPercentage(),
-									// 	"mismatches":            result.MismatchesRead,
-									// 	"numMismatches":         len(result.MismatchesRead),
-									// }).Debug("too many mismatches in middle extension (right) -> skip sequence")
-
-									result.IncompleteMap = true
-									return
+									result.MismatchesRead = mmBeforeGapFill
+									// determine the next gap (-1 if there is none)
+									readGapPos = gapRead.End + 1
+									indexRegionBeforeGap = result.MatchedRead.GetGapIndexAfterPos(readGapPos)
+									continue GapLoop
 								}
 							}
 						}
+						// add the split to the result only if threshold was not exeeded
+						result.MatchedRead.AddRegionNonOverlappingPanic(gapRead.End-(gapRead.Length()-bestSplit), gapRead.End)
+						result.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.End-(gapRead.Length()-bestSplit), gapGenome.End)
 					}
 
 					// logrus.WithFields(logrus.Fields{
@@ -706,6 +699,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 			}
 		}
 
+		// return
 		// there are unmatched positions in front of the read
 		firstRegionRead, _ := result.MatchedRead.GetFirstRegion()
 		if firstRegionRead.Start > 0 {
@@ -713,6 +707,9 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 			startRead := 0
 			endRead := firstRegionRead.Start
 			extensionLength := endRead - startRead
+
+			mmBeforeLeftExtension := make([]int, len(result.MismatchesRead))
+			copy(mmBeforeLeftExtension, result.MismatchesRead)
 
 			firstRegionGenome, _ := result.MatchedGenome.GetFirstRegion()
 			startGenome := firstRegionGenome.Start - extensionLength
@@ -732,6 +729,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 			if startGenome < 0 {
 				// logrus.Debug("genome index out of bounds")
 
+				result.MismatchesRead = mmBeforeLeftExtension
 				result.IncompleteMap = true
 				return
 			}
@@ -761,6 +759,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 					// 	"numMismatches":         len(result.MismatchesRead),
 					// }).Debug("too many mismatches in left extension -> skip sequence")
 
+					result.MismatchesRead = mmBeforeLeftExtension
 					result.IncompleteMap = true
 					return
 				}
@@ -789,6 +788,9 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 
 		if lastRegionRead.End < len(*read.Sequence) {
 
+			mmBeforeRightExtension := make([]int, len(result.MismatchesRead))
+			copy(mmBeforeRightExtension, result.MismatchesRead)
+
 			startRead := lastRegionRead.End
 			endRead := len(*read.Sequence)
 			extensionLength := endRead - startRead
@@ -811,6 +813,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 			if startGenome+len(readSequence) > len(*genomeIndex.Sequences[result.SequenceIndex]) {
 				// logrus.Debug("genome index out of bounds")
 
+				result.MismatchesRead = mmBeforeRightExtension
 				result.IncompleteMap = true
 				return
 			}
@@ -835,6 +838,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 					// }).Debug("too many mismatches in right extension -> skip sequence")
 					// continue sequenceLoop
 
+					result.MismatchesRead = mmBeforeRightExtension
 					result.IncompleteMap = true
 					return
 				}
@@ -868,7 +872,7 @@ func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.Genome
 
 		// INFO: DNA RNA
 		// Only annotate if RNA
-		if res.MatchedGenome.HasGaps() {
+		if res.MatchedGenome.HasGaps() && config.IsOriginRNA {
 			res.NormalizeRegions()
 			annotateSpliceSites(read, genomeIndex, res)
 		}
@@ -882,11 +886,15 @@ func mapReadToSequence(seqIndex int, read *fastq.Read, genomeIndex *index.Genome
 			}
 		}
 
+		if res.MatchedGenome.Length() != len(*read.Sequence) {
+			res.IncompleteMap = true
+		}
+
 		// INFO: Now apply blacklist
 		// If res in a repeat region, only append to finalResults when low mm
 		isInRepeat := isPartOfRepeat(res, genomeIndex)
 		if isInRepeat {
-			if len(res.MismatchesRead) < 4 {
+			if uint8(float64(len(res.MismatchesRead))*100/float64(len(*read.Sequence))) <= config.MaxMismatchPercentageRepeat {
 				finalResults = append(finalResults, res)
 			}
 		} else {
@@ -905,7 +913,7 @@ func isPartOfRepeat(res *mapperutils.ReadMatchResult, genomeIndex *index.GenomeI
 
 	for _, genomicRegion := range res.MatchedGenome.Regions {
 		repeats := genomeIndex.Blacklist[res.SequenceIndex].Including(float64(genomicRegion.Start))
-		if len(repeats) != 0 && genomicRegion.Length() > 70 {
+		if len(repeats) != 0 {
 			return true
 		}
 	}

@@ -98,6 +98,9 @@ func ReadGenesFromGtf(gtfFile *os.File, geneIds map[string]struct{}) []*GeneBasi
 		}
 
 		contigName := line[0]
+		if strings.HasPrefix(contigName, "chr") {
+			contigName = strings.TrimPrefix(contigName, "chr")
+		}
 		startGenomicRaw, errStart := strconv.ParseUint(line[3], 10, 32)
 		endGenomicRaw, errEnd := strconv.ParseUint(line[4], 10, 32)
 
