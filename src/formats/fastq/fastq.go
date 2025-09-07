@@ -3,12 +3,13 @@ package fastq
 import (
 	"bufio"
 	"compress/gzip"
-	"github.com/sirupsen/logrus"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 type Read struct {
@@ -43,7 +44,6 @@ func (pr *ProgressReader) Read(p []byte) (int, error) {
 }
 
 func InitFromPaths(pathR1Reads *string, pathR2Reads *string) (*Reader, error) {
-
 	var fileR1Reads *os.File = nil
 	var errR1 error = nil
 
@@ -67,7 +67,6 @@ func InitFromPaths(pathR1Reads *string, pathR2Reads *string) (*Reader, error) {
 }
 
 func InitFromFiles(fastqR1File *os.File, fastqR2File *os.File) (*Reader, error) {
-
 	logrus.WithFields(logrus.Fields{
 		"R1": fastqR1File.Name(),
 		"R2": fastqR2File.Name(),
@@ -138,7 +137,6 @@ func InitFromFiles(fastqR1File *os.File, fastqR2File *os.File) (*Reader, error) 
 }
 
 func (r Reader) NextRead() (*ReadPair, uint64) {
-
 	timerStart := time.Now()
 
 	if !r.scannerR1.Scan() {
@@ -154,6 +152,10 @@ func (r Reader) NextRead() (*ReadPair, uint64) {
 
 	// remove the leading '@' character from the header
 	headerBytesR1 := r.scannerR1.Bytes()
+	if len(headerBytesR1) == 0 {
+		return nil, 0
+	}
+
 	bytesRead += uint64(len(headerBytesR1))
 	headerR1 := string(headerBytesR1)[1:]
 
@@ -186,6 +188,11 @@ func (r Reader) NextRead() (*ReadPair, uint64) {
 
 		// remove the leading '@' character from the header
 		headerBytesR2 := r.scannerR2.Bytes()
+
+		if len(headerBytesR2) == 0 {
+			return nil, 0
+		}
+
 		bytesRead += uint64(len(headerBytesR2))
 		headerR2 := string(headerBytesR2)[1:]
 
