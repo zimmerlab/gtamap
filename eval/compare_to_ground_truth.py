@@ -6,8 +6,29 @@ import pysam
 import os
 import matplotlib.pyplot as plt
 import seaborn as sns
+import numpy as np
 import json
 from collections import defaultdict
+import sys
+
+
+def convert_to_global(mapper1_data, offset):
+    c_dict = dict()
+    for category, read_dict in mapper1_data.items():
+        if category in ["fw_mm", "rv_mm"]:
+            c_dict[category] = read_dict
+            continue
+
+        converted_regions = defaultdict(list)
+        for read_id, regions in read_dict.items():
+            new_region_list = []
+            for start, stop in regions[0]:
+                new_region_list.append((start + offset - 1, stop + offset - 1))
+            converted_regions[read_id].append(new_region_list)
+
+        c_dict[category] = converted_regions
+
+    return c_dict
 
 
 def compare_to_ground_truth(mapper_data, ground_truth_data, verbose):
@@ -43,7 +64,7 @@ def compare_to_ground_truth(mapper_data, ground_truth_data, verbose):
         else 0
     )
 
-    fw_accuracy, complient_fw = positional_accuracy(
+    fw_accuracy, complient_fw, avg_missed_bases_fw, mm_delta_fw = positional_accuracy(
         mapped_intervals_dict=mapper_data["fw"],
         true_intervals_dict=ground_truth_data["fw"],
         true_mm=ground_truth_data["fw_mut_combined"],
@@ -51,7 +72,7 @@ def compare_to_ground_truth(mapper_data, ground_truth_data, verbose):
         read_type="fw",
         verbose=verbose,
     )
-    rw_accuracy, complient_rv = positional_accuracy(
+    rw_accuracy, complient_rv, avg_missed_bases_rv, mm_delta_rv = positional_accuracy(
         mapped_intervals_dict=mapper_data["rv"],
         true_intervals_dict=ground_truth_data["rv"],
         true_mm=ground_truth_data["rv_mut_combined"],
@@ -99,6 +120,10 @@ def compare_to_ground_truth(mapper_data, ground_truth_data, verbose):
         "rv_level_3_recall": rv_level_three_recall,
         "perfect_matches_fw": complient_fw,
         "perfect_matches_rv": complient_rv,
+        "avg_missaligned_positions_fw": avg_missed_bases_fw,
+        "avg_missaligned_positions_rv": avg_missed_bases_rv,
+        "mm_delta_fw": mm_delta_fw,
+        "mm_delta_rv": mm_delta_rv,
     }
 
 
@@ -222,8 +247,10 @@ def parse_ground_truth(gt_file: str, gene_id: str):
         .cast(pl.List(pl.Int64))
         .alias("rw_mut_combined"),
     )
-    gene_strand = filtered_df["strand"][0]
+    gene_strand = filtered_df["strand"].item(0)
     is_rev = gene_strand == "-"
+    gene_start = filtered_df["gene_start"].item(0)
+    gene_length = filtered_df["gene_length"].item(0)
 
     # Create separate dictionaries for forward and reverse regions
     # is it +?
@@ -279,6 +306,8 @@ def parse_ground_truth(gt_file: str, gene_id: str):
         "rv_seq_err": rv_seq_err,
         "fw_mut_combined": fw_mut_combined,
         "rv_mut_combined": rv_mut_combined,
+        "gene_start": gene_start,
+        "gene_length": gene_length,
     }, df.height
 
 
@@ -303,7 +332,12 @@ def parse_region(region: str, is_rev: bool):
 
 
 def positional_accuracy(
-    mapped_intervals_dict, true_intervals_dict, true_mm, mapped_mm, read_type, verbose
+    mapped_intervals_dict,
+    true_intervals_dict,
+    true_mm,
+    mapped_mm,
+    read_type,
+    verbose,
 ):
     """
     Compute positional accuracy for each read and return the average accuracy.
@@ -313,6 +347,8 @@ def positional_accuracy(
     :return: Average positional accuracy across all reads.
     """
     accuracies = []
+    missed_bases_list = []
+    mm_delta = []
 
     number_of_complient_intervals = 0
     total = 0
@@ -347,69 +383,59 @@ def positional_accuracy(
             overlapping_bases_list.append(overlapping_bases)
 
         best_overlap = max(overlapping_bases_list)
-        if total_true_bases > 0:
-            if best_overlap == total_true_bases:
-                accuracies.append(best_overlap / total_true_bases)
-                number_of_complient_intervals += 1
-                # for i, o in enumerate(overlapping_bases_list):
-                #     missed_bases = total_true_bases - o
-                #     if not true_mm[read_id]:
-                #         true_mm[read_id] = []
-                # print(f"[\033[31mMAP INFO\033[0m] of {read_id} ({read_type}):")
-                # if len(mapped_mm[read_id][i]) <= len(true_mm[read_id]):
-                #     print(f"> [   \033[35mMAP\033[0m]: {mapped_intervals[i]}")
-                # else:
-                #     print(f"> [   \033[33mMAP\033[0m]: {mapped_intervals[i]}")
-                # print(f"> [   \033[32mREF\033[0m]: {true_intervals}")
-                # if len(mapped_mm[read_id][i]) <= len(true_mm[read_id]):
-                #     print(f"> [\033[35mMM MAP\033[0m]: {mapped_mm[read_id][i]}")
-                # else:
-                #     print(f"> [\033[33mMM MAP\033[0m]: {mapped_mm[read_id][i]}")
-                # print(f"> [\033[32mMM REF\033[0m]: {true_mm[read_id]}")
-            else:
-                # first get rv which best matches ground truth
-                if verbose:
+        best_overlap_index = np.argmax(overlapping_bases_list)
+        if best_overlap == total_true_bases:
+            accuracies.append(best_overlap / total_true_bases)
+            number_of_complient_intervals += 1
+            mm_delta.append(0)
+        else:
+            # first get rv which best matches ground truth
+            if mapped_mm[read_id][best_overlap_index] == ["*"]:
+                continue  # skip reads which were not mapped
+            accuracies.append(best_overlap / total_true_bases)
+            missed_bases = total_true_bases - best_overlap
+            missed_bases_list.append(missed_bases)
+            if not true_mm[read_id]:
+                true_mm[read_id] = []
+            delta = len(mapped_mm[read_id][best_overlap_index]) - len(true_mm[read_id])
+            mm_delta.append(delta)
+            seen = set()
+            if verbose:
 
-                    print(
-                        f"[\033[31mINCOMPLETE MAP\033[0m] of {read_id} ({read_type}):"
-                    )
-                    missed_bases = total_true_bases - best_overlap
-                    accuracies.append(best_overlap / total_true_bases)
-                    seen = set()
-                    if not true_mm[read_id]:
-                        true_mm[read_id] = []
+                print(f"[\033[31mINCOMPLETE MAP\033[0m] of {read_id} ({read_type}):")
 
-                    for i, interval in enumerate(mapped_intervals):
-                        key = "|".join(str(x) for x in chain.from_iterable(interval))
-                        if key not in seen:
-                            seen.add(key)
-                            missed_bases = total_true_bases - overlapping_bases_list[i]
-                            print(
-                                f"> [\033[34mALTERNATIVE\033[0m] Missaligned positions: ({missed_bases})"
-                            )
-                            if len(mapped_mm[read_id][i]) <= len(true_mm[read_id]):
-                                print(
-                                    f"> [   \033[35mMAP\033[0m]: {mapped_intervals[i]}"
-                                )
-                            else:
-                                print(
-                                    f"> [   \033[33mMAP\033[0m]: {mapped_intervals[i]}"
-                                )
-                            print(f"> [   \033[32mREF\033[0m]: {true_intervals}")
-                            if len(mapped_mm[read_id][i]) <= len(true_mm[read_id]):
-                                print(
-                                    f"> [\033[35mMM MAP\033[0m]: {mapped_mm[read_id][i]}"
-                                )
-                            else:
-                                print(
-                                    f"> [\033[33mMM MAP\033[0m]: {mapped_mm[read_id][i]}"
-                                )
-                            print(f"> [\033[32mMM REF\033[0m]: {true_mm[read_id]}")
+                for i, interval in enumerate(mapped_intervals):
+                    key = "|".join(str(x) for x in chain.from_iterable(interval))
+                    if key not in seen:
+                        seen.add(key)
+                        missed_bases = total_true_bases - overlapping_bases_list[i]
+                        print(
+                            f"> [\033[34mALTERNATIVE\033[0m] Missaligned positions: ({missed_bases})"
+                        )
+                        if len(mapped_mm[read_id][i]) <= len(true_mm[read_id]):
+                            print(f"> [   \033[35mMAP\033[0m]: {mapped_intervals[i]}")
+                        else:
+                            print(f"> [   \033[33mMAP\033[0m]: {mapped_intervals[i]}")
+                        print(f"> [   \033[32mREF\033[0m]: {true_intervals}")
+                        if len(mapped_mm[read_id][i]) <= len(true_mm[read_id]):
+                            print(f"> [\033[35mMM MAP\033[0m]: {mapped_mm[read_id][i]}")
+                        else:
+                            print(f"> [\033[33mMM MAP\033[0m]: {mapped_mm[read_id][i]}")
+                        print(f"> [\033[32mMM REF\033[0m]: {true_mm[read_id]}")
 
     return (
-        (sum(accuracies) / len(accuracies), number_of_complient_intervals)
+        (
+            sum(accuracies) / len(accuracies),
+            number_of_complient_intervals,
+            (
+                sum(missed_bases_list) / len(missed_bases_list)
+                if len(missed_bases_list) > 0
+                else 0
+            ),
+            (sum(mm_delta) / len(mm_delta) if len(mm_delta) > 0 else 0),
+        )
         if accuracies
-        else (0, 0)
+        else (0, 0, 0, 0)
     )
 
 
@@ -635,7 +661,7 @@ def merge_blocks(regions):
 
 def get_mismatches(read, flip_coords=False):
     if not read.cigartuples:
-        print(f"Had to skip extracting mm from {read.query_name} due to missing cigar")
+        # print(f"Had to skip extracting mm from {read.query_name} due to missing cigar")
         return ["*"]
     cigar_tuples = read.cigartuples
     mm = []
@@ -661,10 +687,11 @@ def get_mismatches(read, flip_coords=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Compare RNA mapper outputs")
     parser.add_argument("--sam1", required=True, help="First SAM file (your mapper)")
+    parser.add_argument("--mapper", required=True, help="Name of mapper")
     parser.add_argument("--ground_truth", help="Ground truth file (optional)")
     parser.add_argument("--output_dir", default="comparison_results", help="Output dir")
     parser.add_argument(
-        "--gene_id", help="Gene ID to filter reads (e.g., ENSG00000005073)"
+        "--gene_id", default="", help="Gene ID to filter reads (e.g., ENSG00000005073)"
     )
     parser.add_argument("--verbose", action="store_true", help="Verbose output")
 
@@ -672,19 +699,31 @@ if __name__ == "__main__":
 
     plot_prefix = args.output_dir
 
-    mapper1_data = parse_sam_file(args.sam1)
-
-    g_id = args.sam1.split("/")[-1].split(".")[0]
-
-    out_summary = os.path.join(args.output_dir, f"{g_id}.stat")
-    if not os.path.exists(args.output_dir):
-        os.makedirs(args.output_dir)
+    g_id = args.gene_id
+    if g_id == "":
+        g_id = args.sam1.split("/")[-1].split(".")[0]
+        if "_" in g_id:
+            g_id = g_id.split("_")[1]
 
     ground_truth_data, N = parse_ground_truth(
         args.ground_truth,
         g_id,
     )
+    print("parsed gt")
 
+    gene_start = ground_truth_data["gene_start"]
+
+    mapper1_data = parse_sam_file(args.sam1)
+    print("parsed sam")
+    if args.mapper == "hisat2" or args.mapper == "star":
+        mapper1_data = convert_to_global(mapper1_data, gene_start)
+        print("converted sam")
+
+    out_summary = os.path.join(args.output_dir, f"{args.mapper}_{g_id}.stat")
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
+
+    print("analyzing ...")
     results = compare_to_ground_truth(mapper1_data, ground_truth_data, args.verbose)
     results["true_negatives"] = (
         N
@@ -709,6 +748,10 @@ if __name__ == "__main__":
         "rv_level_2_recall",
         "fw_level_3_recall",
         "rv_level_3_recall",
+        "avg_missaligned_positions_fw",
+        "avg_missaligned_positions_rv",
+        "mm_delta_fw",
+        "mm_delta_rv",
     ]
 
     for key in print_order:
@@ -723,6 +766,8 @@ if __name__ == "__main__":
         header_fields.append("geneID")
         fields = []
         fields.append(g_id)
+        header_fields.append("tool")
+        fields.append(args.mapper)
         for key in print_order:
             val = results[key]
             if key == "false_negative_ids":
