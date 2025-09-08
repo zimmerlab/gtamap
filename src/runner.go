@@ -35,43 +35,88 @@ func main() {
 	// 	panic(err)
 	// }
 	// defer pprof.StopCPUProfile()
-	parser := argparse.NewParser("gtamap", "Gene-centric spliced read mapping")
 
-	var cmdIndexPre *argparse.Command = parser.NewCommand("index-pre", "Extract gene sequences from genome.")
-	var fastaFileIndexPre *string = cmdIndexPre.String("", "fasta", &argparse.Options{
-		Required: true,
-		Help:     "Nucleotide sequences (FASTA) file (currently only non-compressed).",
-	})
-	var gtfFileIndexPre *string = cmdIndexPre.String("", "gtf", &argparse.Options{
-		Required: true,
-		Help:     "Genome annotation (GTF) file (currently only non-compressed).",
-	})
-	var separateExtraction *bool = cmdIndexPre.Flag("", "splitgenes", &argparse.Options{
-		Help: "Extract gene sequences into separate fasta files, if more than one gene id is specified in --geneids",
-	})
-	var outputDirIndexPre *string = cmdIndexPre.String("", "output", &argparse.Options{
-		Required: true,
-		Help:     "Output directory for extracted gene sequences.",
-	})
-	var geneIdsIndexPre *string = cmdIndexPre.String("", "geneids", &argparse.Options{
-		Required: false,
-		Help:     "Gene IDs to extract (comma-separated).",
-	})
-	var upstreamIndexPre *int = cmdIndexPre.Int("", "upstream", &argparse.Options{
-		Required: false,
-		Help:     "Number of bases to add upstream of the gene start position.",
-		Default:  0,
-	})
-	var downstreamIndexPre *int = cmdIndexPre.Int("", "downstream", &argparse.Options{
-		Required: false,
-		Help:     "Number of bases to add downstream of the gene end position.",
-		Default:  0,
-	})
-	var logLevelIndexPre *string = cmdIndexPre.Selector("", "loglevel", []string{"ERROR", "INFO", "DEBUG"}, &argparse.Options{
-		Required: false,
-		Help:     "Log output level.",
-		Default:  "INFO",
-	})
+	parser := argparse.NewParser(
+		"gtamap",
+		"Gene-centric spliced read mapping",
+	)
+
+	var cmdIndexPre *argparse.Command = parser.NewCommand(
+		"index-pre",
+		"Extract gene sequences from genome.",
+	)
+
+	var fastaFileIndexPre *string = cmdIndexPre.String(
+		"",
+		"fasta",
+		&argparse.Options{
+			Required: true,
+			Help: "Nucleotide sequences (FASTA) file (currently only " +
+				"non-compressed).",
+		},
+	)
+	var gtfFileIndexPre *string = cmdIndexPre.String(
+		"",
+		"gtf",
+		&argparse.Options{
+			Required: true,
+			Help: "Genome annotation (GTF) file (currently only " +
+				"non-compressed).",
+		},
+	)
+	var separateExtraction *bool = cmdIndexPre.Flag(
+		"",
+		"splitgenes",
+		&argparse.Options{
+			Help: "Extract gene sequences into separate fasta files, if " +
+				"more than one gene id is specified in --geneids",
+		},
+	)
+	var outputDirIndexPre *string = cmdIndexPre.String(
+		"",
+		"output",
+		&argparse.Options{
+			Required: true,
+			Help:     "Output directory for extracted gene sequences.",
+		},
+	)
+	var geneIdsIndexPre *string = cmdIndexPre.String(
+		"",
+		"geneids",
+		&argparse.Options{
+			Required: false,
+			Help:     "Gene IDs to extract (comma-separated).",
+		},
+	)
+	var upstreamIndexPre *int = cmdIndexPre.Int(
+		"",
+		"upstream", &argparse.Options{
+			Required: false,
+			Help: "Number of bases to add upstream of the gene start " +
+				"position.",
+			Default: 0,
+		},
+	)
+	var downstreamIndexPre *int = cmdIndexPre.Int(
+		"",
+		"downstream",
+		&argparse.Options{
+			Required: false,
+			Help: "Number of bases to add downstream of the gene end " +
+				"position.",
+			Default: 0,
+		},
+	)
+	var logLevelIndexPre *string = cmdIndexPre.Selector(
+		"",
+		"loglevel",
+		[]string{"ERROR", "INFO", "DEBUG"},
+		&argparse.Options{
+			Required: false,
+			Help:     "Log output level.",
+			Default:  "INFO",
+		},
+	)
 
 	var cmdIndexPreRegion *argparse.Command = parser.NewCommand("index-pre-region", "Extract a specific sequence from genome.")
 	var fastaFileIndexPreRegion *string = cmdIndexPreRegion.String("", "fasta", &argparse.Options{
