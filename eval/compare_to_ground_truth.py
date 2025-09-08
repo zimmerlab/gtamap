@@ -81,6 +81,33 @@ def compare_to_ground_truth(mapper_data, ground_truth_data, verbose):
         verbose=verbose,
     )
 
+    (
+        fw_accuracy_strict,
+        complient_fw_strict,
+        avg_missed_bases_fw_strict,
+        mm_delta_fw_strict,
+    ) = positional_accuracy_strict(
+        mapped_intervals_dict=mapper_data["fw"],
+        true_intervals_dict=ground_truth_data["fw"],
+        true_mm=ground_truth_data["fw_mut_combined"],
+        mapped_mm=mapper_data["fw_mm"],
+        read_type="fw",
+        verbose=verbose,
+    )
+    (
+        rw_accuracy_strict,
+        complient_rv_strict,
+        avg_missed_bases_rv_strict,
+        mm_delta_rv_strict,
+    ) = positional_accuracy_strict(
+        mapped_intervals_dict=mapper_data["rv"],
+        true_intervals_dict=ground_truth_data["rv"],
+        true_mm=ground_truth_data["rv_mut_combined"],
+        mapped_mm=mapper_data["rv_mm"],
+        read_type="rv",
+        verbose=verbose,
+    )
+
     rv_level_two_recall = level_two_recall(
         pred_intervals_dict=mapper_data["rv"],
         true_intervals_dict=ground_truth_data["rv"],
@@ -124,6 +151,10 @@ def compare_to_ground_truth(mapper_data, ground_truth_data, verbose):
         "avg_missaligned_positions_rv": avg_missed_bases_rv,
         "mm_delta_fw": mm_delta_fw,
         "mm_delta_rv": mm_delta_rv,
+        "fw_overlap_strict": fw_accuracy_strict,
+        "rv_overlap_strict": rw_accuracy_strict,
+        "avg_missaligned_positions_fw_strict": avg_missed_bases_fw_strict,
+        "avg_missaligned_positions_rv_strict": avg_missed_bases_rv_strict,
     }
 
 
@@ -329,6 +360,124 @@ def parse_region(region: str, is_rev: bool):
             (int(start) - 1, int(end) - 1)
             for start, end in (r.split("-") for r in regions)
         ][::-1]
+
+
+def positional_accuracy_strict(
+    mapped_intervals_dict,
+    true_intervals_dict,
+    true_mm,
+    mapped_mm,
+    read_type,
+    verbose,
+):
+    """
+    Compute positional accuracy for each read and return the average accuracy.
+
+    :param pred_intervals_dict: Dictionary of predicted intervals {read_id: list([(start, stop), ...], [(start, stop), ...)]}
+    :param true_intervals_dict: Dictionary of true intervals {read_id: [(start, stop), ...]}
+    :return: Average positional accuracy across all reads.
+    """
+    accuracies = []
+    missed_bases_list = []
+    mm_delta = []
+
+    number_of_complient_intervals = 0
+    total = 0
+    for read_id, true_intervals in true_intervals_dict.items():
+        total += 1
+        total_true_bases = sum(end - start for start, end in true_intervals)
+
+        if read_id not in mapped_intervals_dict:
+            # FN case: nothing mapped for this read
+            accuracies.append(0.0)
+            missed_bases_list.append(total_true_bases)
+            mm_delta.append(len(true_mm[read_id]) if true_mm[read_id] else 0)
+            if verbose:
+                print(f"[\033[31mUNMAPPED READ\033[0m] {read_id} ({read_type})")
+                print(f"> [   \033[32mREF\033[0m]: {true_intervals}")
+                print(f"> [\033[32mMM REF\033[0m]: {true_mm[read_id]}")
+            continue
+
+        mapped_intervals = mapped_intervals_dict[
+            read_id
+        ]  # is a list of lists of tuples
+
+        total_true_bases = sum(end - start for start, end in true_intervals)
+
+        # evaluate all mapped intervals
+        overlapping_bases_list = []  # store num overlaps per map in list
+        for mappedInterval in mapped_intervals:
+            overlapping_bases = 0
+
+            for true_start, true_end in true_intervals:
+                for pred_start, pred_end in mappedInterval:
+                    if pred_end < true_start:
+                        continue  # Skip if predicted interval is before the true interval
+                    if pred_start > true_end:
+                        break  # No need to check further (sorted order)
+
+                    overlap_start = max(true_start, pred_start)
+                    overlap_end = min(true_end, pred_end)
+
+                    if overlap_start <= overlap_end:
+                        overlapping_bases += overlap_end - overlap_start
+            overlapping_bases_list.append(overlapping_bases)
+
+        best_overlap = max(overlapping_bases_list)
+        best_overlap_index = np.argmax(overlapping_bases_list)
+        if best_overlap == total_true_bases:
+            accuracies.append(best_overlap / total_true_bases)
+            number_of_complient_intervals += 1
+            mm_delta.append(0)
+        else:
+            # first get rv which best matches ground truth
+            if mapped_mm[read_id][best_overlap_index] == ["*"]:
+                continue  # skip reads which were not mapped
+            accuracies.append(best_overlap / total_true_bases)
+            missed_bases = total_true_bases - best_overlap
+            missed_bases_list.append(missed_bases)
+            if not true_mm[read_id]:
+                true_mm[read_id] = []
+            delta = len(mapped_mm[read_id][best_overlap_index]) - len(true_mm[read_id])
+            mm_delta.append(delta)
+            seen = set()
+            if verbose:
+
+                print(f"[\033[31mINCOMPLETE MAP\033[0m] of {read_id} ({read_type}):")
+
+                for i, interval in enumerate(mapped_intervals):
+                    key = "|".join(str(x) for x in chain.from_iterable(interval))
+                    if key not in seen:
+                        seen.add(key)
+                        missed_bases = total_true_bases - overlapping_bases_list[i]
+                        print(
+                            f"> [\033[34mALTERNATIVE\033[0m] Missaligned positions: ({missed_bases})"
+                        )
+                        if len(mapped_mm[read_id][i]) <= len(true_mm[read_id]):
+                            print(f"> [   \033[35mMAP\033[0m]: {mapped_intervals[i]}")
+                        else:
+                            print(f"> [   \033[33mMAP\033[0m]: {mapped_intervals[i]}")
+                        print(f"> [   \033[32mREF\033[0m]: {true_intervals}")
+                        if len(mapped_mm[read_id][i]) <= len(true_mm[read_id]):
+                            print(f"> [\033[35mMM MAP\033[0m]: {mapped_mm[read_id][i]}")
+                        else:
+                            print(f"> [\033[33mMM MAP\033[0m]: {mapped_mm[read_id][i]}")
+                        print(f"> [\033[32mMM REF\033[0m]: {true_mm[read_id]}")
+
+    return (
+        (
+            sum(accuracies) / len(accuracies),
+            number_of_complient_intervals,
+            (
+                sum(missed_bases_list) / len(missed_bases_list)
+                if len(missed_bases_list) > 0
+                else 0
+            ),
+            (sum(mm_delta) / len(mm_delta) if len(mm_delta) > 0 else 0),
+        )
+        if accuracies
+        else (0, 0, 0, 0)
+    )
 
 
 def positional_accuracy(
@@ -752,12 +901,18 @@ if __name__ == "__main__":
         "avg_missaligned_positions_rv",
         "mm_delta_fw",
         "mm_delta_rv",
+        "fw_overlap_strict",
+        "rv_overlap_strict",
+        "avg_missaligned_positions_fw_strict",
+        "avg_missaligned_positions_rv_strict",
     ]
 
     for key in print_order:
         val = results[key]
         if key == "false_negative_ids":
-            print(f"[\033[32mMETRIC\033[0m] {key} (30 examples) = {list(val)[0:30]}")
+            print(
+                f"[\033[32mMETRIC\033[0m] {key} (showing 30 examples of {len(val)}) = {list(val)[0:30]}"
+            )
         else:
             print(f"[\033[32mMETRIC\033[0m] {key} = {val}")
 
