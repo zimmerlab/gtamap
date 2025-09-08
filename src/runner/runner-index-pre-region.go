@@ -1,9 +1,12 @@
 package runner
 
 import (
-	"fmt"
+	"strconv"
+	"strings"
 
+	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/akamensky/argparse"
+	"github.com/sirupsen/logrus"
 )
 
 type ArgsIndexPreRegion struct {
@@ -58,7 +61,37 @@ func AddCommandIndexPreRegion(
 }
 
 func ExecIndexPreRegion(argsObj *ArgsIndexPreRegion) {
-	fmt.Println("exec index-pre-region")
 
-	fmt.Println(*argsObj.FastaFile)
+	logrus.Info("Extracting region sequence from genome")
+
+	// parse region string to contig, start, end
+	region := strings.Split(*argsObj.Region, ":")
+	if len(region) != 2 {
+		logrus.Fatal("Invalid region format. Expected format: <chromosome>:<start>-<end>")
+	}
+
+	chromosome := region[0]
+
+	startEnd := strings.Split(region[1], "-")
+	if len(startEnd) != 2 {
+		logrus.Fatal("Invalid region format. Expected format: <chromosome>:<start>-<end>")
+	}
+
+	start, err := strconv.Atoi(startEnd[0])
+	if err != nil || start < 0 {
+		logrus.Fatal("Invalid start position. Expected a positive integer.")
+	}
+
+	end, err := strconv.Atoi(startEnd[1])
+	if err != nil || end <= start {
+		logrus.Fatal("Invalid end position. Expected an integer greater than start position.")
+	}
+
+	index.ExtractSequenceFromFastaForIndex(
+		*argsObj.FastaFile,
+		chromosome,
+		start,
+		end,
+		*argsObj.OutputDir,
+	)
 }

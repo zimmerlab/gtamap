@@ -1,10 +1,12 @@
 package runner
 
 import (
-	"fmt"
 	"os"
+	"strings"
 
+	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/akamensky/argparse"
+	"github.com/sirupsen/logrus"
 )
 
 type ArgsIndex struct {
@@ -84,7 +86,40 @@ func AddCommandIndex(
 }
 
 func ExecIndex(argsObj *ArgsIndex) {
-	fmt.Println("exec index")
 
-	fmt.Println(*argsObj.FastaFile)
+	// ensure .gtai suffix of output file
+	if !strings.HasSuffix(*argsObj.OutputFile, ".gtai") {
+		*argsObj.OutputFile += ".gtai"
+	}
+
+	outputFileIndex, err := os.OpenFile(
+		*argsObj.OutputFile,
+		os.O_WRONLY|os.O_CREATE|os.O_TRUNC,
+		0o600,
+	)
+
+	if err != nil {
+		logrus.Fatalf("Could not open output sam file: %v", err)
+	}
+
+	if *argsObj.RegionmaskBedFile == (os.File{}) {
+		argsObj.RegionmaskBedFile = nil
+	}
+	if *argsObj.RegionmaskPriorityFile == (os.File{}) {
+		argsObj.RegionmaskPriorityFile = nil
+	}
+	if (argsObj.RegionmaskBedFile == nil &&
+		argsObj.RegionmaskPriorityFile != nil) ||
+		(argsObj.RegionmaskBedFile != nil &&
+			argsObj.RegionmaskPriorityFile == nil) {
+		logrus.Fatal("Both --regionmaskBed and --regionmaskPriorities " +
+			"need to be provided to use region masking.")
+	}
+
+	index.BuildAndSerializeGenomeIndex(
+		argsObj.FastaFile,
+		outputFileIndex,
+		argsObj.RegionmaskBedFile,
+		argsObj.RegionmaskPriorityFile,
+	)
 }

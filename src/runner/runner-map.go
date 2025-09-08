@@ -1,10 +1,16 @@
 package runner
 
 import (
-	"fmt"
+	"log"
 	"os"
 
+	"github.com/KleinSamuel/gtamap/src/config"
+	"github.com/KleinSamuel/gtamap/src/core/index"
+	"github.com/KleinSamuel/gtamap/src/core/mapper"
+	"github.com/KleinSamuel/gtamap/src/datawriter"
+	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/akamensky/argparse"
+	"github.com/sirupsen/logrus"
 )
 
 type ArgsMap struct {
@@ -128,7 +134,74 @@ func AddCommandMap(
 }
 
 func ExecMap(argsObj *ArgsMap) {
-	fmt.Println("exec map")
 
-	fmt.Println(*argsObj.IndexFile)
+	// if *logFileMap != "" {
+	// 	config.LogOut = *logFileMap
+	// }
+
+	// should already be captured by argument parsers
+	if *argsObj.ReadType != "DNA" && *argsObj.ReadType != "RNA" {
+		log.Fatalf("Invalid read type: %s. Must be DNA or RNA.", *argsObj.ReadType)
+	}
+
+	config.IsOriginRNA = *argsObj.ReadType == "RNA"
+
+	genomeIndex := index.ReadGenomeIndexByFile(argsObj.IndexFile)
+
+	if *argsObj.RegionmaskBedFile == (os.File{}) {
+		argsObj.RegionmaskBedFile = nil
+	}
+	if *argsObj.RegionmaskPriorityFile == (os.File{}) {
+		argsObj.RegionmaskPriorityFile = nil
+	}
+	if (argsObj.RegionmaskBedFile == nil &&
+		argsObj.RegionmaskPriorityFile != nil) ||
+		(argsObj.RegionmaskBedFile != nil &&
+			argsObj.RegionmaskPriorityFile == nil) {
+		logrus.Fatal("Both --regionmaskBed and --regionmaskPriorities " +
+			"need to be provided to use region masking.")
+	}
+
+	// add region mask to index if provided
+	if argsObj.RegionmaskBedFile != nil && argsObj.RegionmaskPriorityFile != nil {
+
+		index.AddRegionmaskToIndex(
+			argsObj.RegionmaskBedFile,
+			argsObj.RegionmaskPriorityFile,
+			genomeIndex,
+		)
+
+		logrus.WithFields(logrus.Fields{
+			"region mask":   argsObj.RegionmaskBedFile.Name(),
+			"priority file": argsObj.RegionmaskPriorityFile.Name(),
+		}).Info("Using region mask bed file and priority file")
+
+	} else {
+		logrus.Info("No region mask used")
+	}
+
+	reader, errFastq := fastq.InitFromFiles(
+		argsObj.FastqR1File,
+		argsObj.FastqR2File,
+	)
+
+	if errFastq != nil {
+		logrus.Fatalf("Could not initialize fastq reader: %v", errFastq)
+	}
+
+	writer := datawriter.InitFromPath(*argsObj.OutputFile)
+
+	// Old paralog logic where main index is extended by using paralog indices
+	// if *paralogFilePathMap != "" {
+	// 	logrus.Info("Found paralog file. Reading in paralog indices.")
+	// 	paralogFileMap, err := os.Open(*paralogFilePathMap)
+	// 	if err != nil {
+	// 		panic("Error reading provided paralog file. Make sure it exists")
+	// 	}
+	// 	genomeIndex.LoadParalogs(paralogFileMap)
+	// }
+
+	// TODO: maybe check threads parameter for valid values
+
+	mapper.MapAll(genomeIndex, reader, writer, argsObj.Threads)
 }
