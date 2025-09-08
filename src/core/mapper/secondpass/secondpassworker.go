@@ -722,31 +722,23 @@ func correctSymmetricIntronErrors(readMatchResult *mapperutils.ReadMatchResult, 
 			}
 			// go to next gap
 			continue
-		}
-
-		// get all possible l and r paddings of right anchor
-		lPaddings, _ := getPadding(leftMappedRegion, targetSeqIntronSet)
-		_, rPaddings := getPadding(rightMappedRegion, targetSeqIntronSet)
-
-		if len(lPaddings) == 1 && len(rPaddings) == 1 {
-			// looks ugly but both maps only contain one padding, but since they are in a map and I dont know their value, I make nested for loop
-			for lPad := range lPaddings {
-				for rPad := range rPaddings {
-					if lPad == rPad && lPad != 0 {
-						if leftMappedRegion.Length() >= utils.Abs(lPad) && rightMappedRegion.Length() >= utils.Abs(rPad) {
-							correctedReadMatchResult.MatchedGenome.Regions[i].End += lPad
-							correctedReadMatchResult.MatchedGenome.Regions[i+1].Start += rPad
-							hasCorrection = true
+		} else {
+			count := 0
+			for _, overlapIntron := range overlappingIntrons {
+				correctedL := overlapIntron.Start - gap.Start
+				correctedR := overlapIntron.End - gap.End
+				if correctedL == correctedR && correctedL != 0 {
+					if leftMappedRegion.Length() >= utils.Abs(correctedL) && rightMappedRegion.Length() >= utils.Abs(correctedR) {
+						count++
+						if count > 1 {
+							logrus.Warnf("Tried to apply several paddins. Need to implement / Should not happen (Read %s)", read.Header)
+							continue
 						}
+						correctedReadMatchResult.MatchedGenome.Regions[i].End += correctedL
+						correctedReadMatchResult.MatchedGenome.Regions[i+1].Start += correctedR
+						hasCorrection = true
 					}
 				}
-			}
-		} else {
-			// either lPaddings > 1 and/or rPaddings>1
-			// go through all combinations and find the one with the min mismatches
-			possiblePaddings := getPossiblePaddingCombinations(leftMappedRegion, rightMappedRegion, lPaddings, rPaddings)
-			if len(possiblePaddings) > 1 {
-				logrus.Warn("Multiple padding combinations fornd for sym intron error: Need to implement logic")
 			}
 		}
 	}
