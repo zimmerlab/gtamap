@@ -1770,7 +1770,7 @@ func getPadding(mainAnchor regionvector.Region, targetSeqIntronSet *regionvector
 func extractMMofAnchor(anchor regionvector.Region, mms []int) []int {
 	extracted := make([]int, 0)
 	for _, mm := range mms {
-		if mm >= anchor.Start && mm <= anchor.End {
+		if mm >= anchor.Start && mm < anchor.End {
 			extracted = append(extracted, mm)
 		}
 	}
