@@ -686,6 +686,9 @@ func (t *TranscriptomeGraph) dfsRight(node *TranscriptomeNode, path []Region, le
 
 	if lengthOfCurrentPath == length {
 		// key := serializePath(path)
+		if len(path) == 0 {
+			return // skip empty paths
+		}
 		key := hashPath(path)
 		if !seen[key] {
 			*results = append(*results, append([]Region{}, path...))
@@ -738,6 +741,9 @@ func (t *TranscriptomeGraph) dfsLeft(node *TranscriptomeNode, path []Region, len
 
 	if lengthOfCurrentPath == length {
 		// key := serializePath(path)
+		if len(path) == 0 {
+			return // skip empty paths
+		}
 		key := hashPath(path)
 		if !seen[key] {
 			*results = append(*results, append([]Region{}, path...))
