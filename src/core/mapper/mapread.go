@@ -699,7 +699,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 			}
 		}
 
-		// return
+		return
 		// there are unmatched positions in front of the read
 		firstRegionRead, _ := result.MatchedRead.GetFirstRegion()
 		if firstRegionRead.Start > 0 {
