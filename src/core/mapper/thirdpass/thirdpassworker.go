@@ -2,6 +2,7 @@ package thirdpass
 
 import (
 	"math"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,6 +20,16 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 	defer wgThirdPass.Done()
 	total := 0
 	mmTotal := 0
+
+	f, err := os.Create("output.tsv")
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	if err := WriteHeader(f); err != nil {
+		panic(err)
+	}
 
 	for {
 
@@ -66,6 +77,8 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 				mmTotal += len(task.TargetInfo.Fw[i].MismatchesRead)
 
 				s, err := readPairResultToSamString(index, task.TargetInfo.ReadPair, task.TargetInfo.Fw[i], nil)
+				task.TargetInfo.Fw[i].EndMM = len(task.TargetInfo.Fw[i].MismatchesRead)
+				task.TargetInfo.Fw[i].WriteTSV(f, index.GetSequenceInfo(task.TargetInfo.Fw[i].SequenceIndex).GeneId, 1, i)
 				if err != nil {
 					logrus.Error("Error converting read pair result to SAM string: ", err)
 					continue
@@ -86,6 +99,8 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 				mmTotal += len(task.TargetInfo.Rv[j].MismatchesRead)
 
 				s, err := readPairResultToSamString(index, task.TargetInfo.ReadPair, nil, task.TargetInfo.Rv[j])
+				task.TargetInfo.Rv[j].EndMM = len(task.TargetInfo.Rv[j].MismatchesRead)
+				task.TargetInfo.Rv[j].WriteTSV(f, index.GetSequenceInfo(task.TargetInfo.Rv[j].SequenceIndex).GeneId, 1, j)
 				if err != nil {
 					logrus.Error("Error converting read pair result to SAM string: ", err)
 					continue
@@ -486,4 +501,20 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 	}
 
 	return builder.String(), nil
+}
+
+func WriteHeader(f *os.File) error {
+	header := []string{
+		"Gene", "sId", "isFw", "altId", "InitialMM", "EndMM",
+		"IsFixPoint", "MainAnchorLength", "MainAnchorMM",
+		"TotalLeftOptions", "TotalRightOptions",
+		"ValidLeftOptions", "ValidRightOptions",
+		"LeftFixpointLength", "RightFixpointLength",
+		"IsOverhangCorrected",
+		"IsGapFill", "IsGapFillOverflow", "GapsFilled", "GapsFilledOverflow",
+		"IsSymInErr", "SymInErrLen",
+	}
+	line := strings.Join(header, "\t") + "\n"
+	_, err := f.WriteString(line)
+	return err
 }

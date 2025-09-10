@@ -2,6 +2,7 @@ package mapperutils
 
 import (
 	"fmt"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -42,6 +43,30 @@ type ReadMatchResult struct {
 	diagonalHandler *DiagonalHandler
 	IncompleteMap   bool
 	SpliceSitesInfo []int // corresponds to the number of junctions of match result. canonical splice site -> 2 = canonical, 1 = non-can, 0 = no splice site
+	// fileds for logging
+	Id        int
+	InitialMM int
+	EndMM     int
+
+	IsFixPoint          bool
+	MainAnchorLength    int
+	MainAnchorMM        int
+	TotalLeftOptions    int
+	TotalRightOptions   int
+	ValidLeftOptions    int
+	ValidRightOptions   int
+	LeftFixpointLength  int
+	RightFixpointLength int
+
+	IsOverhangCorrected bool
+
+	IsGapFill          bool
+	IsGapFillOverflow  bool
+	GapsFilled         []int
+	GapsFilledOverflow []int
+
+	IsSymInErr  bool
+	SymInErrLen []int
 }
 
 func (r *ReadMatchResult) HasUnknownSpliceSites() bool {
@@ -296,12 +321,50 @@ func (r *ReadMatchResult) Copy() *ReadMatchResult {
 		dhCopy = r.diagonalHandler.Copy()
 	}
 
+	cSymInErrLen := make([]int, 0)
+	if r.SymInErrLen != nil {
+		cSymInErrLen := make([]int, len(r.SymInErrLen))
+		copy(cSymInErrLen, r.SymInErrLen)
+	}
+
+	cGapsFilled := make([]int, 0)
+	if r.GapsFilled != nil {
+		cGapsFilled = make([]int, len(r.GapsFilled))
+		copy(cGapsFilled, r.GapsFilled)
+	}
+	cGapsFilledOverflow := make([]int, 0)
+	if r.GapsFilledOverflow != nil {
+		cGapsFilledOverflow = make([]int, len(r.GapsFilledOverflow))
+		copy(cGapsFilledOverflow, r.GapsFilledOverflow)
+	}
+
 	return &ReadMatchResult{
 		SequenceIndex:   r.SequenceIndex,
 		MatchedRead:     r.MatchedRead.Copy(),
 		MatchedGenome:   r.MatchedGenome.Copy(),
 		MismatchesRead:  append([]int{}, r.MismatchesRead...),
 		diagonalHandler: dhCopy,
+
+		InitialMM:           r.InitialMM,
+		IsFixPoint:          r.IsFixPoint,
+		MainAnchorLength:    r.MainAnchorLength,
+		MainAnchorMM:        r.MainAnchorMM,
+		TotalLeftOptions:    r.TotalLeftOptions,
+		TotalRightOptions:   r.TotalRightOptions,
+		ValidLeftOptions:    r.ValidLeftOptions,
+		ValidRightOptions:   r.ValidRightOptions,
+		LeftFixpointLength:  r.LeftFixpointLength,
+		RightFixpointLength: r.RightFixpointLength,
+
+		IsOverhangCorrected: r.IsOverhangCorrected,
+
+		IsGapFill:          r.IsGapFill,
+		GapsFilled:         cGapsFilled,
+		IsGapFillOverflow:  r.IsGapFillOverflow,
+		GapsFilledOverflow: cGapsFilledOverflow,
+
+		IsSymInErr:  r.IsSymInErr,
+		SymInErrLen: cSymInErrLen,
 	}
 }
 
@@ -728,4 +791,45 @@ func ParseMatchedRegion(region regionvector.Region, mms []int, isRev bool) strin
 	}
 
 	return builder.String()
+}
+
+func sliceToString(s []int) string {
+	if len(s) == 0 {
+		return "NA"
+	}
+	strs := make([]string, len(s))
+	for i, v := range s {
+		strs[i] = strconv.Itoa(v)
+	}
+	return strings.Join(strs, ",")
+}
+
+func (r *ReadMatchResult) WriteTSV(f *os.File, gene string, isFw int, altId int) error {
+	fields := []string{
+		gene,
+		strconv.Itoa(r.SequenceIndex),
+		strconv.Itoa(isFw),
+		strconv.Itoa(altId),
+		strconv.Itoa(r.InitialMM),
+		strconv.Itoa(r.EndMM),
+		strconv.FormatBool(r.IsFixPoint),
+		strconv.Itoa(r.MainAnchorLength),
+		strconv.Itoa(r.MainAnchorMM),
+		strconv.Itoa(r.TotalLeftOptions),
+		strconv.Itoa(r.TotalRightOptions),
+		strconv.Itoa(r.ValidLeftOptions),
+		strconv.Itoa(r.ValidRightOptions),
+		strconv.Itoa(r.LeftFixpointLength),
+		strconv.Itoa(r.RightFixpointLength),
+		strconv.FormatBool(r.IsOverhangCorrected),
+		strconv.FormatBool(r.IsGapFill),
+		strconv.FormatBool(r.IsGapFillOverflow),
+		sliceToString(r.GapsFilled),
+		sliceToString(r.GapsFilledOverflow),
+		strconv.FormatBool(r.IsSymInErr),
+		sliceToString(r.SymInErrLen),
+	}
+	line := strings.Join(fields, "\t") + "\n"
+	_, err := f.WriteString(line)
+	return err
 }
