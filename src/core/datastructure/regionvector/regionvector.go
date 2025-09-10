@@ -677,7 +677,7 @@ func (t *TranscriptomeGraph) dfsRight(node *TranscriptomeNode, path []Region, le
 		}
 		return
 	}
-	if node.Start < start {
+	if node.Start < start && len(path) > 0 {
 		return // invalid node for right path
 	}
 
@@ -729,7 +729,7 @@ func (t *TranscriptomeGraph) dfsLeft(node *TranscriptomeNode, path []Region, len
 		return
 	}
 
-	if node.Stop > end {
+	if node.Stop > end && len(path) > 0 {
 		return // invalid node for left path
 	}
 
