@@ -868,19 +868,8 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 			}
 		}
 
-		var rightRemaps []*RemapSection
-		if len(rightSections) > 1 {
-			// we need to choose best option
-			s := chooseBestRemapSection(rightSections)
-			rightRemaps = s
-		}
-
-		var leftRemaps []*RemapSection
-		if len(leftSections) > 1 {
-			// we need to choose best option
-			s := chooseBestRemapSection(leftSections)
-			leftRemaps = s
-		}
+		rightRemaps := chooseBestRemapSection(rightSections)
+		leftRemaps := chooseBestRemapSection(leftSections)
 
 		// pair remaining sections in leftRemaps and rightRemaps
 		finalRemaps := make([]*mapperutils.ReadMatchResult, 0)
@@ -1440,7 +1429,7 @@ func fixPointRNARemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 					leftPaths = append(leftPaths, path)
 				}
 			}
-			if leftPaths != nil {
+			if len(leftPaths) != 0 {
 				remapSectionsLeft := scoreLeftOptions(leftPaths, anchorToRemap.MainAnchorRead.Start, read.Sequence, genomeIndex.Sequences[anchorToRemap.SequenceIndex], anchorToRemap.MainAnchorGenome)
 				anchorToRemap.TotalLeftPaths = len(leftPaths)
 				anchorToRemap.LeftSections = remapSectionsLeft
@@ -1466,7 +1455,7 @@ func fixPointRNARemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 					rightPaths = append(rightPaths, path)
 				}
 			}
-			if rightPaths != nil {
+			if len(rightPaths) != 0 {
 				remapSectionsRight := scoreRightOptions(rightPaths, anchorToRemap.MainAnchorRead.End, read.Sequence, genomeIndex.Sequences[anchorToRemap.SequenceIndex], anchorToRemap.MainAnchorGenome)
 				anchorToRemap.TotalRightPaths = len(rightPaths)
 				anchorToRemap.RightSections = remapSectionsRight
