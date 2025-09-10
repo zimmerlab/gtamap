@@ -2,6 +2,7 @@ package secondpass
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 
@@ -39,7 +40,8 @@ func SecondpassMappingWorker(secondPassChan *SecondPassChannel, wgIncompleteMapp
 		}
 
 		wgRemap.Add(1)
-		// TODO: limit number of goroutines here to respect --threads parameter
+
+		// BUG: limit number of goroutines here to respect --threads parameter
 		go func(t *mapperutils.ReadPairMatchResults) {
 			defer wgRemap.Done()
 
@@ -54,7 +56,11 @@ func SecondpassMappingWorker(secondPassChan *SecondPassChannel, wgIncompleteMapp
 	wgRemap.Wait()
 }
 
-func remapReadPair(readPairMapping *mapperutils.ReadPairMatchResults, annotationMap map[int]*mapperutils.TargetAnnotation, genomeIndex *index.GenomeIndex) {
+func remapReadPair(
+	readPairMapping *mapperutils.ReadPairMatchResults,
+	annotationMap map[int]*mapperutils.TargetAnnotation,
+	genomeIndex *index.GenomeIndex,
+) {
 	fwRemaps := make([]*mapperutils.ReadMatchResult, 0)
 
 	for _, mapping := range readPairMapping.Fw {
@@ -96,11 +102,17 @@ func remapReadPair(readPairMapping *mapperutils.ReadPairMatchResults, annotation
 	}
 }
 
-func getUniqRemaps(r []*mapperutils.ReadMatchResult) []*mapperutils.ReadMatchResult {
+func getUniqRemaps(
+	r []*mapperutils.ReadMatchResult,
+) []*mapperutils.ReadMatchResult {
+
 	uniq := make([]*mapperutils.ReadMatchResult, 0)
 	seen := make(map[string]bool)
+
 	for _, remap := range r {
+
 		remap.MergeRegions()
+
 		hash := createHash(remap)
 		if !seen[hash] {
 			seen[hash] = true
@@ -166,12 +178,26 @@ func createHash(r *mapperutils.ReadMatchResult) string {
 	return sb.String()
 }
 
-func remapRead(readMapping *mapperutils.ReadMatchResult, annotation *mapperutils.TargetAnnotation, read *fastq.Read, genomeIndex *index.GenomeIndex) []*mapperutils.ReadMatchResult {
-	alternativeReadMatchResults := make([]*mapperutils.ReadMatchResult, 0)
-	readMapping.NormalizeRegions() // NOTE: this is CRUCIAL and NEEDS to be called before ANY REMAP!!!
+func remapRead(
+	readMapping *mapperutils.ReadMatchResult,
+	annotation *mapperutils.TargetAnnotation,
+	read *fastq.Read,
+	genomeIndex *index.GenomeIndex,
+) []*mapperutils.ReadMatchResult {
 
-	// do we have an annotation?
+	if len(readMapping.MatchedRead.Regions) != len(readMapping.MatchedGenome.Regions) {
+		fmt.Println("error in remapRead: read and genome regions do not match in length")
+		os.Exit(1)
+	}
+
+	// NOTE: this is CRUCIAL and NEEDS to be called before ANY REMAP!!!
+	readMapping.NormalizeRegions()
+
+	alternativeReadMatchResults := make([]*mapperutils.ReadMatchResult, 0)
+
+	// only remap if there is an annotation and in RNA mode
 	if annotation != nil && config.IsOriginRNA {
+
 		if readMapping.IncompleteMap {
 			// TODO: even in DNA mode?
 			remaps := fixPointRNARemap(readMapping, annotation.Introns[readMapping.SequenceIndex], read, genomeIndex)

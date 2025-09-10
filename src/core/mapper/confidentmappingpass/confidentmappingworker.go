@@ -1,6 +1,8 @@
 package confidentmappingpass
 
 import (
+	"fmt"
+	"os"
 	"sort"
 	"strconv"
 	"sync"
@@ -326,13 +328,32 @@ func invertIntrons(sId int, intronsOfTarget []*regionvector.Intron, index *index
 }
 
 // extracts all gaps in fw and rv mappings but mirrors the rv coords to match fw orientation
-func getGapsPlusOrientation(sId int, cMapsPerSeq []*ConfidentTask, index *index.GenomeIndex) ([]*regionvector.Gap, int, int) {
+func getGapsPlusOrientation(
+	sId int,
+	cMapsPerSeq []*ConfidentTask,
+	index *index.GenomeIndex,
+) (
+	[]*regionvector.Gap,
+	int,
+	int,
+) {
+
 	plusOrientatedGapsPerMainSeqId := make([]*regionvector.Gap, 0)
 	plusStrandednessEvidence := 0
 	minusStrandednessEvidence := 0
 
 	// iterate over each confMap in target seq seqId
 	for _, confMap := range cMapsPerSeq {
+
+		if len(confMap.ResultFw.MatchedRead.Regions) != len(confMap.ResultFw.MatchedGenome.Regions) {
+			fmt.Println("error in get gaps plus orientation result fw")
+			os.Exit(1)
+		}
+		if len(confMap.ResultRv.MatchedRead.Regions) != len(confMap.ResultRv.MatchedGenome.Regions) {
+			fmt.Println("error in get gaps plus orientation result rv")
+			os.Exit(1)
+		}
+
 		confMap.ResultFw.NormalizeRegions()
 		confMap.ResultRv.NormalizeRegions()
 

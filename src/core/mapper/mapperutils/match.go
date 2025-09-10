@@ -162,50 +162,55 @@ func (r ReadMatchResult) GetLargestAnchor(introns *regionvector.RegionSet) (regi
 	return largestAnchor, prevIntron.Rank, mainAnchorIndex // anchor rank == intron rank of prev intron
 }
 
-// func (r *ReadMatchResult) MergeRegions() {
-// 	mergedRead := []regionvector.Region{r.MatchedRead.Regions[0]}
-// 	mergedGenome := []regionvector.Region{r.MatchedGenome.Regions[0]}
-//
-// 	for i := 1; i < len(r.MatchedRead.Regions); i++ {
-// 		last := &mergedRead[len(mergedRead)-1]
-// 		current := r.MatchedRead.Regions[i]
-//
-// 		if current.Start <= last.End { // Overlapping or adjacent
-// 			if current.End > last.End {
-// 				last.End = current.End
-// 			}
-// 		} else {
-// 			mergedRead = append(mergedRead, current)
-// 		}
-// 	}
-//
-// 	for i := 1; i < len(r.MatchedGenome.Regions); i++ {
-// 		last := &mergedGenome[len(mergedGenome)-1]
-// 		current := r.MatchedGenome.Regions[i]
-//
-// 		if current.Start <= last.End { // Overlapping or adjacent
-// 			if current.End > last.End {
-// 				last.End = current.End
-// 			}
-// 		} else {
-// 			mergedGenome = append(mergedGenome, current)
-// 		}
-// 	}
-// 	r.MatchedGenome.Regions = mergedGenome
-// 	r.MatchedRead.Regions = mergedRead
-// }
+func (r *ReadMatchResult) MergeRegions() {
+	mergedRead := []regionvector.Region{r.MatchedRead.Regions[0]}
+	mergedGenome := []regionvector.Region{r.MatchedGenome.Regions[0]}
+
+	for i := 1; i < len(r.MatchedRead.Regions); i++ {
+		last := &mergedRead[len(mergedRead)-1]
+		current := r.MatchedRead.Regions[i]
+
+		if current.Start <= last.End { // Overlapping or adjacent
+			if current.End > last.End {
+				last.End = current.End
+			}
+		} else {
+			mergedRead = append(mergedRead, current)
+		}
+	}
+
+	for i := 1; i < len(r.MatchedGenome.Regions); i++ {
+		last := &mergedGenome[len(mergedGenome)-1]
+		current := r.MatchedGenome.Regions[i]
+
+		if current.Start <= last.End { // Overlapping or adjacent
+			if current.End > last.End {
+				last.End = current.End
+			}
+		} else {
+			mergedGenome = append(mergedGenome, current)
+		}
+	}
+	r.MatchedGenome.Regions = mergedGenome
+	r.MatchedRead.Regions = mergedRead
+}
 
 // MergeRegions merges the read and genome regions if both are consecutive.
 // This preserves the property that the number of read and genome regions are
 // the same and that each read region is associated with the genome region at
 // the same index.
-func (r *ReadMatchResult) MergeRegions() {
+func (r *ReadMatchResult) MergeRegionsIfBothConsecutive() {
 
 	if len(r.MatchedRead.Regions) != len(r.MatchedGenome.Regions) {
+
+		fmt.Println(r.SequenceIndex)
+		fmt.Println(r.MatchedRead.Regions)
+		fmt.Println(r.MatchedGenome.Regions)
+
 		logrus.WithFields(logrus.Fields{
 			"len read regions":   len(r.MatchedRead.Regions),
 			"len genome regions": len(r.MatchedGenome.Regions),
-		}).Error("Cannot merge regions of ReadMatchResult: different number of read and genome regions")
+		}).Error("Cant merge regions of ReadMatchResult: different number of read and genome regions")
 		return
 	}
 
@@ -493,18 +498,39 @@ func hasLongDiagonals(mapping *ReadMatchResult) bool {
 }
 
 func (r *ReadMatchResult) GetCigar() (string, error) {
+
 	var builder strings.Builder
+
 	slices.Sort(r.MismatchesRead)
-	r.MergeRegions()
+
+	fmt.Println("\n\nin GetCigar")
+	fmt.Println(r.MatchedRead.Regions)
+	fmt.Println(r.MatchedGenome.Regions)
+
 	r.NormalizeRegions()
 
+	// TODO: remove this sanity check
+	if len(r.MatchedRead.Regions) != len(r.MatchedGenome.Regions) {
+		logrus.Fatal("len(r.MatchedRead.Regions) != len(r.MatchedGenome.Regions) even after NormalizeRegions()")
+	}
+	if r.MatchedRead.Length() != r.MatchedGenome.Length() {
+		logrus.Fatal("r.MatchedRead.Length() != r.MatchedGenome.Length() even after NormalizeRegions()")
+	}
+
+	fmt.Println("--")
+	fmt.Println(r.MatchedRead.Regions)
+	fmt.Println(r.MatchedGenome.Regions)
+
 	isForwardStrand := r.SequenceIndex == 0
+
+	fmt.Println("is forward strand:", isForwardStrand)
 
 	if isForwardStrand {
 
 		// number of cumulative aligned positions (matches or mismatches) between the read and the genome
 		numMatchesSum := 0
 
+		// TODO: is this needed when NormalizeRegions is called above?
 		if len(r.MatchedGenome.Regions) != len(r.MatchedRead.Regions) {
 			// r.SyncRegions()
 			r.NormalizeRegions()
@@ -559,8 +585,9 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 
 				builder.WriteString(strconv.Itoa(numSkipped))
 
-				// determine whether the gap is an intron or a deletion
-				if numSkipped < config.IntronLengthMin() {
+				if !config.IsOriginRNA || numSkipped < config.IntronLengthMin() {
+					// there are no introns in DNA mode
+					// configured threshold is used to determine whether a gap is a deletion or an intron
 					builder.WriteString("D")
 				} else {
 					builder.WriteString("N")
@@ -655,6 +682,8 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 			}
 		}
 	}
+
+	fmt.Println(builder.String())
 
 	return builder.String(), nil
 }
@@ -760,11 +789,16 @@ func (t TargetAnnotation) LogInfo() {
 	}
 }
 
-func ParseMatchedRegion(region regionvector.Region, mms []int, isRev bool) string {
+func ParseMatchedRegion(
+	region regionvector.Region,
+	mismatchesInRead []int,
+	isRev bool,
+) string {
+
 	var builder strings.Builder
-	if len(mms) == 0 {
-		builder.WriteString(fmt.Sprintf("%d=", region.Length()))
-		return builder.String()
+
+	if len(mismatchesInRead) == 0 {
+		return fmt.Sprintf("%d=", region.Length())
 	}
 
 	lastStart := 0      // relative to region start
@@ -779,8 +813,8 @@ func ParseMatchedRegion(region regionvector.Region, mms []int, isRev bool) strin
 	}
 
 	if isRev {
-		for i := len(mms) - 1; i >= 0; i-- {
-			mm := mms[i]
+		for i := len(mismatchesInRead) - 1; i >= 0; i-- {
+			mm := mismatchesInRead[i]
 			if mm < region.Start || mm >= region.End {
 				continue
 			}
@@ -801,7 +835,11 @@ func ParseMatchedRegion(region regionvector.Region, mms []int, isRev bool) strin
 			lastStart = relativePos + 1
 		}
 	} else {
-		for _, mm := range mms {
+
+		fmt.Println("in parse matched region")
+		fmt.Println(mismatchesInRead)
+
+		for _, mm := range mismatchesInRead {
 			if mm < region.Start || mm >= region.End {
 				continue
 			}

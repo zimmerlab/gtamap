@@ -827,7 +827,7 @@ func (i *GenomeIndex) IsResultValid(result *mapperutils.ReadMatchResult) bool {
 	// DEBUG: print result
 	fmt.Println(result.String())
 
-	result.MergeRegions()
+	result.MergeRegionsIfBothConsecutive()
 
 	fmt.Println(result.String())
 
