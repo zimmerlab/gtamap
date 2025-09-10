@@ -857,7 +857,7 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 			startPos := adjustedAnchorsLeft[i].Start
 			leftPaths := targetSeqIntronSet.TranscriptomeGraph.FindPathsLeft(startPos, missingBases)
 			if leftPaths != nil {
-				remapSectionsLeft := scoreLeftOptions(leftPaths, adjustedReadAnchorsLeft[i].Start, read.Sequence, genomeIndex.Sequences[readMatchResult.SequenceIndex])
+				remapSectionsLeft := scoreLeftOptions(leftPaths, adjustedReadAnchorsLeft[i].Start, read.Sequence, genomeIndex.Sequences[readMatchResult.SequenceIndex], adjustedAnchorsLeft[i])
 				leftSections = remapSectionsLeft
 			}
 		}
@@ -868,7 +868,7 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 			startPos := adjustedAnchorsRight[i].End
 			rightPaths := targetSeqIntronSet.TranscriptomeGraph.FindPathsRight(startPos, missingBases)
 			if rightPaths != nil {
-				remapSectionsRight := scoreRightOptions(rightPaths, adjustedReadAnchorsRight[i].End, read.Sequence, genomeIndex.Sequences[readMatchResult.SequenceIndex])
+				remapSectionsRight := scoreRightOptions(rightPaths, adjustedReadAnchorsRight[i].End, read.Sequence, genomeIndex.Sequences[readMatchResult.SequenceIndex], adjustedAnchorsRight[i])
 				rightSections = remapSectionsRight
 			}
 		}
@@ -892,20 +892,16 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 
 		if rightRemaps != nil && leftRemaps != nil {
 			for _, lSection := range leftRemaps {
-				lExtLen := lSection.MatchedGenome[0].Length()
 				lExtStopRead := lSection.MatchedRead[0].End
 				for _, rSection := range rightRemaps {
-					rExtLen := rSection.MatchedGenome[len(rSection.MatchedGenome)-1].Length()
 					rExtStartRead := rSection.MatchedRead[len(rSection.MatchedRead)-1].Start
 
 					// create template correction once (readMatchResult with regions removed which got remapped)
 					correctedTemplate := readMatchResult.Copy()
-					correctedTemplateRightEnd := correctedTemplate.MatchedGenome.Regions[len(correctedTemplate.MatchedGenome.Regions)-1].End
-					correctedTemplateLeftStart := correctedTemplate.MatchedGenome.Regions[0].Start
 					// remove left regions
-					correctedTemplate.MatchedGenome.RemoveRegion(0, correctedTemplateLeftStart+lExtLen)
+					correctedTemplate.MatchedGenome.RemoveRegion(0, lSection.MainAnchor.Start)
 					// remove right regions
-					correctedTemplate.MatchedGenome.RemoveRegion(correctedTemplateRightEnd-rExtLen, len(*genomeIndex.Sequences[readMatchResult.SequenceIndex]))
+					correctedTemplate.MatchedGenome.RemoveRegion(rSection.MainAnchor.End, len(*genomeIndex.Sequences[readMatchResult.SequenceIndex]))
 
 					templateMappedRead := regionvector.Region{Start: lExtStopRead, End: rExtStartRead}
 					templateMM := extractMMofAnchor(templateMappedRead, correctedTemplate.MismatchesRead)
@@ -931,13 +927,11 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 			}
 		} else if rightRemaps != nil {
 			for _, rSection := range rightRemaps {
-				rExtLen := rSection.MatchedGenome[len(rSection.MatchedGenome)-1].Length()
 				rExtStartRead := rSection.MatchedRead[len(rSection.MatchedRead)-1].Start
 				// create template correction once (readMatchResult with regions removed which got remapped)
 				correctedTemplate := readMatchResult.Copy()
-				correctedTemplateRightEnd := correctedTemplate.MatchedGenome.Regions[len(correctedTemplate.MatchedGenome.Regions)-1].End
 				// remove right regions
-				correctedTemplate.MatchedGenome.RemoveRegion(correctedTemplateRightEnd-rExtLen, len(*genomeIndex.Sequences[readMatchResult.SequenceIndex]))
+				correctedTemplate.MatchedGenome.RemoveRegion(rSection.MainAnchor.End, len(*genomeIndex.Sequences[readMatchResult.SequenceIndex]))
 				templateMappedRead := regionvector.Region{Start: 0, End: rExtStartRead}
 				templateMM := extractMMofAnchor(templateMappedRead, correctedTemplate.MismatchesRead)
 				corrected := correctedTemplate.Copy()
@@ -952,13 +946,11 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 			}
 		} else if leftRemaps != nil {
 			for _, lSection := range leftRemaps {
-				lExtLen := lSection.MatchedGenome[0].Length()
 				lExtStopRead := lSection.MatchedRead[0].End
 				// create template correction once (readMatchResult with regions removed which got remapped)
 				correctedTemplate := readMatchResult.Copy()
-				correctedTemplateLeftStart := correctedTemplate.MatchedGenome.Regions[0].Start
 				// remove left regions
-				correctedTemplate.MatchedGenome.RemoveRegion(0, correctedTemplateLeftStart+lExtLen)
+				correctedTemplate.MatchedGenome.RemoveRegion(0, lSection.MainAnchor.Start)
 				templateMappedRead := regionvector.Region{Start: lExtStopRead, End: len(*read.Sequence)}
 				templateMM := extractMMofAnchor(templateMappedRead, correctedTemplate.MismatchesRead)
 				corrected := correctedTemplate.Copy()
@@ -1301,6 +1293,7 @@ type RemapSection struct {
 	Mm              []int
 	MatchedRead     []regionvector.Region
 	MatchedGenome   []regionvector.Region
+	MainAnchor      regionvector.Region
 	TotalLeftPaths  int
 	TotalRightPaths int
 }
@@ -1453,7 +1446,7 @@ func fixPointRNARemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 				}
 			}
 			if leftPaths != nil {
-				remapSectionsLeft := scoreLeftOptions(leftPaths, anchorToRemap.MainAnchorRead.Start, read.Sequence, genomeIndex.Sequences[anchorToRemap.SequenceIndex])
+				remapSectionsLeft := scoreLeftOptions(leftPaths, anchorToRemap.MainAnchorRead.Start, read.Sequence, genomeIndex.Sequences[anchorToRemap.SequenceIndex], anchorToRemap.MainAnchorGenome)
 				anchorToRemap.TotalLeftPaths = len(leftPaths)
 				anchorToRemap.LeftSections = remapSectionsLeft
 			}
@@ -1479,7 +1472,7 @@ func fixPointRNARemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 				}
 			}
 			if rightPaths != nil {
-				remapSectionsRight := scoreRightOptions(rightPaths, anchorToRemap.MainAnchorRead.End, read.Sequence, genomeIndex.Sequences[anchorToRemap.SequenceIndex])
+				remapSectionsRight := scoreRightOptions(rightPaths, anchorToRemap.MainAnchorRead.End, read.Sequence, genomeIndex.Sequences[anchorToRemap.SequenceIndex], anchorToRemap.MainAnchorGenome)
 				anchorToRemap.TotalRightPaths = len(rightPaths)
 				anchorToRemap.RightSections = remapSectionsRight
 			}
@@ -1664,12 +1657,13 @@ func getBestCandidateSections(sections []*RemapSection) []*RemapSection {
 	return candidates
 }
 
-func scoreRightOptions(rightPaths [][]regionvector.Region, startInRead int, readSeq *[]byte, refSeq *[]byte) []*RemapSection {
+func scoreRightOptions(rightPaths [][]regionvector.Region, startInRead int, readSeq *[]byte, refSeq *[]byte, mainAnchor regionvector.Region) []*RemapSection {
 	remapSectionsRight := make([]*RemapSection, 0)
 	lenReadSeq := len(*readSeq)
 PathLoop:
 	for _, path := range rightPaths {
 		currSection := RemapSection{
+			MainAnchor:    mainAnchor,
 			MatchedGenome: path,
 			MatchedRead:   make([]regionvector.Region, 0),
 			Mm:            make([]int, 0),
@@ -1703,13 +1697,14 @@ PathLoop:
 	return remapSectionsRight
 }
 
-func scoreLeftOptions(leftPaths [][]regionvector.Region, startInRead int, readSeq *[]byte, refSeq *[]byte) []*RemapSection {
+func scoreLeftOptions(leftPaths [][]regionvector.Region, startInRead int, readSeq *[]byte, refSeq *[]byte, mainAnchor regionvector.Region) []*RemapSection {
 	remapSectionsLeft := make([]*RemapSection, 0)
 	lenReadSeq := len(*readSeq)
 PathLoop:
 	for _, path := range leftPaths {
 		// WARN: left pasths are inverted ;)
 		currSection := RemapSection{
+			MainAnchor:    mainAnchor,
 			MatchedGenome: path,
 			MatchedRead:   make([]regionvector.Region, 0),
 			Mm:            make([]int, 0),
