@@ -570,7 +570,7 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 				gapRead, _ := result.MatchedRead.GetGapAfterRegionIndex(indexRegionBeforeGap)
 				gapGenome, gapGenomeOk := result.MatchedGenome.GetGapAfterRegionIndex(indexRegionBeforeGap)
 
-				if !gapGenomeOk || gapRead.Length() >= 20 {
+				if !gapGenomeOk {
 					// logrus.WithFields(logrus.Fields{
 					// 	"read":    result.MatchedRead,
 					// 	"genome":  result.MatchedGenome,
