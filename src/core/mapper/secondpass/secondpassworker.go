@@ -148,10 +148,6 @@ func remapRead(readMapping *mapperutils.ReadMatchResult, annotation *mapperutils
 	if annotation != nil {
 		if readMapping.IncompleteMap {
 			remaps := fixPointRNARemap(readMapping, annotation.Introns[readMapping.SequenceIndex], read, genomeIndex, annotation.IntronTrees[readMapping.SequenceIndex])
-			for _, remap := range remaps {
-				overhangCorrected := correctOverhangs(remap, annotation.Introns[readMapping.SequenceIndex], read, genomeIndex, annotation.IntronTrees[readMapping.SequenceIndex])
-				alternativeReadMatchResults = append(alternativeReadMatchResults, overhangCorrected...)
-			}
 			alternativeReadMatchResults = append(alternativeReadMatchResults, remaps...)
 		} else {
 			overhangCorrected := correctOverhangs(readMapping, annotation.Introns[readMapping.SequenceIndex], read, genomeIndex, annotation.IntronTrees[readMapping.SequenceIndex])
@@ -198,7 +194,6 @@ func remapRead(readMapping *mapperutils.ReadMatchResult, annotation *mapperutils
 			}
 		}
 	}
-
 	return alternativeReadMatchResults
 }
 
