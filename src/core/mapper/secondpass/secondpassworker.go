@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/KleinSamuel/gtamap/src/config"
+	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
@@ -146,14 +147,14 @@ func remapRead(readMapping *mapperutils.ReadMatchResult, annotation *mapperutils
 	// do we have an annotation?
 	if annotation != nil {
 		if readMapping.IncompleteMap {
-			remaps := fixPointRNARemap(readMapping, annotation.Introns[readMapping.SequenceIndex], read, genomeIndex)
+			remaps := fixPointRNARemap(readMapping, annotation.Introns[readMapping.SequenceIndex], read, genomeIndex, annotation.IntronTrees[readMapping.SequenceIndex])
 			for _, remap := range remaps {
-				overhangCorrected := correctOverhangs(remap, annotation.Introns[readMapping.SequenceIndex], read, genomeIndex)
+				overhangCorrected := correctOverhangs(remap, annotation.Introns[readMapping.SequenceIndex], read, genomeIndex, annotation.IntronTrees[readMapping.SequenceIndex])
 				alternativeReadMatchResults = append(alternativeReadMatchResults, overhangCorrected...)
 			}
 			alternativeReadMatchResults = append(alternativeReadMatchResults, remaps...)
 		} else {
-			overhangCorrected := correctOverhangs(readMapping, annotation.Introns[readMapping.SequenceIndex], read, genomeIndex)
+			overhangCorrected := correctOverhangs(readMapping, annotation.Introns[readMapping.SequenceIndex], read, genomeIndex, annotation.IntronTrees[readMapping.SequenceIndex])
 			alternativeReadMatchResults = append(alternativeReadMatchResults, overhangCorrected...)
 		}
 	}
@@ -769,7 +770,7 @@ func getPossiblePaddingCombinations(leftMappedRegion, rightMappedRegion regionve
 	return paddingsToCheck
 }
 
-func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet *regionvector.RegionSet, read *fastq.Read, genomeIndex *index.GenomeIndex) []*mapperutils.ReadMatchResult {
+func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet *regionvector.RegionSet, read *fastq.Read, genomeIndex *index.GenomeIndex, intronTree *datastructure.INTree) []*mapperutils.ReadMatchResult {
 	remaps := make([]*mapperutils.ReadMatchResult, 0)
 
 	if len(readMatchResult.MatchedGenome.Regions) > 1 {
@@ -783,8 +784,8 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 		mmLastRegion := extractMMofAnchor(lastRegionRead, readMatchResult.MismatchesRead)
 
 		// here we need to do it manually
-		lPaddings, _ := getPadding(firstRegion, targetSeqIntronSet)
-		_, rPaddings := getPadding(lastRegion, targetSeqIntronSet)
+		lPaddings, _ := getPadding(firstRegion, targetSeqIntronSet, intronTree)
+		_, rPaddings := getPadding(lastRegion, targetSeqIntronSet, intronTree)
 
 		// i := 0
 		// for l := range lPaddings {
@@ -979,7 +980,7 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 
 	} else {
 		// we can do same strategy as in fixPointRNARemap since there is only one anchor
-		overhangCorrected := fixPointRNARemap(readMatchResult, targetSeqIntronSet, read, genomeIndex)
+		overhangCorrected := fixPointRNARemap(readMatchResult, targetSeqIntronSet, read, genomeIndex, intronTree)
 		for _, r := range overhangCorrected {
 			r.IsOverhangCorrected = true
 		}
@@ -1304,7 +1305,7 @@ type RemapSection struct {
 	TotalRightPaths int
 }
 
-func fixPointRNARemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet *regionvector.RegionSet, read *fastq.Read, genomeIndex *index.GenomeIndex) []*mapperutils.ReadMatchResult {
+func fixPointRNARemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet *regionvector.RegionSet, read *fastq.Read, genomeIndex *index.GenomeIndex, intronTree *datastructure.INTree) []*mapperutils.ReadMatchResult {
 	// init list of remaps
 	remaps := make([]*Remap, 0)
 
@@ -1318,7 +1319,7 @@ func fixPointRNARemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 	}
 
 	// get possible padding of l and r (we expect only one padding each)
-	lPaddings, rPaddings := getPadding(oriMainAnchor, targetSeqIntronSet)
+	lPaddings, rPaddings := getPadding(oriMainAnchor, targetSeqIntronSet, intronTree)
 
 	adjustedAnchors := make([]regionvector.Region, 0)
 	adjustedReadAnchors := make([]regionvector.Region, 0)
@@ -1744,8 +1745,17 @@ PathLoop:
 	return remapSectionsLeft
 }
 
-func getPadding(mainAnchor regionvector.Region, targetSeqIntronSet *regionvector.RegionSet) (map[int]struct{}, map[int]struct{}) { // l, r
-	overlappingIntrons := targetSeqIntronSet.GetIntersectingIntrons(mainAnchor)
+func getPadding(mainAnchor regionvector.Region, targetSeqIntronSet *regionvector.RegionSet, intronTree *datastructure.INTree) (map[int]struct{}, map[int]struct{}) { // l, r
+	// overlappingIntrons := targetSeqIntronSet.GetIntersectingIntrons(mainAnchor)
+	overlappingIntrons := make([]*regionvector.Intron, 0)
+	leftIntersections := intronTree.Including(float64(mainAnchor.Start))
+	rightIntersections := intronTree.Including(float64(mainAnchor.End))
+	for _, inx := range leftIntersections {
+		overlappingIntrons = append(overlappingIntrons, targetSeqIntronSet.Regions[inx])
+	}
+	for _, inx := range rightIntersections {
+		overlappingIntrons = append(overlappingIntrons, targetSeqIntronSet.Regions[inx])
+	}
 
 	// try every combination of start coords
 	rPadding := make(map[int]struct{})

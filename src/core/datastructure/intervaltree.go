@@ -177,6 +177,14 @@ type RepeatRegion struct {
 	Lower, Upper float64
 }
 
+type IntronRegion struct {
+	Lower, Upper float64
+}
+
 func (rr *RepeatRegion) Limits() (float64, float64) {
 	return rr.Lower, rr.Upper
+}
+
+func (ir *IntronRegion) Limits() (float64, float64) {
+	return ir.Lower, ir.Upper
 }

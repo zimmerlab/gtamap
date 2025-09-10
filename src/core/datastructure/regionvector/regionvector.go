@@ -915,16 +915,12 @@ func (rs *RegionSet) GetIntersectingIntrons(b Region) []*Intron {
 	for i := idx - 1; i >= 0 && rs.Regions[i].End > b.Start; i-- {
 		if overlaps(rs.Regions[i], b) {
 			introns = append(introns, rs.Regions[i])
-		} else {
-			break
 		}
 	}
 
 	for i := idx; i < len(rs.Regions) && rs.Regions[i].Start < b.End; i++ {
 		if overlaps(rs.Regions[i], b) {
 			introns = append(introns, rs.Regions[i])
-		} else {
-			break
 		}
 	}
 	return introns

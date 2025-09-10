@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/KleinSamuel/gtamap/src/config"
+	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/sirupsen/logrus"
@@ -666,6 +667,7 @@ type TargetAnnotation struct {
 	PreferedStrand int                             // 0 -> + (fw+ and rv-); 1 -> - (fw- and rv+)
 	Confidence     float32                         // percentage of reads contributing to PreferedStrand
 	Introns        map[int]*regionvector.RegionSet // maps to sub sequence index, meaning each gene has two slices of introns 0 -> plusOrintation 1 -> minusOrientation
+	IntronTrees    map[int]*datastructure.INTree   // interval trees for intronsmaps
 	// zero bases coords, start incl, stop excl
 }
 
