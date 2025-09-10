@@ -891,18 +891,20 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 
 		if rightRemaps != nil && leftRemaps != nil {
 			for _, lSection := range leftRemaps {
-				lExtStop := lSection.MatchedGenome[0].End
+				lExtLen := lSection.MatchedGenome[0].Length()
 				lExtStopRead := lSection.MatchedRead[0].End
 				for _, rSection := range rightRemaps {
-					rExtStart := rSection.MatchedGenome[len(rSection.MatchedGenome)-1].Start
+					rExtLen := rSection.MatchedGenome[len(rSection.MatchedGenome)-1].Length()
 					rExtStartRead := rSection.MatchedRead[len(rSection.MatchedRead)-1].Start
 
 					// create template correction once (readMatchResult with regions removed which got remapped)
 					correctedTemplate := readMatchResult.Copy()
+					correctedTemplateRightEnd := correctedTemplate.MatchedGenome.Regions[len(correctedTemplate.MatchedGenome.Regions)-1].End
+					correctedTemplateLeftStart := correctedTemplate.MatchedGenome.Regions[0].Start
 					// remove left regions
-					correctedTemplate.MatchedGenome.RemoveRegion(0, lExtStop)
+					correctedTemplate.MatchedGenome.RemoveRegion(0, correctedTemplateLeftStart+lExtLen)
 					// remove right regions
-					correctedTemplate.MatchedGenome.RemoveRegion(rExtStart, len(*genomeIndex.Sequences[readMatchResult.SequenceIndex]))
+					correctedTemplate.MatchedGenome.RemoveRegion(correctedTemplateRightEnd-rExtLen, len(*genomeIndex.Sequences[readMatchResult.SequenceIndex]))
 
 					templateMappedRead := regionvector.Region{Start: lExtStopRead, End: rExtStartRead}
 					templateMM := extractMMofAnchor(templateMappedRead, correctedTemplate.MismatchesRead)
@@ -918,6 +920,7 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 					corrected.MismatchesRead = templateMM
 					corrected.MismatchesRead = append(corrected.MismatchesRead, lSection.Mm...)
 					corrected.MismatchesRead = append(corrected.MismatchesRead, rSection.Mm...)
+
 					corrected.TotalLeftOptions = lSection.TotalLeftPaths
 					corrected.TotalRightOptions = rSection.TotalRightPaths
 					corrected.ValidLeftOptions = len(leftRemaps)
@@ -927,12 +930,13 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 			}
 		} else if rightRemaps != nil {
 			for _, rSection := range rightRemaps {
-				rExtStart := rSection.MatchedGenome[len(rSection.MatchedGenome)-1].Start
+				rExtLen := rSection.MatchedGenome[len(rSection.MatchedGenome)-1].Length()
 				rExtStartRead := rSection.MatchedRead[len(rSection.MatchedRead)-1].Start
 				// create template correction once (readMatchResult with regions removed which got remapped)
 				correctedTemplate := readMatchResult.Copy()
+				correctedTemplateRightEnd := correctedTemplate.MatchedGenome.Regions[len(correctedTemplate.MatchedGenome.Regions)-1].End
 				// remove right regions
-				correctedTemplate.MatchedGenome.RemoveRegion(rExtStart, len(*genomeIndex.Sequences[readMatchResult.SequenceIndex]))
+				correctedTemplate.MatchedGenome.RemoveRegion(correctedTemplateRightEnd-rExtLen, len(*genomeIndex.Sequences[readMatchResult.SequenceIndex]))
 				templateMappedRead := regionvector.Region{Start: 0, End: rExtStartRead}
 				templateMM := extractMMofAnchor(templateMappedRead, correctedTemplate.MismatchesRead)
 				corrected := correctedTemplate.Copy()
@@ -947,12 +951,13 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 			}
 		} else if leftRemaps != nil {
 			for _, lSection := range leftRemaps {
-				lExtStop := lSection.MatchedGenome[0].End
+				lExtLen := lSection.MatchedGenome[0].Length()
 				lExtStopRead := lSection.MatchedRead[0].End
 				// create template correction once (readMatchResult with regions removed which got remapped)
 				correctedTemplate := readMatchResult.Copy()
+				correctedTemplateLeftStart := correctedTemplate.MatchedGenome.Regions[0].Start
 				// remove left regions
-				correctedTemplate.MatchedGenome.RemoveRegion(0, lExtStop)
+				correctedTemplate.MatchedGenome.RemoveRegion(0, correctedTemplateLeftStart+lExtLen)
 				templateMappedRead := regionvector.Region{Start: lExtStopRead, End: len(*read.Sequence)}
 				templateMM := extractMMofAnchor(templateMappedRead, correctedTemplate.MismatchesRead)
 				corrected := correctedTemplate.Copy()
