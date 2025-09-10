@@ -851,9 +851,9 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 			missingBases := adjustedReadAnchorsLeft[i].Start
 			startPos := adjustedAnchorsLeft[i].Start
 			leftPaths := targetSeqIntronSet.TranscriptomeGraph.FindPathsLeft(startPos, missingBases)
-			if leftPaths != nil {
+			if len(leftPaths) != 0 {
 				remapSectionsLeft := scoreLeftOptions(leftPaths, adjustedReadAnchorsLeft[i].Start, read.Sequence, genomeIndex.Sequences[readMatchResult.SequenceIndex], adjustedAnchorsLeft[i])
-				leftSections = remapSectionsLeft
+				leftSections = append(leftSections, remapSectionsLeft...)
 			}
 		}
 		// correct last region
@@ -862,9 +862,9 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 			missingBases := len(*read.Sequence) - adjustedReadAnchorsRight[i].End
 			startPos := adjustedAnchorsRight[i].End
 			rightPaths := targetSeqIntronSet.TranscriptomeGraph.FindPathsRight(startPos, missingBases)
-			if rightPaths != nil {
+			if len(rightPaths) != 0 {
 				remapSectionsRight := scoreRightOptions(rightPaths, adjustedReadAnchorsRight[i].End, read.Sequence, genomeIndex.Sequences[readMatchResult.SequenceIndex], adjustedAnchorsRight[i])
-				rightSections = remapSectionsRight
+				rightSections = append(rightSections, remapSectionsRight...)
 			}
 		}
 
