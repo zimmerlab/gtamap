@@ -7,31 +7,35 @@ import (
 
 // Filter the read
 // TODO: finalize the filter step as this is the most crucial step in terms of runtime
+// TODO: the kmer match information is to be used in subsequent mapping step
 // TODO: this has to be adjusted in order to allow for multiple targets in index
 // it should then return a list of potential sequences (n,n+1 grouped)
 func GlobalFilter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
+
 	// indexHasBlacklist := len(genomeIndex.RepeatRegions) > 0
 	numMatching := 0
 
 	numMatchingFw := 0
 	numMatchingRv := 0
 
+	// TODO: optimize by extracting computations to variables
 	for i := 0; i <= len(*readSequence)-(int(config.KmerLength())); i += int(config.KmerLength()) {
 
 		kmer := (*readSequence)[i : i+int(config.KmerLength())]
 
-		// matches := genomeIndex.KeywordTree.FindKeyword(&kmer, i)
 		matches := genomeIndex.GetKeywordFromMap(*(*[10]byte)(kmer))
 
 		okFw := false
 		okRv := false
 		for _, m := range matches {
+
 			//if indexHasBlacklist {
 			//	repeatIndices := genomeIndex.Blacklist[int(m.SequenceIndex)].Including(float64(m.Position))
 			//	if len(repeatIndices) > 1 {
 			//		break
 			//	}
 			//}
+
 			if m.SequenceIndex == 0 {
 				okFw = true
 			} else {

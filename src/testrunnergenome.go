@@ -197,15 +197,18 @@ func testIndex() {
 
 func testRegionmask() {
 
-	genomeIndexPath := "/home/sam/Data/gtamap/nsun5/ENSG00000130305.gtai"
+	genomeIndexPath := "/home/sam/Data/gtamap/opn1lw-opn1mw/X_154138492_154274890.with-regionmask.gtai"
 
-	bedFilePath := "/home/sam/Data/gtamap/regionmask/mask.bed"
-	prioFilePath := "/home/sam/Data/gtamap/regionmask/mask.priority"
+	// bedFilePath := "/home/sam/Data/gtamap/regionmask/mask.bed"
+	// prioFilePath := "/home/sam/Data/gtamap/regionmask/mask.priority"
 
-	readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.fastq.gz"
-	readsRvPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_2.fastq.gz"
+	// readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.fastq.gz"
+	// readsRvPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_2.fastq.gz"
 
-	outputPath := "/home/sam/Data/gtamap/nsun5/ENSG00000130305.goland.sam"
+	readsFwPath := "/home/sam/Data/gtamap/opn1lw-opn1mw/test.fw.fq"
+	readsRvPath := "/home/sam/Data/gtamap/opn1lw-opn1mw/test.rv.fq"
+
+	outputPath := "/home/sam/Data/gtamap/opn1lw-opn1mw/test.sam"
 
 	genomeIndex := index.ReadGenomeIndexByPath(genomeIndexPath)
 	reader, _ := fastq.InitFromPaths(&readsFwPath, &readsRvPath)
@@ -213,15 +216,26 @@ func testRegionmask() {
 
 	numThreads := 1
 
-	// TODO: change from nil to actual values
-	regionMask, errRegionMask := index.NewRegionMaskFromPaths(prioFilePath, bedFilePath, nil)
-	if errRegionMask != nil {
-		logrus.Fatal("Error creating region mask from paths", errRegionMask)
-	}
-
-	fmt.Println(regionMask)
+	// // TODO: change from nil to actual values
+	// regionMask, errRegionMask := index.NewRegionMaskFromPaths(prioFilePath, bedFilePath, nil)
+	// if errRegionMask != nil {
+	// 	logrus.Fatal("Error creating region mask from paths", errRegionMask)
+	// }
+	//
+	// fmt.Println(regionMask)
 
 	mapper.MapAll(genomeIndex, reader, writer, &numThreads)
+}
+
+func ViewRegionMask() {
+
+	index := index.ReadGenomeIndexByPath("/home/sam/Data/gtamap/opn1lw-opn1mw/X_154138492_154274890.with-regionmask.gtai")
+
+	for contig, mask := range index.RegionMask.ContigMasks {
+		fmt.Println("Contig:", contig)
+		mask.Print()
+	}
+
 }
 
 func main() {
@@ -280,7 +294,9 @@ func main() {
 	// testTas2ReadsAllOnNsun5()
 	//testTas2ReadsAllOnActbRamBug()
 	//testIndex()
+
 	testRegionmask()
+	// ViewRegionMask()
 
 	//analysis.CompareResults()
 }

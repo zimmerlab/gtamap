@@ -3,6 +3,8 @@ package interval
 import (
 	"fmt"
 	"sort"
+
+	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 )
 
 type PriorityListItem struct {
@@ -78,15 +80,105 @@ func (l *PriorityList) ContainedIn(position int) int {
 	}
 }
 
-func (l *PriorityList) GetMostImportantItemThatOverlaps(start int, end int) *PriorityListItem {
+func (l *PriorityList) ApplyMaskToRegion(start int, end int) {
+
+	regions := make([]regionvector.Region, 0)
+	labels := make([]string, 0)
 
 	index, offset := l.GetInsertionPos(start)
 
-	if offset != -1 && index == 0 {
-		return nil
+	fmt.Println(index, offset)
+
+	// the given region is completely unmasked when:
+	// - there are no items in the mask list
+	// - the insertion index is after the last item
+	// - the given region is between list items (offset -1 means not contained
+	//   in item at index and should be inserted before)
+	if len(l.Items) == 0 ||
+		index >= len(l.Items) ||
+		(offset == -1 && end <= l.Items[index].Start) {
+		regions = append(regions, regionvector.Region{Start: start, End: end})
+		labels = append(labels, "unmasked")
+		return
 	}
 
 	item := l.Items[index]
+
+	// add unmasked if before first item
+	if offset == -1 {
+		// there is an overlap with item or otherwise the function would have
+		// returned above
+		regions = append(regions, regionvector.Region{
+			Start: start,
+			End:   item.Start,
+		})
+		labels = append(labels, "unmasked")
+		index++
+	}
+
+	for {
+
+		regions = append(regions, regionvector.Region{
+			Start: max(l.Items[index].Start, start),
+			End:   min(l.Items[index].End, end),
+		})
+		labels = append(labels, l.Items[index].Name)
+
+		index++
+
+		if index >= len(l.Items) || l.Items[index].Start >= end {
+			break
+		}
+	}
+
+	fmt.Println("after regionmask is applied")
+
+	for i := 0; i < len(regions); i++ {
+		fmt.Println(regions[i], labels[i])
+	}
+
+	fmt.Println("-")
+}
+
+func (l *PriorityList) GetItemAtPosition(pos int) (bool, string, int) {
+
+	index, offset := l.GetInsertionPos(pos)
+
+	if len(l.Items) == 0 ||
+		offset == -1 ||
+		index >= len(l.Items) {
+		return false, "", 0
+	}
+
+	return true, l.Items[index].Name, l.Items[index].Priority
+}
+
+func (l *PriorityList) GetMostImportantItemThatOverlaps(
+	start int,
+	end int,
+) (bool, string, int) {
+
+	index, offset := l.GetInsertionPos(start)
+
+	if (offset != -1 && index == 0) || index >= len(l.Items) {
+		return false, "", 0
+	}
+
+	item := l.Items[index]
+
+	// fmt.Println("region\t", start, end)
+	// fmt.Println("item\t", item.Start, item.End)
+
+	prio := -1
+	size := 0
+	if offset > -1 {
+
+		// fmt.Println(min(item.End, end))
+		// fmt.Println("item.Start", item.Start, "offset", offset)
+
+		prio = item.Priority
+		size = min(item.End, end) - (item.Start + offset)
+	}
 
 	for {
 		index++
@@ -95,17 +187,32 @@ func (l *PriorityList) GetMostImportantItemThatOverlaps(start int, end int) *Pri
 			break
 		}
 
-		if l.Items[index].Priority > item.Priority {
+		// skip if item does not overlap region
+		if l.Items[index].End <= start {
+			continue
+		}
+
+		if prio == -1 || l.Items[index].Priority > prio {
+
+			prio = l.Items[index].Priority
+			size = min(l.Items[index].End, end) - max(l.Items[index].Start, start)
 			item = l.Items[index]
 
-			if item.Priority == l.MaxPriority {
-				// premature exit if max priority reached
-				return item
-			}
+			// if item.Priority == l.MaxPriority {
+			// 	// premature exit if max priority reached
+			// 	return item
+			// }
+
+		} else if l.Items[index].Priority == prio {
+			size += min(l.Items[index].End, end) - max(l.Items[index].Start, start)
 		}
 	}
 
-	return item
+	if size == 0 {
+		return false, "", 0
+	}
+
+	return true, item.Name, size
 }
 
 func (l *PriorityList) GetInsertionPos(position int) (int, int) {

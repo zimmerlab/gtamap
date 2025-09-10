@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"fmt"
 	"log"
 	"os"
 
@@ -22,6 +23,7 @@ type ArgsMap struct {
 	Threads                *int
 	RegionmaskBedFile      *os.File
 	RegionmaskPriorityFile *os.File
+	RegionmaskAction       *string
 }
 
 func AddCommandMap(
@@ -130,6 +132,17 @@ func AddCommandMap(
 		},
 	)
 
+	argsObj.RegionmaskAction = command.Selector(
+		"",
+		"regionmaskAction",
+		[]string{"combine", "ignore-index"},
+		&argparse.Options{
+			Required: false,
+			Help:     "Specify how to handle regionmasks",
+			Default:  "combine",
+		},
+	)
+
 	return command, argsObj
 }
 
@@ -165,6 +178,8 @@ func ExecMap(argsObj *ArgsMap) {
 	// add region mask to index if provided
 	if argsObj.RegionmaskBedFile != nil && argsObj.RegionmaskPriorityFile != nil {
 
+		fmt.Println("regionmask action:", *argsObj.RegionmaskAction)
+
 		index.AddRegionmaskToIndex(
 			argsObj.RegionmaskBedFile,
 			argsObj.RegionmaskPriorityFile,
@@ -176,8 +191,6 @@ func ExecMap(argsObj *ArgsMap) {
 			"priority file": argsObj.RegionmaskPriorityFile.Name(),
 		}).Info("Using region mask bed file and priority file")
 
-	} else {
-		logrus.Info("No region mask used")
 	}
 
 	reader, errFastq := fastq.InitFromFiles(

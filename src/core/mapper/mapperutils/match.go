@@ -35,13 +35,53 @@ type SequenceMatchResult struct {
 }
 
 type ReadMatchResult struct {
-	SequenceIndex   int                        // the index of the sequence in the genome
-	MatchedRead     *regionvector.RegionVector // region vector containing the matched positions in the read
-	MatchedGenome   *regionvector.RegionVector // region vector containing the matched positions in the genome
-	MismatchesRead  []int                      // the positions of the mismatches in the read
-	diagonalHandler *DiagonalHandler
-	IncompleteMap   bool
-	SpliceSitesInfo []int // corresponds to the number of junctions of match result. canonical splice site -> 2 = canonical, 1 = non-can, 0 = no splice site
+	SequenceIndex            int                        // the index of the sequence in the genome
+	MatchedRead              *regionvector.RegionVector // region vector containing the matched positions in the read
+	MatchedGenome            *regionvector.RegionVector // region vector containing the matched positions in the genome
+	MismatchesRead           []int                      // the positions of the mismatches in the read
+	MismatchCounts           map[string]int
+	MismatchConstraintGlobal int
+	diagonalHandler          *DiagonalHandler
+	IncompleteMap            bool
+	SpliceSitesInfo          []int // corresponds to the number of junctions of match result. canonical splice site -> 2 = canonical, 1 = non-can, 0 = no splice site
+}
+
+func (r *ReadMatchResult) String() string {
+	sb := strings.Builder{}
+
+	sb.Write(fmt.Appendf(nil, "ReadMatchResult on seq index %d (incomplete: %t)\n", r.SequenceIndex, r.IncompleteMap))
+
+	maxLenReadStart := 0
+	maxLenReadEnd := 0
+	maxLenGenomeStart := 0
+	maxLenGenomeEnd := 0
+
+	for i := 0; i < len(r.MatchedRead.Regions); i++ {
+
+		read := r.MatchedRead.Regions[i]
+		genome := r.MatchedGenome.Regions[i]
+
+		maxLenReadStart = max(maxLenReadStart, len(strconv.Itoa(read.Start)))
+		maxLenReadEnd = max(maxLenReadEnd, len(strconv.Itoa(read.End)))
+		maxLenGenomeStart = max(maxLenGenomeStart, len(strconv.Itoa(genome.Start)))
+		maxLenGenomeEnd = max(maxLenGenomeEnd, len(strconv.Itoa(genome.End)))
+	}
+
+	for i := 0; i < len(r.MatchedRead.Regions); i++ {
+
+		read := r.MatchedRead.Regions[i]
+		genome := r.MatchedGenome.Regions[i]
+
+		if i > 0 && read.Start > r.MatchedRead.Regions[i-1].End {
+			sb.Write(fmt.Appendf(nil, "%3d: %*d - %*d <-> \n", i, maxLenReadStart, r.MatchedRead.Regions[i-1].End, maxLenReadEnd, read.Start))
+		}
+
+		sb.Write(fmt.Appendf(nil, "%3d: %*d - %*d <-> %*d - %*d\n", i, maxLenReadStart, read.Start, maxLenReadEnd, read.End, maxLenGenomeStart, genome.Start, maxLenGenomeEnd, genome.End))
+	}
+
+	sb.Write(fmt.Appendf(nil, "Mismatches in read: %v\n", r.MismatchesRead))
+
+	return sb.String()
 }
 
 func (r *ReadMatchResult) HasUnknownSpliceSites() bool {
@@ -122,37 +162,92 @@ func (r ReadMatchResult) GetLargestAnchor(introns *regionvector.RegionSet) (regi
 	return largestAnchor, prevIntron.Rank, mainAnchorIndex // anchor rank == intron rank of prev intron
 }
 
+// func (r *ReadMatchResult) MergeRegions() {
+// 	mergedRead := []regionvector.Region{r.MatchedRead.Regions[0]}
+// 	mergedGenome := []regionvector.Region{r.MatchedGenome.Regions[0]}
+//
+// 	for i := 1; i < len(r.MatchedRead.Regions); i++ {
+// 		last := &mergedRead[len(mergedRead)-1]
+// 		current := r.MatchedRead.Regions[i]
+//
+// 		if current.Start <= last.End { // Overlapping or adjacent
+// 			if current.End > last.End {
+// 				last.End = current.End
+// 			}
+// 		} else {
+// 			mergedRead = append(mergedRead, current)
+// 		}
+// 	}
+//
+// 	for i := 1; i < len(r.MatchedGenome.Regions); i++ {
+// 		last := &mergedGenome[len(mergedGenome)-1]
+// 		current := r.MatchedGenome.Regions[i]
+//
+// 		if current.Start <= last.End { // Overlapping or adjacent
+// 			if current.End > last.End {
+// 				last.End = current.End
+// 			}
+// 		} else {
+// 			mergedGenome = append(mergedGenome, current)
+// 		}
+// 	}
+// 	r.MatchedGenome.Regions = mergedGenome
+// 	r.MatchedRead.Regions = mergedRead
+// }
+
+// MergeRegions merges the read and genome regions if both are consecutive.
+// This preserves the property that the number of read and genome regions are
+// the same and that each read region is associated with the genome region at
+// the same index.
 func (r *ReadMatchResult) MergeRegions() {
-	mergedRead := []regionvector.Region{r.MatchedRead.Regions[0]}
-	mergedGenome := []regionvector.Region{r.MatchedGenome.Regions[0]}
+
+	if len(r.MatchedRead.Regions) != len(r.MatchedGenome.Regions) {
+		logrus.WithFields(logrus.Fields{
+			"len read regions":   len(r.MatchedRead.Regions),
+			"len genome regions": len(r.MatchedGenome.Regions),
+		}).Error("Cannot merge regions of ReadMatchResult: different number of read and genome regions")
+		return
+	}
+
+	mergedRead := make([]regionvector.Region, 1)
+	mergedRead[0] = regionvector.Region{
+		Start: r.MatchedRead.Regions[0].Start,
+		End:   r.MatchedRead.Regions[0].End,
+	}
+
+	mergedGenome := make([]regionvector.Region, 1)
+	mergedGenome[0] = regionvector.Region{
+		Start: r.MatchedGenome.Regions[0].Start,
+		End:   r.MatchedGenome.Regions[0].End,
+	}
+
+	iMerged := 0
 
 	for i := 1; i < len(r.MatchedRead.Regions); i++ {
-		last := &mergedRead[len(mergedRead)-1]
-		current := r.MatchedRead.Regions[i]
 
-		if current.Start <= last.End { // Overlapping or adjacent
-			if current.End > last.End {
-				last.End = current.End
-			}
+		isConsecutiveRead := r.MatchedRead.Regions[i].Start == mergedRead[iMerged].End
+		isConsecutiveGenome := r.MatchedGenome.Regions[i].Start == mergedGenome[iMerged].End
+
+		if isConsecutiveRead && isConsecutiveGenome {
+			// extend the last region
+			mergedRead[iMerged].End = r.MatchedRead.Regions[i].End
+			mergedGenome[iMerged].End = r.MatchedGenome.Regions[i].End
 		} else {
-			mergedRead = append(mergedRead, current)
+			// add a new region
+			mergedRead = append(mergedRead, regionvector.Region{
+				Start: r.MatchedRead.Regions[i].Start,
+				End:   r.MatchedRead.Regions[i].End,
+			})
+			mergedGenome = append(mergedGenome, regionvector.Region{
+				Start: r.MatchedGenome.Regions[i].Start,
+				End:   r.MatchedGenome.Regions[i].End,
+			})
+			iMerged++
 		}
 	}
 
-	for i := 1; i < len(r.MatchedGenome.Regions); i++ {
-		last := &mergedGenome[len(mergedGenome)-1]
-		current := r.MatchedGenome.Regions[i]
-
-		if current.Start <= last.End { // Overlapping or adjacent
-			if current.End > last.End {
-				last.End = current.End
-			}
-		} else {
-			mergedGenome = append(mergedGenome, current)
-		}
-	}
-	r.MatchedGenome.Regions = mergedGenome
 	r.MatchedRead.Regions = mergedRead
+	r.MatchedGenome.Regions = mergedGenome
 }
 
 func (r *ReadMatchResult) NormalizeRegions() {
@@ -296,12 +391,19 @@ func (r *ReadMatchResult) Copy() *ReadMatchResult {
 		dhCopy = r.diagonalHandler.Copy()
 	}
 
+	mismatchCounts := make(map[string]int)
+	for key, val := range r.MismatchCounts {
+		mismatchCounts[key] = val
+	}
+
 	return &ReadMatchResult{
-		SequenceIndex:   r.SequenceIndex,
-		MatchedRead:     r.MatchedRead.Copy(),
-		MatchedGenome:   r.MatchedGenome.Copy(),
-		MismatchesRead:  append([]int{}, r.MismatchesRead...),
-		diagonalHandler: dhCopy,
+		SequenceIndex:            r.SequenceIndex,
+		MatchedRead:              r.MatchedRead.Copy(),
+		MatchedGenome:            r.MatchedGenome.Copy(),
+		MismatchesRead:           append([]int{}, r.MismatchesRead...),
+		MismatchCounts:           mismatchCounts,
+		MismatchConstraintGlobal: r.MismatchConstraintGlobal,
+		diagonalHandler:          dhCopy,
 	}
 }
 

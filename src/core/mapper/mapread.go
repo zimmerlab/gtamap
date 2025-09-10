@@ -10,7 +10,15 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex, greedy bool) ([]*mapperutils.ReadMatchResult, bool) {
+func MapRead(
+	read *fastq.Read,
+	genomeIndex *index.GenomeIndex,
+	greedy bool,
+) (
+	[]*mapperutils.ReadMatchResult,
+	bool,
+) {
+
 	// logrus.WithFields(logrus.Fields{
 	// 	"read":   read.Header,
 	// 	"length": len(*read.Sequence),
@@ -32,7 +40,7 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex, greedy bool) ([]*
 
 		matches := genomeIndex.FindKeywordMatchesInMap(&kmer, i)
 
-		if matches == nil || len(matches) == 0 {
+		if len(matches) == 0 {
 			continue
 		}
 
@@ -140,8 +148,14 @@ func MapRead(read *fastq.Read, genomeIndex *index.GenomeIndex, greedy bool) ([]*
 	return results, true
 }
 
-func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperutils.DiagonalHandler,
-	result *mapperutils.ReadMatchResult, results *[]*mapperutils.ReadMatchResult, isGreedy bool, currDepth *int,
+func applyPossibleDiagonals(
+	read *fastq.Read,
+	genomeIndex *index.GenomeIndex,
+	dh *mapperutils.DiagonalHandler,
+	result *mapperutils.ReadMatchResult,
+	results *[]*mapperutils.ReadMatchResult,
+	isGreedy bool,
+	currDepth *int,
 ) {
 	// logrus.Debug("")
 	// logrus.WithFields(logrus.Fields{
@@ -181,7 +195,8 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 		// logrus.Debug("adding partial result to results")
 
 		// check if result is not empty
-		if len(result.MatchedGenome.Regions) == 0 || len(result.MatchedRead.Regions) == 0 {
+		if len(result.MatchedGenome.Regions) == 0 ||
+			len(result.MatchedRead.Regions) == 0 {
 			return
 		}
 
@@ -228,7 +243,8 @@ func applyPossibleDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, dh
 		// logrus.Debug("adding partial result to results")
 
 		// check if result is not empty
-		if len(result.MatchedGenome.Regions) == 0 || len(result.MatchedRead.Regions) == 0 {
+		if len(result.MatchedGenome.Regions) == 0 ||
+			len(result.MatchedRead.Regions) == 0 {
 			return
 		}
 
@@ -327,9 +343,14 @@ func findExcludedDiagonal(before []int, after []int, removed int) []int {
 	return excluded
 }
 
-func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperutils.DiagonalHandler,
-	diagonal int, result *mapperutils.ReadMatchResult,
+func applyDiagonal(
+	read *fastq.Read,
+	genomeIndex *index.GenomeIndex,
+	dh *mapperutils.DiagonalHandler,
+	diagonal int,
+	result *mapperutils.ReadMatchResult,
 ) bool {
+
 	diagonalRead := regionvector.NewRegionVector()
 	diagonalGenome := regionvector.NewRegionVector()
 
@@ -374,6 +395,8 @@ func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperu
 
 	gapsRead, gapsGenome := mapperutils.ComputeGapsInDiagonal(diagonalRead, diagonalGenome, result)
 
+	sequenceInfo := genomeIndex.GetSequenceInfo(result.SequenceIndex)
+
 	// resolve gaps on the same diagonal
 	// gaps can occur because of mismatches in the read and genome which prevent exact kmer matching
 	// this is done by filling the gaps in the read and genome and counting the mismatches
@@ -404,6 +427,7 @@ func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperu
 		// count mismatches when filling the gap and skip the match if there are too many
 		geneSeqPos := 0
 		for k := gapRead.Start - 1; k <= gapRead.End-1; k++ {
+
 			readByte := (*read.Sequence)[k]
 			gIndex := gapGenome.Start + geneSeqPos - 1
 			genomeByte := (*genomeIndex.Sequences[result.SequenceIndex])[gIndex]
@@ -414,20 +438,33 @@ func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperu
 				continue
 			}
 
-			// add the mismatche to the result
-			result.MismatchesRead = append(result.MismatchesRead, k)
+			isValid := AddMismatchToResult(
+				genomeIndex,
+				result,
+				k,
+				int(sequenceInfo.StartGenomic)+gIndex,
+			)
 
-			// skip this match result if there are too many mismatches
-			if exceedsMismatchConstraint(read, result) {
-				// logrus.WithFields(logrus.Fields{
-				// 	"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
-				// 	"maxMismatchPercentage": config.MaxMismatchPercentage(),
-				// 	"mismatches":            result.MismatchesRead,
-				// 	"numMismatches":         len(result.MismatchesRead),
-				// }).Debug("too many mismatches in diagonal filling")
-
+			if !isValid {
 				return false
 			}
+
+			// INFO: commented out during implementation of AddMismatchToResult
+
+			// // add the mismatche to the result
+			// result.MismatchesRead = append(result.MismatchesRead, k)
+			//
+			// // skip this match result if there are too many mismatches
+			// if exceedsMismatchConstraint(read, result) {
+			// 	// logrus.WithFields(logrus.Fields{
+			// 	// 	"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
+			// 	// 	"maxMismatchPercentage": config.MaxMismatchPercentage(),
+			// 	// 	"mismatches":            result.MismatchesRead,
+			// 	// 	"numMismatches":         len(result.MismatchesRead),
+			// 	// }).Debug("too many mismatches in diagonal filling")
+			//
+			// 	return false
+			// }
 		}
 
 		// diagonalGenome.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.End)
@@ -499,6 +536,38 @@ func applyDiagonal(read *fastq.Read, genomeIndex *index.GenomeIndex, dh *mapperu
 	return true
 }
 
+func AddMismatchToResult(
+	genomeIndex *index.GenomeIndex,
+	result *mapperutils.ReadMatchResult,
+	posInRead int,
+	posInGenomeGlobal int,
+) bool {
+
+	result.MismatchesRead = append(result.MismatchesRead, posInRead)
+
+	found, name, _ := genomeIndex.RegionMask.ContigMasks[genomeIndex.GetSequenceInfo(result.SequenceIndex).Contig].GetItemAtPosition(posInGenomeGlobal)
+	if !found {
+		name = "unmasked"
+	}
+
+	if _, foundName := result.MismatchCounts[name]; !foundName {
+		result.MismatchCounts[name] = 0
+	}
+	result.MismatchCounts[name] += 1
+
+	// mismatches exceed global mismatch constraint
+	if len(result.MismatchesRead) > result.MismatchConstraintGlobal {
+		return false
+	}
+
+	// TODO: check region mismatch constraint
+	if name == "SINE/Alu" && result.MismatchCounts[name] >= 4 {
+		return false
+	}
+
+	return true
+}
+
 func annotateSpliceSites(read *fastq.Read, genomeIndex *index.GenomeIndex, result *mapperutils.ReadMatchResult) {
 	// used to keep track of the read position for the next gap
 	readGapPos := 0
@@ -548,7 +617,12 @@ func annotateSpliceSites(read *fastq.Read, genomeIndex *index.GenomeIndex, resul
 	}
 }
 
-func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *mapperutils.ReadMatchResult) {
+func extendDiagonals(
+	read *fastq.Read,
+	genomeIndex *index.GenomeIndex,
+	result *mapperutils.ReadMatchResult,
+) {
+
 	if result.MatchedRead.Length() == len(*read.Sequence) {
 		// logrus.Debug("read fully matched")
 	} else {
@@ -623,26 +697,47 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 						readByte := (*read.Sequence)[gapRead.Start : gapRead.Start+bestSplit]
 						genomeByte := (*genomeIndex.Sequences[result.SequenceIndex])[gapGenome.Start : gapGenome.Start+bestSplit]
 
-						// add the mismatches to the result
-						for i := 0; i < bestSplit; i++ {
-							// add the mismatche to the result
-							if readByte[i] != genomeByte[i] {
-								result.MismatchesRead = append(result.MismatchesRead, gapRead.Start+i)
+						startRead := gapRead.Start
+						startGenomic := int(genomeIndex.GetSequenceInfo(result.SequenceIndex).StartGenomic) + gapGenome.Start
 
-								// skip this match result if there are too many mismatches
-								if exceedsMismatchConstraint(read, result) {
-									// logrus.WithFields(logrus.Fields{
-									// 	"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
-									// 	"maxMismatchPercentage": config.MaxMismatchPercentage(),
-									// 	"mismatches":            result.MismatchesRead,
-									// 	"numMismatches":         len(result.MismatchesRead),
-									// }).Debug("too many mismatches in middle extension (left) -> skip sequence")
-									// continue sequenceLoop
+						// add mismatches to the result
+						for i := range bestSplit {
 
-									result.IncompleteMap = true
-									return
-								}
+							if readByte[i] == genomeByte[i] {
+								// skip matches
+								continue
 							}
+
+							isValid := AddMismatchToResult(
+								genomeIndex,
+								result,
+								startRead+i,
+								startGenomic+i,
+							)
+
+							if !isValid {
+								result.IncompleteMap = true
+								return
+							}
+
+							// NOTE: commented out when adding AddMismatchToResult
+
+							// // add the mismatches to the result
+							// result.MismatchesRead = append(result.MismatchesRead, gapRead.Start+i)
+							//
+							// // skip this match result if there are too many mismatches
+							// if exceedsMismatchConstraint(read, result) {
+							// 	// logrus.WithFields(logrus.Fields{
+							// 	// 	"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
+							// 	// 	"maxMismatchPercentage": config.MaxMismatchPercentage(),
+							// 	// 	"mismatches":            result.MismatchesRead,
+							// 	// 	"numMismatches":         len(result.MismatchesRead),
+							// 	// }).Debug("too many mismatches in middle extension (left) -> skip sequence")
+							// 	// continue sequenceLoop
+							//
+							// 	result.IncompleteMap = true
+							// 	return
+							// }
 						}
 					}
 
@@ -671,26 +766,46 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 						readByte := (*read.Sequence)[gapRead.End-(gapRead.Length()-bestSplit) : gapRead.End]
 						genomeByte := (*genomeIndex.Sequences[result.SequenceIndex])[gapGenome.End-(gapRead.Length()-bestSplit) : gapGenome.End]
 
+						startRead := gapRead.End - (gapRead.Length() - bestSplit)
+						startGenomic := int(genomeIndex.GetSequenceInfo(result.SequenceIndex).StartGenomic) - gapGenome.End - (gapRead.Length() - bestSplit)
+
 						// add the mismatches to the result
 						for i := 0; i < gapRead.Length()-bestSplit; i++ {
-							// add the mismatche to the result
-							if readByte[i] != genomeByte[i] {
-								// result.MismatchesRead = append(result.MismatchesRead, gapRead.End-(bestSplit-i))
-								result.MismatchesRead = append(result.MismatchesRead, gapRead.Start+bestSplit+i)
 
-								// skip this match result if there are too many mismatches
-								if exceedsMismatchConstraint(read, result) {
-									// logrus.WithFields(logrus.Fields{
-									// 	"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
-									// 	"maxMismatchPercentage": config.MaxMismatchPercentage(),
-									// 	"mismatches":            result.MismatchesRead,
-									// 	"numMismatches":         len(result.MismatchesRead),
-									// }).Debug("too many mismatches in middle extension (right) -> skip sequence")
-
-									result.IncompleteMap = true
-									return
-								}
+							if readByte[i] == genomeByte[i] {
+								continue
 							}
+
+							// add mismatches to the result
+							isValid := AddMismatchToResult(
+								genomeIndex,
+								result,
+								startRead+i,
+								startGenomic+i,
+							)
+
+							if !isValid {
+								result.IncompleteMap = true
+								return
+							}
+
+							// INFO: commented out when adding AddMismatchToResult
+
+							// // result.MismatchesRead = append(result.MismatchesRead, gapRead.End-(bestSplit-i))
+							// result.MismatchesRead = append(result.MismatchesRead, gapRead.Start+bestSplit+i)
+							//
+							// // skip this match result if there are too many mismatches
+							// if exceedsMismatchConstraint(read, result) {
+							// 	// logrus.WithFields(logrus.Fields{
+							// 	// 	"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
+							// 	// 	"maxMismatchPercentage": config.MaxMismatchPercentage(),
+							// 	// 	"mismatches":            result.MismatchesRead,
+							// 	// 	"numMismatches":         len(result.MismatchesRead),
+							// 	// }).Debug("too many mismatches in middle extension (right) -> skip sequence")
+							//
+							// 	result.IncompleteMap = true
+							// 	return
+							// }
 						}
 					}
 
@@ -714,8 +829,10 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 			endRead := firstRegionRead.Start
 			extensionLength := endRead - startRead
 
-			mmBeforeLeftExtension := make([]int, len(result.MismatchesRead))
-			copy(mmBeforeLeftExtension, result.MismatchesRead)
+			resultBackup := result.Copy()
+
+			// mmBeforeLeftExtension := make([]int, len(result.MismatchesRead))
+			// copy(mmBeforeLeftExtension, result.MismatchesRead)
 
 			firstRegionGenome, _ := result.MatchedGenome.GetFirstRegion()
 			startGenome := firstRegionGenome.Start - extensionLength
@@ -735,40 +852,56 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 			if startGenome < 0 {
 				// logrus.Debug("genome index out of bounds")
 
-				result.MismatchesRead = mmBeforeLeftExtension
+				// result.MismatchesRead = mmBeforeLeftExtension
+				result = resultBackup
 				result.IncompleteMap = true
 				return
 			}
 
 			genomeSequence := (*genomeIndex.Sequences[result.SequenceIndex])[startGenome : startGenome+len(readSequence)]
 
-			numMismatches := 0
+			startGenomic := int(genomeIndex.GetSequenceInfo(result.SequenceIndex).StartGenomic) + startGenome
 
 			// trying to extend the read to the left
-			for i := 0; i < extensionLength; i++ {
+			for i := range extensionLength {
 
 				// skip matches
 				if readSequence[i] == genomeSequence[i] {
 					continue
 				}
 
-				// add the mismatches to the result
-				result.MismatchesRead = append(result.MismatchesRead, startRead+i)
-				numMismatches++
+				isValid := AddMismatchToResult(
+					genomeIndex,
+					result,
+					i,
+					startGenomic+i,
+				)
 
-				// skip this match result if there are too many mismatches
-				if exceedsMismatchConstraint(read, result) {
-					// logrus.WithFields(logrus.Fields{
-					// 	"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
-					// 	"maxMismatchPercentage": config.MaxMismatchPercentage(),
-					// 	"mismatches":            result.MismatchesRead,
-					// 	"numMismatches":         len(result.MismatchesRead),
-					// }).Debug("too many mismatches in left extension -> skip sequence")
-
-					result.MismatchesRead = mmBeforeLeftExtension
+				if !isValid {
+					// result.MismatchesRead = mmBeforeLeftExtension
+					result = resultBackup
 					result.IncompleteMap = true
 					return
 				}
+
+				// INFO: commented out when adding AddMismatchToResult
+
+				// // add the mismatches to the result
+				// result.MismatchesRead = append(result.MismatchesRead, startRead+i)
+				//
+				// // skip this match result if there are too many mismatches
+				// if exceedsMismatchConstraint(read, result) {
+				// 	// logrus.WithFields(logrus.Fields{
+				// 	// 	"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
+				// 	// 	"maxMismatchPercentage": config.MaxMismatchPercentage(),
+				// 	// 	"mismatches":            result.MismatchesRead,
+				// 	// 	"numMismatches":         len(result.MismatchesRead),
+				// 	// }).Debug("too many mismatches in left extension -> skip sequence")
+				//
+				// 	result.MismatchesRead = mmBeforeLeftExtension
+				// 	result.IncompleteMap = true
+				// 	return
+				// }
 			}
 
 			// logrus.WithFields(logrus.Fields{
@@ -794,8 +927,9 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 
 		if lastRegionRead.End < len(*read.Sequence) {
 
-			mmBeforeRightExtension := make([]int, len(result.MismatchesRead))
-			copy(mmBeforeRightExtension, result.MismatchesRead)
+			resultBackup := result.Copy()
+			// mmBeforeRightExtension := make([]int, len(result.MismatchesRead))
+			// copy(mmBeforeRightExtension, result.MismatchesRead)
 
 			startRead := lastRegionRead.End
 			endRead := len(*read.Sequence)
@@ -819,35 +953,57 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 			if startGenome+len(readSequence) > len(*genomeIndex.Sequences[result.SequenceIndex]) {
 				// logrus.Debug("genome index out of bounds")
 
-				result.MismatchesRead = mmBeforeRightExtension
+				// TODO: check if commenting this out is valid
+				// result.MismatchesRead = mmBeforeRightExtension
+
 				result.IncompleteMap = true
 				return
 			}
 
 			genomeSequence := (*genomeIndex.Sequences[result.SequenceIndex])[startGenome : startGenome+len(readSequence)]
 
+			startGenomic := int(genomeIndex.GetSequenceInfo(result.SequenceIndex).StartGenomic) + startGenome
+
 			// trying to extend the read to the right
-			for i := 0; i < extensionLength; i++ {
+			for i := range extensionLength {
 
 				// add the mismatches to the result
-				if readSequence[i] != genomeSequence[i] {
-					result.MismatchesRead = append(result.MismatchesRead, startRead+i)
+				if readSequence[i] == genomeSequence[i] {
+					continue
 				}
 
-				// skip this match result if there are too many mismatches
-				if exceedsMismatchConstraint(read, result) {
-					// logrus.WithFields(logrus.Fields{
-					// 	"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
-					// 	"maxMismatchPercentage": config.MaxMismatchPercentage(),
-					// 	"mismatches":            result.MismatchesRead,
-					// 	"numMismatches":         len(result.MismatchesRead),
-					// }).Debug("too many mismatches in right extension -> skip sequence")
-					// continue sequenceLoop
+				isValid := AddMismatchToResult(
+					genomeIndex,
+					result,
+					i,
+					startGenomic+i,
+				)
 
-					result.MismatchesRead = mmBeforeRightExtension
+				if !isValid {
+					result = resultBackup
+
 					result.IncompleteMap = true
 					return
 				}
+
+				// INFO: commented out when adding AddMismatchToResult
+
+				// result.MismatchesRead = append(result.MismatchesRead, startRead+i)
+				//
+				// // skip this match result if there are too many mismatches
+				// if exceedsMismatchConstraint(read, result) {
+				// 	// logrus.WithFields(logrus.Fields{
+				// 	// 	"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
+				// 	// 	"maxMismatchPercentage": config.MaxMismatchPercentage(),
+				// 	// 	"mismatches":            result.MismatchesRead,
+				// 	// 	"numMismatches":         len(result.MismatchesRead),
+				// 	// }).Debug("too many mismatches in right extension -> skip sequence")
+				// 	// continue sequenceLoop
+				//
+				// 	result.MismatchesRead = mmBeforeRightExtension
+				// 	result.IncompleteMap = true
+				// 	return
+				// }
 			}
 
 			result.MatchedRead.AddRegionNonOverlappingPanic(startRead, endRead)
@@ -868,13 +1024,29 @@ func mapReadToSequence(
 	// list of read match results
 	results := make([]*mapperutils.ReadMatchResult, 0)
 
+	// INFO: max mismatches per read is given as percentage (int, 5 = 5%)
+	// compute actual number of allowed mismatches based on read length
+	// store this in the result to prevent frequent computations
+	maxMismatches := int((float32(config.MaxMismatchPercentage()) / 100) * float32(len(*read.Sequence)))
+
 	result := &mapperutils.ReadMatchResult{
-		SequenceIndex:  seqIndex,
-		MatchedRead:    regionvector.NewRegionVector(),
-		MatchedGenome:  regionvector.NewRegionVector(),
-		MismatchesRead: make([]int, 0),
+		SequenceIndex:            seqIndex,
+		MatchedRead:              regionvector.NewRegionVector(),
+		MatchedGenome:            regionvector.NewRegionVector(),
+		MismatchesRead:           make([]int, 0),
+		MismatchCounts:           make(map[string]int),
+		MismatchConstraintGlobal: maxMismatches,
 	}
-	applyPossibleDiagonals(read, genomeIndex, diagonalHandler, result, &results, greedy, currDepth)
+
+	applyPossibleDiagonals(
+		read,
+		genomeIndex,
+		diagonalHandler,
+		result,
+		&results,
+		greedy,
+		currDepth,
+	)
 
 	finalResults := make([]*mapperutils.ReadMatchResult, 0)
 
@@ -901,6 +1073,8 @@ func mapReadToSequence(
 		// INFO: Now apply blacklist
 		// If res in a repeat region, only append to finalResults when low mm
 
+		// genomeIndex.IsResultValid(res)
+
 		// TODO: adjust to region mask
 		// if genomeIndex.IsPartOfRepeat(res) {
 		//
@@ -925,7 +1099,10 @@ func mapReadToSequence(
 // as configured in the config. This value is an integer between 0 and 100 which represents the percentage
 // of allowed mismatches in the read.
 // The function returns true if the number of mismatches exceeds the allowed percentage.
-func exceedsMismatchConstraint(read *fastq.Read, result *mapperutils.ReadMatchResult) bool {
+func exceedsMismatchConstraint(
+	read *fastq.Read,
+	result *mapperutils.ReadMatchResult,
+) bool {
 	// the percentage of the mismatches accumulated in the given result relative to the read length
 	mismatchPercentage := uint8(float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)))
 	return mismatchPercentage > config.MaxMismatchPercentage()

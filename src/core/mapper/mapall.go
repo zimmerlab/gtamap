@@ -19,7 +19,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawriter.Writer,
+func MapAll(
+	genomeIndex *index.GenomeIndex,
+	reader *fastq.Reader,
+	writer *datawriter.Writer,
 	numThreads *int,
 ) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
@@ -106,7 +109,16 @@ func MapAll(genomeIndex *index.GenomeIndex, reader *fastq.Reader, writer *datawr
 	for i := 0; i < numWorkers; i++ {
 		wgMainMappingPass.Add(1)
 		// go MapperWorker(i, genomeIndex, &wgMainMappingPass, taskChan, secondpassChan, confidentMappingChan, paralogMappingChan, progressChan, timerChan)
-		go MapperWorker(i, genomeIndex, &wgMainMappingPass, taskChan, secondpassChan, confidentMappingChan, progressChan, timerChan)
+		go MapperWorker(
+			i,
+			genomeIndex,
+			&wgMainMappingPass,
+			taskChan,
+			secondpassChan,
+			confidentMappingChan,
+			progressChan,
+			timerChan,
+		)
 	}
 
 	go MappingTaskProducer(reader, taskChan, progressChan, maxTasks, specificQname)

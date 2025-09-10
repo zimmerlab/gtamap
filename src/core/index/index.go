@@ -2,6 +2,7 @@ package index
 
 import (
 	"encoding/gob"
+	"fmt"
 	"io/fs"
 	"log"
 	"math"
@@ -811,6 +812,61 @@ func (i *GenomeIndex) NumSequences() int {
 	return len(i.SequenceHeaders)
 }
 
+func (i *GenomeIndex) IsResultValid(result *mapperutils.ReadMatchResult) bool {
+
+	sequenceInfo := i.GetSequenceInfo(result.SequenceIndex)
+
+	if _, found := i.RegionMask.ContigMasks[sequenceInfo.Contig]; !found {
+		return true
+	}
+
+	length := int(sequenceInfo.EndGenomic - sequenceInfo.StartGenomic)
+	isForward := i.IsSequenceForward(result.SequenceIndex)
+
+	fmt.Println("--")
+	// DEBUG: print result
+	fmt.Println(result.String())
+
+	result.MergeRegions()
+
+	fmt.Println(result.String())
+
+	for _, genomicRegion := range result.MatchedGenome.Regions {
+
+		var startGenomic int
+		if isForward {
+			startGenomic = int(sequenceInfo.StartGenomic) + genomicRegion.Start
+		} else {
+			startGenomic = int(sequenceInfo.StartGenomic) + (length - genomicRegion.End)
+		}
+
+		fmt.Printf("region:\nrel:\t%d - %d\nglb:\t%d - %d\n\n", genomicRegion.Start, genomicRegion.End, startGenomic, startGenomic+genomicRegion.Length())
+
+		i.RegionMask.ContigMasks[sequenceInfo.Contig].ApplyMaskToRegion(startGenomic, startGenomic+genomicRegion.Length())
+
+		//
+		// 	found, name, size := i.RegionMask.ContigMasks[sequenceInfo.Contig].
+		// 		GetMostImportantItemThatOverlaps(
+		// 			startGenomic,
+		// 			startGenomic+genomicRegion.Length(),
+		// 		)
+		//
+		// 	if !found {
+		// 		continue
+		// 	}
+		//
+		// 	// percentOverlap := float32(size) / float32(genomicRegion.Length())
+		// 	fmt.Println()
+		// 	fmt.Println(genomicRegion)
+		// 	fmt.Println(startGenomic, startGenomic+genomicRegion.Length())
+		// 	fmt.Println(name, size)
+		// 	fmt.Println(float32(size) / float32(genomicRegion.Length()))
+		//
+	}
+
+	return true
+}
+
 // TODO: adjust to region mask
 // func (i *GenomeIndex) IsPartOfRepeat(result *mapperutils.ReadMatchResult) bool {
 //
@@ -1069,6 +1125,7 @@ func BuildAndSerializeGenomeIndex(
 
 	// add region mask to index if provided
 	if regionmaskBedFile != nil && regionmaskPriorityFile != nil {
+
 		AddRegionmaskToIndex(regionmaskBedFile, regionmaskPriorityFile, genomeIndex)
 
 		logrus.WithFields(logrus.Fields{

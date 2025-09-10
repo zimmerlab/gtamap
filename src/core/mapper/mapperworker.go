@@ -18,7 +18,9 @@ type ProgressStats struct {
 	NumConfidentMappings uint64
 }
 
-func MapperWorker(workerId int, genomeIndex *index.GenomeIndex,
+func MapperWorker(
+	workerId int,
+	genomeIndex *index.GenomeIndex,
 	wg *sync.WaitGroup,
 	taskChan <-chan MappingTask,
 	secondpassChan *secondpass.SecondPassChannel,
@@ -58,8 +60,15 @@ func MapperWorker(workerId int, genomeIndex *index.GenomeIndex,
 			progressStats.ReadsProcessed = 0
 		}
 
-		MapReadPair(task.ReadPair, genomeIndex, secondpassChan, confidentMappingChan, timerChan, progressChan,
-			progressStats)
+		MapReadPair(
+			task.ReadPair,
+			genomeIndex,
+			secondpassChan,
+			confidentMappingChan,
+			timerChan,
+			progressChan,
+			progressStats,
+		)
 	}
 
 	//logrus.WithFields(logrus.Fields{
