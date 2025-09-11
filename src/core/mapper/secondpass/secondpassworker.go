@@ -887,7 +887,7 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 					// remove right regions
 					correctedTemplate.MatchedGenome.RemoveRegion(rSection.MainAnchor.End, len(*genomeIndex.Sequences[readMatchResult.SequenceIndex]))
 
-					templateMappedRead := regionvector.Region{Start: lExtStopRead, End: rExtStartRead}
+					templateMappedRead := regionvector.Region{Start: lExtStopRead, End: rExtStartRead - 1}
 					templateMM := extractMMofAnchor(templateMappedRead, correctedTemplate.MismatchesRead)
 					corrected := correctedTemplate.Copy()
 
