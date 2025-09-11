@@ -45,9 +45,7 @@ type ReadMatchResult struct {
 	IncompleteMap   bool
 	SpliceSitesInfo []int // corresponds to the number of junctions of match result. canonical splice site -> 2 = canonical, 1 = non-can, 0 = no splice site
 	// fileds for logging
-	Id        int
-	InitialMM int
-	EndMM     int
+	Id int
 
 	IsFixPoint          bool
 	MainAnchorLength    int
@@ -346,7 +344,6 @@ func (r *ReadMatchResult) Copy() *ReadMatchResult {
 		MismatchesRead:  append([]int{}, r.MismatchesRead...),
 		diagonalHandler: dhCopy,
 
-		InitialMM:           r.InitialMM,
 		IsFixPoint:          r.IsFixPoint,
 		MainAnchorLength:    r.MainAnchorLength,
 		MainAnchorMM:        r.MainAnchorMM,
@@ -812,8 +809,7 @@ func (r *ReadMatchResult) WriteTSV(f *os.File, gene string, isFw int, altId int)
 		strconv.Itoa(r.SequenceIndex),
 		strconv.Itoa(isFw),
 		strconv.Itoa(altId),
-		strconv.Itoa(r.InitialMM),
-		strconv.Itoa(r.EndMM),
+		strconv.Itoa(len(r.MismatchesRead)),
 		strconv.FormatBool(r.IsFixPoint),
 		strconv.Itoa(r.MainAnchorLength),
 		strconv.Itoa(r.MainAnchorMM),
