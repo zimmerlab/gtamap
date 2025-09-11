@@ -2,7 +2,6 @@ package secondpass
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 
@@ -37,7 +36,7 @@ func SecondpassMappingWorker(
 	logrus.Info("Started second pass")
 	logrus.Info("Started output worker")
 
-	for i := 0; i < numWorkers; i++ {
+	for range numWorkers {
 
 		wgSecondpass.Add(1)
 
@@ -54,6 +53,23 @@ func SecondpassMappingWorker(
 
 				remapReadPair(task, annotation, genomeIndex)
 
+				// for _, r := range task.Fw {
+				// 	for mi := 0; mi < len(r.MismatchesRead); mi++ {
+				// 		for mj := mi + 1; mj < len(r.MismatchesRead); mj++ {
+				// 			if r.MismatchesRead[mi] == r.MismatchesRead[mj] {
+				// 				fmt.Println(r.MatchedRead.Regions)
+				// 				fmt.Println(r.MatchedGenome.Regions)
+				// 				fmt.Println(r.MismatchesRead)
+				// 				r.NormalizeRegions()
+				// 				fmt.Println(r.MatchedRead.Regions)
+				// 				fmt.Println(r.MatchedGenome.Regions)
+				// 				fmt.Println(r.MismatchesRead)
+				// 				logrus.Fatal("Duplicate mismatch positions found in remap!")
+				// 			}
+				// 		}
+				// 	}
+				// }
+
 				thirdPassChan.Send(&thirdpass.ThirdPassTask{
 					ReadPairId: task.ReadPair.ReadR1.Header,
 					TargetInfo: task,
@@ -68,19 +84,72 @@ func remapReadPair(
 	annotationMap map[int]*mapperutils.TargetAnnotation,
 	genomeIndex *index.GenomeIndex,
 ) {
+
+	for _, r := range readPairMapping.Fw {
+		for mi := 0; mi < len(r.MismatchesRead); mi++ {
+			for mj := mi + 1; mj < len(r.MismatchesRead); mj++ {
+				if r.MismatchesRead[mi] == r.MismatchesRead[mj] {
+					fmt.Println(r.MatchedRead.Regions)
+					fmt.Println(r.MatchedGenome.Regions)
+					fmt.Println(r.MismatchesRead)
+					r.NormalizeRegions()
+					fmt.Println(r.MatchedRead.Regions)
+					fmt.Println(r.MatchedGenome.Regions)
+					fmt.Println(r.MismatchesRead)
+					logrus.Fatal("Duplicate before remap fw")
+				}
+			}
+		}
+	}
+
 	fwRemaps := make([]*mapperutils.ReadMatchResult, 0)
 
 	for _, mapping := range readPairMapping.Fw {
+
+		// BUG: only valid if there is only one sequence in the index
 		mainSeqId := mapping.SequenceIndex / 2
-		remaps := remapRead(mapping, annotationMap[mainSeqId], readPairMapping.ReadPair.ReadR1, genomeIndex)
+
+		remaps := remapRead(
+			mapping,
+			annotationMap[mainSeqId],
+			readPairMapping.ReadPair.ReadR1,
+			genomeIndex,
+		)
+
 		fwRemaps = append(fwRemaps, remaps...)
+	}
+
+	for _, r := range fwRemaps {
+		for mi := 0; mi < len(r.MismatchesRead); mi++ {
+			for mj := mi + 1; mj < len(r.MismatchesRead); mj++ {
+				if r.MismatchesRead[mi] == r.MismatchesRead[mj] {
+					fmt.Println(r.MatchedRead.Regions)
+					fmt.Println(r.MatchedGenome.Regions)
+					fmt.Println(r.MismatchesRead)
+					r.NormalizeRegions()
+					fmt.Println(r.MatchedRead.Regions)
+					fmt.Println(r.MatchedGenome.Regions)
+					fmt.Println(r.MismatchesRead)
+					logrus.Fatal("Duplicate after remap fw")
+				}
+			}
+		}
 	}
 
 	rvRemaps := make([]*mapperutils.ReadMatchResult, 0)
 
 	for _, mapping := range readPairMapping.Rv {
+
+		// BUG: only valid if there is only one sequence in the index
 		mainSeqId := mapping.SequenceIndex / 2
-		remaps := remapRead(mapping, annotationMap[mainSeqId], readPairMapping.ReadPair.ReadR2, genomeIndex)
+
+		remaps := remapRead(
+			mapping,
+			annotationMap[mainSeqId],
+			readPairMapping.ReadPair.ReadR2,
+			genomeIndex,
+		)
+
 		rvRemaps = append(rvRemaps, remaps...)
 	}
 
@@ -192,11 +261,6 @@ func remapRead(
 	genomeIndex *index.GenomeIndex,
 ) []*mapperutils.ReadMatchResult {
 
-	if len(readMapping.MatchedRead.Regions) != len(readMapping.MatchedGenome.Regions) {
-		fmt.Println("error in remapRead: read and genome regions do not match in length")
-		os.Exit(1)
-	}
-
 	// NOTE: this is CRUCIAL and NEEDS to be called before ANY REMAP!!!
 	readMapping.NormalizeRegions()
 
@@ -205,44 +269,103 @@ func remapRead(
 	// only remap if there is an annotation and in RNA mode
 	if annotation != nil && config.IsOriginRNA {
 
+		candidates := make([]*mapperutils.ReadMatchResult, 0)
+
 		if readMapping.IncompleteMap {
+
 			// TODO: even in DNA mode?
-			remaps := fixPointRNARemap(readMapping, annotation.Introns[readMapping.SequenceIndex], read, genomeIndex)
+			remaps := fixPointRNARemap(
+				readMapping,
+				annotation.Introns[readMapping.SequenceIndex],
+				read,
+				genomeIndex,
+			)
+
 			for _, remap := range remaps {
-				overhangCorrected := correctOverhangs(remap, annotation.Introns[readMapping.SequenceIndex], read, genomeIndex)
-				alternativeReadMatchResults = append(alternativeReadMatchResults, overhangCorrected...)
+
+				overhangCorrected := correctOverhangs(
+					remap,
+					annotation.Introns[readMapping.SequenceIndex],
+					read,
+					genomeIndex,
+				)
+
+				candidates = append(
+					candidates,
+					overhangCorrected...,
+				)
 			}
-			alternativeReadMatchResults = append(alternativeReadMatchResults, remaps...)
+
+			candidates = append(
+				candidates,
+				remaps...,
+			)
+
 		} else {
-			overhangCorrected := correctOverhangs(readMapping, annotation.Introns[readMapping.SequenceIndex], read, genomeIndex)
-			alternativeReadMatchResults = append(alternativeReadMatchResults, overhangCorrected...)
+
+			overhangCorrected := correctOverhangs(
+				readMapping,
+				annotation.Introns[readMapping.SequenceIndex],
+				read,
+				genomeIndex,
+			)
+
+			candidates = append(
+				candidates,
+				overhangCorrected...,
+			)
+		}
+
+		// fill potential gaps in all remaps
+		for _, alternativeMap := range candidates {
+			if alternativeMap.MatchedRead.Regions[0].Start == 0 &&
+				alternativeMap.MatchedRead.Regions[len(alternativeMap.MatchedRead.Regions)-1].End == len(*read.Sequence) &&
+				alternativeMap.MatchedRead.Length() != len(*read.Sequence) {
+
+				// For some reason go decides to share arr space of these objects in alternativeReadMatchResults which
+				// leads to unexpected behavior when appending to the mismatch slices of the objects
+				// this seems to have fixed it. Before the behavior was that when i appened a mm to the last obj, the last-1 obj
+				// somehow also appended this mm and this lead to duplicated mms and a mismatch between query len and cigar len....
+
+				originalMismatches := alternativeMap.MismatchesRead
+				alternativeMap.MismatchesRead = make([]int, len(originalMismatches))
+				copy(alternativeMap.MismatchesRead, originalMismatches)
+
+				isValid := fillGaps(alternativeMap, genomeIndex, read)
+				if isValid {
+					alternativeReadMatchResults = append(alternativeReadMatchResults, alternativeMap)
+				}
+			}
 		}
 	}
 
-	// fill potential gaps in all remaps
-	for _, alternativeMap := range alternativeReadMatchResults {
-		if alternativeMap.MatchedRead.Regions[0].Start == 0 && alternativeMap.MatchedRead.Regions[len(alternativeMap.MatchedRead.Regions)-1].End == len(*read.Sequence) && alternativeMap.MatchedRead.Length() != len(*read.Sequence) {
-			// For some reason go decides to share arr space of these objects in alternativeReadMatchResults which
-			// leads to unexpected behavior when appending to the mismatch slices of the objects
-			// this seems to have fixed it. Before the behavior was that when i appened a mm to the last obj, the last-1 obj
-			// somehow also appended this mm and this lead to duplicated mms and a mismatch between query len and cigar len....
-			originalMismatches := alternativeMap.MismatchesRead
-			alternativeMap.MismatchesRead = make([]int, len(originalMismatches))
-			copy(alternativeMap.MismatchesRead, originalMismatches)
-			fillGaps(alternativeMap, genomeIndex, read)
-		}
-	}
+	// BUG: alternative results are not added (see isValid above) if there
+	// are mismatch thresholds met. this does NOT solve the problem with
+	// duplicate mismatch positions in the read! it only mitigates the
+	// downstream problem of invalid cigar strings!
 
 	// fill gaps in original map
-	if readMapping.MatchedRead.Regions[0].Start == 0 && readMapping.MatchedRead.Regions[len(readMapping.MatchedRead.Regions)-1].End == len(*read.Sequence) && readMapping.MatchedRead.Length() != len(*read.Sequence) {
-		// before we do anything, check if the missing part of the map is a gap in the mapping (lets say 10 bases are missing
-		// in the middle of the read). We want to use the already mapped part of the read before dicarding them in the remap
+	if readMapping.MatchedRead.Regions[0].Start == 0 &&
+		readMapping.MatchedRead.Regions[len(readMapping.MatchedRead.Regions)-1].End == len(*read.Sequence) &&
+		readMapping.MatchedRead.Length() != len(*read.Sequence) {
+
+		// before we do anything, check if the missing part of the map is a
+		// gap in the mapping (lets say 10 bases are missing in the middle of
+		// the read). We want to use the already mapped part of the read
+		// before dicarding them in the remap
+
 		r := readMapping.Copy()
-		originalMismatches := r.MismatchesRead
-		r.MismatchesRead = make([]int, len(originalMismatches))
-		copy(r.MismatchesRead, originalMismatches)
-		fillGaps(r, genomeIndex, read)
-		alternativeReadMatchResults = append(alternativeReadMatchResults, r)
+
+		// INFO: this is already handled by the copy function of the result
+		// NOTE: if this is because the weird duplicate mismatches then investigate
+		// originalMismatches := r.MismatchesRead
+		// r.MismatchesRead = make([]int, len(originalMismatches))
+		// copy(r.MismatchesRead, originalMismatches)
+
+		isValid := fillGaps(r, genomeIndex, read)
+		if isValid {
+			alternativeReadMatchResults = append(alternativeReadMatchResults, r)
+		}
 	}
 
 	if !readMapping.IncompleteMap && readMapping.MatchedRead.Length() == len(*read.Sequence) {
@@ -252,7 +375,14 @@ func remapRead(
 
 	if config.IsOriginRNA && annotation != nil {
 		for _, alternative := range alternativeReadMatchResults {
-			symIntronCorrected := correctSymmetricIntronErrors(alternative, annotation.Introns[readMapping.SequenceIndex], read, genomeIndex)
+
+			symIntronCorrected := correctSymmetricIntronErrors(
+				alternative,
+				annotation.Introns[readMapping.SequenceIndex],
+				read,
+				genomeIndex,
+			)
+
 			if symIntronCorrected != nil {
 				alternativeReadMatchResults = append(alternativeReadMatchResults, symIntronCorrected)
 			}
@@ -834,10 +964,17 @@ func getPossiblePaddingCombinations(leftMappedRegion, rightMappedRegion regionve
 	return paddingsToCheck
 }
 
-func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet *regionvector.RegionSet, read *fastq.Read, genomeIndex *index.GenomeIndex) []*mapperutils.ReadMatchResult {
+func correctOverhangs(
+	readMatchResult *mapperutils.ReadMatchResult,
+	targetSeqIntronSet *regionvector.RegionSet,
+	read *fastq.Read,
+	genomeIndex *index.GenomeIndex,
+) []*mapperutils.ReadMatchResult {
+
 	remaps := make([]*mapperutils.ReadMatchResult, 0)
 
 	if len(readMatchResult.MatchedGenome.Regions) > 1 {
+
 		// we need to check left most anchor and right most anchor
 		firstRegion := readMatchResult.MatchedGenome.Regions[0]
 		firstRegionRead := readMatchResult.MatchedRead.Regions[0]
@@ -1027,8 +1164,15 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 		return finalRemaps
 
 	} else {
+
 		// we can do same strategy as in fixPointRNARemap since there is only one anchor
-		overhangCorrected := fixPointRNARemap(readMatchResult, targetSeqIntronSet, read, genomeIndex)
+		overhangCorrected := fixPointRNARemap(
+			readMatchResult,
+			targetSeqIntronSet,
+			read,
+			genomeIndex,
+		)
+
 		remaps = append(remaps, overhangCorrected...)
 	}
 	return remaps
@@ -1344,7 +1488,13 @@ type RemapSection struct {
 	MatchedGenome []regionvector.Region
 }
 
-func fixPointRNARemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet *regionvector.RegionSet, read *fastq.Read, genomeIndex *index.GenomeIndex) []*mapperutils.ReadMatchResult {
+func fixPointRNARemap(
+	readMatchResult *mapperutils.ReadMatchResult,
+	targetSeqIntronSet *regionvector.RegionSet,
+	read *fastq.Read,
+	genomeIndex *index.GenomeIndex,
+) []*mapperutils.ReadMatchResult {
+
 	// init list of remaps
 	remaps := make([]*Remap, 0)
 
@@ -1386,9 +1536,13 @@ func fixPointRNARemap(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 					appliedR = true
 				}
 
-				adjustedMM := extractMMofAnchor(adjustedReadAnchor, oriMmMainAnchor)
+				adjustedMM := extractMMofAnchor(
+					adjustedReadAnchor,
+					oriMmMainAnchor,
+				)
 
-				// we need to account for case where applying l pad makes it impossible to also apply r pad
+				// we need to account for case where applying l pad makes it
+				// impossible to also apply r pad
 
 				// case 1: both paddings applied successfully
 				if appliedL && appliedR {
@@ -1784,11 +1938,14 @@ func extractMMofAnchor(anchor regionvector.Region, mms []int) []int {
 	return extracted
 }
 
+// NOTE: this function now returns false if the readMatchResult becomes invalid due to too many mismatches
+// TODO: comment
 func fillGaps(
 	readMatchResult *mapperutils.ReadMatchResult,
 	genomeIndex *index.GenomeIndex,
 	read *fastq.Read,
-) {
+) bool {
+
 	// used to keep track of the read position for the next gap
 	readGapPos := 0
 	// returns the index of the first region after which a gap occurs (-1 if no gap)
@@ -1821,6 +1978,9 @@ func fillGaps(
 					}).Fatal("no best split found")
 				}
 
+				sequenceInfo := genomeIndex.GetSequenceInfo(readMatchResult.SequenceIndex)
+				contigMask := genomeIndex.RegionMask.ContigMasks[sequenceInfo.Contig]
+
 				// when bestSplit is 0 then there is nothing to be added to the left side of the gap
 				if bestSplit > 0 {
 
@@ -1832,9 +1992,7 @@ func fillGaps(
 					readByte := (*read.Sequence)[gapRead.Start : gapRead.Start+bestSplit]
 					genomeByte := (*genomeIndex.Sequences[readMatchResult.SequenceIndex])[gapGenome.Start : gapGenome.Start+bestSplit]
 
-					sequenceInfo := genomeIndex.GetSequenceInfo(readMatchResult.SequenceIndex)
 					startGenomic := int(sequenceInfo.StartGenomic) + gapGenome.Start
-					contigMask := genomeIndex.RegionMask.ContigMasks[sequenceInfo.Contig]
 
 					// add the mismatches to the readMatchResult
 					for j := range bestSplit {
@@ -1850,7 +2008,9 @@ func fillGaps(
 							startGenomic+j,
 						)
 
-						fmt.Println("is valid", isValid)
+						if !isValid {
+							return false
+						}
 
 						// readMatchResult.MismatchesRead = append(readMatchResult.MismatchesRead, gapRead.Start+j)
 					}
@@ -1870,28 +2030,42 @@ func fillGaps(
 
 					// add the mismatches to the readMatchResult
 					for j := 0; j < gapRead.Length()-bestSplit; j++ {
-						// add the mismatche to the readMatchResult
-						if readByte[j] != genomeByte[j] {
-							// readMatchResult.MismatchesRead = append(readMatchResult.MismatchesRead, gapRead.End-(bestSplit-i))
-							readMatchResult.MismatchesRead = append(readMatchResult.MismatchesRead, gapRead.Start+bestSplit+j) // NEW
+
+						if readByte[j] == genomeByte[j] {
+							// skip matches
+							continue
 						}
+
+						isValid := readMatchResult.AddMismatch(
+							contigMask,
+							gapRead.Start+bestSplit+j,
+							gapGenome.End-(gapRead.Length()-bestSplit)+j,
+						)
+
+						if !isValid {
+							return false
+						}
+
+						// readMatchResult.MismatchesRead = append(readMatchResult.MismatchesRead, gapRead.End-(bestSplit-i))
+						// readMatchResult.MismatchesRead = append(readMatchResult.MismatchesRead, gapRead.Start+bestSplit+j) // NEW
 					}
+
 					readMatchResult.NormalizeRegions()
 				}
+
 			} else {
+
 				if gapGenome.Length() == 0 {
 					// there's no gap at all in genome
 					indexRegionBeforeGap = readMatchResult.MatchedRead.GetGapIndexAfterPos(gapRead.End + 1)
 					continue
 				}
+
 				// gap in genome smaller that read gap, we can minimize mm in that region
 				// genomeGapLen < readGapLen
 				seqIndex := readMatchResult.SequenceIndex
 				if gapRead.Length() <= 0 {
-					// fmt.Println(readMatchResult.MatchedGenome.Regions)
-					// fmt.Println(readMatchResult.MatchedRead.Regions)
-					// fmt.Println(read.Header)
-					return
+					return true
 				}
 
 				lErrors := make([]int, gapGenome.Length()+1)
@@ -1945,8 +2119,11 @@ func fillGaps(
 				readMatchResult.NormalizeRegions()
 			}
 		}
+
 		indexRegionBeforeGap = readMatchResult.MatchedRead.GetGapIndexAfterPos(gapRead.End + 1)
 	}
+
+	return true
 }
 
 func determineBestSplit(

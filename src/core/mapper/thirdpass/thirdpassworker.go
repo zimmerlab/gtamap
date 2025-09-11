@@ -35,12 +35,17 @@ func ThirdPassWorker(
 		// logrus.Debugf("Third pass: %s", task.ReadPairId)
 
 		var builder strings.Builder
+
 		if config.IncludeAllPairings {
+
 			for i := 0; i < len(task.TargetInfo.Fw); i++ {
+
 				if task.TargetInfo.Fw[i].IncompleteMap {
 					continue
 				}
+
 				for j := 0; j < len(task.TargetInfo.Rv); j++ {
+
 					if task.TargetInfo.Rv[j].IncompleteMap {
 						continue
 					}
@@ -50,7 +55,13 @@ func ThirdPassWorker(
 					total += len(*task.TargetInfo.ReadPair.ReadR1.Sequence)
 					mmTotal += len(task.TargetInfo.Rv[j].MismatchesRead)
 
-					s, err := readPairResultToSamString(index, task.TargetInfo.ReadPair, task.TargetInfo.Fw[i], task.TargetInfo.Rv[j])
+					s, err := readPairResultToSamString(
+						index,
+						task.TargetInfo.ReadPair,
+						task.TargetInfo.Fw[i],
+						task.TargetInfo.Rv[j],
+					)
+
 					if err != nil {
 						logrus.Error("Error converting read pair result to SAM string: ", err)
 						continue
@@ -59,10 +70,14 @@ func ThirdPassWorker(
 				}
 			}
 		} else {
+
 			// here we do not pair any reads, we just output single sam entries
 			// FW
+
 			numRecordsR1 := 0
+
 			for i := 0; i < len(task.TargetInfo.Fw); i++ {
+
 				if task.TargetInfo.Fw[i].IncompleteMap {
 					continue
 				}
@@ -70,11 +85,18 @@ func ThirdPassWorker(
 				total += len(*task.TargetInfo.ReadPair.ReadR1.Sequence)
 				mmTotal += len(task.TargetInfo.Fw[i].MismatchesRead)
 
-				s, err := readPairResultToSamString(index, task.TargetInfo.ReadPair, task.TargetInfo.Fw[i], nil)
+				s, err := readPairResultToSamString(
+					index,
+					task.TargetInfo.ReadPair,
+					task.TargetInfo.Fw[i],
+					nil,
+				)
+
 				if err != nil {
 					logrus.Error("Error converting read pair result to SAM string: ", err)
 					continue
 				}
+
 				builder.WriteString(s)
 
 				numRecordsR1++
@@ -82,7 +104,9 @@ func ThirdPassWorker(
 
 			// RV
 			numRecordsR2 := 0
+
 			for j := 0; j < len(task.TargetInfo.Rv); j++ {
+
 				if task.TargetInfo.Rv[j].IncompleteMap {
 					continue
 				}
@@ -90,17 +114,25 @@ func ThirdPassWorker(
 				total += len(*task.TargetInfo.ReadPair.ReadR2.Sequence)
 				mmTotal += len(task.TargetInfo.Rv[j].MismatchesRead)
 
-				s, err := readPairResultToSamString(index, task.TargetInfo.ReadPair, nil, task.TargetInfo.Rv[j])
+				s, err := readPairResultToSamString(
+					index,
+					task.TargetInfo.ReadPair,
+					nil,
+					task.TargetInfo.Rv[j],
+				)
+
 				if err != nil {
 					logrus.Error("Error converting read pair result to SAM string: ", err)
 					continue
 				}
+
 				builder.WriteString(s)
 
 				numRecordsR2++
 			}
 
-			if (numRecordsR1 == 0 && numRecordsR2 != 0) || (numRecordsR1 != 0 && numRecordsR2 == 0) {
+			if (numRecordsR1 == 0 && numRecordsR2 != 0) ||
+				(numRecordsR1 != 0 && numRecordsR2 == 0) {
 				// one mate is unmapped
 				// write read mate as unmapped to sam
 				builder.WriteString(unmappedReadMateToSamString(task.TargetInfo.ReadPair, numRecordsR1 == 0))
@@ -109,6 +141,7 @@ func ThirdPassWorker(
 
 		outputChan <- builder.String()
 	}
+
 	logrus.Info("Done with output")
 	logrus.WithFields(logrus.Fields{
 		"Average MM":        float64(mmTotal) / float64(total),

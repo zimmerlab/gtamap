@@ -218,6 +218,8 @@ func testRegionmask() {
 
 	numThreads := 1
 
+	// config.IsOriginRNA = false
+
 	// // TODO: change from nil to actual values
 	// regionMask, errRegionMask := index.NewRegionMaskFromPaths(prioFilePath, bedFilePath, nil)
 	// if errRegionMask != nil {

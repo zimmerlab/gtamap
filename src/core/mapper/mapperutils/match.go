@@ -511,6 +511,12 @@ func (r *ReadMatchResult) AddMismatch(
 	// 	"posInGenomeGlobal": posInGenomeGlobal,
 	// }).Info("adding mismatch to result")
 
+	for _, mm := range r.MismatchesRead {
+		if mm == posInRead {
+			logrus.Fatal("Trying to add duplicate mismatch position to ReadMatchResult:", r.MismatchesRead, "posInRead:", posInRead)
+		}
+	}
+
 	// mismatches exceed global mismatch constraint
 	if len(r.MismatchesRead)+1 > r.MismatchConstraintGlobal {
 		return false
@@ -547,15 +553,15 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 	// slices.Sort(r.MismatchesRead)
 	sort.Ints(r.MismatchesRead)
 
-	for i := 1; i < len(r.MismatchesRead); i++ {
-		if r.MismatchesRead[i] == r.MismatchesRead[i-1] {
-			logrus.Fatal("Duplicate mismatch positions in read:", r.MismatchesRead)
-		}
-	}
+	// for i := 1; i < len(r.MismatchesRead); i++ {
+	// 	if r.MismatchesRead[i] == r.MismatchesRead[i-1] {
+	// 		logrus.Fatal("Duplicate mismatch positions in read:", r.MismatchesRead)
+	// 	}
+	// }
 
-	fmt.Println("\n\nin GetCigar")
-	fmt.Println(r.MatchedRead.Regions)
-	fmt.Println(r.MatchedGenome.Regions)
+	// fmt.Println("\n\nin GetCigar")
+	// fmt.Println(r.MatchedRead.Regions)
+	// fmt.Println(r.MatchedGenome.Regions)
 
 	r.NormalizeRegions()
 
@@ -567,13 +573,13 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 		logrus.Fatal("r.MatchedRead.Length() != r.MatchedGenome.Length() even after NormalizeRegions()")
 	}
 
-	fmt.Println("--")
-	fmt.Println(r.MatchedRead.Regions)
-	fmt.Println(r.MatchedGenome.Regions)
+	// fmt.Println("--")
+	// fmt.Println(r.MatchedRead.Regions)
+	// fmt.Println(r.MatchedGenome.Regions)
 
 	isForwardStrand := r.SequenceIndex == 0
 
-	fmt.Println("is forward strand:", isForwardStrand)
+	// fmt.Println("is forward strand:", isForwardStrand)
 
 	if isForwardStrand {
 
@@ -732,8 +738,6 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 			}
 		}
 	}
-
-	fmt.Println(builder.String())
 
 	return builder.String(), nil
 }
