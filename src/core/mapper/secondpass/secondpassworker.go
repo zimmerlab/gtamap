@@ -1777,7 +1777,11 @@ func extractMMofAnchor(anchor regionvector.Region, mms []int) []int {
 	return extracted
 }
 
-func fillGaps(readMatchResult *mapperutils.ReadMatchResult, genomeIndex *index.GenomeIndex, read *fastq.Read) {
+func fillGaps(
+	readMatchResult *mapperutils.ReadMatchResult,
+	genomeIndex *index.GenomeIndex,
+	read *fastq.Read,
+) {
 	// used to keep track of the read position for the next gap
 	readGapPos := 0
 	// returns the index of the first region after which a gap occurs (-1 if no gap)
@@ -1821,12 +1825,26 @@ func fillGaps(readMatchResult *mapperutils.ReadMatchResult, genomeIndex *index.G
 					readByte := (*read.Sequence)[gapRead.Start : gapRead.Start+bestSplit]
 					genomeByte := (*genomeIndex.Sequences[readMatchResult.SequenceIndex])[gapGenome.Start : gapGenome.Start+bestSplit]
 
+					sequenceInfo := genomeIndex.GetSequenceInfo(readMatchResult.SequenceIndex)
+					startGenomic := int(sequenceInfo.StartGenomic) + gapGenome.Start
+					contigMask := genomeIndex.RegionMask.ContigMasks[sequenceInfo.Contig]
+
 					// add the mismatches to the readMatchResult
-					for j := 0; j < bestSplit; j++ {
+					for j := range bestSplit {
 						// add the mismatche to the readMatchResult
-						if readByte[j] != genomeByte[j] {
-							readMatchResult.MismatchesRead = append(readMatchResult.MismatchesRead, gapRead.Start+j)
+						if readByte[j] == genomeByte[j] {
+							continue
 						}
+
+						isValid := readMatchResult.AddMismatch(
+							contigMask,
+							gapRead.Start+j,
+							startGenomic+j,
+						)
+
+						fmt.Println("is valid", isValid)
+
+						// readMatchResult.MismatchesRead = append(readMatchResult.MismatchesRead, gapRead.Start+j)
 					}
 				}
 

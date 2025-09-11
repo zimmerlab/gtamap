@@ -2,12 +2,13 @@ package mapperutils
 
 import (
 	"fmt"
-	"slices"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
+	"github.com/KleinSamuel/gtamap/src/core/interval"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/sirupsen/logrus"
 )
@@ -497,11 +498,60 @@ func hasLongDiagonals(mapping *ReadMatchResult) bool {
 	return true
 }
 
+func (r *ReadMatchResult) AddMismatch(
+	contigMask *interval.PriorityList,
+	posInRead int,
+	posInGenomeGlobal int,
+) bool {
+
+	// logrus.WithFields(logrus.Fields{
+	// 	"read":              result.MatchedRead.Regions,
+	// 	"genome":            result.MatchedGenome.Regions,
+	// 	"posInRead":         posInRead,
+	// 	"posInGenomeGlobal": posInGenomeGlobal,
+	// }).Info("adding mismatch to result")
+
+	// mismatches exceed global mismatch constraint
+	if len(r.MismatchesRead)+1 > r.MismatchConstraintGlobal {
+		return false
+	}
+
+	found, name, _ := contigMask.GetItemAtPosition(posInGenomeGlobal)
+	if !found {
+		name = "unmasked"
+	}
+
+	if _, foundName := r.MismatchCounts[name]; !foundName {
+		r.MismatchCounts[name] = 0
+	}
+
+	// mismatches exceed region specific mismatch constraint
+	// TODO: check region mismatch constraint
+	if name == "SINE/Alu" && r.MismatchCounts[name]+1 >= 4 {
+		return false
+	}
+
+	// add the mismatch count to the region specific mismatch counts
+	r.MismatchCounts[name] += 1
+	// add the read position of the mismatch to the result
+	r.MismatchesRead = append(r.MismatchesRead, posInRead)
+
+	// the read is still valid even after adding the mismatch
+	return true
+}
+
 func (r *ReadMatchResult) GetCigar() (string, error) {
 
 	var builder strings.Builder
 
-	slices.Sort(r.MismatchesRead)
+	// slices.Sort(r.MismatchesRead)
+	sort.Ints(r.MismatchesRead)
+
+	for i := 1; i < len(r.MismatchesRead); i++ {
+		if r.MismatchesRead[i] == r.MismatchesRead[i-1] {
+			logrus.Fatal("Duplicate mismatch positions in read:", r.MismatchesRead)
+		}
+	}
 
 	fmt.Println("\n\nin GetCigar")
 	fmt.Println(r.MatchedRead.Regions)
@@ -835,9 +885,6 @@ func ParseMatchedRegion(
 			lastStart = relativePos + 1
 		}
 	} else {
-
-		fmt.Println("in parse matched region")
-		fmt.Println(mismatchesInRead)
 
 		for _, mm := range mismatchesInRead {
 			if mm < region.Start || mm >= region.End {

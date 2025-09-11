@@ -205,10 +205,10 @@ func testRegionmask() {
 	// readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.fastq.gz"
 	// readsRvPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_2.fastq.gz"
 
-	// readsFwPath := "/home/sam/Data/gtamap/opn1lw-opn1mw/test.fw.40k.fq"
-	// readsRvPath := "/home/sam/Data/gtamap/opn1lw-opn1mw/test.rv.40k.fq"
-	readsFwPath := "/home/sam/Data/gtamap/opn1lw-opn1mw/bug.fw.fq"
-	readsRvPath := "/home/sam/Data/gtamap/opn1lw-opn1mw/bug.rv.fq"
+	readsFwPath := "/home/sam/Data/gtamap/opn1lw-opn1mw/test.fw.40k.fq"
+	readsRvPath := "/home/sam/Data/gtamap/opn1lw-opn1mw/test.rv.40k.fq"
+	// readsFwPath := "/home/sam/Data/gtamap/opn1lw-opn1mw/bug.fw.fq"
+	// readsRvPath := "/home/sam/Data/gtamap/opn1lw-opn1mw/bug.rv.fq"
 
 	outputPath := "/home/sam/Data/gtamap/opn1lw-opn1mw/test.sam"
 

@@ -396,6 +396,7 @@ func applyDiagonal(
 	gapsRead, gapsGenome := mapperutils.ComputeGapsInDiagonal(diagonalRead, diagonalGenome, result)
 
 	sequenceInfo := genomeIndex.GetSequenceInfo(result.SequenceIndex)
+	contigMask := genomeIndex.RegionMask.ContigMasks[sequenceInfo.Contig]
 
 	// resolve gaps on the same diagonal
 	// gaps can occur because of mismatches in the read and genome which prevent exact kmer matching
@@ -438,9 +439,8 @@ func applyDiagonal(
 				continue
 			}
 
-			isValid := AddMismatchToResult(
-				genomeIndex,
-				result,
+			isValid := result.AddMismatch(
+				contigMask,
 				k,
 				int(sequenceInfo.StartGenomic)+gIndex,
 			)
@@ -536,37 +536,44 @@ func applyDiagonal(
 	return true
 }
 
-func AddMismatchToResult(
-	genomeIndex *index.GenomeIndex,
-	result *mapperutils.ReadMatchResult,
-	posInRead int,
-	posInGenomeGlobal int,
-) bool {
-
-	result.MismatchesRead = append(result.MismatchesRead, posInRead)
-
-	found, name, _ := genomeIndex.RegionMask.ContigMasks[genomeIndex.GetSequenceInfo(result.SequenceIndex).Contig].GetItemAtPosition(posInGenomeGlobal)
-	if !found {
-		name = "unmasked"
-	}
-
-	if _, foundName := result.MismatchCounts[name]; !foundName {
-		result.MismatchCounts[name] = 0
-	}
-	result.MismatchCounts[name] += 1
-
-	// mismatches exceed global mismatch constraint
-	if len(result.MismatchesRead) > result.MismatchConstraintGlobal {
-		return false
-	}
-
-	// TODO: check region mismatch constraint
-	if name == "SINE/Alu" && result.MismatchCounts[name] >= 4 {
-		return false
-	}
-
-	return true
-}
+// func AddMismatchToResult(
+// 	genomeIndex *index.GenomeIndex,
+// 	result *mapperutils.ReadMatchResult,
+// 	posInRead int,
+// 	posInGenomeGlobal int,
+// ) bool {
+//
+// 	// logrus.WithFields(logrus.Fields{
+// 	// 	"read":              result.MatchedRead.Regions,
+// 	// 	"genome":            result.MatchedGenome.Regions,
+// 	// 	"posInRead":         posInRead,
+// 	// 	"posInGenomeGlobal": posInGenomeGlobal,
+// 	// }).Info("adding mismatch to result")
+//
+// 	result.MismatchesRead = append(result.MismatchesRead, posInRead)
+//
+// 	found, name, _ := genomeIndex.RegionMask.ContigMasks[genomeIndex.GetSequenceInfo(result.SequenceIndex).Contig].GetItemAtPosition(posInGenomeGlobal)
+// 	if !found {
+// 		name = "unmasked"
+// 	}
+//
+// 	if _, foundName := result.MismatchCounts[name]; !foundName {
+// 		result.MismatchCounts[name] = 0
+// 	}
+// 	result.MismatchCounts[name] += 1
+//
+// 	// mismatches exceed global mismatch constraint
+// 	if len(result.MismatchesRead) > result.MismatchConstraintGlobal {
+// 		return false
+// 	}
+//
+// 	// TODO: check region mismatch constraint
+// 	if name == "SINE/Alu" && result.MismatchCounts[name] >= 4 {
+// 		return false
+// 	}
+//
+// 	return true
+// }
 
 func annotateSpliceSites(read *fastq.Read, genomeIndex *index.GenomeIndex, result *mapperutils.ReadMatchResult) {
 	// used to keep track of the read position for the next gap
@@ -626,6 +633,10 @@ func extendDiagonals(
 	if result.MatchedRead.Length() == len(*read.Sequence) {
 		// logrus.Debug("read fully matched")
 	} else {
+
+		// required by AddMismatch
+		sequenceInfo := genomeIndex.GetSequenceInfo(result.SequenceIndex)
+		contigMask := genomeIndex.RegionMask.ContigMasks[sequenceInfo.Contig]
 
 		// there are gaps (unmatched regions) in the read (between matched regions / diagonals)
 		if result.MatchedRead.HasGaps() {
@@ -708,9 +719,8 @@ func extendDiagonals(
 								continue
 							}
 
-							isValid := AddMismatchToResult(
-								genomeIndex,
-								result,
+							isValid := result.AddMismatch(
+								contigMask,
 								startRead+i,
 								startGenomic+i,
 							)
@@ -720,7 +730,7 @@ func extendDiagonals(
 								return
 							}
 
-							// NOTE: commented out when adding AddMismatchToResult
+							// NOTE: commented out when adding AddMismatch
 
 							// // add the mismatches to the result
 							// result.MismatchesRead = append(result.MismatchesRead, gapRead.Start+i)
@@ -777,9 +787,8 @@ func extendDiagonals(
 							}
 
 							// add mismatches to the result
-							isValid := AddMismatchToResult(
-								genomeIndex,
-								result,
+							isValid := result.AddMismatch(
+								contigMask,
 								startRead+i,
 								startGenomic+i,
 							)
@@ -789,7 +798,7 @@ func extendDiagonals(
 								return
 							}
 
-							// INFO: commented out when adding AddMismatchToResult
+							// INFO: commented out when adding AddMismatch
 
 							// // result.MismatchesRead = append(result.MismatchesRead, gapRead.End-(bestSplit-i))
 							// result.MismatchesRead = append(result.MismatchesRead, gapRead.Start+bestSplit+i)
@@ -829,7 +838,7 @@ func extendDiagonals(
 			endRead := firstRegionRead.Start
 			extensionLength := endRead - startRead
 
-			resultBackup := result.Copy()
+			// resultBackup := result.Copy()
 
 			// mmBeforeLeftExtension := make([]int, len(result.MismatchesRead))
 			// copy(mmBeforeLeftExtension, result.MismatchesRead)
@@ -853,7 +862,7 @@ func extendDiagonals(
 				// logrus.Debug("genome index out of bounds")
 
 				// result.MismatchesRead = mmBeforeLeftExtension
-				result = resultBackup
+				// result = resultBackup
 				result.IncompleteMap = true
 				return
 			}
@@ -870,21 +879,22 @@ func extendDiagonals(
 					continue
 				}
 
-				isValid := AddMismatchToResult(
-					genomeIndex,
-					result,
-					i,
+				isValid := result.AddMismatch(
+					contigMask,
+					startRead+i,
 					startGenomic+i,
 				)
 
 				if !isValid {
+					// mismatch is not added if invalid by new AddMismatch func
 					// result.MismatchesRead = mmBeforeLeftExtension
-					result = resultBackup
+					// result = resultBackup
+
 					result.IncompleteMap = true
 					return
 				}
 
-				// INFO: commented out when adding AddMismatchToResult
+				// INFO: commented out when adding AddMismatch
 
 				// // add the mismatches to the result
 				// result.MismatchesRead = append(result.MismatchesRead, startRead+i)
@@ -927,7 +937,7 @@ func extendDiagonals(
 
 		if lastRegionRead.End < len(*read.Sequence) {
 
-			resultBackup := result.Copy()
+			// resultBackup := result.Copy()
 			// mmBeforeRightExtension := make([]int, len(result.MismatchesRead))
 			// copy(mmBeforeRightExtension, result.MismatchesRead)
 
@@ -972,21 +982,21 @@ func extendDiagonals(
 					continue
 				}
 
-				isValid := AddMismatchToResult(
-					genomeIndex,
-					result,
-					i,
+				isValid := result.AddMismatch(
+					contigMask,
+					startRead+i,
 					startGenomic+i,
 				)
 
 				if !isValid {
-					result = resultBackup
+					// the mismatch is not added in new AddMismatch func
+					// result = resultBackup
 
 					result.IncompleteMap = true
 					return
 				}
 
-				// INFO: commented out when adding AddMismatchToResult
+				// INFO: commented out when adding AddMismatch
 
 				// result.MismatchesRead = append(result.MismatchesRead, startRead+i)
 				//
