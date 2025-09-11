@@ -77,7 +77,7 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 				mmTotal += len(task.TargetInfo.Fw[i].MismatchesRead)
 
 				s, err := readPairResultToSamString(index, task.TargetInfo.ReadPair, task.TargetInfo.Fw[i], nil)
-				task.TargetInfo.Fw[i].WriteTSV(f, index.GetSequenceInfo(task.TargetInfo.Fw[i].SequenceIndex).GeneId, 1, i)
+				task.TargetInfo.Fw[i].WriteTSV(f, index.GetSequenceInfo(task.TargetInfo.Fw[i].SequenceIndex).GeneId, 1, i, task.TargetInfo.ReadPair.ReadR1.Header)
 				if err != nil {
 					logrus.Error("Error converting read pair result to SAM string: ", err)
 					continue
@@ -98,7 +98,7 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 				mmTotal += len(task.TargetInfo.Rv[j].MismatchesRead)
 
 				s, err := readPairResultToSamString(index, task.TargetInfo.ReadPair, nil, task.TargetInfo.Rv[j])
-				task.TargetInfo.Rv[j].WriteTSV(f, index.GetSequenceInfo(task.TargetInfo.Rv[j].SequenceIndex).GeneId, 1, j)
+				task.TargetInfo.Rv[j].WriteTSV(f, index.GetSequenceInfo(task.TargetInfo.Rv[j].SequenceIndex).GeneId, 1, j, task.TargetInfo.ReadPair.ReadR2.Header)
 				if err != nil {
 					logrus.Error("Error converting read pair result to SAM string: ", err)
 					continue
@@ -503,7 +503,7 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 
 func WriteHeader(f *os.File) error {
 	header := []string{
-		"Gene", "sId", "isFw", "altId", "MM",
+		"Gene", "ReadId", "SId", "IsFw", "AltId", "MM",
 		"IsFixPoint", "MainAnchorLength", "MainAnchorMM",
 		"TotalLeftOptions", "TotalRightOptions",
 		"ValidLeftOptions", "ValidRightOptions",

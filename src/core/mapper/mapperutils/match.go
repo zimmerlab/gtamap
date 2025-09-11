@@ -803,9 +803,10 @@ func sliceToString(s []int) string {
 	return strings.Join(strs, ",")
 }
 
-func (r *ReadMatchResult) WriteTSV(f *os.File, gene string, isFw int, altId int) error {
+func (r *ReadMatchResult) WriteTSV(f *os.File, gene string, isFw int, altId int, readId string) error {
 	fields := []string{
 		gene,
+		readId,
 		strconv.Itoa(r.SequenceIndex),
 		strconv.Itoa(isFw),
 		strconv.Itoa(altId),
