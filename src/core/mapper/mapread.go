@@ -699,7 +699,14 @@ func extendDiagonals(read *fastq.Read, genomeIndex *index.GenomeIndex, result *m
 			}
 		}
 
-		// return
+		// L / R EXTENSION:
+		// Here we extend start/end of mapping if possible
+		// This is CRUTIAL
+		// Let's say we mapped [8, 148] using only diagonals and gapFill.
+		// Let's also say there is a junction somewhere in the genomic region vec and the read has 0 mm
+		// If we don't extend [0,8] and [148,150], we can't label the read as "confident" since
+		// its reg vec is not == read length -> junction will be missed -> less options in second pass
+
 		// there are unmatched positions in front of the read
 		firstRegionRead, _ := result.MatchedRead.GetFirstRegion()
 		if firstRegionRead.Start > 0 {
