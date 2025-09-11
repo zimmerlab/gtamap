@@ -16,10 +16,17 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func SecondpassMappingWorker(secondPassChan *SecondPassChannel, wgIncompleteMapping *sync.WaitGroup, annotationChan <-chan map[int]*mapperutils.TargetAnnotation, thirdPassChan *thirdpass.ThirdPassChannel, genomeIndex *index.GenomeIndex) {
+func SecondpassMappingWorker(
+	secondPassChan *SecondPassChannel,
+	wgSecondpass *sync.WaitGroup,
+	annotationChan <-chan map[int]*mapperutils.TargetAnnotation,
+	thirdPassChan *thirdpass.ThirdPassChannel,
+	genomeIndex *index.GenomeIndex,
+	numWorkers int,
+) {
 	// in here we receive all non-confident readpairs. Some have multiple maps for fw and rv and some are
 	// not completely mapped yet. Confident readpairs are contained in confidentChan.
-	defer wgIncompleteMapping.Done()
+	defer wgSecondpass.Done()
 
 	// main seq id -> seq annot
 	var annotation map[int]*mapperutils.TargetAnnotation
@@ -30,30 +37,30 @@ func SecondpassMappingWorker(secondPassChan *SecondPassChannel, wgIncompleteMapp
 	logrus.Info("Started second pass")
 	logrus.Info("Started output worker")
 
-	var wgRemap sync.WaitGroup
+	for i := 0; i < numWorkers; i++ {
 
-	for {
-		task, ok := secondPassChan.Receive()
+		wgSecondpass.Add(1)
 
-		if !ok {
-			break
-		}
+		go func() {
+			defer wgSecondpass.Done()
 
-		wgRemap.Add(1)
+			for {
 
-		// BUG: limit number of goroutines here to respect --threads parameter
-		go func(t *mapperutils.ReadPairMatchResults) {
-			defer wgRemap.Done()
+				task, ok := secondPassChan.Receive()
 
-			remapReadPair(task, annotation, genomeIndex)
+				if !ok {
+					break
+				}
 
-			thirdPassChan.Send(&thirdpass.ThirdPassTask{
-				ReadPairId: task.ReadPair.ReadR1.Header,
-				TargetInfo: task,
-			})
-		}(task)
+				remapReadPair(task, annotation, genomeIndex)
+
+				thirdPassChan.Send(&thirdpass.ThirdPassTask{
+					ReadPairId: task.ReadPair.ReadR1.Header,
+					TargetInfo: task,
+				})
+			}
+		}()
 	}
-	wgRemap.Wait()
 }
 
 func remapReadPair(
@@ -1831,8 +1838,9 @@ func fillGaps(
 
 					// add the mismatches to the readMatchResult
 					for j := range bestSplit {
-						// add the mismatche to the readMatchResult
+
 						if readByte[j] == genomeByte[j] {
+							// skip matches
 							continue
 						}
 

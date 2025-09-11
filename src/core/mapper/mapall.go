@@ -129,15 +129,28 @@ func MapAll(
 	confidentMappingChan.Close()
 	var waitgroupConfidentMap sync.WaitGroup
 	waitgroupConfidentMap.Add(1)
-	go confidentmappingpass.ConfidentMappingWorker(confidentMappingChan, &waitgroupConfidentMap, annotationChan, genomeIndex)
+	go confidentmappingpass.ConfidentMappingWorker(
+		confidentMappingChan,
+		&waitgroupConfidentMap,
+		annotationChan,
+		genomeIndex,
+	)
 
 	var wgThirdPass sync.WaitGroup
 	wgThirdPass.Add(1)
 	go thirdpass.ThirdPassWorker(thirdpassChan, &wgThirdPass, outputChan, genomeIndex)
 
 	var wgSecondpass sync.WaitGroup
+
 	wgSecondpass.Add(1)
-	go secondpass.SecondpassMappingWorker(secondpassChan, &wgSecondpass, annotationChan, thirdpassChan, genomeIndex)
+	go secondpass.SecondpassMappingWorker(
+		secondpassChan,
+		&wgSecondpass,
+		annotationChan,
+		thirdpassChan,
+		genomeIndex,
+		numWorkers,
+	)
 
 	waitgroupConfidentMap.Wait()
 	close(annotationChan)

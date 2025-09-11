@@ -15,7 +15,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGroup, outputChan chan<- string, index *index.GenomeIndex) {
+func ThirdPassWorker(
+	thirdPassChan *ThirdPassChannel,
+	wgThirdPass *sync.WaitGroup,
+	outputChan chan<- string,
+	index *index.GenomeIndex,
+) {
 	defer wgThirdPass.Done()
 	total := 0
 	mmTotal := 0

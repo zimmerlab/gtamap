@@ -15,7 +15,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func ConfidentMappingWorker(confidentChan *ConfidentPassChan, wgConfidentMapping *sync.WaitGroup, annotationChan chan<- map[int]*mapperutils.TargetAnnotation, index *index.GenomeIndex) {
+func ConfidentMappingWorker(
+	confidentChan *ConfidentPassChan,
+	wgConfidentMapping *sync.WaitGroup,
+	annotationChan chan<- map[int]*mapperutils.TargetAnnotation,
+	index *index.GenomeIndex,
+) {
+
 	defer wgConfidentMapping.Done()
 
 	cMapsPerSeq := make(map[int][]*ConfidentTask, 0)
