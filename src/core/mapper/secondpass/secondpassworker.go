@@ -771,46 +771,19 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 		// we need to check left most anchor and right most anchor
 		firstRegion := readMatchResult.MatchedGenome.Regions[0]
 		firstRegionRead := readMatchResult.MatchedRead.Regions[0]
-		mmFirstRegion := extractMMofAnchor(firstRegionRead, readMatchResult.MismatchesRead)
 
 		lastRegion := readMatchResult.MatchedGenome.Regions[len(readMatchResult.MatchedGenome.Regions)-1]
 		lastRegionRead := readMatchResult.MatchedRead.Regions[len(readMatchResult.MatchedRead.Regions)-1]
-		mmLastRegion := extractMMofAnchor(lastRegionRead, readMatchResult.MismatchesRead)
 
 		// here we need to do it manually
 		lPaddings, _ := getPadding(firstRegion, targetSeqIntronSet, intronTree)
 		_, rPaddings := getPadding(lastRegion, targetSeqIntronSet, intronTree)
 
-		// i := 0
-		// for l := range lPaddings {
-		// 	if firstRegionRead.Start+l < firstRegionRead.End {
-		// 		firstRegion.Start += l
-		// 		firstRegionRead.Start += l
-		// 		mmFirstRegion = extractMMofAnchor(firstRegionRead, mmFirstRegion)
-		// 		i++
-		// 	}
-		// }
-		// j := 0
-		// for r := range rPaddings {
-		// 	if lastRegionRead.End-r > lastRegionRead.Start {
-		// 		lastRegion.End -= r
-		// 		lastRegionRead.End -= r
-		// 		mmLastRegion = extractMMofAnchor(lastRegionRead, mmLastRegion)
-		// 		j++
-		// 	}
-		// }
-		// if i > 1 || j > 1 {
-		// 	// logrus.Warnf("Multiple paddings applied in read %s", read.Header)
-		// 	// logrus.Warnf("L or R paddings have several options. This case is not yet handled: l=%d, r=%d", lPaddings, rPaddings)
-		// }
-
 		adjustedAnchorsRight := make([]regionvector.Region, 0)
 		adjustedReadAnchorsRight := make([]regionvector.Region, 0)
-		adjustedMmsRight := make([][]int, 0)
 
 		adjustedAnchorsLeft := make([]regionvector.Region, 0)
 		adjustedReadAnchorsLeft := make([]regionvector.Region, 0)
-		adjustedMmsLeft := make([][]int, 0)
 
 		if len(rPaddings) > 0 {
 			for r := range rPaddings {
@@ -820,11 +793,9 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 					adjustedAnchor.End -= r
 					adjustedReadAnchor.End -= r
 				}
-				adjustedMM := extractMMofAnchor(adjustedReadAnchor, mmLastRegion)
 
 				adjustedAnchorsRight = append(adjustedAnchorsRight, adjustedAnchor)
 				adjustedReadAnchorsRight = append(adjustedReadAnchorsRight, adjustedReadAnchor)
-				adjustedMmsRight = append(adjustedMmsRight, adjustedMM)
 			}
 		}
 
@@ -836,11 +807,9 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 					adjustedAnchor.Start += l
 					adjustedReadAnchor.Start += l
 				}
-				adjustedMM := extractMMofAnchor(adjustedReadAnchor, mmFirstRegion)
 
 				adjustedAnchorsLeft = append(adjustedAnchorsLeft, adjustedAnchor)
 				adjustedReadAnchorsLeft = append(adjustedReadAnchorsLeft, adjustedReadAnchor)
-				adjustedMmsLeft = append(adjustedMmsLeft, adjustedMM)
 			}
 		}
 
