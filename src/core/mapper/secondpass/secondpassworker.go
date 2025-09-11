@@ -772,7 +772,12 @@ func correctSymmetricIntronErrors(readMatchResult *mapperutils.ReadMatchResult, 
 	}
 }
 
-func cartesianProduct(corrections map[int][]int) [][]int {
+type PaddingTuple struct {
+	GapIdx  int
+	Padding int
+}
+
+func cartesianProduct(corrections map[int][]int) [][]PaddingTuple {
 	if len(corrections) == 0 {
 		return nil
 	}
@@ -783,24 +788,31 @@ func cartesianProduct(corrections map[int][]int) [][]int {
 	}
 	sort.Ints(keys)
 
-	var results [][]int
+	var results [][]PaddingTuple
 
-	var backtrack func(idx int, current []int)
-	backtrack = func(idx int, current []int) {
+	var backtrack func(idx int, current []PaddingTuple)
+	backtrack = func(idx int, current []PaddingTuple) {
 		if idx == len(keys) {
-			combo := make([]int, len(current))
+			combo := make([]PaddingTuple, len(current))
 			copy(combo, current)
 			results = append(results, combo)
 			return
 		}
 
 		k := keys[idx]
-		for _, v := range corrections[k] {
-			backtrack(idx+1, append(current, v))
+		values := corrections[k]
+		if len(values) == 0 {
+			return
+		}
+		for _, v := range values {
+			backtrack(idx+1, append(current, PaddingTuple{GapIdx: k, Padding: v}))
 		}
 	}
 
-	backtrack(0, []int{})
+	backtrack(0, []PaddingTuple{})
+	if len(results) == 0 {
+		return nil
+	}
 	return results
 }
 
@@ -834,11 +846,11 @@ func correctSymmetricIntronErrorsEnhanced(readMatchResult *mapperutils.ReadMatch
 	correctedRes := make([]*mapperutils.ReadMatchResult, 0)
 	for _, comb := range combinations {
 		corrected := readMatchResult.Copy()
-		for idxGap, padding := range comb {
-			corrected.MatchedGenome.Regions[idxGap].End += padding
-			corrected.MatchedGenome.Regions[idxGap+1].Start += padding
+		for _, paddingTuple := range comb {
+			corrected.MatchedGenome.Regions[paddingTuple.GapIdx].End += paddingTuple.Padding
+			corrected.MatchedGenome.Regions[paddingTuple.GapIdx].Start += paddingTuple.Padding
 			corrected.IsSymInErr = true
-			corrected.SymInErrLen = append(corrected.SymInErrLen, utils.Abs(padding))
+			corrected.SymInErrLen = append(corrected.SymInErrLen, utils.Abs(paddingTuple.Padding))
 		}
 		correctedRes = append(correctedRes, corrected)
 	}
