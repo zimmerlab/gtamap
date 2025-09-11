@@ -142,7 +142,6 @@ func createHash(r *mapperutils.ReadMatchResult) string {
 func remapRead(readMapping *mapperutils.ReadMatchResult, annotation *mapperutils.TargetAnnotation, read *fastq.Read, genomeIndex *index.GenomeIndex) []*mapperutils.ReadMatchResult {
 	alternativeReadMatchResults := make([]*mapperutils.ReadMatchResult, 0)
 	readMapping.NormalizeRegions() // NOTE: this is CRUCIAL and NEEDS to be called before ANY REMAP!!!
-	readMapping.InitialMM = len(readMapping.MismatchesRead)
 
 	// do we have an annotation?
 	if annotation != nil {
@@ -878,7 +877,7 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 			for _, lSection := range leftRemaps {
 				lExtStopRead := lSection.MatchedRead[0].End
 				for _, rSection := range rightRemaps {
-					rExtStartRead := rSection.MatchedRead[len(rSection.MatchedRead)-1].Start
+					rExtStartRead := rSection.MatchedRead[0].Start
 
 					// create template correction once (readMatchResult with regions removed which got remapped)
 					correctedTemplate := readMatchResult.Copy()
@@ -887,7 +886,7 @@ func correctOverhangs(readMatchResult *mapperutils.ReadMatchResult, targetSeqInt
 					// remove right regions
 					correctedTemplate.MatchedGenome.RemoveRegion(rSection.MainAnchor.End, len(*genomeIndex.Sequences[readMatchResult.SequenceIndex]))
 
-					templateMappedRead := regionvector.Region{Start: lExtStopRead, End: rExtStartRead - 1}
+					templateMappedRead := regionvector.Region{Start: lExtStopRead, End: rExtStartRead}
 					templateMM := extractMMofAnchor(templateMappedRead, correctedTemplate.MismatchesRead)
 					corrected := correctedTemplate.Copy()
 
