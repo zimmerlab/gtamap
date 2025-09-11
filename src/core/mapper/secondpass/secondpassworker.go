@@ -2,6 +2,7 @@ package secondpass
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 
@@ -187,9 +188,9 @@ func remapRead(readMapping *mapperutils.ReadMatchResult, annotation *mapperutils
 
 	if config.IsOriginRNA && annotation != nil {
 		for _, alternative := range alternativeReadMatchResults {
-			symIntronCorrected := correctSymmetricIntronErrors(alternative, annotation.Introns[readMapping.SequenceIndex], read, genomeIndex)
+			symIntronCorrected := correctSymmetricIntronErrorsEnhanced(alternative, annotation.Introns[readMapping.SequenceIndex])
 			if symIntronCorrected != nil {
-				alternativeReadMatchResults = append(alternativeReadMatchResults, symIntronCorrected)
+				alternativeReadMatchResults = append(alternativeReadMatchResults, symIntronCorrected...)
 			}
 		}
 	}
@@ -718,26 +719,47 @@ func correctSymmetricIntronErrors(readMatchResult *mapperutils.ReadMatchResult, 
 					correctedReadMatchResult.SymInErrLen = append(correctedReadMatchResult.SymInErrLen, utils.Abs(correctedL))
 				}
 			}
-			// go to next gap
-			continue
 		} else {
+			preferedIntron := -1
+			score := -1
 			count := 0
-			for _, overlapIntron := range overlappingIntrons {
-				correctedL := overlapIntron.Start - gap.Start
-				correctedR := overlapIntron.End - gap.End
-				if correctedL == correctedR && correctedL != 0 {
-					if leftMappedRegion.Length() >= utils.Abs(correctedL) && rightMappedRegion.Length() >= utils.Abs(correctedR) {
-						count++
-						if count > 1 {
-							logrus.Warnf("Tried to apply several paddins. Need to implement / Should not happen (Read %s)", read.Header)
-							continue
-						}
-						correctedReadMatchResult.MatchedGenome.Regions[i].End += correctedL
-						correctedReadMatchResult.MatchedGenome.Regions[i+1].Start += correctedR
-						hasCorrection = true
-						correctedReadMatchResult.IsSymInErr = true
-						correctedReadMatchResult.SymInErrLen = append(correctedReadMatchResult.SymInErrLen, utils.Abs(correctedL))
-					}
+			for i, overlapIntron := range overlappingIntrons {
+				if score == -1 {
+					preferedIntron = i
+					score = overlapIntron.SpliceSiteScore
+					continue
+				}
+				if overlapIntron.SpliceSiteScore > score {
+					preferedIntron = i
+					score = overlapIntron.SpliceSiteScore
+					continue
+				}
+				if overlapIntron.SpliceSiteScore == score {
+					count++
+				}
+			}
+
+			// if score == 0 {
+			// 	continue // dont bother correction this junction since spliceSite score is 0
+			// }
+
+			if preferedIntron == -1 {
+				continue
+			}
+
+			if count > 1 {
+				logrus.Warnf("Potentially missed padding in sym intron err with several introns having score greater than 0 %s", read.Header)
+			}
+
+			correctedL := overlappingIntrons[preferedIntron].Start - gap.Start
+			correctedR := overlappingIntrons[preferedIntron].End - gap.End
+			if correctedL == correctedR && correctedL != 0 {
+				if leftMappedRegion.Length() >= utils.Abs(correctedL) && rightMappedRegion.Length() >= utils.Abs(correctedR) {
+					correctedReadMatchResult.MatchedGenome.Regions[i].End += correctedL
+					correctedReadMatchResult.MatchedGenome.Regions[i+1].Start += correctedR
+					hasCorrection = true
+					correctedReadMatchResult.IsSymInErr = true
+					correctedReadMatchResult.SymInErrLen = append(correctedReadMatchResult.SymInErrLen, utils.Abs(correctedL))
 				}
 			}
 		}
@@ -745,6 +767,84 @@ func correctSymmetricIntronErrors(readMatchResult *mapperutils.ReadMatchResult, 
 
 	if hasCorrection {
 		return correctedReadMatchResult
+	} else {
+		return nil
+	}
+}
+
+func cartesianProduct(corrections map[int][]int) [][]int {
+	if len(corrections) == 0 {
+		return nil
+	}
+
+	keys := make([]int, 0, len(corrections))
+	for k := range corrections {
+		keys = append(keys, k)
+	}
+	sort.Ints(keys)
+
+	var results [][]int
+
+	var backtrack func(idx int, current []int)
+	backtrack = func(idx int, current []int) {
+		if idx == len(keys) {
+			combo := make([]int, len(current))
+			copy(combo, current)
+			results = append(results, combo)
+			return
+		}
+
+		k := keys[idx]
+		for _, v := range corrections[k] {
+			backtrack(idx+1, append(current, v))
+		}
+	}
+
+	backtrack(0, []int{})
+	return results
+}
+
+func correctSymmetricIntronErrorsEnhanced(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet *regionvector.RegionSet) []*mapperutils.ReadMatchResult {
+	// collect all sym paddings into this map
+	corrections := make(map[int][]int)
+
+	// iterate over all ali blocks and check if sym intron error
+	for i := 0; i <= len(readMatchResult.MatchedGenome.Regions)-2; i++ {
+		leftMappedRegion := readMatchResult.MatchedGenome.Regions[i]
+		rightMappedRegion := readMatchResult.MatchedGenome.Regions[i+1]
+		gap, ok := readMatchResult.MatchedGenome.GetGap(i)
+		if !ok {
+			break
+		}
+
+		overlappingIntrons := targetSeqIntronSet.GetIntersectingIntrons(gap)
+		for _, overlapIntron := range overlappingIntrons {
+			correctedL := overlapIntron.Start - gap.Start
+			correctedR := overlapIntron.End - gap.End
+			if correctedL == correctedR && correctedL != 0 {
+				if leftMappedRegion.Length() >= utils.Abs(correctedL) && rightMappedRegion.Length() >= utils.Abs(correctedR) {
+					corrections[i] = append(corrections[i], correctedL)
+				}
+			}
+		}
+
+	}
+
+	combinations := cartesianProduct(corrections) // in combinations, each sub slice is a comb of paddings for the readMatchResult. Each index is a gap
+	correctedRes := make([]*mapperutils.ReadMatchResult, 0)
+	for _, comb := range combinations {
+		corrected := readMatchResult.Copy()
+		for idxGap, padding := range comb {
+			corrected.MatchedGenome.Regions[idxGap].End += padding
+			corrected.MatchedGenome.Regions[idxGap+1].Start += padding
+			corrected.IsSymInErr = true
+			corrected.SymInErrLen = append(corrected.SymInErrLen, utils.Abs(padding))
+		}
+		correctedRes = append(correctedRes, corrected)
+	}
+
+	if len(correctedRes) != 0 {
+		return correctedRes
 	} else {
 		return nil
 	}
