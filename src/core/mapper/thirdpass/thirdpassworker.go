@@ -26,6 +26,7 @@ func ThirdPassWorker(
 	total := 0
 	mmTotal := 0
 
+	// FIX: write to config defined output file
 	f, err := os.Create("output.tsv")
 	if err != nil {
 		panic(err)

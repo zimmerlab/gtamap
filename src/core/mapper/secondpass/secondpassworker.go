@@ -55,40 +55,6 @@ func SecondpassMappingWorker(
 
 				remapReadPair(task, annotation, genomeIndex)
 
-				if task.ReadPair.ReadR2.Header == "A00925:309:HKNKCDSX3:1:1661:16839:22858" {
-					fmt.Println("here")
-					fmt.Println(task.ReadPair.ReadR1.Header, task.ReadPair.ReadR2.Header)
-
-					sequenceInfo := genomeIndex.GetSequenceInfo(task.Rv[0].SequenceIndex)
-					startGenomic := int(sequenceInfo.StartGenomic)
-
-					fmt.Println("start genomic: ", startGenomic)
-
-					for _, r := range task.Rv {
-
-						fmt.Println(startGenomic + r.MatchedGenome.Regions[0].Start)
-						fmt.Println(r.MatchedGenome)
-
-					}
-				}
-
-				// for _, r := range task.Fw {
-				// 	for mi := 0; mi < len(r.MismatchesRead); mi++ {
-				// 		for mj := mi + 1; mj < len(r.MismatchesRead); mj++ {
-				// 			if r.MismatchesRead[mi] == r.MismatchesRead[mj] {
-				// 				fmt.Println(r.MatchedRead.Regions)
-				// 				fmt.Println(r.MatchedGenome.Regions)
-				// 				fmt.Println(r.MismatchesRead)
-				// 				r.NormalizeRegions()
-				// 				fmt.Println(r.MatchedRead.Regions)
-				// 				fmt.Println(r.MatchedGenome.Regions)
-				// 				fmt.Println(r.MismatchesRead)
-				// 				logrus.Fatal("Duplicate mismatch positions found in remap!")
-				// 			}
-				// 		}
-				// 	}
-				// }
-
 				thirdPassChan.Send(&thirdpass.ThirdPassTask{
 					ReadPairId: task.ReadPair.ReadR1.Header,
 					TargetInfo: task,
@@ -103,10 +69,6 @@ func remapReadPair(
 	annotationMap map[int]*mapperutils.TargetAnnotation,
 	genomeIndex *index.GenomeIndex,
 ) {
-
-	if readPairMapping.ReadPair.ReadR2.Header == "A00925:309:HKNKCDSX3:1:1661:16839:22858" {
-		fmt.Println("here")
-	}
 
 	fwRemaps := make([]*mapperutils.ReadMatchResult, 0)
 
@@ -127,16 +89,7 @@ func remapReadPair(
 
 	rvRemaps := make([]*mapperutils.ReadMatchResult, 0)
 
-	for ind, mapping := range readPairMapping.Rv {
-
-		if readPairMapping.ReadPair.ReadR2.Header == "A00925:309:HKNKCDSX3:1:1661:16839:22858" {
-			// if len(mapping.MatchedGenome.Regions) == 4 && mapping.MatchedGenome.Regions[0].Start == 21345 && mapping.MatchedGenome.Regions[3].End == 73483 {
-			// 	fmt.Println("here")
-			// }
-			if ind == 9 {
-				fmt.Println("ind")
-			}
-		}
+	for _, mapping := range readPairMapping.Rv {
 
 		// BUG: only valid if there is only one sequence in the index
 		mainSeqId := mapping.SequenceIndex / 2
@@ -147,63 +100,6 @@ func remapReadPair(
 			readPairMapping.ReadPair.ReadR2,
 			genomeIndex,
 		)
-
-		if readPairMapping.ReadPair.ReadR2.Header == "A00925:309:HKNKCDSX3:1:1661:16839:22858" {
-
-			for _, r := range remaps {
-
-				sequenceInfo := genomeIndex.GetSequenceInfo(r.SequenceIndex)
-
-				seqLen := sequenceInfo.EndGenomic - sequenceInfo.StartGenomic
-
-				startGenomicFw := int(genomeIndex.GetSequenceInfo(r.SequenceIndex - 1).StartGenomic)
-
-				last, _ := r.MatchedGenome.GetLastRegion()
-				offset := int(seqLen) - last.End
-				posFw := startGenomicFw + (offset) + 1
-
-				if posFw == 154201408 {
-
-					fmt.Println("\n\n")
-					fmt.Println(r.MismatchesRead)
-					fmt.Println(r.MatchedRead)
-					fmt.Println(r.MatchedGenome)
-
-					fmt.Println(r.MatchedGenome.Length())
-
-					cigarRv, errCigarRv := r.GetCigar()
-					if errCigarRv != nil {
-						fmt.Println("err cigar")
-						fmt.Println(errCigarRv)
-					}
-					fmt.Println(cigarRv)
-
-					fmt.Println(r.MismatchesRead)
-					fmt.Println(r.MatchedRead)
-					fmt.Println(r.MatchedGenome)
-
-					if cigarRv[0] == '7' {
-						fmt.Println("!!!!!!!!!!!!!!!!!!!!here at 7")
-						fmt.Println("INDEX; ", ind)
-
-						r.GetCigar()
-					}
-				}
-
-				// for i := 0; i < len(r.MatchedGenome.Regions)-1; i++ {
-				// 	cRead := r.MatchedRead.Regions[i].End == r.MatchedRead.Regions[i+1].Start
-				// 	cGenome := r.MatchedGenome.Regions[i].End == r.MatchedGenome.Regions[i+1].Start
-				//
-				// 	if !cRead && !cGenome {
-				// 		fmt.Println("gaps in both rv ", readPairMapping.ReadPair.ReadR2.Header)
-				// 	}
-				// }
-				//
-				// if r.MatchedRead.Length() != len(*readPairMapping.ReadPair.ReadR2.Sequence) {
-				// 	fmt.Println("rv not full length ", readPairMapping.ReadPair.ReadR2.Header)
-				// }
-			}
-		}
 
 		rvRemaps = append(rvRemaps, remaps...)
 	}
@@ -1071,12 +967,16 @@ func cartesianProduct(corrections map[int][]int) [][]PaddingTuple {
 	return results
 }
 
-func correctSymmetricIntronErrorsEnhanced(readMatchResult *mapperutils.ReadMatchResult, targetSeqIntronSet *regionvector.RegionSet) []*mapperutils.ReadMatchResult {
+func correctSymmetricIntronErrorsEnhanced(
+	readMatchResult *mapperutils.ReadMatchResult,
+	targetSeqIntronSet *regionvector.RegionSet,
+) []*mapperutils.ReadMatchResult {
+
 	// collect all sym paddings into this map
 	corrections := make(map[int][]int)
 
 	// iterate over all ali blocks and check if sym intron error
-	for i := 0; i <= len(readMatchResult.MatchedGenome.Regions)-2; i++ {
+	for i := 0; i < len(readMatchResult.MatchedGenome.Regions)-1; i++ {
 
 		leftMappedRegion := readMatchResult.MatchedGenome.Regions[i]
 		rightMappedRegion := readMatchResult.MatchedGenome.Regions[i+1]
@@ -1089,30 +989,56 @@ func correctSymmetricIntronErrorsEnhanced(readMatchResult *mapperutils.ReadMatch
 
 		overlappingIntrons := targetSeqIntronSet.GetIntersectingIntrons(gap)
 		for _, overlapIntron := range overlappingIntrons {
+
 			correctedL := overlapIntron.Start - gap.Start
 			correctedR := overlapIntron.End - gap.End
 
 			// BUG: check if the correction overlaps regions from before and after
 
-			if correctedL == correctedR && correctedL != 0 {
-				if leftMappedRegion.Length() >= utils.Abs(correctedL) && rightMappedRegion.Length() >= utils.Abs(correctedR) {
-					corrections[i] = append(corrections[i], correctedL)
-				}
+			if correctedL != correctedR || correctedL == 0 {
+				continue
+			}
+
+			if leftMappedRegion.Length() >= utils.Abs(correctedL) &&
+				rightMappedRegion.Length() >= utils.Abs(correctedR) {
+				corrections[i] = append(corrections[i], correctedL)
 			}
 		}
 
 	}
 
-	combinations := cartesianProduct(corrections) // in combinations, each sub slice is a comb of paddings for the readMatchResult. Each index is a gap
+	// in combinations, each sub slice is a comb of paddings for the
+	// readMatchResult. Each index is a gap
+	combinations := cartesianProduct(corrections)
+
 	correctedRes := make([]*mapperutils.ReadMatchResult, 0)
+
 	for _, comb := range combinations {
+
 		corrected := readMatchResult.Copy()
+
 		for _, paddingTuple := range comb {
 			corrected.MatchedGenome.Regions[paddingTuple.GapIdx].End += paddingTuple.Padding
 			corrected.MatchedGenome.Regions[paddingTuple.GapIdx].Start += paddingTuple.Padding
 			corrected.IsSymInErr = true
 			corrected.SymInErrLen = append(corrected.SymInErrLen, utils.Abs(paddingTuple.Padding))
 		}
+
+		// FIX: check if result is still valid after correction:
+		// genomic regions can not overlap
+		// it would probably be better for the runtime if this would not occur
+		// in the first place but this would require extensive checking in
+		// the loop above
+		isValid := true
+		for j := 0; j < len(corrected.MatchedGenome.Regions)-1; j++ {
+			if corrected.MatchedGenome.Regions[j].End > corrected.MatchedGenome.Regions[j+1].Start {
+				isValid = false
+			}
+		}
+		if !isValid {
+			continue
+		}
+
 		correctedRes = append(correctedRes, corrected)
 	}
 

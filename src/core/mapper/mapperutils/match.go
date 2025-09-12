@@ -629,10 +629,6 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 	// 	}
 	// }
 
-	// fmt.Println("\n\nin GetCigar")
-	// fmt.Println(r.MatchedRead.Regions)
-	// fmt.Println(r.MatchedGenome.Regions)
-
 	r.NormalizeRegions()
 
 	// TODO: remove this sanity check
@@ -643,13 +639,7 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 		logrus.Fatal("r.MatchedRead.Length() != r.MatchedGenome.Length() even after NormalizeRegions()")
 	}
 
-	// fmt.Println("--")
-	// fmt.Println(r.MatchedRead.Regions)
-	// fmt.Println(r.MatchedGenome.Regions)
-
 	isForwardStrand := r.SequenceIndex == 0
-
-	// fmt.Println("is forward strand:", isForwardStrand)
 
 	if isForwardStrand {
 
