@@ -311,11 +311,17 @@ func InferIntronsOfTarget(targetId int, confMaps []*ConfidentTask, index *index.
 	intronTreeMap := make(map[int]*datastructure.INTree)
 	convertedPlusRegions := make([]datastructure.Bounds, len(plusOrientatedIntronsOfTarget))
 	for i, intron := range plusOrientatedIntronsOfTarget {
-		convertedPlusRegions[i] = &datastructure.IntronRegion{Lower: float64(intron.Start), Upper: float64(intron.End)}
+		convertedPlusRegions[i] = &datastructure.IntronRegion{
+			Lower: intron.Start,
+			Upper: intron.End,
+		}
 	}
 	convertedMinusRegions := make([]datastructure.Bounds, len(minusOrientatedIntronsOfTarget))
 	for i, intron := range minusOrientatedIntronsOfTarget {
-		convertedMinusRegions[i] = &datastructure.IntronRegion{Lower: float64(intron.Start), Upper: float64(intron.End)}
+		convertedMinusRegions[i] = &datastructure.IntronRegion{
+			Lower: intron.Start,
+			Upper: intron.End,
+		}
 	}
 
 	intronTreeMap[0] = datastructure.NewINTree(convertedPlusRegions)
@@ -331,18 +337,31 @@ func InferIntronsOfTarget(targetId int, confMaps []*ConfidentTask, index *index.
 	return &targetAnnotation
 }
 
-func invertIntrons(sId int, intronsOfTarget []*regionvector.Intron, index *index.GenomeIndex) []*regionvector.Intron {
+func invertIntrons(
+	sId int,
+	intronsOfTarget []*regionvector.Intron,
+	index *index.GenomeIndex,
+) []*regionvector.Intron {
+
 	mirroredIntronsPerSeqId := make([]*regionvector.Intron, 0)
-	geneLength := int(index.GetSequenceInfo(sId).EndGenomic - index.GetSequenceInfo(sId).StartGenomic)
+
+	geneLength := int(
+		index.GetSequenceInfo(sId).EndGenomic -
+			index.GetSequenceInfo(sId).StartGenomic,
+	)
+
 	for _, intron := range intronsOfTarget {
-		mirroredIntronsPerSeqId = append(mirroredIntronsPerSeqId, &regionvector.Intron{
-			// Start:    geneLength - intron.End + 2*int(index.SequenceInfo[sId].StartGenomic),
-			// End:      geneLength - intron.Start + 2*int(index.SequenceInfo[sId].StartGenomic),
-			Start:           geneLength - intron.End,
-			End:             geneLength - intron.Start,
-			Evidence:        intron.Evidence,
-			SpliceSiteScore: intron.SpliceSiteScore,
-		})
+		mirroredIntronsPerSeqId = append(
+			mirroredIntronsPerSeqId,
+			&regionvector.Intron{
+				// Start:    geneLength - intron.End + 2*int(index.SequenceInfo[sId].StartGenomic),
+				// End:      geneLength - intron.Start + 2*int(index.SequenceInfo[sId].StartGenomic),
+				Start:           geneLength - intron.End,
+				End:             geneLength - intron.Start,
+				Evidence:        intron.Evidence,
+				SpliceSiteScore: intron.SpliceSiteScore,
+			},
+		)
 	}
 
 	return mirroredIntronsPerSeqId
