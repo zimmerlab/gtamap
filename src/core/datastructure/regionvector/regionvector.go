@@ -262,24 +262,25 @@ func (rv *RegionVector) GetFirstGap() (Region, bool) {
 	return rv.GetGap(0)
 }
 
-// GetGapAfterRegionIndex returns the gap after the region with given index.
-// It returns nil if the region index is out of bounds or if there is no gap after the region.
-func (rv *RegionVector) GetGapAfterRegionIndex(regionIndex int) (Region, bool) {
-	if regionIndex >= len(rv.Regions) {
-		return Region{}, false
-	}
-
-	gap := Region{
-		Start: rv.Regions[regionIndex].End,
-		End:   rv.Regions[regionIndex+1].Start,
-	}
-
-	if gap.Start >= gap.End {
-		return Region{}, false
-	}
-
-	return gap, true
-}
+// // GetGapAfterRegionIndex returns the gap after the region with given index.
+// // It returns nil if the region index is out of bounds or if there is no gap after the region.
+// func (rv *RegionVector) GetGapAfterRegionIndex(regionIndex int) (Region, bool) {
+//
+// 	if regionIndex >= len(rv.Regions) {
+// 		return Region{}, false
+// 	}
+//
+// 	gap := Region{
+// 		Start: rv.Regions[regionIndex].End,
+// 		End:   rv.Regions[regionIndex+1].Start,
+// 	}
+//
+// 	if gap.Start >= gap.End {
+// 		return Region{}, false
+// 	}
+//
+// 	return gap, true
+// }
 
 func (rv *RegionVector) GetGaps() *RegionVector {
 	gaps := NewRegionVector()
@@ -289,6 +290,25 @@ func (rv *RegionVector) GetGaps() *RegionVector {
 	}
 
 	return gaps
+}
+
+// GetGapAfterRegion return the gap (if present) between the region
+// at the given index and the region after that. It returns false if
+// no such gap is present in the region vector.
+func (rv *RegionVector) GetGapAfterRegionIndex(regionIndex int) (Region, bool) {
+
+	if regionIndex < 0 || regionIndex >= len(rv.Regions)-1 || len(rv.Regions) <= 1 {
+		return Region{}, false
+	}
+
+	if rv.Regions[regionIndex].End != rv.Regions[regionIndex+1].Start {
+		return Region{
+			Start: rv.Regions[regionIndex].End,
+			End:   rv.Regions[regionIndex+1].Start,
+		}, true
+	}
+
+	return Region{}, false
 }
 
 func (rv *RegionVector) GetGap(num int) (Region, bool) {
