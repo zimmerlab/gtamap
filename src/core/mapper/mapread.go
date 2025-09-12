@@ -224,7 +224,7 @@ func applyPossibleDiagonals(
 		l := dh.Diagonals[diagonal][len(dh.Diagonals[diagonal])-1].ToRead - dh.Diagonals[diagonal][0].FromRead
 		if config.IsOriginRNA {
 			// RNA: check pot length of best initial diag is smaller than 30, if so, don't map read
-			if l < 30 {
+			if l < 20 {
 				return
 			}
 		} else if l < 50 {
@@ -238,7 +238,7 @@ func applyPossibleDiagonals(
 	// BAD: many remaining diags and best score < 2
 	// GOOD/OKAY: few remaining diags and best score < 2 (Happens if we already mapped large portion of reads
 	// thus eliminating many of the remaining diags)
-	if score < 2 && len(dh.Diagonals) > 3 {
+	if score < 2 && len(dh.Diagonals) > 10 {
 		// logrus.Debug("no suitable diagonal found")
 		// logrus.Debug("adding partial result to results")
 
@@ -688,21 +688,11 @@ func extendDiagonals(
 						}).Fatal("no best split found")
 					}
 
-					// logrus.WithFields(logrus.Fields{
-					// 	"split": bestSplit,
-					// }).Debug("best split found")
-
-					// logrus.WithFields(logrus.Fields{
-					// 	"read":   result.MatchedRead,
-					// 	"genome": result.MatchedGenome,
-					// }).Debug("regions before")
+					// false if any mismatch threshold was exceeded
+					fillGap := true
 
 					// when bestSplit is 0 then there is nothing to be added to the left side of the gap
 					if bestSplit > 0 {
-
-						// add the split to the result
-						result.MatchedRead.AddRegionNonOverlappingPanic(gapRead.Start, gapRead.Start+bestSplit)
-						result.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.Start+bestSplit)
 
 						// the read and genome sequences from the start of the gap to the best split (left)
 						readByte := (*read.Sequence)[gapRead.Start : gapRead.Start+bestSplit]
@@ -727,50 +717,21 @@ func extendDiagonals(
 
 							if !isValid {
 								result.IncompleteMap = true
-								return
+								fillGap = false
+								break
 							}
+						}
 
-							// NOTE: commented out when adding AddMismatch
-
-							// // add the mismatches to the result
-							// result.MismatchesRead = append(result.MismatchesRead, gapRead.Start+i)
-							//
-							// // skip this match result if there are too many mismatches
-							// if exceedsMismatchConstraint(read, result) {
-							// 	// logrus.WithFields(logrus.Fields{
-							// 	// 	"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
-							// 	// 	"maxMismatchPercentage": config.MaxMismatchPercentage(),
-							// 	// 	"mismatches":            result.MismatchesRead,
-							// 	// 	"numMismatches":         len(result.MismatchesRead),
-							// 	// }).Debug("too many mismatches in middle extension (left) -> skip sequence")
-							// 	// continue sequenceLoop
-							//
-							// 	result.IncompleteMap = true
-							// 	return
-							// }
+						if fillGap {
+							// add the split to the result only if threshold was not exeeded
+							result.MatchedRead.AddRegionNonOverlappingPanic(gapRead.Start, gapRead.Start+bestSplit)
+							result.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.Start+bestSplit)
 						}
 					}
 
-					// logrus.WithFields(logrus.Fields{
-					// 	"read":   result.MatchedRead,
-					// 	"genome": result.MatchedGenome,
-					// }).Debug("regions after left")
-
 					// when bestSplit is equal to the length of the gap then there is nothing
 					// to be added to the right side of the gap
-					if bestSplit < gapRead.Length() {
-
-						// logrus.WithFields(logrus.Fields{
-						// 	"gapReadEnd":    gapRead.End,
-						// 	"bestSplit":     bestSplit,
-						// 	"gapReadLength": gapRead.Length(),
-						// 	"left":          gapRead.End - (gapRead.Length() - bestSplit),
-						// 	"right":         gapRead.End,
-						// }).Debug("debug split right")
-
-						// add the split to the result
-						result.MatchedRead.AddRegionNonOverlappingPanic(gapRead.End-(gapRead.Length()-bestSplit), gapRead.End)
-						result.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.End-(gapRead.Length()-bestSplit), gapGenome.End)
+					if fillGap && bestSplit < gapRead.Length() {
 
 						// the read and genome sequences from the best split to the end of the gap (right)
 						readByte := (*read.Sequence)[gapRead.End-(gapRead.Length()-bestSplit) : gapRead.End]
@@ -795,33 +756,17 @@ func extendDiagonals(
 
 							if !isValid {
 								result.IncompleteMap = true
-								return
+								fillGap = false
+								break
 							}
+						}
 
-							// INFO: commented out when adding AddMismatch
-
-							// // result.MismatchesRead = append(result.MismatchesRead, gapRead.End-(bestSplit-i))
-							// result.MismatchesRead = append(result.MismatchesRead, gapRead.Start+bestSplit+i)
-							//
-							// // skip this match result if there are too many mismatches
-							// if exceedsMismatchConstraint(read, result) {
-							// 	// logrus.WithFields(logrus.Fields{
-							// 	// 	"mismatchPercentage":    float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)),
-							// 	// 	"maxMismatchPercentage": config.MaxMismatchPercentage(),
-							// 	// 	"mismatches":            result.MismatchesRead,
-							// 	// 	"numMismatches":         len(result.MismatchesRead),
-							// 	// }).Debug("too many mismatches in middle extension (right) -> skip sequence")
-							//
-							// 	result.IncompleteMap = true
-							// 	return
-							// }
+						if fillGap {
+							// add the split to the result only if threshold was not exeeded
+							result.MatchedRead.AddRegionNonOverlappingPanic(gapRead.End-(gapRead.Length()-bestSplit), gapRead.End)
+							result.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.End-(gapRead.Length()-bestSplit), gapGenome.End)
 						}
 					}
-
-					// logrus.WithFields(logrus.Fields{
-					// 	"read":   result.MatchedRead,
-					// 	"genome": result.MatchedGenome,
-					// }).Debug("regions after right")
 				}
 
 				// determine the next gap (-1 if there is none)
@@ -829,6 +774,14 @@ func extendDiagonals(
 				indexRegionBeforeGap = result.MatchedRead.GetGapIndexAfterPos(readGapPos)
 			}
 		}
+
+		// L / R EXTENSION:
+		// Here we extend start/end of mapping if possible
+		// This is CRUTIAL
+		// Let's say we mapped [8, 148] using only diagonals and gapFill.
+		// Let's also say there is a junction somewhere in the genomic region vec and the read has 0 mm
+		// If we don't extend [0,8] and [148,150], we can't label the read as "confident" since
+		// its reg vec is not == read length -> junction will be missed -> less options in second pass
 
 		// there are unmatched positions in front of the read
 		firstRegionRead, _ := result.MatchedRead.GetFirstRegion()
@@ -1078,6 +1031,10 @@ func mapReadToSequence(
 				// skip this map if the final length is less than 70 precent of read length
 				continue
 			}
+		}
+
+		if res.MatchedGenome.Length() != len(*read.Sequence) {
+			res.IncompleteMap = true
 		}
 
 		// INFO: Now apply blacklist

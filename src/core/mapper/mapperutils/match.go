@@ -2,11 +2,13 @@ package mapperutils
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/KleinSamuel/gtamap/src/config"
+	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/core/interval"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
@@ -45,6 +47,28 @@ type ReadMatchResult struct {
 	diagonalHandler          *DiagonalHandler
 	IncompleteMap            bool
 	SpliceSitesInfo          []int // corresponds to the number of junctions of match result. canonical splice site -> 2 = canonical, 1 = non-can, 0 = no splice site
+
+	Id int // fileds for logging
+
+	IsFixPoint          bool
+	MainAnchorLength    int
+	MainAnchorMM        int
+	TotalLeftOptions    int
+	TotalRightOptions   int
+	ValidLeftOptions    int
+	ValidRightOptions   int
+	LeftFixpointLength  int
+	RightFixpointLength int
+
+	IsOverhangCorrected bool
+
+	IsGapFill          bool
+	IsGapFillOverflow  bool
+	GapsFilled         []int
+	GapsFilledOverflow []int
+
+	IsSymInErr  bool
+	SymInErrLen []int
 }
 
 func (r *ReadMatchResult) String() string {
@@ -402,6 +426,23 @@ func (r *ReadMatchResult) Copy() *ReadMatchResult {
 		mismatchCounts[key] = val
 	}
 
+	cSymInErrLen := make([]int, 0)
+	if r.SymInErrLen != nil {
+		cSymInErrLen := make([]int, len(r.SymInErrLen))
+		copy(cSymInErrLen, r.SymInErrLen)
+	}
+
+	cGapsFilled := make([]int, 0)
+	if r.GapsFilled != nil {
+		cGapsFilled = make([]int, len(r.GapsFilled))
+		copy(cGapsFilled, r.GapsFilled)
+	}
+	cGapsFilledOverflow := make([]int, 0)
+	if r.GapsFilledOverflow != nil {
+		cGapsFilledOverflow = make([]int, len(r.GapsFilledOverflow))
+		copy(cGapsFilledOverflow, r.GapsFilledOverflow)
+	}
+
 	return &ReadMatchResult{
 		SequenceIndex:            r.SequenceIndex,
 		MatchedRead:              r.MatchedRead.Copy(),
@@ -410,10 +451,38 @@ func (r *ReadMatchResult) Copy() *ReadMatchResult {
 		MismatchCounts:           mismatchCounts,
 		MismatchConstraintGlobal: r.MismatchConstraintGlobal,
 		diagonalHandler:          dhCopy,
+
+		IsFixPoint:          r.IsFixPoint,
+		MainAnchorLength:    r.MainAnchorLength,
+		MainAnchorMM:        r.MainAnchorMM,
+		TotalLeftOptions:    r.TotalLeftOptions,
+		TotalRightOptions:   r.TotalRightOptions,
+		ValidLeftOptions:    r.ValidLeftOptions,
+		ValidRightOptions:   r.ValidRightOptions,
+		LeftFixpointLength:  r.LeftFixpointLength,
+		RightFixpointLength: r.RightFixpointLength,
+
+		IsOverhangCorrected: r.IsOverhangCorrected,
+
+		IsGapFill:          r.IsGapFill,
+		GapsFilled:         cGapsFilled,
+		IsGapFillOverflow:  r.IsGapFillOverflow,
+		GapsFilledOverflow: cGapsFilledOverflow,
+
+		IsSymInErr:  r.IsSymInErr,
+		SymInErrLen: cSymInErrLen,
 	}
 }
 
-func AssignReadMatchResults(fwMappings []*ReadMatchResult, rvMappings []*ReadMatchResult) (map[int][]*ReadMatchResult, map[int][]*ReadMatchResult, map[int]struct{}) {
+func AssignReadMatchResults(
+	fwMappings []*ReadMatchResult,
+	rvMappings []*ReadMatchResult,
+) (
+	map[int][]*ReadMatchResult,
+	map[int][]*ReadMatchResult,
+	map[int]struct{},
+) {
+
 	fwMapPerSeqIndex := make(map[int][]*ReadMatchResult)
 	rvMapPerSeqIndex := make(map[int][]*ReadMatchResult)
 	mappedRegionIds := make(map[int]struct{})
@@ -788,6 +857,7 @@ type TargetAnnotation struct {
 	PreferedStrand int                             // 0 -> + (fw+ and rv-); 1 -> - (fw- and rv+)
 	Confidence     float32                         // percentage of reads contributing to PreferedStrand
 	Introns        map[int]*regionvector.RegionSet // maps to sub sequence index, meaning each gene has two slices of introns 0 -> plusOrintation 1 -> minusOrientation
+	IntronTrees    map[int]*datastructure.INTree   // interval trees for intronsmaps
 	// zero bases coords, start incl, stop excl
 }
 
@@ -919,4 +989,45 @@ func ParseMatchedRegion(
 	}
 
 	return builder.String()
+}
+
+func sliceToString(s []int) string {
+	if len(s) == 0 {
+		return "NA"
+	}
+	strs := make([]string, len(s))
+	for i, v := range s {
+		strs[i] = strconv.Itoa(v)
+	}
+	return strings.Join(strs, ",")
+}
+
+func (r *ReadMatchResult) WriteTSV(f *os.File, gene string, isFw int, altId int, readId string) error {
+	fields := []string{
+		gene,
+		readId,
+		strconv.Itoa(r.SequenceIndex),
+		strconv.Itoa(isFw),
+		strconv.Itoa(altId),
+		strconv.Itoa(len(r.MismatchesRead)),
+		strconv.FormatBool(r.IsFixPoint),
+		strconv.Itoa(r.MainAnchorLength),
+		strconv.Itoa(r.MainAnchorMM),
+		strconv.Itoa(r.TotalLeftOptions),
+		strconv.Itoa(r.TotalRightOptions),
+		strconv.Itoa(r.ValidLeftOptions),
+		strconv.Itoa(r.ValidRightOptions),
+		strconv.Itoa(r.LeftFixpointLength),
+		strconv.Itoa(r.RightFixpointLength),
+		strconv.FormatBool(r.IsOverhangCorrected),
+		strconv.FormatBool(r.IsGapFill),
+		strconv.FormatBool(r.IsGapFillOverflow),
+		sliceToString(r.GapsFilled),
+		sliceToString(r.GapsFilledOverflow),
+		strconv.FormatBool(r.IsSymInErr),
+		sliceToString(r.SymInErrLen),
+	}
+	line := strings.Join(fields, "\t") + "\n"
+	_, err := f.WriteString(line)
+	return err
 }

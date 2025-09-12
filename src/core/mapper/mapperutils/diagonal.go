@@ -311,22 +311,48 @@ func (dh *DiagonalHandler) IsValidExtension(possibleExtension []*Match, result R
 	//	return false
 	//}
 
-	// check if the diagonal position within the genome is still consistent with the already mapped regions
 	for i, resultMatch := range result.MatchedRead.Regions {
-		if resultMatch.End <= minRead {
-			// the existing match is before the new match in the read
-			// then its diagonal must be before the new diagonal
-			if minGenome < result.MatchedGenome.Regions[i].End {
+		genomeMatch := result.MatchedGenome.Regions[i]
+
+		// new region is inside the read interval of an existing one
+		if !(maxRead <= resultMatch.Start || minRead >= resultMatch.End) {
+			// overlap in read, not allowed
+			return false
+		}
+
+		// new region comes after in read
+		if minRead >= resultMatch.End {
+			// then it must also come after in genome
+			if minGenome < genomeMatch.End {
 				return false
 			}
-		} else if resultMatch.Start >= maxRead {
-			// the existing match is after the new match in the read
-			// then its diagonal must be after the new diagonal
-			if maxGenome > result.MatchedGenome.Regions[i].Start {
+		}
+
+		// new region comes before in read
+		if maxRead <= resultMatch.Start {
+			// then it must also come before in genome
+			if maxGenome > genomeMatch.Start {
 				return false
 			}
 		}
 	}
+
+	//// check if the diagonal position within the genome is still consistent with the already mapped regions
+	//for i, resultMatch := range result.MatchedRead.Regions {
+	//	if resultMatch.End <= minRead {
+	//		// the existing match is before the new match in the read
+	//		// then its diagonal must be before the new diagonal
+	//		if minGenome < result.MatchedGenome.Regions[i].End {
+	//			return false
+	//		}
+	//	} else if resultMatch.Start >= maxRead {
+	//		// the existing match is after the new match in the read
+	//		// then its diagonal must be after the new diagonal
+	//		if maxGenome > result.MatchedGenome.Regions[i].Start {
+	//			return false
+	//		}
+	//	}
+	//}
 
 	return true
 }

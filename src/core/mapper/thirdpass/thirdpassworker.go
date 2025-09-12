@@ -2,6 +2,7 @@ package thirdpass
 
 import (
 	"math"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,6 +25,16 @@ func ThirdPassWorker(
 	defer wgThirdPass.Done()
 	total := 0
 	mmTotal := 0
+
+	f, err := os.Create("output.tsv")
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	if err := WriteHeader(f); err != nil {
+		panic(err)
+	}
 
 	for {
 
@@ -92,8 +103,19 @@ func ThirdPassWorker(
 					nil,
 				)
 
+				task.TargetInfo.Fw[i].WriteTSV(
+					f,
+					index.GetSequenceInfo(
+						task.TargetInfo.Fw[i].SequenceIndex,
+					).GeneId,
+					1,
+					i,
+					task.TargetInfo.ReadPair.ReadR1.Header,
+				)
+
 				if err != nil {
-					logrus.Error("Error converting read pair result to SAM string: ", err)
+					logrus.Error("Error converting read pair result to SAM "+
+						"string: ", err)
 					continue
 				}
 
@@ -121,6 +143,16 @@ func ThirdPassWorker(
 					task.TargetInfo.Rv[j],
 				)
 
+				task.TargetInfo.Rv[j].WriteTSV(
+					f,
+					index.GetSequenceInfo(
+						task.TargetInfo.Rv[j].SequenceIndex,
+					).GeneId,
+					1,
+					j,
+					task.TargetInfo.ReadPair.ReadR2.Header,
+				)
+
 				if err != nil {
 					logrus.Error("Error converting read pair result to SAM string: ", err)
 					continue
@@ -135,7 +167,12 @@ func ThirdPassWorker(
 				(numRecordsR1 != 0 && numRecordsR2 == 0) {
 				// one mate is unmapped
 				// write read mate as unmapped to sam
-				builder.WriteString(unmappedReadMateToSamString(task.TargetInfo.ReadPair, numRecordsR1 == 0))
+				builder.WriteString(
+					unmappedReadMateToSamString(
+						task.TargetInfo.ReadPair,
+						numRecordsR1 == 0,
+					),
+				)
 			}
 		}
 
@@ -524,4 +561,20 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 	}
 
 	return builder.String(), nil
+}
+
+func WriteHeader(f *os.File) error {
+	header := []string{
+		"Gene", "ReadId", "SId", "IsFw", "AltId", "MM",
+		"IsFixPoint", "MainAnchorLength", "MainAnchorMM",
+		"TotalLeftOptions", "TotalRightOptions",
+		"ValidLeftOptions", "ValidRightOptions",
+		"LeftFixpointLength", "RightFixpointLength",
+		"IsOverhangCorrected",
+		"IsGapFill", "IsGapFillOverflow", "GapsFilled", "GapsFilledOverflow",
+		"IsSymInErr", "SymInErrLen",
+	}
+	line := strings.Join(header, "\t") + "\n"
+	_, err := f.WriteString(line)
+	return err
 }

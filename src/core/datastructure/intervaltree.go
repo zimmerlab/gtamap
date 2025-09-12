@@ -181,3 +181,11 @@ type RepeatRegion struct {
 func (rr *RepeatRegion) Limits() (int, int) {
 	return rr.Lower, rr.Upper
 }
+
+type IntronRegion struct {
+	Lower, Upper int
+}
+
+func (ir *IntronRegion) Limits() (int, int) {
+	return ir.Lower, ir.Upper
+}

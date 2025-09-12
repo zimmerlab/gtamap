@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/KleinSamuel/gtamap/src/config"
+	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
@@ -49,11 +50,11 @@ func ConfidentMappingWorker(
 		annotation[targetId] = InferIntronsOfTarget(targetId, cMaps, index)
 
 		if len(annotation[targetId].Introns[0].Regions) == 0 {
-			annotation[targetId] = nil // if no junctions in conf maps, no introns can be inferred and no graph can be ctreated
+			annotation[targetId] = nil // if no junctions in conf maps, no introns can be inferred and no graph can be created
 		} else {
 			// build graphs
-			annotation[targetId].Introns[0].BuildTranscriptomeGraph(len(*index.Sequences[targetId]))
-			annotation[targetId].Introns[1].BuildTranscriptomeGraph(len(*index.Sequences[targetId]))
+			annotation[targetId].Introns[targetId].BuildTranscriptomeGraph(len(*index.Sequences[targetId]))
+			annotation[targetId].Introns[targetId+1].BuildTranscriptomeGraph(len(*index.Sequences[targetId]))
 			annotation[targetId].LogInfo()
 		}
 	}
@@ -307,10 +308,24 @@ func InferIntronsOfTarget(targetId int, confMaps []*ConfidentTask, index *index.
 	intronMap[0] = regionvector.NewRegionSet(plusOrientatedIntronsOfTarget)
 	intronMap[1] = regionvector.NewRegionSet(minusOrientatedIntronsOfTarget)
 
+	intronTreeMap := make(map[int]*datastructure.INTree)
+	convertedPlusRegions := make([]datastructure.Bounds, len(plusOrientatedIntronsOfTarget))
+	for i, intron := range plusOrientatedIntronsOfTarget {
+		convertedPlusRegions[i] = &datastructure.IntronRegion{Lower: float64(intron.Start), Upper: float64(intron.End)}
+	}
+	convertedMinusRegions := make([]datastructure.Bounds, len(minusOrientatedIntronsOfTarget))
+	for i, intron := range minusOrientatedIntronsOfTarget {
+		convertedMinusRegions[i] = &datastructure.IntronRegion{Lower: float64(intron.Start), Upper: float64(intron.End)}
+	}
+
+	intronTreeMap[0] = datastructure.NewINTree(convertedPlusRegions)
+	intronTreeMap[1] = datastructure.NewINTree(convertedMinusRegions)
+
 	targetAnnotation := mapperutils.TargetAnnotation{
 		PreferedStrand: preferredStrandedness,
 		Confidence:     confidence,
 		Introns:        intronMap,
+		IntronTrees:    intronTreeMap,
 	}
 
 	return &targetAnnotation

@@ -513,6 +513,18 @@ func serializePath(path []Region) string {
 	return sb.String()
 }
 
+func hashPath(path []Region) uint64 {
+	var h uint64 = 14695981039346656037
+	const prime uint64 = 1099511628211
+	for _, r := range path {
+		h ^= uint64(r.Start)
+		h *= prime
+		h ^= uint64(r.End)
+		h *= prime
+	}
+	return h
+}
+
 type TranscriptomeGraph struct {
 	Length      int
 	IntronNodes []*TranscriptomeNode
@@ -640,7 +652,8 @@ func (rs *RegionSet) SpansIntron(region Region) []*Intron {
 
 func (t *TranscriptomeGraph) FindPathsRight(startPos int, length int) [][]Region {
 	var results [][]Region
-	seen := make(map[string]bool)
+	// seen := make(map[string]bool)
+	seen := make(map[uint64]bool)
 
 	foundStartNode := false
 	for _, startNode := range t.ExonNodes {
@@ -669,7 +682,7 @@ func (t *TranscriptomeGraph) FindPathsRight(startPos int, length int) [][]Region
 
 func (t *TranscriptomeGraph) FindPathsLeft(startPos int, length int) [][]Region {
 	var results [][]Region
-	seen := make(map[string]bool)
+	seen := make(map[uint64]bool)
 
 	foundStartNode := false
 	for _, startNode := range t.ExonNodes {
@@ -703,19 +716,26 @@ func LengthOfPath(regions []Region) int {
 	return i
 }
 
-func (t *TranscriptomeGraph) dfsRight(node *TranscriptomeNode, path []Region, length int, results *[][]Region, start int, seen map[string]bool) {
+func (t *TranscriptomeGraph) dfsRight(node *TranscriptomeNode, path []Region, length int, results *[][]Region, start int, seen map[uint64]bool) {
 	if node.IsIntron == 1 {
 		for _, next := range node.Next {
-			t.dfsRight(next, path, length, results, next.Start, seen)
+			t.dfsRight(next, path, length, results, next.Start, seen) // start from next exon node
 		}
 		return
+	}
+	if node.Start < start && len(path) > 0 {
+		return // invalid node for right path
 	}
 
 	span := node.Stop - start
 	lengthOfCurrentPath := LengthOfPath(path)
 
 	if lengthOfCurrentPath == length {
-		key := serializePath(path)
+		// key := serializePath(path)
+		if len(path) == 0 {
+			return // skip empty paths
+		}
+		key := hashPath(path)
 		if !seen[key] {
 			*results = append(*results, append([]Region{}, path...))
 			seen[key] = true
@@ -726,7 +746,8 @@ func (t *TranscriptomeGraph) dfsRight(node *TranscriptomeNode, path []Region, le
 			Start: start,
 			End:   start + length - lengthOfCurrentPath,
 		})
-		key := serializePath(clipped)
+		// key := serializePath(clipped)
+		key := hashPath(clipped)
 		if !seen[key] {
 			*results = append(*results, clipped)
 			seen[key] = true
@@ -734,7 +755,7 @@ func (t *TranscriptomeGraph) dfsRight(node *TranscriptomeNode, path []Region, le
 		return
 	} else if span == 0 {
 		for _, next := range node.Next {
-			t.dfsRight(next, path, length, results, node.Start, seen)
+			t.dfsRight(next, path, length, results, node.Stop, seen)
 		}
 		return
 	}
@@ -749,7 +770,7 @@ func (t *TranscriptomeGraph) dfsRight(node *TranscriptomeNode, path []Region, le
 	}
 }
 
-func (t *TranscriptomeGraph) dfsLeft(node *TranscriptomeNode, path []Region, length int, results *[][]Region, end int, seen map[string]bool) {
+func (t *TranscriptomeGraph) dfsLeft(node *TranscriptomeNode, path []Region, length int, results *[][]Region, end int, seen map[uint64]bool) {
 	if node.IsIntron == 1 {
 		for _, prev := range node.Prev {
 			t.dfsLeft(prev, path, length, results, prev.Stop, seen)
@@ -757,11 +778,19 @@ func (t *TranscriptomeGraph) dfsLeft(node *TranscriptomeNode, path []Region, len
 		return
 	}
 
+	if node.Stop > end && len(path) > 0 {
+		return // invalid node for left path
+	}
+
 	span := end - node.Start
 	lengthOfCurrentPath := LengthOfPath(path)
 
 	if lengthOfCurrentPath == length {
-		key := serializePath(path)
+		// key := serializePath(path)
+		if len(path) == 0 {
+			return // skip empty paths
+		}
+		key := hashPath(path)
 		if !seen[key] {
 			*results = append(*results, append([]Region{}, path...))
 			seen[key] = true
@@ -772,7 +801,8 @@ func (t *TranscriptomeGraph) dfsLeft(node *TranscriptomeNode, path []Region, len
 			Start: end + lengthOfCurrentPath - length,
 			End:   end,
 		})
-		key := serializePath(clipped)
+		// key := serializePath(clipped)
+		key := hashPath(clipped)
 		if !seen[key] {
 			*results = append(*results, clipped)
 			seen[key] = true
@@ -937,16 +967,12 @@ func (rs *RegionSet) GetIntersectingIntrons(b Region) []*Intron {
 	for i := idx - 1; i >= 0 && rs.Regions[i].End > b.Start; i-- {
 		if overlaps(rs.Regions[i], b) {
 			introns = append(introns, rs.Regions[i])
-		} else {
-			break
 		}
 	}
 
 	for i := idx; i < len(rs.Regions) && rs.Regions[i].Start < b.End; i++ {
 		if overlaps(rs.Regions[i], b) {
 			introns = append(introns, rs.Regions[i])
-		} else {
-			break
 		}
 	}
 	return introns
@@ -954,7 +980,7 @@ func (rs *RegionSet) GetIntersectingIntrons(b Region) []*Intron {
 
 // overlaps is needed to check if a region overlaps an intron and since intron is a different struct compared to region I made an extra func
 func overlaps(a *Intron, b Region) bool {
-	return a.Start < b.End && b.Start < a.End
+	return a.Start <= b.End && b.Start <= a.End
 }
 
 // OverlapsByRegion checks if the region vector overlaps with the given region.
