@@ -384,6 +384,7 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 		var errCigarRv error
 
 		cigarRv, errCigarRv = resRv.GetCigar()
+
 		if errCigarRv != nil {
 			logrus.WithFields(logrus.Fields{
 				"read":              readPair.ReadR2.Header,

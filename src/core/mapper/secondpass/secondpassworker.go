@@ -87,21 +87,8 @@ func remapReadPair(
 	genomeIndex *index.GenomeIndex,
 ) {
 
-	for _, r := range readPairMapping.Fw {
-		for mi := 0; mi < len(r.MismatchesRead); mi++ {
-			for mj := mi + 1; mj < len(r.MismatchesRead); mj++ {
-				if r.MismatchesRead[mi] == r.MismatchesRead[mj] {
-					fmt.Println(r.MatchedRead.Regions)
-					fmt.Println(r.MatchedGenome.Regions)
-					fmt.Println(r.MismatchesRead)
-					r.NormalizeRegions()
-					fmt.Println(r.MatchedRead.Regions)
-					fmt.Println(r.MatchedGenome.Regions)
-					fmt.Println(r.MismatchesRead)
-					logrus.Fatal("Duplicate before remap fw")
-				}
-			}
-		}
+	if readPairMapping.ReadPair.ReadR2.Header == "A00925:309:HKNKCDSX3:1:2137:20184:7294" {
+		fmt.Println("here")
 	}
 
 	fwRemaps := make([]*mapperutils.ReadMatchResult, 0)
@@ -119,23 +106,6 @@ func remapReadPair(
 		)
 
 		fwRemaps = append(fwRemaps, remaps...)
-	}
-
-	for _, r := range fwRemaps {
-		for mi := 0; mi < len(r.MismatchesRead); mi++ {
-			for mj := mi + 1; mj < len(r.MismatchesRead); mj++ {
-				if r.MismatchesRead[mi] == r.MismatchesRead[mj] {
-					fmt.Println(r.MatchedRead.Regions)
-					fmt.Println(r.MatchedGenome.Regions)
-					fmt.Println(r.MismatchesRead)
-					r.NormalizeRegions()
-					fmt.Println(r.MatchedRead.Regions)
-					fmt.Println(r.MatchedGenome.Regions)
-					fmt.Println(r.MismatchesRead)
-					logrus.Fatal("Duplicate after remap fw")
-				}
-			}
-		}
 	}
 
 	rvRemaps := make([]*mapperutils.ReadMatchResult, 0)
@@ -1024,10 +994,13 @@ func correctSymmetricIntronErrorsEnhanced(readMatchResult *mapperutils.ReadMatch
 
 	// iterate over all ali blocks and check if sym intron error
 	for i := 0; i <= len(readMatchResult.MatchedGenome.Regions)-2; i++ {
+
 		leftMappedRegion := readMatchResult.MatchedGenome.Regions[i]
 		rightMappedRegion := readMatchResult.MatchedGenome.Regions[i+1]
-		gap, ok := readMatchResult.MatchedGenome.GetGap(i)
-		if !ok {
+
+		// gap, ok := readMatchResult.MatchedGenome.GetGap(i)
+		gap, isGapPresent := readMatchResult.MatchedGenome.GetGapAfterRegionIndex(i)
+		if !isGapPresent {
 			break
 		}
 
@@ -2095,6 +2068,9 @@ func extractMMofAnchor(anchor regionvector.Region, mms []int) []int {
 
 // NOTE: this function now returns false if the readMatchResult becomes invalid due to too many mismatches
 // TODO: comment
+// this is similar to the extendDiagonals function in mapread.go with the
+// difference that here the result is discarded when the mismatch threshold
+// is exceeded
 func fillGaps(
 	readMatchResult *mapperutils.ReadMatchResult,
 	genomeIndex *index.GenomeIndex,
@@ -2117,13 +2093,21 @@ func fillGaps(
 		gapGenomeEnd := gapGenome.End
 
 		if gapRead.Start != gapRead.End {
+
 			// if we end up in here, it means our map looks like this
 			// [0,97], [113, 150] -> mid block is missing
 
 			// is there enough space in the genome gap to fill in the missing read portion
 			if gapEnd-gapStart <= gapGenome.End-gapGenome.Start && gapRead.Length() > 0 {
+
 				// is insert
-				bestSplit := determineBestSplit(genomeIndex, read, readMatchResult.SequenceIndex, &gapRead, &gapGenome)
+				bestSplit := determineBestSplit(
+					genomeIndex,
+					read,
+					readMatchResult.SequenceIndex,
+					&gapRead,
+					&gapGenome,
+				)
 
 				if bestSplit == -1 {
 					// this should not happen because a split should be found every time
@@ -2139,15 +2123,17 @@ func fillGaps(
 				// when bestSplit is 0 then there is nothing to be added to the left side of the gap
 				if bestSplit > 0 {
 
-					// add the split to the readMatchResult
-					readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(gapRead.Start, gapRead.Start+bestSplit)
-					readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.Start+bestSplit)
+					gapStartRead := gapRead.Start
+					gapEndRead := gapRead.Start + bestSplit
+
+					gapStartGenome := gapGenome.Start
+					gapEndGenome := gapGenome.Start + bestSplit
 
 					// the read and genome sequences from the start of the gap to the best split (left)
-					readByte := (*read.Sequence)[gapRead.Start : gapRead.Start+bestSplit]
-					genomeByte := (*genomeIndex.Sequences[readMatchResult.SequenceIndex])[gapGenome.Start : gapGenome.Start+bestSplit]
+					readByte := (*read.Sequence)[gapStartRead:gapEndRead]
+					genomeByte := (*genomeIndex.Sequences[readMatchResult.SequenceIndex])[gapStartGenome:gapEndGenome]
 
-					startGenomic := int(sequenceInfo.StartGenomic) + gapGenome.Start
+					startGenomic := int(sequenceInfo.StartGenomic) + gapStartGenome
 
 					// add the mismatches to the readMatchResult
 					for j := range bestSplit {
@@ -2159,29 +2145,42 @@ func fillGaps(
 
 						isValid := readMatchResult.AddMismatch(
 							contigMask,
-							gapRead.Start+j,
+							gapStartRead+j,
 							startGenomic+j,
 						)
 
 						if !isValid {
 							return false
 						}
-
-						// readMatchResult.MismatchesRead = append(readMatchResult.MismatchesRead, gapRead.Start+j)
 					}
+
+					// add the split to the readMatchResult
+					readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(
+						gapStartRead,
+						gapEndRead,
+					)
+					readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(
+						gapStartGenome,
+						gapEndGenome,
+					)
 				}
 
 				// when bestSplit is equal to the length of the gap then there is nothing
 				// to be added to the right side of the gap
 				if bestSplit < gapRead.Length() {
 
-					// add the split to the readMatchResult
-					readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(gapRead.End-(gapRead.Length()-bestSplit), gapRead.End)
-					readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.End-(gapRead.Length()-bestSplit), gapGenome.End)
+					gapStartRead := gapRead.End - (gapRead.Length() - bestSplit)
+					gapEndRead := gapRead.End
 
-					// the read and genome sequences from the best split to the end of the gap (right)
-					readByte := (*read.Sequence)[gapRead.End-(gapRead.Length()-bestSplit) : gapRead.End]
-					genomeByte := (*genomeIndex.Sequences[readMatchResult.SequenceIndex])[gapGenome.End-(gapRead.Length()-bestSplit) : gapGenome.End]
+					gapStartGenome := gapGenome.End - (gapRead.Length() - bestSplit)
+					gapEndGenome := gapGenome.End
+
+					// the read and genome sequences from the best split to
+					// the end of the gap (right)
+					readByte := (*read.Sequence)[gapStartRead:gapEndRead]
+					genomeByte := (*genomeIndex.Sequences[readMatchResult.SequenceIndex])[gapStartGenome:gapEndGenome]
+
+					startGenomic := int(sequenceInfo.StartGenomic) + gapStartGenome
 
 					// add the mismatches to the readMatchResult
 					for j := 0; j < gapRead.Length()-bestSplit; j++ {
@@ -2193,21 +2192,34 @@ func fillGaps(
 
 						isValid := readMatchResult.AddMismatch(
 							contigMask,
-							gapRead.Start+bestSplit+j,
-							gapGenome.End-(gapRead.Length()-bestSplit)+j,
+							gapStartRead+j,
+							startGenomic+j,
 						)
 
 						if !isValid {
 							return false
 						}
-
-						// readMatchResult.MismatchesRead = append(readMatchResult.MismatchesRead, gapRead.End-(bestSplit-i))
-						// readMatchResult.MismatchesRead = append(readMatchResult.MismatchesRead, gapRead.Start+bestSplit+j) // NEW
 					}
 
+					// add the split to the readMatchResult
+					readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(
+						gapStartRead,
+						gapEndRead,
+					)
+
+					readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(
+						gapStartGenome,
+						gapEndGenome,
+					)
+
 					readMatchResult.NormalizeRegions()
+
 					readMatchResult.IsGapFillOverflow = true
-					readMatchResult.GapsFilledOverflow = append(readMatchResult.GapsFilledOverflow, gapGenome.Length())
+
+					readMatchResult.GapsFilledOverflow = append(
+						readMatchResult.GapsFilledOverflow,
+						gapGenome.Length(),
+					)
 				}
 
 			} else {
@@ -2262,24 +2274,41 @@ func fillGaps(
 				// rDonorSeq := string((*read.Sequence)[gapRead.End-rSplit : gapRead.End])
 
 				// close gap in genome
-				readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(gapGenomeStart, gapGenomeEnd)
+				readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(
+					gapGenomeStart,
+					gapGenomeEnd,
+				)
 
 				// add left part of read
 				if minSplit > 0 {
-					readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(gapRead.Start, gapRead.Start+minSplit)
+					readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(
+						gapRead.Start,
+						gapRead.Start+minSplit,
+					)
 				}
 
 				// add right part of read
 				if rSplit > 0 {
-					readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(gapRead.End-rSplit, gapRead.End)
+					readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(
+						gapRead.End-rSplit,
+						gapRead.End,
+					)
 				}
+
 				readMatchResult.NormalizeRegions()
+
 				readMatchResult.IsGapFill = true
-				readMatchResult.GapsFilled = append(readMatchResult.GapsFilled, gapRead.Length())
+
+				readMatchResult.GapsFilled = append(
+					readMatchResult.GapsFilled,
+					gapRead.Length(),
+				)
 			}
 		}
 
-		indexRegionBeforeGap = readMatchResult.MatchedRead.GetGapIndexAfterPos(gapRead.End + 1)
+		indexRegionBeforeGap = readMatchResult.MatchedRead.GetGapIndexAfterPos(
+			gapRead.End + 1,
+		)
 	}
 
 	return true

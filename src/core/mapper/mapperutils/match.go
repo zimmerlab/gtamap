@@ -582,7 +582,8 @@ func (r *ReadMatchResult) AddMismatch(
 
 	for _, mm := range r.MismatchesRead {
 		if mm == posInRead {
-			logrus.Fatal("Trying to add duplicate mismatch position to ReadMatchResult:", r.MismatchesRead, "posInRead:", posInRead)
+			logrus.Fatal("Trying to add duplicate mismatch position to "+
+				"ReadMatchResult:", r.MismatchesRead, "posInRead:", posInRead)
 		}
 	}
 
@@ -685,9 +686,9 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 				logrus.WithFields(logrus.Fields{
 					"read":   r.MatchedRead,
 					"genome": r.MatchedGenome,
-				}).Warn("Gap in genome and read at the same time")
+				}).Warn("Gap in genome and read at the same time (fw)")
 
-				return "", fmt.Errorf("gap in genome and read at the same time")
+				return "", fmt.Errorf("gap in genome and read at the same time (fw)")
 			}
 
 			if !gapInGenome && !gapInRead {

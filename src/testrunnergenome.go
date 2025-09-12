@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
@@ -218,6 +219,7 @@ func testRegionmask() {
 
 	numThreads := 1
 
+	config.IsOriginRNA = true
 	// config.IsOriginRNA = false
 
 	// // TODO: change from nil to actual values
