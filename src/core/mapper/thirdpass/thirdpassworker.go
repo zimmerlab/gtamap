@@ -248,9 +248,16 @@ func unmappedReadMateToSamString(readPair *fastq.ReadPair, isR1 bool) string {
 	return builder.String()
 }
 
-func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.ReadPair,
-	resFw *mapperutils.ReadMatchResult, resRv *mapperutils.ReadMatchResult,
-) (string, error) {
+func readPairResultToSamString(
+	genomeIndex *index.GenomeIndex,
+	readPair *fastq.ReadPair,
+	resFw *mapperutils.ReadMatchResult,
+	resRv *mapperutils.ReadMatchResult,
+) (
+	string,
+	error,
+) {
+
 	flagFw := sam.Flag{}
 	flagRv := sam.Flag{}
 

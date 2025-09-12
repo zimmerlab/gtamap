@@ -55,6 +55,23 @@ func SecondpassMappingWorker(
 
 				remapReadPair(task, annotation, genomeIndex)
 
+				if task.ReadPair.ReadR2.Header == "A00925:309:HKNKCDSX3:1:1661:16839:22858" {
+					fmt.Println("here")
+					fmt.Println(task.ReadPair.ReadR1.Header, task.ReadPair.ReadR2.Header)
+
+					sequenceInfo := genomeIndex.GetSequenceInfo(task.Rv[0].SequenceIndex)
+					startGenomic := int(sequenceInfo.StartGenomic)
+
+					fmt.Println("start genomic: ", startGenomic)
+
+					for _, r := range task.Rv {
+
+						fmt.Println(startGenomic + r.MatchedGenome.Regions[0].Start)
+						fmt.Println(r.MatchedGenome)
+
+					}
+				}
+
 				// for _, r := range task.Fw {
 				// 	for mi := 0; mi < len(r.MismatchesRead); mi++ {
 				// 		for mj := mi + 1; mj < len(r.MismatchesRead); mj++ {
@@ -87,7 +104,7 @@ func remapReadPair(
 	genomeIndex *index.GenomeIndex,
 ) {
 
-	if readPairMapping.ReadPair.ReadR2.Header == "A00925:309:HKNKCDSX3:1:2137:20184:7294" {
+	if readPairMapping.ReadPair.ReadR2.Header == "A00925:309:HKNKCDSX3:1:1661:16839:22858" {
 		fmt.Println("here")
 	}
 
@@ -110,7 +127,16 @@ func remapReadPair(
 
 	rvRemaps := make([]*mapperutils.ReadMatchResult, 0)
 
-	for _, mapping := range readPairMapping.Rv {
+	for ind, mapping := range readPairMapping.Rv {
+
+		if readPairMapping.ReadPair.ReadR2.Header == "A00925:309:HKNKCDSX3:1:1661:16839:22858" {
+			// if len(mapping.MatchedGenome.Regions) == 4 && mapping.MatchedGenome.Regions[0].Start == 21345 && mapping.MatchedGenome.Regions[3].End == 73483 {
+			// 	fmt.Println("here")
+			// }
+			if ind == 9 {
+				fmt.Println("ind")
+			}
+		}
 
 		// BUG: only valid if there is only one sequence in the index
 		mainSeqId := mapping.SequenceIndex / 2
@@ -121,6 +147,63 @@ func remapReadPair(
 			readPairMapping.ReadPair.ReadR2,
 			genomeIndex,
 		)
+
+		if readPairMapping.ReadPair.ReadR2.Header == "A00925:309:HKNKCDSX3:1:1661:16839:22858" {
+
+			for _, r := range remaps {
+
+				sequenceInfo := genomeIndex.GetSequenceInfo(r.SequenceIndex)
+
+				seqLen := sequenceInfo.EndGenomic - sequenceInfo.StartGenomic
+
+				startGenomicFw := int(genomeIndex.GetSequenceInfo(r.SequenceIndex - 1).StartGenomic)
+
+				last, _ := r.MatchedGenome.GetLastRegion()
+				offset := int(seqLen) - last.End
+				posFw := startGenomicFw + (offset) + 1
+
+				if posFw == 154201408 {
+
+					fmt.Println("\n\n")
+					fmt.Println(r.MismatchesRead)
+					fmt.Println(r.MatchedRead)
+					fmt.Println(r.MatchedGenome)
+
+					fmt.Println(r.MatchedGenome.Length())
+
+					cigarRv, errCigarRv := r.GetCigar()
+					if errCigarRv != nil {
+						fmt.Println("err cigar")
+						fmt.Println(errCigarRv)
+					}
+					fmt.Println(cigarRv)
+
+					fmt.Println(r.MismatchesRead)
+					fmt.Println(r.MatchedRead)
+					fmt.Println(r.MatchedGenome)
+
+					if cigarRv[0] == '7' {
+						fmt.Println("!!!!!!!!!!!!!!!!!!!!here at 7")
+						fmt.Println("INDEX; ", ind)
+
+						r.GetCigar()
+					}
+				}
+
+				// for i := 0; i < len(r.MatchedGenome.Regions)-1; i++ {
+				// 	cRead := r.MatchedRead.Regions[i].End == r.MatchedRead.Regions[i+1].Start
+				// 	cGenome := r.MatchedGenome.Regions[i].End == r.MatchedGenome.Regions[i+1].Start
+				//
+				// 	if !cRead && !cGenome {
+				// 		fmt.Println("gaps in both rv ", readPairMapping.ReadPair.ReadR2.Header)
+				// 	}
+				// }
+				//
+				// if r.MatchedRead.Length() != len(*readPairMapping.ReadPair.ReadR2.Sequence) {
+				// 	fmt.Println("rv not full length ", readPairMapping.ReadPair.ReadR2.Header)
+				// }
+			}
+		}
 
 		rvRemaps = append(rvRemaps, remaps...)
 	}
@@ -1008,6 +1091,9 @@ func correctSymmetricIntronErrorsEnhanced(readMatchResult *mapperutils.ReadMatch
 		for _, overlapIntron := range overlappingIntrons {
 			correctedL := overlapIntron.Start - gap.Start
 			correctedR := overlapIntron.End - gap.End
+
+			// BUG: check if the correction overlaps regions from before and after
+
 			if correctedL == correctedR && correctedL != 0 {
 				if leftMappedRegion.Length() >= utils.Abs(correctedL) && rightMappedRegion.Length() >= utils.Abs(correctedR) {
 					corrections[i] = append(corrections[i], correctedL)
