@@ -9,7 +9,7 @@ import (
 
 var env string = "development"
 
-const toolVersion string = "0.3.2"
+const toolVersion string = "0.4.0"
 
 var kmerLength uint8 = 10
 
