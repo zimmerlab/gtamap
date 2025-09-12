@@ -678,7 +678,13 @@ func extendDiagonals(
 						return
 					}
 
-					bestSplit := determineBestSplit(genomeIndex, read, result.SequenceIndex, gapRead, gapGenome)
+					bestSplit := determineBestSplit(
+						genomeIndex,
+						read,
+						result.SequenceIndex,
+						gapRead,
+						gapGenome,
+					)
 
 					if bestSplit == -1 {
 						// this should not happen because a split should be found every time
@@ -690,6 +696,15 @@ func extendDiagonals(
 
 					// false if any mismatch threshold was exceeded
 					fillGap := true
+
+					// make a copy of the mismatches to be able to revert if
+					// threshold is exceeded
+					mmCopy := make([]int, len(result.MismatchesRead))
+					copy(mmCopy, result.MismatchesRead)
+					mmCountsCopy := make(map[string]int)
+					for k, v := range result.MismatchCounts {
+						mmCountsCopy[k] = v
+					}
 
 					// when bestSplit is 0 then there is nothing to be added to the left side of the gap
 					if bestSplit > 0 {
@@ -763,9 +778,22 @@ func extendDiagonals(
 
 						if fillGap {
 							// add the split to the result only if threshold was not exeeded
-							result.MatchedRead.AddRegionNonOverlappingPanic(gapRead.End-(gapRead.Length()-bestSplit), gapRead.End)
-							result.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.End-(gapRead.Length()-bestSplit), gapGenome.End)
+							result.MatchedRead.AddRegionNonOverlappingPanic(
+								gapRead.End-(gapRead.Length()-bestSplit),
+								gapRead.End,
+							)
+							result.MatchedGenome.AddRegionNonOverlappingPanic(
+								gapGenome.End-(gapRead.Length()-bestSplit),
+								gapGenome.End,
+							)
 						}
+					}
+
+					if !fillGap {
+						// reset the mismatches to the state before
+						// attempting to fill the gap
+						result.MismatchesRead = mmCopy
+						result.MismatchCounts = mmCountsCopy
 					}
 				}
 
@@ -1158,8 +1186,14 @@ func determineBestSplit(
 		// INFO: DNA RNA MODE
 		// only score splicesites in RNA mode
 
-		spliceSitePenalty, _ := utils.ScoreSpliceSites(donorSiteSeq[0], donorSiteSeq[1],
-			acceptorSiteSeq[0], acceptorSiteSeq[1], lookOnPlusStrand)
+		spliceSitePenalty, _ := utils.ScoreSpliceSites(
+			donorSiteSeq[0],
+			donorSiteSeq[1],
+			acceptorSiteSeq[0],
+			acceptorSiteSeq[1],
+			lookOnPlusStrand,
+		)
+
 		numMismatches += spliceSitePenalty
 
 		// logrus.WithFields(logrus.Fields{
