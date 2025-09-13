@@ -14,7 +14,7 @@ func PrintBanner() {
 	logrus.Info("│ ┬ │ ├─┤│││├─┤├─┘")
 	logrus.Info("└─┘ ┴ ┴ ┴┴ ┴┴ ┴┴")
 	logrus.Info("gtamap v" + config.ToolVersion() + " (S. Klein, M. Weyrich, 2025)")
-	logrus.Info("Fast and memory efficient spliced read mapping to a single gene reference.")
+	logrus.Info("Sensitive read (DNA / RNA) mapping to a target region")
 	logrus.Info("")
 }
 
@@ -28,7 +28,17 @@ func Run() {
 
 	parser := argparse.NewParser(
 		"gtamap",
-		"Gene-centric spliced read mapping",
+		"Sensitive read mapping to a target region",
+	)
+
+	var configFile *string = parser.String(
+		"",
+		"config",
+		&argparse.Options{
+			Required: false,
+			Help:     "Path to configuration file (YAML)",
+			Default:  "",
+		},
 	)
 
 	var logLevel *string = parser.Selector(
@@ -43,11 +53,8 @@ func Run() {
 	)
 
 	cmdIndexPre, argsIndexPre := AddCommandIndexPre(parser)
-
 	cmdIndexPreRegion, argsIndexPreRegion := AddCommandIndexPreRegion(parser)
-
 	cmdIndex, argsIndex := AddCommandIndex(parser)
-
 	cmdMap, argsMap := AddCommandMap(parser)
 
 	err := parser.Parse(os.Args)
@@ -61,6 +68,11 @@ func Run() {
 		logrus.Fatalf("Invalid log level: %v", errLevel)
 	}
 	logrus.SetLevel(level)
+
+	_, errConfig := config.LoadMapperConfig(*configFile)
+	if errConfig != nil {
+		logrus.Fatalf("Failed to load configuration: %v", errConfig)
+	}
 
 	if cmdIndexPre.Happened() {
 

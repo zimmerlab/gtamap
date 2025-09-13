@@ -28,8 +28,6 @@ func MapRead(
 		MatchesPerSequence: make([]*mapperutils.SequenceMatchResult, genomeIndex.NumSequences()*2),
 	}
 
-	// fmt.Println(read.Header)
-
 	// TODO: purposely hardcoded the kmer length to 10 because the fixed size array requires manual
 	// TODO: intervention when changing the kmer length, having it variable via config could introduce bugs
 	// generate non-overlapping k-mers for the read pair
@@ -1018,7 +1016,8 @@ func mapReadToSequence(
 	// INFO: max mismatches per read is given as percentage (int, 5 = 5%)
 	// compute actual number of allowed mismatches based on read length
 	// store this in the result to prevent frequent computations
-	maxMismatches := int((float32(config.MaxMismatchPercentage()) / 100) * float32(len(*read.Sequence)))
+	maxMismatches := int((float32(config.MaxMismatchPercentage()) / 100) *
+		float32(len(*read.Sequence)))
 
 	result := &mapperutils.ReadMatchResult{
 		SequenceIndex:            seqIndex,

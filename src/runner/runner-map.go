@@ -90,11 +90,11 @@ func AddCommandMap(
 
 	argsObj.ReadType = command.Selector(
 		"",
-		"read-type",
-		[]string{"DNA", "RNA"},
+		"read-origin",
+		[]string{"dna", "rna"},
 		&argparse.Options{
 			Required: true,
-			Help:     "Specify read type",
+			Help:     "Specify read origin",
 		},
 	)
 
@@ -110,7 +110,7 @@ func AddCommandMap(
 
 	argsObj.RegionmaskBedFile = command.File(
 		"",
-		"regionmaskBed",
+		"regionmask-bed",
 		os.O_RDONLY,
 		0o600,
 		&argparse.Options{
@@ -122,7 +122,7 @@ func AddCommandMap(
 
 	argsObj.RegionmaskPriorityFile = command.File(
 		"",
-		"regionmaskPriorities",
+		"regionmask-priorities",
 		os.O_RDONLY,
 		0o600,
 		&argparse.Options{
@@ -134,7 +134,7 @@ func AddCommandMap(
 
 	argsObj.RegionmaskAction = command.Selector(
 		"",
-		"regionmaskAction",
+		"regionmask-action",
 		[]string{"combine", "ignore-index"},
 		&argparse.Options{
 			Required: false,
@@ -152,12 +152,14 @@ func ExecMap(argsObj *ArgsMap) {
 	// 	config.LogOut = *logFileMap
 	// }
 
-	// should already be captured by argument parsers
-	if *argsObj.ReadType != "DNA" && *argsObj.ReadType != "RNA" {
-		log.Fatalf("Invalid read type: %s. Must be DNA or RNA.", *argsObj.ReadType)
+	// should already be captured by argument parser
+	errOrigin := config.Mapper.SetReadOrigin(*argsObj.ReadType)
+	if errOrigin != nil {
+		log.Fatal(errOrigin)
 	}
 
-	config.IsOriginRNA = *argsObj.ReadType == "RNA"
+	fmt.Println(config.Mapper.Mapping.IsReadOriginRna)
+	os.Exit(1)
 
 	genomeIndex := index.ReadGenomeIndexByFile(argsObj.IndexFile)
 
