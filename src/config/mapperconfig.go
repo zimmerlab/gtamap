@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -16,9 +17,15 @@ type MapperConfig struct {
 		OutputDir string `mapstructure:"output_dir" yaml:"output_dir"`
 	} `mapstructure:"general" yaml:"general"`
 
+	Index struct {
+	} `mapstructure:"index" yaml:"index"`
+
 	Mapping struct {
-		ReadOrigin      string `mapstructure:"read_origin" yaml:"read_origin"` // "dna" or "rna"
-		IsReadOriginRna bool   `mapstructure:"-" yaml:"-"`                     // derived, not in config file
+		IndexFilePath   string `mapstructure:"index_file_path" yaml:"index_file_path"`
+		FastqR1FilePath string `mapstructure:"fastq_r1_file_path" yaml:"fastq_r1_file_path"`
+		FastqR2FilePath string `mapstructure:"fastq_r2_file_path" yaml:"fastq_r2_file_path"`
+		ReadOrigin      string `mapstructure:"read_origin" yaml:"read_origin"`
+		IsReadOriginRna bool   `mapstructure:"is_read_origin_rna" yaml:"is_read_origin_rna"`
 		Threads         int    `mapstructure:"threads" yaml:"threads"`
 
 		RnaMode struct {
@@ -35,8 +42,9 @@ type MapperConfig struct {
 		} `mapstructure:"dna_mode" yaml:"dna_mode"`
 
 		Output struct {
-			IncludeMMinSAM     bool `mapstructure:"sam_use_x" yaml:"sam_use_x"`
-			IncludeAllPairings bool `mapstructure:"sam_include_all_pairings" yaml:"sam_include_all_pairings"`
+			SamFileName        string `mapstructure:"sam_file_name" yaml:"sam_file_name"`
+			IncludeMMinSAM     bool   `mapstructure:"sam_use_x" yaml:"sam_use_x"`
+			IncludeAllPairings bool   `mapstructure:"sam_include_all_pairings" yaml:"sam_include_all_pairings"`
 		} `mapstructure:"output" yaml:"output"`
 	} `mapstructure:"mapping" yaml:"mapping"`
 }
@@ -79,6 +87,17 @@ func (c *MapperConfig) GetMaxMismatches(readLength int) int {
 	}
 }
 
+// SetMappingThreads sets the number of threads to use for mapping.
+// If threads is <= 0 or greater than the number of CPU cores, it defaults to
+// the number of CPU cores.
+func (c *MapperConfig) SetMappingThreads(threads int) {
+	cpuThreads := runtime.NumCPU()
+	if threads <= 0 || threads > cpuThreads {
+		c.Mapping.Threads = cpuThreads
+	}
+	c.Mapping.Threads = threads
+}
+
 func setDefaults(v *viper.Viper) {
 
 	// GENERAL
@@ -102,13 +121,14 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("mapping.dna_mode.max_mismatch_percentage", 0.1)
 
 	// MAPPING - OUTPUT
+	v.SetDefault("mapping.output.sam_file_name", "aligned.sam")
 	v.SetDefault("mapping.output.sam_use_x", true)
 	v.SetDefault("mapping.output.sam_include_all_pairings", false)
 }
 
-func LoadMapperConfig(path string) (*MapperConfig, error) {
+func LoadMapperConfig(v *viper.Viper, path string) (*MapperConfig, error) {
 
-	v := viper.New()
+	// v := viper.New()
 	v.SetConfigName("mapperconfig")
 	v.SetConfigType("yaml")
 
@@ -145,9 +165,6 @@ func LoadMapperConfig(path string) (*MapperConfig, error) {
 		logrus.Error(err)
 		return nil, err
 	}
-
-	fmt.Println("no error")
-	fmt.Println(cfg)
 
 	Mapper = &cfg
 

@@ -23,7 +23,7 @@ func MapAll(
 	genomeIndex *index.GenomeIndex,
 	reader *fastq.Reader,
 	writer *datawriter.Writer,
-	numThreads *int,
+	numThreads int,
 ) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
@@ -37,11 +37,11 @@ func MapAll(
 
 	writer.Write(samHeader.String())
 
-	numWorkers := runtime.NumCPU()
-
-	if *numThreads > 0 {
-		numWorkers = *numThreads
-	}
+	// numWorkers := runtime.NumCPU()
+	//
+	// if *numThreads > 0 {
+	// 	numWorkers = *numThreads
+	// }
 
 	// the size of the task queue buffer
 	bufferSizeMultiplier := 10000
@@ -64,7 +64,7 @@ func MapAll(
 	// @43_fw		needs to be extended to the right
 
 	// contains the read pairs that need to be mapped
-	taskChan := make(chan MappingTask, numWorkers*bufferSizeMultiplier)
+	taskChan := make(chan MappingTask, numThreads*bufferSizeMultiplier)
 	// contains all read pairs (multimapped and parially mapped) except for confident read pairs
 	secondpassChan := secondpass.NewSecondPassChannel()
 	// contains all read pairs (multimapped and parially mapped) except for confident read pairs
@@ -106,9 +106,10 @@ func MapAll(
 	// wait group that keeps track of the mapping goroutines that are still running
 	var wgMainMappingPass sync.WaitGroup
 	// start the mapping worker goroutine pool
-	for i := 0; i < numWorkers; i++ {
+	for i := range numThreads {
+
 		wgMainMappingPass.Add(1)
-		// go MapperWorker(i, genomeIndex, &wgMainMappingPass, taskChan, secondpassChan, confidentMappingChan, paralogMappingChan, progressChan, timerChan)
+
 		go MapperWorker(
 			i,
 			genomeIndex,
@@ -121,7 +122,13 @@ func MapAll(
 		)
 	}
 
-	go MappingTaskProducer(reader, taskChan, progressChan, maxTasks, specificQname)
+	go MappingTaskProducer(
+		reader,
+		taskChan,
+		progressChan,
+		maxTasks,
+		specificQname,
+	)
 
 	wgMainMappingPass.Wait()
 	// close(paralogMappingChan)
@@ -138,7 +145,12 @@ func MapAll(
 
 	var wgThirdPass sync.WaitGroup
 	wgThirdPass.Add(1)
-	go thirdpass.ThirdPassWorker(thirdpassChan, &wgThirdPass, outputChan, genomeIndex)
+	go thirdpass.ThirdPassWorker(
+		thirdpassChan,
+		&wgThirdPass,
+		outputChan,
+		genomeIndex,
+	)
 
 	var wgSecondpass sync.WaitGroup
 
@@ -149,7 +161,7 @@ func MapAll(
 		annotationChan,
 		thirdpassChan,
 		genomeIndex,
-		numWorkers,
+		numThreads,
 	)
 
 	waitgroupConfidentMap.Wait()
