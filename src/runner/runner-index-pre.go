@@ -1,131 +1,170 @@
 package runner
 
 import (
-	"strings"
-
+	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/index"
-	"github.com/akamensky/argparse"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
-type ArgsIndexPre struct {
-	FastaFile            *string
-	GtfFile              *string
-	IsSeparateExtraction *bool
-	OutputDir            *string
-	GeneIds              *string
-	UpstreamBases        *int
-	DownstreamBases      *int
-}
+func GetCommandIndexPre(v *viper.Viper) *cobra.Command {
 
-func AddCommandIndexPre(
-	parser *argparse.Parser,
-) (
-	*argparse.Command,
-	*ArgsIndexPre,
-) {
+	var fastaFilePath string
+	var fastaIndexFilePath string
+	var gtfFilePath string
+	var singleFile bool
+	var outputDirPath string
+	var fastaFileName string
+	var geneIds []string
+	var upstreamBases int
+	var downstreamBases int
 
-	var command *argparse.Command = parser.NewCommand(
-		"index-pre",
-		"Extract gene sequences from genome.",
-	)
+	indexPreCmd := &cobra.Command{
+		Use:   "index-pre",
+		Short: "Extract gene sequences from a genome",
+		Run: func(cmd *cobra.Command, args []string) {
 
-	argsObj := &ArgsIndexPre{}
+			config.Mapper.SetIndexFastaIndex(config.Mapper.Index.FastaIndexFilePath)
 
-	argsObj.FastaFile = command.String(
-		"",
+			ExecIndexPre()
+		},
+	}
+
+	flags := indexPreCmd.Flags()
+
+	flags.StringVarP(
+		&fastaFilePath,
 		"fasta",
-		&argparse.Options{
-			Required: true,
-			Help: "Nucleotide sequences (FASTA) file (currently only " +
-				"non-compressed).",
-		},
+		"f",
+		"",
+		"Fasta file (required)",
+	)
+	indexPreCmd.MarkFlagRequired("fasta")
+	v.BindPFlag(
+		"index.fasta_file_path",
+		indexPreCmd.Flags().Lookup("fasta"),
 	)
 
-	argsObj.GtfFile = command.String(
+	flags.StringVarP(
+		&fastaIndexFilePath,
+		"fasta-index",
+		"i",
 		"",
+		"Fasta index file (default: [--fasta].fai)",
+	)
+	v.BindPFlag(
+		"index.fasta_index_file_path",
+		indexPreCmd.Flags().Lookup("fasta-index"),
+	)
+
+	flags.StringVarP(
+		&gtfFilePath,
 		"gtf",
-		&argparse.Options{
-			Required: true,
-			Help: "Genome annotation (GTF) file (currently only " +
-				"non-compressed).",
-		},
+		"g",
+		"",
+		"Genome annotation file (.gtf) (required)",
+	)
+	indexPreCmd.MarkFlagRequired("gtf")
+	v.BindPFlag(
+		"index.gtf_file_path",
+		indexPreCmd.Flags().Lookup("gtf"),
 	)
 
-	argsObj.IsSeparateExtraction = command.Flag(
-		"",
-		"splitgenes",
-		&argparse.Options{
-			Help: "Extract gene sequences into separate fasta files, if " +
-				"more than one gene id is specified in --geneids",
-		},
-	)
-
-	argsObj.OutputDir = command.String(
-		"",
+	flags.StringVarP(
+		&outputDirPath,
 		"output",
-		&argparse.Options{
-			Required: true,
-			Help:     "Output directory for extracted gene sequences.",
-		},
+		"o",
+		"",
+		"Output directory",
+	)
+	v.BindPFlag(
+		"general.output_dir",
+		indexPreCmd.Flags().Lookup("output"),
 	)
 
-	// TODO: maybe use StringList instead of manual parsing
-	argsObj.GeneIds = command.String(
-		"",
-		"geneids",
-		&argparse.Options{
-			Required: false,
-			Help:     "Gene IDs to extract (comma-separated).",
-		},
+	flags.BoolVarP(
+		&singleFile,
+		"single-file",
+		"s",
+		false,
+		"Write all gene sequences to a single fasta file",
+	)
+	v.BindPFlag(
+		"index.output.single_file",
+		indexPreCmd.Flags().Lookup("single-file"),
 	)
 
-	argsObj.UpstreamBases = command.Int(
+	flags.StringVar(
+		&fastaFileName,
+		"fasta-file-name",
 		"",
-		"upstream", &argparse.Options{
-			Required: false,
-			Help: "Number of bases to add upstream of the gene start " +
-				"position.",
-			Default: 0,
-		},
+		"Output FASTA file name (within output directory) (only for "+
+			"--single-file) (default: genes.fa)",
+	)
+	v.BindPFlag(
+		"index.output.fasta_file_name",
+		indexPreCmd.Flags().Lookup("fasta-file-name"),
 	)
 
-	argsObj.DownstreamBases = command.Int(
-		"",
+	flags.StringSliceVarP(
+		&geneIds,
+		"gene-ids",
+		"l",
+		nil,
+		"Gene IDs to extract (comma-separated). If not provided, all "+
+			"genes are extracted.",
+	)
+	v.BindPFlag(
+		"index.gene_ids",
+		indexPreCmd.Flags().Lookup("gene-ids"),
+	)
+
+	flags.IntVarP(
+		&upstreamBases,
+		"upstream",
+		"u",
+		0,
+		"Number of bases to add upstream of the gene start position.",
+	)
+	v.BindPFlag(
+		"index.upstream_bases",
+		indexPreCmd.Flags().Lookup("upstream"),
+	)
+
+	flags.IntVarP(
+		&downstreamBases,
 		"downstream",
-		&argparse.Options{
-			Required: false,
-			Help: "Number of bases to add downstream of the gene end " +
-				"position.",
-			Default: 0,
-		},
+		"d",
+		0,
+		"Number of bases to add downstream of the gene end position.",
+	)
+	v.BindPFlag(
+		"index.downstream_bases",
+		indexPreCmd.Flags().Lookup("downstream"),
 	)
 
-	return command, argsObj
+	return indexPreCmd
 }
 
-func ExecIndexPre(argsObj *ArgsIndexPre) {
+func ExecIndexPre() {
 
 	logrus.Info("Extracting gene sequences from genome")
 
-	// parse gene ids from comma separated string to map
+	// convert gene id list to set
 	geneIds := make(map[string]struct{})
-	if *argsObj.GeneIds != "" {
-		genes := strings.Split(*argsObj.GeneIds, ",")
-		for _, gene := range genes {
-			geneIds[gene] = struct{}{}
-		}
+	for _, gene := range config.Mapper.Index.GeneIds {
+		geneIds[gene] = struct{}{}
 	}
 
 	index.ExtractGeneSequenceFromGtfAndFastaForIndex(
-		*argsObj.GtfFile,
-		*argsObj.FastaFile,
-		*argsObj.OutputDir,
+		config.Mapper.Index.GtfFilePath,
+		config.Mapper.Index.FastaFilePath,
+		config.Mapper.Index.FastaIndexFilePath,
+		config.Mapper.General.OutputDir,
 		geneIds,
-		*argsObj.UpstreamBases,
-		*argsObj.DownstreamBases,
-		*argsObj.IsSeparateExtraction,
+		config.Mapper.Index.UpstreamBases,
+		config.Mapper.Index.DownstreamBases,
+		config.Mapper.Index.Output.SingleFile,
 	)
-
-	logrus.Info("Done extracting gene sequences from genome")
 }

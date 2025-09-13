@@ -18,6 +18,18 @@ type MapperConfig struct {
 	} `mapstructure:"general" yaml:"general"`
 
 	Index struct {
+		FastaFilePath      string   `mapstructure:"fasta_file_path" yaml:"fasta_file_path"`
+		FastaIndexFilePath string   `mapstructure:"fasta_index_file_path" yaml:"fasta_index_file_path"`
+		GtfFilePath        string   `mapstructure:"gtf_file_path" yaml:"gtf_file_path"`
+		GeneIds            []string `mapstructure:"gene_ids" yaml:"gene_ids"`
+		Regions            []string `mapstructure:"regions" yaml:"regions"`
+		UpstreamBases      int      `mapstructure:"upstream_bases" yaml:"upstream_bases"`
+		DownstreamBases    int      `mapstructure:"downstream_bases" yaml:"downstream_bases"`
+
+		Output struct {
+			SingleFile    bool   `mapstructure:"single_file" yaml:"single_file"`
+			FastaFileName string `mapstructure:"fasta_file_name" yaml:"fasta_file_name"`
+		} `mapstructure:"output" yaml:"output"`
 	} `mapstructure:"index" yaml:"index"`
 
 	Mapping struct {
@@ -98,10 +110,44 @@ func (c *MapperConfig) SetMappingThreads(threads int) {
 	c.Mapping.Threads = threads
 }
 
+func (c *MapperConfig) GetMappingOutputSamFile() (*os.File, error) {
+
+	// combine output dir and sam file name
+	outputPath := filepath.Join(
+		c.General.OutputDir,
+		c.Mapping.Output.SamFileName,
+	)
+
+	file, err := os.OpenFile(outputPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open output SAM file %s: %w", outputPath, err)
+	}
+
+	return file, nil
+}
+
+func (c *MapperConfig) SetIndexFastaIndex(fastaIndexFilePath string) {
+	if fastaIndexFilePath != "" {
+		c.Index.FastaIndexFilePath = fastaIndexFilePath
+	} else {
+		c.Index.FastaIndexFilePath = c.Index.FastaFilePath + ".fai"
+	}
+}
+
 func setDefaults(v *viper.Viper) {
 
 	// GENERAL
 	v.SetDefault("general.output_dir", "./output")
+
+	// INDEX
+	v.SetDefault("index.gene_ids", []string{})
+	v.SetDefault("index.regions", []string{})
+	v.SetDefault("index.upstream_bases", 0)
+	v.SetDefault("index.downstream_bases", 0)
+
+	// INDEX - OUTPUT
+	v.SetDefault("index.output.single_file", false)
+	v.SetDefault("index.output.fasta_file_name", "genes.fa")
 
 	// MAPPING
 	// should be required by parser (no default) such that the user has to

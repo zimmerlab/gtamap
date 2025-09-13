@@ -86,42 +86,13 @@ func Execute() {
 		"Log output level (ERROR, INFO, DEBUG)",
 	)
 
-	// subcommand: index-pre
-	indexPreCmd := &cobra.Command{
-		Use:   "index-pre",
-		Short: "Prepare index (pre step)",
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println(args)
-			// ExecIndexPre(args)
-		},
-	}
-
-	// Subcommand: index-pre-region
-	indexPreRegionCmd := &cobra.Command{
-		Use:   "index-pre-region",
-		Short: "Prepare index with region",
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println(args)
-			// ExecIndexPreRegion(args)
-		},
-	}
-
-	// Subcommand: index
-	indexCmd := &cobra.Command{
-		Use:   "index",
-		Short: "Build index",
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println(args)
-			// ExecIndex(args)
-		},
-	}
-
+	indexPreCmd := GetCommandIndexPre(viper)
+	indexPreRegionCmd := GetCommandIndexPreRegion(viper)
 	mapCmd := GetCommandMap(viper)
 
 	rootCmd.AddCommand(
 		indexPreCmd,
 		indexPreRegionCmd,
-		indexCmd,
 		mapCmd,
 	)
 

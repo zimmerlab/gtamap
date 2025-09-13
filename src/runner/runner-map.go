@@ -13,17 +13,17 @@ import (
 	"github.com/spf13/viper"
 )
 
-type ArgsMap struct {
-	IndexFile              *os.File
-	FastqR1File            *os.File
-	FastqR2File            *os.File
-	OutputFile             *string
-	ReadType               *string
-	Threads                *int
-	RegionmaskBedFile      *os.File
-	RegionmaskPriorityFile *os.File
-	RegionmaskAction       *string
-}
+// type ArgsMap struct {
+// 	IndexFile              *os.File
+// 	FastqR1File            *os.File
+// 	FastqR2File            *os.File
+// 	OutputFile             *string
+// 	ReadType               *string
+// 	Threads                *int
+// 	RegionmaskBedFile      *os.File
+// 	RegionmaskPriorityFile *os.File
+// 	RegionmaskAction       *string
+// }
 
 func GetCommandMap(v *viper.Viper) *cobra.Command {
 
@@ -287,8 +287,6 @@ func ExecMap() {
 
 	genomeIndex := index.ReadGenomeIndexByFile(indexFile)
 
-	os.Exit(1)
-
 	// if *argsObj.RegionmaskBedFile == (os.File{}) {
 	// 	argsObj.RegionmaskBedFile = nil
 	// }
@@ -334,19 +332,12 @@ func ExecMap() {
 		logrus.Fatalf("Could not initialize fastq reader: %v", errFastqReader)
 	}
 
-	writer := datawriter.InitFromPath(config.Mapper.General.OutputDir)
+	samFile, errSamFile := config.Mapper.GetMappingOutputSamFile()
+	if errSamFile != nil {
+		logrus.Fatalf("Could not create/open output SAM file: %v", errSamFile)
+	}
 
-	// Old paralog logic where main index is extended by using paralog indices
-	// if *paralogFilePathMap != "" {
-	// 	logrus.Info("Found paralog file. Reading in paralog indices.")
-	// 	paralogFileMap, err := os.Open(*paralogFilePathMap)
-	// 	if err != nil {
-	// 		panic("Error reading provided paralog file. Make sure it exists")
-	// 	}
-	// 	genomeIndex.LoadParalogs(paralogFileMap)
-	// }
-
-	// TODO: maybe check threads parameter for valid values
+	writer := datawriter.InitFromFile(samFile)
 
 	mapper.MapAll(
 		genomeIndex,

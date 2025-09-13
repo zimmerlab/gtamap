@@ -5,14 +5,22 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
 	"github.com/KleinSamuel/gtamap/src/formats/fasta"
 	"github.com/KleinSamuel/gtamap/src/formats/gtf"
 	"github.com/sirupsen/logrus"
 )
 
-func ExtractSequenceFromFastaForIndex(fastaPath string, chromosome string, start int, end int, outputPath string) {
-	fastaIndexPath := fastaPath + ".fai"
+func ExtractSequenceFromFastaForIndex(
+	fastaPath string,
+	fastaIndexPath string,
+	chromosome string,
+	start int,
+	end int,
+	outputPath string,
+) {
+	// fastaIndexPath := fastaPath + ".fai"
 
 	logrus.WithFields(logrus.Fields{
 		"fastaPath":      fastaPath,
@@ -61,10 +69,18 @@ func ExtractSequenceFromFastaForIndex(fastaPath string, chromosome string, start
 	AppendSequenceToFastaFile(name, chromosome, true, start, end, []byte(seq), 60, outFile)
 }
 
-func ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath string, fastaPath string, outputPath string,
-	geneIds map[string]struct{}, upstreamBases int, downstreamBases int, separateExtraction bool,
-) {
-	fastaIndexPath := fastaPath + ".fai"
+func ExtractGeneSequenceFromGtfAndFastaForIndex(
+	gtfPath string,
+	fastaPath string,
+	fastaIndexPath string,
+	outputPath string,
+	geneIds map[string]struct{},
+	upstreamBases int,
+	downstreamBases int,
+	singleFasta bool,
+) error {
+
+	// fastaIndexPath := fastaPath + ".fai"
 
 	logrus.WithFields(logrus.Fields{
 		"gtfPath":         gtfPath,
@@ -86,11 +102,11 @@ func ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath string, fastaPath string
 
 	geneInfo := gtf.ReadGenesFromGtfUsingPath(gtfPath, geneIds)
 	if len(geneInfo) == 0 {
-		logrus.WithFields(logrus.Fields{
-			"provided geneIds": geneIds,
-			"gtf":              gtfPath,
-		}).Warnf("Non of the target geneIds were found in provided gtf")
-		return
+		// logrus.WithFields(logrus.Fields{
+		// 	"provided geneIds": geneIds,
+		// 	"gtf":              gtfPath,
+		// }).Warnf("None of the target gene ids were found in provided gtf")
+		return fmt.Errorf("no target gene id found in provided gtf")
 	}
 
 	fastaIndex := fasta.ReadFastaIndexUsingPath(fastaIndexPath)
@@ -104,51 +120,13 @@ func ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath string, fastaPath string
 	}
 	defer fastaFile.Close()
 
-	if separateExtraction {
-		// write each gene to separate fa file
-		for _, gene := range geneInfo {
-			if gene == nil {
-				logrus.Warn("Skipping gene since it was not found in provided gtf.")
-				continue
-			}
+	if singleFasta {
 
-			outFilePath := filepath.Join(outputPath, gene.GeneId+".fa")
-			outFile, errOpen := os.Create(outFilePath)
-			if errOpen != nil {
-				logrus.Fatal("Error creating separate output file (.fa)", errOpen)
-			}
-
-			logrus.WithFields(logrus.Fields{
-				"separated fasta": outputPath,
-			}).Info("Creating a separate fasta file")
-
-			geneStart := int(gene.StartGenomic) - upstreamBases
-			if geneStart < 0 {
-				geneStart = 0
-
-				logrus.WithFields(logrus.Fields{
-					"geneId":   gene.GeneId,
-					"start":    gene.StartGenomic,
-					"upstream": upstreamBases,
-				}).Warn("Genomic region is negative, setting to 0")
-			}
-
-			geneEnd := int(gene.EndGenomic) + downstreamBases
-
-			seq := dataloader.ExtractSequenceAsStringFromFasta(fastaFile, fastaIndex, gene.Contig,
-				uint32(geneStart), uint32(geneEnd))
-
-			AppendSequenceToFastaFile(gene.GeneId, gene.Contig, gene.IsForwardStrand, geneStart, geneEnd,
-				[]byte(seq), 60, outFile)
-
-			outFile.Close()
-		}
-	} else {
 		// create shared fasta file
 		outFilePath := ""
 		if len(geneInfo) > 1 {
 			// if several gene ids are in geneInfo, name shared .fa file genes.fa
-			outFilePath = filepath.Join(outputPath, "genes.fa")
+			outFilePath = filepath.Join(outputPath, config.Mapper.Index.Output.FastaFileName)
 		} else {
 			// if there's only one element in geneInfo and --splitgenes was not set,
 			// use the gene id as file name
@@ -156,7 +134,8 @@ func ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath string, fastaPath string
 		}
 		outFile, errOpen := os.Create(outFilePath)
 		if errOpen != nil {
-			logrus.Fatal("Error creating shared output file (.fa)", errOpen)
+			// logrus.Fatal("Error creating shared output file (.fa)", errOpen)
+			return fmt.Errorf("error creating shared output file (.fa): %w", errOpen)
 		}
 
 		logrus.WithFields(logrus.Fields{
@@ -185,8 +164,51 @@ func ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath string, fastaPath string
 				[]byte(seq), 60, outFile)
 		}
 		outFile.Close()
+
+	} else {
+
+		// write each gene to separate fa file
+		for _, gene := range geneInfo {
+			if gene == nil {
+				logrus.Warn("Skipping gene since it was not found in provided gtf.")
+				continue
+			}
+
+			outFilePath := filepath.Join(outputPath, gene.GeneId+".fa")
+			outFile, errOpen := os.Create(outFilePath)
+			if errOpen != nil {
+				// logrus.Fatal("Error creating separate output file (.fa)", errOpen)
+				return fmt.Errorf("error creating separate output file (.fa): %w", errOpen)
+			}
+
+			logrus.WithFields(logrus.Fields{
+				"separated fasta": outputPath,
+			}).Info("Creating a separate fasta file")
+
+			geneStart := int(gene.StartGenomic) - upstreamBases
+			if geneStart < 0 {
+				geneStart = 0
+
+				logrus.WithFields(logrus.Fields{
+					"geneId":   gene.GeneId,
+					"start":    gene.StartGenomic,
+					"upstream": upstreamBases,
+				}).Warn("Genomic region is negative, setting to 0")
+			}
+
+			geneEnd := int(gene.EndGenomic) + downstreamBases
+
+			seq := dataloader.ExtractSequenceAsStringFromFasta(fastaFile, fastaIndex, gene.Contig,
+				uint32(geneStart), uint32(geneEnd))
+
+			AppendSequenceToFastaFile(gene.GeneId, gene.Contig, gene.IsForwardStrand, geneStart, geneEnd,
+				[]byte(seq), 60, outFile)
+
+			outFile.Close()
+		}
 	}
-	return
+
+	return nil
 }
 
 func AppendSequenceToFastaFile(name string, contig string, isForwardStrand bool, startGenomic int, endGenomic int,
