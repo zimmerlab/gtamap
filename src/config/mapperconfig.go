@@ -134,85 +134,79 @@ func (c *MapperConfig) SetIndexFastaIndex(fastaIndexFilePath string) {
 	}
 }
 
-func setDefaults(v *viper.Viper) {
+func setDefaults() {
 
 	// GENERAL
-	v.SetDefault("general.output_dir", "./output")
+	viper.SetDefault("general.output_dir", "./output")
 
 	// INDEX
-	v.SetDefault("index.gene_ids", []string{})
-	v.SetDefault("index.regions", []string{})
-	v.SetDefault("index.upstream_bases", 0)
-	v.SetDefault("index.downstream_bases", 0)
+	viper.SetDefault("index.gene_ids", []string{})
+	viper.SetDefault("index.regions", []string{})
+	viper.SetDefault("index.upstream_bases", 0)
+	viper.SetDefault("index.downstream_bases", 0)
 
 	// INDEX - OUTPUT
-	v.SetDefault("index.output.single_file", false)
-	v.SetDefault("index.output.fasta_file_name", "genes.fa")
+	viper.SetDefault("index.output.single_file", false)
+	viper.SetDefault("index.output.fasta_file_name", "genes.fa")
 
 	// MAPPING
 	// should be required by parser (no default) such that the user has to
 	// specify it which minimizes the chance of mistakes (hopefully)
-	// v.SetDefault("mapping.read_origin", "dna")
-	v.SetDefault("mapping.threads", -1)
+	// viper.SetDefault("mapping.read_origin", "dna")
+	viper.SetDefault("mapping.threads", -1)
 
 	// MAPPING - RNA MODE
-	v.SetDefault("mapping.rna_mode.intron_length_min", 20)
-	// v.SetDefault("mapping.rna_mode.max_mismatch_count", 15)
-	v.SetDefault("mapping.rna_mode.mismatch_max_percentage", 0.1)
+	viper.SetDefault("mapping.rna_mode.intron_length_min", 20)
+	// viper.SetDefault("mapping.rna_mode.max_mismatch_count", 15)
+	viper.SetDefault("mapping.rna_mode.mismatch_max_percentage", 0.1)
 
 	// MAPPING - DNA MODE
-	v.SetDefault("mapping.dna_mode.max_gap_length", 1000)
-	v.SetDefault("mapping.dna_mode.max_gap_count", 3)
-	// v.SetDefault("mapping.dna_mode.max_mismatch_count", 15)
-	v.SetDefault("mapping.dna_mode.max_mismatch_percentage", 0.1)
+	viper.SetDefault("mapping.dna_mode.max_gap_length", 1000)
+	viper.SetDefault("mapping.dna_mode.max_gap_count", 3)
+	// viper.SetDefault("mapping.dna_mode.max_mismatch_count", 15)
+	viper.SetDefault("mapping.dna_mode.max_mismatch_percentage", 0.1)
 
 	// MAPPING - OUTPUT
-	v.SetDefault("mapping.output.sam_file_name", "aligned.sam")
-	v.SetDefault("mapping.output.sam_use_x", true)
-	v.SetDefault("mapping.output.sam_include_all_pairings", false)
+	viper.SetDefault("mapping.output.sam_file_name", "aligned.sam")
+	viper.SetDefault("mapping.output.sam_use_x", true)
+	viper.SetDefault("mapping.output.sam_include_all_pairings", false)
 }
 
-func LoadMapperConfig(v *viper.Viper, path string) (*MapperConfig, error) {
+func InitConfig(configFilePath string) {
 
-	// v := viper.New()
-	v.SetConfigName("mapperconfig")
-	v.SetConfigType("yaml")
+	setDefaults()
 
-	if path != "" {
-		// if a custom path is provided, use it (overrides default)
-		v.SetConfigFile(path)
-	} else {
-		// use default: look for mapperconfig.yaml next to the binary
-		execPath, err := os.Executable()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get executable path: %w", err)
-		}
-		binaryDir := filepath.Dir(execPath)
-		v.AddConfigPath(binaryDir)
-		// fallback to current directory
-		v.AddConfigPath("./")
+	// default search path is next to executable
+	execPath, err := os.Executable()
+	if err != nil {
+		logrus.Fatalf("failed to get executable path: %v", err)
 	}
 
-	setDefaults(v)
+	binaryDir := filepath.Dir(execPath)
+	viper.AddConfigPath(binaryDir)
+	viper.SetConfigName("mapperconfig")
+	viper.SetConfigType("yaml")
 
-	if err := v.ReadInConfig(); err != nil {
-		if path != "" {
-			return nil, fmt.Errorf("failed to read config from %s: %w", path, err)
-		}
-		logrus.Info("No mapperconfig.yaml found, using default configuration")
+	if err := viper.ReadInConfig(); err != nil {
+		logrus.Info("Error loading default configuration", err)
 	} else {
 		logrus.WithFields(logrus.Fields{
-			"config": v.ConfigFileUsed(),
-		}).Info("Using mapper configuration")
+			"config": viper.ConfigFileUsed(),
+		}).Info("Loaded mapper configuration")
+	}
+
+	if configFilePath != "" {
+		viper.SetConfigFile(configFilePath)
+		if err := viper.MergeInConfig(); err != nil {
+			logrus.Fatalf("Error reading config file %s: %v", configFilePath, err)
+		}
 	}
 
 	var cfg MapperConfig
-	if err := v.Unmarshal(&cfg); err != nil {
-		logrus.Error(err)
-		return nil, err
+
+	if err := viper.Unmarshal(&cfg); err != nil {
+		logrus.Fatalf("Unable to decode config into struct: %v", err)
 	}
 
 	Mapper = &cfg
-
-	return Mapper, nil
 }

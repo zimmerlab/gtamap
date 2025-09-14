@@ -7,7 +7,6 @@ import (
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func PrintBanner() {
@@ -32,25 +31,6 @@ func Execute() {
 	var configFile string
 	var logLevel string
 
-	viper := viper.New()
-
-	// TODO: prescan os.Args for --key=value and set in viper
-	// which allows to supply any argument even when not defined as flag
-
-	// for _, arg := range os.Args[1:] {
-	// 	if strings.HasPrefix(arg, "--") {
-	// 		parts := strings.SplitN(arg[2:], "=", 2)
-	// 		// map --foo-bar -> foo.bar
-	// 		key := strings.ReplaceAll(parts[0], "-", ".")
-	// 		value := ""
-	// 		if len(parts) > 1 {
-	// 			value = parts[1]
-	// 		}
-	// 		fmt.Println(key, " -> ", value)
-	// 		// viper.Set(key, value)
-	// 	}
-	// }
-
 	rootCmd := &cobra.Command{
 		Use: "gtamap",
 		// Short: "Sensitive read mapping to a target region",
@@ -63,10 +43,7 @@ func Execute() {
 			}
 			logrus.SetLevel(level)
 
-			_, errConfig := config.LoadMapperConfig(viper, configFile)
-			if errConfig != nil {
-				return fmt.Errorf("failed to load config: %w", errConfig)
-			}
+			config.InitConfig(configFile)
 
 			return nil
 		},
@@ -86,9 +63,9 @@ func Execute() {
 		"Log output level (ERROR, INFO, DEBUG)",
 	)
 
-	indexPreCmd := GetCommandIndexPre(viper)
-	indexPreRegionCmd := GetCommandIndexPreRegion(viper)
-	mapCmd := GetCommandMap(viper)
+	indexPreCmd := GetCommandIndexPre()
+	indexPreRegionCmd := GetCommandIndexPreRegion()
+	mapCmd := GetCommandMap()
 
 	rootCmd.AddCommand(
 		indexPreCmd,

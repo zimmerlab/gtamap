@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-func GetCommandIndexPre(v *viper.Viper) *cobra.Command {
+func GetCommandIndexPre() *cobra.Command {
 
 	var fastaFilePath string
 	var fastaIndexFilePath string
@@ -41,7 +41,7 @@ func GetCommandIndexPre(v *viper.Viper) *cobra.Command {
 		"Fasta file (required)",
 	)
 	indexPreCmd.MarkFlagRequired("fasta")
-	v.BindPFlag(
+	viper.BindPFlag(
 		"index.fasta_file_path",
 		indexPreCmd.Flags().Lookup("fasta"),
 	)
@@ -53,7 +53,7 @@ func GetCommandIndexPre(v *viper.Viper) *cobra.Command {
 		"",
 		"Fasta index file (default: [--fasta].fai)",
 	)
-	v.BindPFlag(
+	viper.BindPFlag(
 		"index.fasta_index_file_path",
 		indexPreCmd.Flags().Lookup("fasta-index"),
 	)
@@ -66,7 +66,7 @@ func GetCommandIndexPre(v *viper.Viper) *cobra.Command {
 		"Genome annotation file (.gtf) (required)",
 	)
 	indexPreCmd.MarkFlagRequired("gtf")
-	v.BindPFlag(
+	viper.BindPFlag(
 		"index.gtf_file_path",
 		indexPreCmd.Flags().Lookup("gtf"),
 	)
@@ -78,7 +78,7 @@ func GetCommandIndexPre(v *viper.Viper) *cobra.Command {
 		"",
 		"Output directory",
 	)
-	v.BindPFlag(
+	viper.BindPFlag(
 		"general.output_dir",
 		indexPreCmd.Flags().Lookup("output"),
 	)
@@ -90,7 +90,7 @@ func GetCommandIndexPre(v *viper.Viper) *cobra.Command {
 		false,
 		"Write all gene sequences to a single fasta file",
 	)
-	v.BindPFlag(
+	viper.BindPFlag(
 		"index.output.single_file",
 		indexPreCmd.Flags().Lookup("single-file"),
 	)
@@ -102,7 +102,7 @@ func GetCommandIndexPre(v *viper.Viper) *cobra.Command {
 		"Output FASTA file name (within output directory) (only for "+
 			"--single-file) (default: genes.fa)",
 	)
-	v.BindPFlag(
+	viper.BindPFlag(
 		"index.output.fasta_file_name",
 		indexPreCmd.Flags().Lookup("fasta-file-name"),
 	)
@@ -115,7 +115,7 @@ func GetCommandIndexPre(v *viper.Viper) *cobra.Command {
 		"Gene IDs to extract (comma-separated). If not provided, all "+
 			"genes are extracted.",
 	)
-	v.BindPFlag(
+	viper.BindPFlag(
 		"index.gene_ids",
 		indexPreCmd.Flags().Lookup("gene-ids"),
 	)
@@ -127,7 +127,7 @@ func GetCommandIndexPre(v *viper.Viper) *cobra.Command {
 		0,
 		"Number of bases to add upstream of the gene start position.",
 	)
-	v.BindPFlag(
+	viper.BindPFlag(
 		"index.upstream_bases",
 		indexPreCmd.Flags().Lookup("upstream"),
 	)
@@ -139,7 +139,7 @@ func GetCommandIndexPre(v *viper.Viper) *cobra.Command {
 		0,
 		"Number of bases to add downstream of the gene end position.",
 	)
-	v.BindPFlag(
+	viper.BindPFlag(
 		"index.downstream_bases",
 		indexPreCmd.Flags().Lookup("downstream"),
 	)

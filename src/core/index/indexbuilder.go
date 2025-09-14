@@ -64,9 +64,24 @@ func ExtractSequenceFromFastaForIndex(
 		"outputFile": outFilePath,
 	}).Info("Creating output file")
 
-	seq := dataloader.ExtractSequenceAsStringFromFasta(fastaFile, fastaIndex, chromosome, uint32(start), uint32(end))
+	seq := dataloader.ExtractSequenceAsStringFromFasta(
+		fastaFile,
+		fastaIndex,
+		chromosome,
+		uint32(start),
+		uint32(end),
+	)
 
-	AppendSequenceToFastaFile(name, chromosome, true, start, end, []byte(seq), 60, outFile)
+	AppendSequenceToFastaFile(
+		name,
+		chromosome,
+		true,
+		start,
+		end,
+		[]byte(seq),
+		60,
+		outFile,
+	)
 }
 
 func ExtractGeneSequenceFromGtfAndFastaForIndex(

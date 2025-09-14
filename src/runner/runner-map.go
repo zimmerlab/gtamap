@@ -3,6 +3,8 @@ package runner
 import (
 	"os"
 
+	"fmt"
+
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper"
@@ -25,7 +27,7 @@ import (
 // 	RegionmaskAction       *string
 // }
 
-func GetCommandMap(v *viper.Viper) *cobra.Command {
+func GetCommandMap() *cobra.Command {
 
 	var indexFilePath string
 	var fastqR1FilePath string
@@ -43,8 +45,7 @@ func GetCommandMap(v *viper.Viper) *cobra.Command {
 
 			errOrigin := config.Mapper.SetReadOrigin(config.Mapper.Mapping.ReadOrigin)
 			if errOrigin != nil {
-				cmd.PrintErrln("\n", cmd.ErrPrefix(), "[-r | --read-origin]",
-					errOrigin.Error(), "\n")
+				cmd.PrintErr(fmt.Sprintln("\n", cmd.ErrPrefix(), "[-r | --read-origin]", errOrigin.Error(), "\n"))
 				cmd.Usage()
 				os.Exit(1)
 			}
@@ -65,7 +66,7 @@ func GetCommandMap(v *viper.Viper) *cobra.Command {
 		"Index file (*.gtai) (required)",
 	)
 	mapCmd.MarkFlagRequired("index")
-	v.BindPFlag(
+	viper.BindPFlag(
 		"mapping.index_file_path",
 		mapCmd.Flags().Lookup("index"),
 	)
@@ -78,7 +79,7 @@ func GetCommandMap(v *viper.Viper) *cobra.Command {
 		"FASTQ file containing the R1 reads (required)",
 	)
 	mapCmd.MarkFlagRequired("reads-r1")
-	v.BindPFlag(
+	viper.BindPFlag(
 		"mapping.fastq_r1_file_path",
 		mapCmd.Flags().Lookup("reads-r1"),
 	)
@@ -90,7 +91,7 @@ func GetCommandMap(v *viper.Viper) *cobra.Command {
 		"",
 		"FASTQ file containing the R2 reads (if paired-end)",
 	)
-	v.BindPFlag(
+	viper.BindPFlag(
 		"mapping.fastq_r2_file_path",
 		mapCmd.Flags().Lookup("reads-r2"),
 	)
@@ -103,7 +104,7 @@ func GetCommandMap(v *viper.Viper) *cobra.Command {
 		"Specify read origin: 'dna' or 'rna' (required)",
 	)
 	mapCmd.MarkFlagRequired("read-origin")
-	v.BindPFlag(
+	viper.BindPFlag(
 		"mapping.read_origin",
 		mapCmd.Flags().Lookup("read-origin"),
 	)
@@ -116,7 +117,7 @@ func GetCommandMap(v *viper.Viper) *cobra.Command {
 		"Output directory (required)",
 	)
 	mapCmd.MarkFlagRequired("output")
-	v.BindPFlag(
+	viper.BindPFlag(
 		"general.output_dir",
 		mapCmd.Flags().Lookup("output"),
 	)
@@ -128,7 +129,7 @@ func GetCommandMap(v *viper.Viper) *cobra.Command {
 		"",
 		"Output SAM file name (within output directory) (default: aligned.sam)",
 	)
-	v.BindPFlag(
+	viper.BindPFlag(
 		"mapping.output.sam_file_name",
 		mapCmd.Flags().Lookup("sam-file-name"),
 	)
@@ -140,7 +141,7 @@ func GetCommandMap(v *viper.Viper) *cobra.Command {
 		0,
 		"Number of threads to use (default: all available)",
 	)
-	v.BindPFlag(
+	viper.BindPFlag(
 		"mapping.threads",
 		mapCmd.Flags().Lookup("threads"),
 	)
