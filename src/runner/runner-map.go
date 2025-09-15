@@ -3,8 +3,6 @@ package runner
 import (
 	"os"
 
-	"fmt"
-
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper"
@@ -14,18 +12,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
-
-// type ArgsMap struct {
-// 	IndexFile              *os.File
-// 	FastqR1File            *os.File
-// 	FastqR2File            *os.File
-// 	OutputFile             *string
-// 	ReadType               *string
-// 	Threads                *int
-// 	RegionmaskBedFile      *os.File
-// 	RegionmaskPriorityFile *os.File
-// 	RegionmaskAction       *string
-// }
 
 func GetCommandMap() *cobra.Command {
 
@@ -43,9 +29,21 @@ func GetCommandMap() *cobra.Command {
 		Short: "Run mapping",
 		Run: func(cmd *cobra.Command, args []string) {
 
+			SetConfigValue("mapping.index_file_path", indexFilePath)
+			SetConfigValue("mapping.fastq_r1_file_path", fastqR1FilePath)
+			SetConfigValue("mapping.fastq_r2_file_path", fastqR2FilePath)
+			SetConfigValue("mapping.read_origin", readOrigin)
+			SetConfigValue("general.output_dir", outputDirPath)
+			SetConfigValue("mapping.output.sam_file_name", samFileName)
+			SetConfigValue("mapping.threads", threads)
+
+			if err := viper.Unmarshal(config.Mapper); err != nil {
+				logrus.Fatalf("Unable to decode config: %v", err)
+			}
+
 			errOrigin := config.Mapper.SetReadOrigin(config.Mapper.Mapping.ReadOrigin)
 			if errOrigin != nil {
-				cmd.PrintErr(fmt.Sprintln("\n", cmd.ErrPrefix(), "[-r | --read-origin]", errOrigin.Error(), "\n"))
+				cmd.PrintErrf("\n%s %s [-r | --read-origin]\n\n", cmd.ErrPrefix(), errOrigin.Error())
 				cmd.Usage()
 				os.Exit(1)
 			}
@@ -66,10 +64,6 @@ func GetCommandMap() *cobra.Command {
 		"Index file (*.gtai) (required)",
 	)
 	mapCmd.MarkFlagRequired("index")
-	viper.BindPFlag(
-		"mapping.index_file_path",
-		mapCmd.Flags().Lookup("index"),
-	)
 
 	flags.StringVarP(
 		&fastqR1FilePath,
@@ -79,10 +73,6 @@ func GetCommandMap() *cobra.Command {
 		"FASTQ file containing the R1 reads (required)",
 	)
 	mapCmd.MarkFlagRequired("reads-r1")
-	viper.BindPFlag(
-		"mapping.fastq_r1_file_path",
-		mapCmd.Flags().Lookup("reads-r1"),
-	)
 
 	flags.StringVarP(
 		&fastqR2FilePath,
@@ -90,10 +80,6 @@ func GetCommandMap() *cobra.Command {
 		"2",
 		"",
 		"FASTQ file containing the R2 reads (if paired-end)",
-	)
-	viper.BindPFlag(
-		"mapping.fastq_r2_file_path",
-		mapCmd.Flags().Lookup("reads-r2"),
 	)
 
 	flags.StringVarP(
@@ -104,10 +90,6 @@ func GetCommandMap() *cobra.Command {
 		"Specify read origin: 'dna' or 'rna' (required)",
 	)
 	mapCmd.MarkFlagRequired("read-origin")
-	viper.BindPFlag(
-		"mapping.read_origin",
-		mapCmd.Flags().Lookup("read-origin"),
-	)
 
 	flags.StringVarP(
 		&outputDirPath,
@@ -117,10 +99,6 @@ func GetCommandMap() *cobra.Command {
 		"Output directory (required)",
 	)
 	mapCmd.MarkFlagRequired("output")
-	viper.BindPFlag(
-		"general.output_dir",
-		mapCmd.Flags().Lookup("output"),
-	)
 
 	flags.StringVarP(
 		&samFileName,
@@ -128,10 +106,6 @@ func GetCommandMap() *cobra.Command {
 		"f",
 		"",
 		"Output SAM file name (within output directory) (default: aligned.sam)",
-	)
-	viper.BindPFlag(
-		"mapping.output.sam_file_name",
-		mapCmd.Flags().Lookup("sam-file-name"),
 	)
 
 	flags.IntVarP(
@@ -141,133 +115,9 @@ func GetCommandMap() *cobra.Command {
 		0,
 		"Number of threads to use (default: all available)",
 	)
-	viper.BindPFlag(
-		"mapping.threads",
-		mapCmd.Flags().Lookup("threads"),
-	)
 
 	return mapCmd
 }
-
-// func AddCommandMap(
-// 	parser *argparse.Parser,
-// ) (
-// 	*argparse.Command,
-// 	*ArgsMap,
-// ) {
-//
-// 	var command *argparse.Command = parser.NewCommand(
-// 		"map",
-// 		"Map reads to the GTAMap index",
-// 	)
-//
-// 	argsObj := &ArgsMap{}
-//
-// 	argsObj.IndexFile = command.File(
-// 		"",
-// 		"index",
-// 		os.O_RDONLY,
-// 		0o600,
-// 		&argparse.Options{
-// 			Required: true,
-// 			Help:     "GTAMap index (.gtai) file",
-// 		},
-// 	)
-//
-// 	argsObj.FastqR1File = command.File(
-// 		"",
-// 		"r1",
-// 		os.O_RDONLY,
-// 		0o600,
-// 		&argparse.Options{
-// 			Required: true,
-// 			Help:     "FASTQ file containing the forward reads",
-// 		},
-// 	)
-//
-// 	argsObj.FastqR2File = command.File(
-// 		"",
-// 		"r2",
-// 		os.O_RDONLY,
-// 		0o600,
-// 		&argparse.Options{
-// 			Required: false,
-// 			Help:     "FASTQ file containing the reverse reads",
-// 		},
-// 	)
-//
-// 	argsObj.OutputFile = command.String(
-// 		"",
-// 		"output",
-// 		&argparse.Options{
-// 			Required: true,
-// 			Help:     "Output SAM file (file extension: .sam)",
-// 			Default:  "",
-// 		},
-// 	)
-//
-// 	// var logFileMap *string = cmdMap.String("", "log", &argparse.Options{
-// 	// 	Help:    "Output log file.",
-// 	// 	Default: "",
-// 	// })
-//
-// 	argsObj.ReadType = command.Selector(
-// 		"",
-// 		"read-origin",
-// 		[]string{"dna", "rna"},
-// 		&argparse.Options{
-// 			Required: true,
-// 			Help:     "Specify read origin",
-// 		},
-// 	)
-//
-// 	argsObj.Threads = command.Int(
-// 		"",
-// 		"threads",
-// 		&argparse.Options{
-// 			Required: false,
-// 			Help:     "Number of threads to use (default: all)",
-// 			Default:  -1,
-// 		},
-// 	)
-//
-// 	argsObj.RegionmaskBedFile = command.File(
-// 		"",
-// 		"regionmask-bed",
-// 		os.O_RDONLY,
-// 		0o600,
-// 		&argparse.Options{
-// 			Required: false,
-// 			Help: "Path to BED file containing regions to mask during " +
-// 				"index construction",
-// 		},
-// 	)
-//
-// 	argsObj.RegionmaskPriorityFile = command.File(
-// 		"",
-// 		"regionmask-priorities",
-// 		os.O_RDONLY,
-// 		0o600,
-// 		&argparse.Options{
-// 			Required: false,
-// 			Help: "Path to TSV file containing region names and their " +
-// 				"corresponding priority (higher number = higher priority)",
-// 		},
-// 	)
-//
-// 	argsObj.RegionmaskAction = command.Selector(
-// 		"",
-// 		"regionmask-action",
-// 		[]string{"combine", "ignore-index"},
-// 		&argparse.Options{
-// 			Required: false,
-// 			Help:     "Specify how to handle regionmasks",
-// 			Default:  "combine",
-// 		},
-// 	)
-//
-// 	return command, argsObj
-// }
 
 func ExecMap() {
 

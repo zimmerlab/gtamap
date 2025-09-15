@@ -7,6 +7,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 func PrintBanner() {
@@ -16,6 +17,13 @@ func PrintBanner() {
 	logrus.Info("gtamap v" + config.ToolVersion() + " (S. Klein, M. Weyrich, 2025)")
 	logrus.Info("Sensitive read (DNA / RNA) mapping to a target region")
 	logrus.Info("")
+}
+
+func SetConfigValue(key string, value any) {
+	if value == "" {
+		return
+	}
+	viper.Set(key, value)
 }
 
 func Execute() {
@@ -65,11 +73,13 @@ func Execute() {
 
 	indexPreCmd := GetCommandIndexPre()
 	indexPreRegionCmd := GetCommandIndexPreRegion()
+	indexCmd := GetCommandIndex()
 	mapCmd := GetCommandMap()
 
 	rootCmd.AddCommand(
 		indexPreCmd,
 		indexPreRegionCmd,
+		indexCmd,
 		mapCmd,
 	)
 

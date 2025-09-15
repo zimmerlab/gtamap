@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -27,8 +28,10 @@ type MapperConfig struct {
 		DownstreamBases    int      `mapstructure:"downstream_bases" yaml:"downstream_bases"`
 
 		Output struct {
-			SingleFile    bool   `mapstructure:"single_file" yaml:"single_file"`
-			FastaFileName string `mapstructure:"fasta_file_name" yaml:"fasta_file_name"`
+			SingleFile       bool   `mapstructure:"single_file" yaml:"single_file"`
+			FastaFileName    string `mapstructure:"fasta_file_name" yaml:"fasta_file_name"`
+			IndexFileName    string `mapstructure:"index_file_name" yaml:"index_file_name"`
+			UseFastaFileName bool   `mapstructure:"use_fasta_file_name" yaml:"use_fasta_file_name"`
 		} `mapstructure:"output" yaml:"output"`
 	} `mapstructure:"index" yaml:"index"`
 
@@ -126,6 +129,39 @@ func (c *MapperConfig) GetMappingOutputSamFile() (*os.File, error) {
 	return file, nil
 }
 
+func (c *MapperConfig) GetIndexOutputFile() (*os.File, error) {
+
+	filename := ""
+
+	if c.Index.Output.UseFastaFileName {
+
+		base := filepath.Base(c.Index.FastaFilePath)
+		name := strings.TrimSuffix(base, filepath.Ext(base))
+		filename = name + ".gtai"
+
+	} else {
+
+		filename = c.Index.Output.IndexFileName
+
+		if filepath.Ext(filename) != ".gtai" {
+			filename += ".gtai"
+		}
+
+	}
+
+	outputPath := filepath.Join(
+		c.General.OutputDir,
+		filename,
+	)
+
+	file, err := os.OpenFile(outputPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open output index file %s: %w", outputPath, err)
+	}
+
+	return file, nil
+}
+
 func (c *MapperConfig) SetIndexFastaIndex(fastaIndexFilePath string) {
 	if fastaIndexFilePath != "" {
 		c.Index.FastaIndexFilePath = fastaIndexFilePath
@@ -148,6 +184,7 @@ func setDefaults() {
 	// INDEX - OUTPUT
 	viper.SetDefault("index.output.single_file", false)
 	viper.SetDefault("index.output.fasta_file_name", "genes.fa")
+	viper.SetDefault("index.output.index_file_name", "index.gtai")
 
 	// MAPPING
 	// should be required by parser (no default) such that the user has to

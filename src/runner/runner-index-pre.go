@@ -25,6 +25,20 @@ func GetCommandIndexPre() *cobra.Command {
 		Short: "Extract gene sequences from a genome",
 		Run: func(cmd *cobra.Command, args []string) {
 
+			SetConfigValue("index.fasta_file_path", fastaFilePath)
+			SetConfigValue("index.fasta_index_file_path", fastaIndexFilePath)
+			SetConfigValue("index.gtf_file_path", gtfFilePath)
+			SetConfigValue("index.output.single_file", singleFile)
+			SetConfigValue("general.output_dir", outputDirPath)
+			SetConfigValue("index.output.fasta_file_name", fastaFileName)
+			SetConfigValue("index.gene_ids", geneIds)
+			SetConfigValue("index.upstream_bases", upstreamBases)
+			SetConfigValue("index.downstream_bases", downstreamBases)
+
+			if err := viper.Unmarshal(config.Mapper); err != nil {
+				logrus.Fatalf("Unable to decode config: %v", err)
+			}
+
 			config.Mapper.SetIndexFastaIndex(config.Mapper.Index.FastaIndexFilePath)
 
 			ExecIndexPre()
@@ -41,10 +55,6 @@ func GetCommandIndexPre() *cobra.Command {
 		"Fasta file (required)",
 	)
 	indexPreCmd.MarkFlagRequired("fasta")
-	viper.BindPFlag(
-		"index.fasta_file_path",
-		indexPreCmd.Flags().Lookup("fasta"),
-	)
 
 	flags.StringVarP(
 		&fastaIndexFilePath,
@@ -52,10 +62,6 @@ func GetCommandIndexPre() *cobra.Command {
 		"i",
 		"",
 		"Fasta index file (default: [--fasta].fai)",
-	)
-	viper.BindPFlag(
-		"index.fasta_index_file_path",
-		indexPreCmd.Flags().Lookup("fasta-index"),
 	)
 
 	flags.StringVarP(
@@ -66,10 +72,6 @@ func GetCommandIndexPre() *cobra.Command {
 		"Genome annotation file (.gtf) (required)",
 	)
 	indexPreCmd.MarkFlagRequired("gtf")
-	viper.BindPFlag(
-		"index.gtf_file_path",
-		indexPreCmd.Flags().Lookup("gtf"),
-	)
 
 	flags.StringVarP(
 		&outputDirPath,
@@ -77,10 +79,6 @@ func GetCommandIndexPre() *cobra.Command {
 		"o",
 		"",
 		"Output directory",
-	)
-	viper.BindPFlag(
-		"general.output_dir",
-		indexPreCmd.Flags().Lookup("output"),
 	)
 
 	flags.BoolVarP(
@@ -90,10 +88,6 @@ func GetCommandIndexPre() *cobra.Command {
 		false,
 		"Write all gene sequences to a single fasta file",
 	)
-	viper.BindPFlag(
-		"index.output.single_file",
-		indexPreCmd.Flags().Lookup("single-file"),
-	)
 
 	flags.StringVar(
 		&fastaFileName,
@@ -101,10 +95,6 @@ func GetCommandIndexPre() *cobra.Command {
 		"",
 		"Output FASTA file name (within output directory) (only for "+
 			"--single-file) (default: genes.fa)",
-	)
-	viper.BindPFlag(
-		"index.output.fasta_file_name",
-		indexPreCmd.Flags().Lookup("fasta-file-name"),
 	)
 
 	flags.StringSliceVarP(
@@ -115,10 +105,6 @@ func GetCommandIndexPre() *cobra.Command {
 		"Gene IDs to extract (comma-separated). If not provided, all "+
 			"genes are extracted.",
 	)
-	viper.BindPFlag(
-		"index.gene_ids",
-		indexPreCmd.Flags().Lookup("gene-ids"),
-	)
 
 	flags.IntVarP(
 		&upstreamBases,
@@ -127,10 +113,6 @@ func GetCommandIndexPre() *cobra.Command {
 		0,
 		"Number of bases to add upstream of the gene start position.",
 	)
-	viper.BindPFlag(
-		"index.upstream_bases",
-		indexPreCmd.Flags().Lookup("upstream"),
-	)
 
 	flags.IntVarP(
 		&downstreamBases,
@@ -138,10 +120,6 @@ func GetCommandIndexPre() *cobra.Command {
 		"d",
 		0,
 		"Number of bases to add downstream of the gene end position.",
-	)
-	viper.BindPFlag(
-		"index.downstream_bases",
-		indexPreCmd.Flags().Lookup("downstream"),
 	)
 
 	return indexPreCmd

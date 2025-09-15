@@ -12,6 +12,15 @@ import (
 	"github.com/spf13/viper"
 )
 
+type ArgsIndexPreRegion struct {
+	fastaFilePath      string
+	fastaIndexFilePath string
+	singleFile         bool
+	outputDirPath      string
+	fastaFileName      string
+	regions            []string
+}
+
 func GetCommandIndexPreRegion() *cobra.Command {
 
 	var fastaFilePath string
@@ -26,7 +35,16 @@ func GetCommandIndexPreRegion() *cobra.Command {
 		Short: "Extract target region sequences from a genome",
 		Run: func(cmd *cobra.Command, args []string) {
 
-			fmt.Println("output dir from config:", config.Mapper.General.OutputDir)
+			SetConfigValue("index.fasta_file_path", fastaFilePath)
+			SetConfigValue("index.fasta_index_file_path", fastaIndexFilePath)
+			SetConfigValue("index.output.single_file", singleFile)
+			SetConfigValue("general.output_dir", outputDirPath)
+			SetConfigValue("index.output.fasta_file_name", fastaFileName)
+			SetConfigValue("index.regions", regions)
+
+			if err := viper.Unmarshal(config.Mapper); err != nil {
+				logrus.Fatalf("Unable to decode config: %v", err)
+			}
 
 			config.Mapper.SetIndexFastaIndex(config.Mapper.Index.FastaIndexFilePath)
 
@@ -44,10 +62,6 @@ func GetCommandIndexPreRegion() *cobra.Command {
 		"Fasta file (required)",
 	)
 	indexPreCmd.MarkFlagRequired("fasta")
-	viper.BindPFlag(
-		"index.fasta_file_path",
-		indexPreCmd.Flags().Lookup("fasta"),
-	)
 
 	flags.StringVarP(
 		&fastaIndexFilePath,
@@ -55,10 +69,6 @@ func GetCommandIndexPreRegion() *cobra.Command {
 		"i",
 		"",
 		"Fasta index file (default: [--fasta].fai)",
-	)
-	viper.BindPFlag(
-		"index.fasta_index_file_path",
-		indexPreCmd.Flags().Lookup("fasta-index"),
 	)
 
 	flags.StringVarP(
@@ -68,10 +78,6 @@ func GetCommandIndexPreRegion() *cobra.Command {
 		"",
 		"Output directory",
 	)
-	viper.BindPFlag(
-		"general.output_dir",
-		indexPreCmd.Flags().Lookup("output"),
-	)
 
 	flags.BoolVarP(
 		&singleFile,
@@ -80,10 +86,6 @@ func GetCommandIndexPreRegion() *cobra.Command {
 		false,
 		"Write all gene sequences to a single fasta file",
 	)
-	viper.BindPFlag(
-		"index.output.single_file",
-		indexPreCmd.Flags().Lookup("single-file"),
-	)
 
 	flags.StringVar(
 		&fastaFileName,
@@ -91,10 +93,6 @@ func GetCommandIndexPreRegion() *cobra.Command {
 		"",
 		"Output FASTA file name (within output directory) (only for "+
 			"--single-file) (default: genes.fa)",
-	)
-	viper.BindPFlag(
-		"index.output.fasta_file_name",
-		indexPreCmd.Flags().Lookup("fasta-file-name"),
 	)
 
 	flags.StringSliceVarP(
@@ -105,12 +103,17 @@ func GetCommandIndexPreRegion() *cobra.Command {
 		"List of regions to extract (e.g. 1:1000-2000,2:1500-2500) (required)",
 	)
 	indexPreCmd.MarkFlagRequired("regions")
-	viper.BindPFlag(
-		"index.regions",
-		indexPreCmd.Flags().Lookup("regions"),
-	)
 
 	return indexPreCmd
+}
+
+func SetBindings(bindings map[string]any) {
+	for key, ptr := range bindings {
+		if ptr != nil {
+			viper.Set(key, ptr)
+			fmt.Printf("Set viper key '%s' to value: %v\n", key, ptr)
+		}
+	}
 }
 
 type IndexPreRegionArgs struct {

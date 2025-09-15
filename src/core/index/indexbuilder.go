@@ -35,7 +35,8 @@ func ExtractSequenceFromFastaForIndex(
 	if _, err := os.Stat(outputPath); os.IsNotExist(err) {
 		err := os.MkdirAll(outputPath, os.ModePerm)
 		if err != nil {
-			logrus.Fatal("Error creating output directory", err)
+			logrus.Error(err)
+			logrus.Fatal("Error creating output directory")
 		}
 	}
 
