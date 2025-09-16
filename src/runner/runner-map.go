@@ -25,6 +25,9 @@ func GetCommandMap() *cobra.Command {
 	var samFileName string
 	var threads int
 
+	var statsFile string
+	var progressFile string
+
 	mapCmd := &cobra.Command{
 		Use:   "map",
 		Short: "Run mapping",
@@ -38,6 +41,8 @@ func GetCommandMap() *cobra.Command {
 			SetConfigValue("mapping.output.sam_file_name", samFileName)
 			SetConfigValue("mapping.threads", threads)
 			SetConfigValue("mapping.regionmask_file_path", regionmaskFilePath)
+			SetConfigValue("mapping.output.mapping_stats_file_name", statsFile)
+			SetConfigValue("mapping.output.mapping_progress_file_name", progressFile)
 
 			if err := viper.Unmarshal(config.Mapper); err != nil {
 				logrus.Fatalf("Unable to decode config: %v", err)
@@ -118,14 +123,26 @@ func GetCommandMap() *cobra.Command {
 		"Number of threads to use (default: all available)",
 	)
 
+	flags.StringVarP(
+		&statsFile,
+		"stats",
+		"s",
+		"",
+		"Mapping statistics file name (within output dir) or full path (default: mapping_stats.tsv)",
+	)
+
+	flags.StringVarP(
+		&progressFile,
+		"progress",
+		"p",
+		"",
+		"Progress file name (within output dir) or full path (default: mapping_progress.tsv)",
+	)
+
 	return mapCmd
 }
 
 func ExecMap() {
-
-	// if *logFileMap != "" {
-	// 	config.LogOut = *logFileMap
-	// }
 
 	indexFile, errIndexFile := os.Open(config.Mapper.Mapping.IndexFilePath)
 	if errIndexFile != nil {

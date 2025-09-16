@@ -78,11 +78,11 @@ type MapperConfig struct {
 		} `mapstructure:"dna_mode" yaml:"dna_mode"`
 
 		Output struct {
-			ProgressLogFileName  string `mapstructure:"progress_log_file_name" yaml:"progress_log_file_name"`     // the name of the progress log file
-			MappingStatsFileName string `mapstructure:"mapping_stats_file_name" yaml:"mapping_stats_file_name"`   // the name of the mapping stats file
-			SamFileName          string `mapstructure:"sam_file_name" yaml:"sam_file_name"`                       // the default name of the output sam file
-			IncludeMMinSAM       bool   `mapstructure:"sam_use_x" yaml:"sam_use_x"`                               // if set to true, CIGAR will include "=" and "X" runes instead of only "M"
-			IncludeAllPairings   bool   `mapstructure:"sam_include_all_pairings" yaml:"sam_include_all_pairings"` // if set to true, all vs. all pairings are written to sam output  NOTE: actual pairing is not implemented yet
+			MappingProgressFileName string `mapstructure:"mapping_progress_file_name" yaml:"mapping_progress_file_name"` // the name of the mapping progress log file
+			MappingStatsFileName    string `mapstructure:"mapping_stats_file_name" yaml:"mapping_stats_file_name"`       // the name of the mapping stats file
+			SamFileName             string `mapstructure:"sam_file_name" yaml:"sam_file_name"`                           // the default name of the output sam file
+			IncludeMMinSAM          bool   `mapstructure:"sam_use_x" yaml:"sam_use_x"`                                   // if set to true, CIGAR will include "=" and "X" runes instead of only "M"
+			IncludeAllPairings      bool   `mapstructure:"sam_include_all_pairings" yaml:"sam_include_all_pairings"`     // if set to true, all vs. all pairings are written to sam output  NOTE: actual pairing is not implemented yet
 		} `mapstructure:"output" yaml:"output"`
 	} `mapstructure:"mapping" yaml:"mapping"`
 }
@@ -234,10 +234,10 @@ func (c *MapperConfig) GetFilterMinMatches() int {
 }
 
 func (c *MapperConfig) GetMapperProgressLogPath() string {
-	if filepath.Dir(c.Mapping.Output.ProgressLogFileName) == "." {
-		return filepath.Join(c.General.OutputDir, c.Mapping.Output.ProgressLogFileName)
+	if filepath.Dir(c.Mapping.Output.MappingProgressFileName) == "." {
+		return filepath.Join(c.General.OutputDir, c.Mapping.Output.MappingProgressFileName)
 	} else {
-		return c.Mapping.Output.ProgressLogFileName
+		return c.Mapping.Output.MappingProgressFileName
 	}
 }
 
@@ -299,7 +299,7 @@ func setDefaults() {
 	viper.SetDefault("mapping.dna_mode.confident.intron_cluster_repair_window", 10)
 
 	// MAPPING - OUTPUT
-	viper.SetDefault("mapping.output.progress_log_file_name", "mapping_progress.log")
+	viper.SetDefault("mapping.output.mapping_progress_file_name", "mapping_progress.log")
 	viper.SetDefault("mapping.output.mapping_stats_file_name", "mapping_stats.tsv")
 	viper.SetDefault("mapping.output.sam_file_name", "aligned.sam")
 	viper.SetDefault("mapping.output.sam_use_x", true)
@@ -325,19 +325,24 @@ func InitConfig(configFilePath string) {
 		if _, ok := err.(*fs.PathError); !ok {
 			logrus.Error("Error reading default configuration", err)
 		} else {
-			logrus.Infof("No default configuration file (%s) found",
-				defaultConfigPath)
+			logrus.WithFields(logrus.Fields{
+				"config": defaultConfigPath,
+			}).Info("No default configuration file found")
 		}
 	} else {
 		logrus.WithFields(logrus.Fields{
 			"config": viper.ConfigFileUsed(),
-		}).Info("Loaded mapper configuration")
+		}).Info("Loaded default configuration file")
 	}
 
 	if configFilePath != "" {
 		viper.SetConfigFile(configFilePath)
 		if err := viper.MergeInConfig(); err != nil {
 			logrus.Fatalf("Error reading config file %s: %v", configFilePath, err)
+		} else {
+			logrus.WithFields(logrus.Fields{
+				"config": configFilePath,
+			}).Info("Loaded custom configuration file")
 		}
 	}
 
