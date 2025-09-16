@@ -1,12 +1,5 @@
 package config
 
-import (
-	"os"
-	"path/filepath"
-
-	"github.com/sirupsen/logrus"
-)
-
 var env string = "development"
 
 const toolVersion string = "0.4.0"
@@ -51,8 +44,6 @@ var (
 	IntronClusterRepairWindow int = 10
 )
 
-var MaxMismatchPercentageRepeat uint8 = 5
-
 // SAM options
 var (
 	IncludeMMinSAM     bool = true  // if set to true, CIGAR will include "=" and "X" runes instead of only "M"
@@ -74,30 +65,6 @@ func ToolVersion() string {
 
 func KmerLength() uint8 {
 	return kmerLength
-}
-
-func OutputDirectory() string {
-	// check if directory exists and create it if not
-	if outputDirectory == "" {
-		outputDirectory = "~/gtamap-output"
-	}
-	if outputDirectory[0] == '~' {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			logrus.Fatal("Error getting home directory", err)
-		}
-		outputDirectory = filepath.Join(homeDir, outputDirectory[1:])
-	}
-	if _, err := os.Stat(outputDirectory); os.IsNotExist(err) {
-		err := os.MkdirAll(outputDirectory, os.ModePerm)
-		if err != nil {
-			logrus.Fatal("Error creating output directory", err)
-		}
-	}
-	logrus.WithFields(logrus.Fields{
-		"outputDirectory": outputDirectory,
-	}).Info("Using output directory")
-	return outputDirectory
 }
 
 func IncludeReadsImproperlyPaired() bool {
