@@ -26,8 +26,7 @@ func ThirdPassWorker(
 	total := 0
 	mmTotal := 0
 
-	// FIX: write to config defined output file
-	f, err := os.Create("output.tsv")
+	f, err := os.Create(config.Mapper.GetMappingStatsFilePath())
 	if err != nil {
 		panic(err)
 	}

@@ -4,7 +4,6 @@ import (
 	"encoding/csv"
 	"math"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"sync"
@@ -75,13 +74,8 @@ func ProgressWorker(progressChan <-chan Event, wg *sync.WaitGroup) {
 	logrus.Debug("Started progressWorker")
 
 	timerStart := time.Now()
-	// Ensure parent dirs exist
-	if err := os.MkdirAll(filepath.Dir(config.LogOut), 0o755); err != nil {
-		logrus.Errorf("Failed to create directories for %s: %v", config.LogOut, err)
-		return
-	}
 
-	tsvFile, err := os.Create(config.LogOut)
+	tsvFile, err := os.Create(config.Mapper.GetMapperProgressLogPath())
 	if err != nil {
 		logrus.Errorf("Failed to create TSV file: %v", err)
 		return
