@@ -45,6 +45,7 @@ type MapperConfig struct {
 		IsReadOriginRna    bool   `mapstructure:"is_read_origin_rna" yaml:"is_read_origin_rna"`
 		Threads            int    `mapstructure:"threads" yaml:"threads"`
 		RegionmaskFilePath string `mapstructure:"regionmask_file_path" yaml:"regionmask_file_path"`
+		MaxBranchingDepth  int    `mapstructure:"max_branching_depth" yaml:"max_branching_depth"`
 
 		RnaMode struct {
 			IntronLengthMin       int     `mapstructure:"intron_length_min" yaml:"intron_length_min"`
@@ -195,6 +196,7 @@ func setDefaults() {
 	// specify it which minimizes the chance of mistakes (hopefully)
 	// viper.SetDefault("mapping.read_origin", "dna")
 	viper.SetDefault("mapping.threads", -1)
+	viper.SetDefault("mapping.max_branching_depth", 30)
 
 	// MAPPING - RNA MODE
 	viper.SetDefault("mapping.rna_mode.intron_length_min", 20)

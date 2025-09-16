@@ -6,11 +6,6 @@ const toolVersion string = "0.4.0"
 
 var kmerLength uint8 = 10
 
-// Mapping params
-var (
-	MaxBranchPoints int = 30 // how often if applyPossibleDiagonals allowed to branch
-)
-
 // ConfidentWorkerParams
 var (
 	MaxConfMm                 int = 6   // how many mm is a conf map allowed to have

@@ -286,7 +286,7 @@ func applyPossibleDiagonals(
 
 	keepMatch := applyDiagonal(read, genomeIndex, dhNew, diagonal, resultNew)
 
-	if keepMatch && *currDepth <= config.MaxBranchPoints {
+	if keepMatch && *currDepth <= config.Mapper.Mapping.MaxBranchingDepth {
 		// keep on extending the currently best diagonal
 		*currDepth++
 		applyPossibleDiagonals(read, genomeIndex, dhNew, resultNew, results, isGreedy, currDepth)
@@ -335,7 +335,7 @@ func applyPossibleDiagonals(
 
 	dh.RemoveDiagonal(diagonal)
 
-	if *currDepth <= config.MaxBranchPoints {
+	if *currDepth <= config.Mapper.Mapping.MaxBranchingDepth {
 		*currDepth++
 		applyPossibleDiagonals(read, genomeIndex, dh, result, results, false, currDepth)
 	}
@@ -636,7 +636,11 @@ func applyDiagonal(
 // 	return true
 // }
 
-func annotateSpliceSites(read *fastq.Read, genomeIndex *index.GenomeIndex, result *mapperutils.ReadMatchResult) {
+func annotateSpliceSites(
+	// read *fastq.Read,
+	genomeIndex *index.GenomeIndex,
+	result *mapperutils.ReadMatchResult,
+) {
 	// used to keep track of the read position for the next gap
 	readGapPos := 0
 	// returns the index of the first region after which a gap occurs (-1 if no gap)
@@ -1097,7 +1101,11 @@ func mapReadToSequence(
 		// Only annotate if RNA
 		if res.MatchedGenome.HasGaps() && config.IsOriginRNA {
 			res.NormalizeRegions()
-			annotateSpliceSites(read, genomeIndex, res)
+			annotateSpliceSites(
+				// read,
+				genomeIndex,
+				res,
+			)
 		}
 
 		// INFO: DNA RNA MODE
