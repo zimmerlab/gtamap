@@ -7,18 +7,20 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/core/interval"
+	"github.com/KleinSamuel/gtamap/src/formats/gtf"
 	"github.com/sirupsen/logrus"
 )
 
 type RegionMask struct {
+	TargetMasks []*interval.PriorityList
 	ContigMasks map[string]*interval.PriorityList
 	Priorities  map[string]int
 }
 
-func NewEmptyRegionMask() *RegionMask {
+func NewEmptyRegionMask(numTargets int) *RegionMask {
 	return &RegionMask{
+		TargetMasks: make([]*interval.PriorityList, numTargets),
 		ContigMasks: make(map[string]*interval.PriorityList),
 		Priorities:  make(map[string]int),
 	}
@@ -27,7 +29,8 @@ func NewEmptyRegionMask() *RegionMask {
 func NewRegionMaskFromPaths(
 	// prioritiesPath string,
 	regionmaskFilePath string,
-	contigToTargetRegions map[string]*regionvector.RegionVector,
+	// contigToTargetRegions map[string]*regionvector.RegionVector,
+	targets []*gtf.GeneBasic,
 ) (*RegionMask, error) {
 
 	// prioritiesFile, errP := os.Open(prioritiesPath)
@@ -40,7 +43,11 @@ func NewRegionMaskFromPaths(
 		return nil, err
 	}
 
-	return NewRegionMask(regionmaskFile, contigToTargetRegions)
+	return NewRegionMask(
+		regionmaskFile,
+		// contigToTargetRegions,
+		targets,
+	)
 }
 
 // NewRegionMask creates a region mask from a BED file and a map of contig
@@ -48,21 +55,21 @@ func NewRegionMaskFromPaths(
 // the BED. The priority file maps the name of a bed entry to an integer.
 // The priority is used to construct the priority list for regions.
 func NewRegionMask(
-	// prioritiesFile *os.File,
 	regionmaskFile *os.File,
-	contigToTargetRegions map[string]*regionvector.RegionVector,
+	// contigToTargetRegions map[string]*regionvector.RegionVector,
+	targets []*gtf.GeneBasic,
 ) (*RegionMask, error) {
 
-	// priorities, errP := bed.ReadPriorities(prioritiesFile)
-	// if errP != nil {
-	// 	return nil, errP
-	// }
-
-	mask := NewEmptyRegionMask()
+	mask := NewEmptyRegionMask(len(targets) * 2)
 
 	scanner := bufio.NewScanner(regionmaskFile)
 
-	contigListTmp := make(map[string]*list.List)
+	// contigListTmp := make(map[string]*list.List)
+
+	targetListTmp := make([]*list.List, len(targets)*2)
+	for i := range targetListTmp {
+		targetListTmp[i] = list.New()
+	}
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -73,6 +80,8 @@ func NewRegionMask(
 			logrus.Error("Invalid BED line (needs 6 columns): ", line)
 			continue
 		}
+
+		contig := lineParts[0]
 
 		start, errStart := strconv.Atoi(lineParts[1])
 		if errStart != nil {
@@ -85,6 +94,8 @@ func NewRegionMask(
 			continue
 		}
 
+		name := lineParts[3]
+
 		priority, errPriority := strconv.Atoi(lineParts[4])
 		if errPriority != nil {
 			logrus.Error("Error parsing priority: ", errPriority)
@@ -96,40 +107,81 @@ func NewRegionMask(
 			logrus.Error("Error parsing max mismatches: ", errMaxMismatches)
 		}
 
-		contig := lineParts[0]
+		// find all target regions which overlap
+		for i, target := range targets {
 
-		// the contig is not part of the target regions
-		if _, exists := contigToTargetRegions[contig]; !exists {
-			continue
+			if contig != target.Contig || start > int(target.EndGenomic) || end < int(target.StartGenomic) {
+				continue
+			}
+
+			// add the 5->3 region
+
+			startRelFw := start - int(target.StartGenomic)
+			endRelFw := end - int(target.StartGenomic)
+
+			targetListTmp[i].PushBack(
+				&interval.PriorityListItem{
+					Start:     startRelFw,
+					End:       endRelFw,
+					Name:      name,
+					Priority:  priority,
+					Threshold: maxMismatches,
+				})
+
+			// add the 3->5 region
+
+			startRelRv := int(target.EndGenomic) - end
+			endRelRv := int(target.EndGenomic) - start
+
+			targetListTmp[i+1].PushBack(
+				&interval.PriorityListItem{
+					Start:     startRelRv,
+					End:       endRelRv,
+					Name:      name,
+					Priority:  priority,
+					Threshold: maxMismatches,
+				})
 		}
-		// the region does not overlap any target region
-		if !contigToTargetRegions[contig].OverlapsAny(start, end) {
-			continue
-		}
 
-		name := lineParts[3]
+		// // the contig is not part of the target regions
+		// if _, exists := contigToTargetRegions[contig]; !exists {
+		// 	continue
+		// }
+		// // the region does not overlap any target region
+		// if !contigToTargetRegions[contig].OverlapsAny(start, end) {
+		// 	continue
+		// }
 
-		if _, exists := contigListTmp[contig]; !exists {
-			contigListTmp[contig] = list.New()
-		}
-
-		contigListTmp[contig].PushBack(&interval.PriorityListItem{
-			Start:     start,
-			End:       end,
-			Name:      name,
-			Priority:  priority,
-			Threshold: maxMismatches,
-		})
+		// if _, exists := contigListTmp[contig]; !exists {
+		// 	contigListTmp[contig] = list.New()
+		// }
+		//
+		// contigListTmp[contig].PushBack(&interval.PriorityListItem{
+		// 	Start:     start,
+		// 	End:       end,
+		// 	Name:      name,
+		// 	Priority:  priority,
+		// 	Threshold: maxMismatches,
+		// })
 	}
 
-	// convert tmp lists to slice and sort
-	for contig, lst := range contigListTmp {
+	// convert the target lists to slice and sort
+	for i, lst := range targetListTmp {
 		regionSlice := make([]*interval.PriorityListItem, 0, lst.Len())
 		for e := lst.Front(); e != nil; e = e.Next() {
 			regionSlice = append(regionSlice, e.Value.(*interval.PriorityListItem))
 		}
-		mask.ContigMasks[contig] = interval.NewListWithData(regionSlice)
+		mask.TargetMasks[i] = interval.NewListWithData(regionSlice)
 	}
+
+	// // convert tmp lists to slice and sort
+	// for contig, lst := range contigListTmp {
+	// 	regionSlice := make([]*interval.PriorityListItem, 0, lst.Len())
+	// 	for e := lst.Front(); e != nil; e = e.Next() {
+	// 		regionSlice = append(regionSlice, e.Value.(*interval.PriorityListItem))
+	// 	}
+	// 	mask.ContigMasks[contig] = interval.NewListWithData(regionSlice)
+	// }
 
 	return mask, nil
 }

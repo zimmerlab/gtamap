@@ -43,28 +43,41 @@ func MapRead(
 		}
 
 		// divide each kmer match into sequence and diagonal per sequence
-		// a sequence is the forward (as given) and rev-comp sequence of each given input sequence
+		// a sequence is the forward (as given) and rev-comp sequence of each
+		// given input sequence
 		for _, match := range matches {
 
 			// add new sequence to global matches
 			if globalMatches.MatchesPerSequence[match.SequenceIndex] == nil {
-				globalMatches.MatchesPerSequence[match.SequenceIndex] = &mapperutils.SequenceMatchResult{
-					MatchesPerDiagonal: make(map[int][]*mapperutils.Match),
-				}
+				globalMatches.MatchesPerSequence[match.SequenceIndex] =
+					&mapperutils.SequenceMatchResult{
+						MatchesPerDiagonal: make(map[int][]*mapperutils.Match),
+					}
 			}
 
 			// add new diagonal to sequence match
-			if globalMatches.MatchesPerSequence[match.SequenceIndex].MatchesPerDiagonal[match.StartGenome] == nil {
-				globalMatches.MatchesPerSequence[match.SequenceIndex].MatchesPerDiagonal[match.StartGenome] = make([]*mapperutils.Match, 0)
+			if globalMatches.MatchesPerSequence[match.SequenceIndex].
+				MatchesPerDiagonal[match.StartGenome] == nil {
+				globalMatches.MatchesPerSequence[match.SequenceIndex].
+					MatchesPerDiagonal[match.StartGenome] = make(
+					[]*mapperutils.Match,
+					0,
+				)
 			}
 
 			// add match to diagonal
-			globalMatches.MatchesPerSequence[match.SequenceIndex].MatchesPerDiagonal[match.StartGenome] = append(globalMatches.MatchesPerSequence[match.SequenceIndex].MatchesPerDiagonal[match.StartGenome], match)
+			globalMatches.MatchesPerSequence[match.SequenceIndex].
+				MatchesPerDiagonal[match.StartGenome] = append(
+				globalMatches.MatchesPerSequence[match.SequenceIndex].
+					MatchesPerDiagonal[match.StartGenome],
+				match,
+			)
 		}
 	}
 
 	// list has size of number of sequences in index
-	// each element represents the maximum number of kmers that matched exactly on the same diagonal
+	// each element represents the maximum number of kmers that matched exactly
+	// on the same diagonal
 	maxDiagonalHitsPerSequence := make([]int, genomeIndex.NumSequences()*2)
 
 	for seqIndex, sequenceMatches := range globalMatches.MatchesPerSequence {
@@ -200,13 +213,17 @@ func applyPossibleDiagonals(
 
 		// INFO: DNA RNA MODE
 		// this result should already have a certain length before we append it to results
-		if !config.IsOriginRNA {
+		if !config.Mapper.Mapping.IsReadOriginRna {
+
 			// for DNA reads we expect the raw result to already be of a certain length
-			if result.MatchedGenome.Length()*10 > len(*read.Sequence)*7 {
-				// fmt.Println(read.Header)
-				// fmt.Println(result.MatchedGenome.Length())
+			if result.MatchedGenome.Length()/len(*read.Sequence) >
+				config.Mapper.Mapping.DnaMode.MinLengthInitialDiagonal {
+
+				// if result.MatchedGenome.Length()*10 > len(*read.Sequence)*7 {
+
 				*results = append(*results, result)
 			}
+
 		} else {
 			*results = append(*results, result)
 		}
@@ -220,11 +237,14 @@ func applyPossibleDiagonals(
 		// here we can expect a larger length for initial diag of map
 
 		l := dh.Diagonals[diagonal][len(dh.Diagonals[diagonal])-1].ToRead - dh.Diagonals[diagonal][0].FromRead
-		if config.IsOriginRNA {
+
+		if config.Mapper.Mapping.IsReadOriginRna {
 			// RNA: check pot length of best initial diag is smaller than 30, if so, don't map read
+			// TODO: add to config
 			if l < 20 {
 				return
 			}
+			// TODO: add to config
 		} else if l < 50 {
 			// DNA: if potential l smaller than 50: return
 			return
@@ -391,10 +411,13 @@ func applyDiagonal(
 	// 	//"gaps":       len(diagonalRead.Regions) - 1,
 	// }).Debug("applying diagonal")
 
-	gapsRead, gapsGenome := mapperutils.ComputeGapsInDiagonal(diagonalRead, diagonalGenome, result)
+	gapsRead, gapsGenome := mapperutils.ComputeGapsInDiagonal(
+		diagonalRead,
+		diagonalGenome,
+		result,
+	)
 
-	sequenceInfo := genomeIndex.GetSequenceInfo(result.SequenceIndex)
-	contigMask := genomeIndex.RegionMask.ContigMasks[sequenceInfo.Contig]
+	regionMask := genomeIndex.RegionMask.TargetMasks[result.SequenceIndex]
 
 	// resolve gaps on the same diagonal
 	// gaps can occur because of mismatches in the read and genome which prevent exact kmer matching
@@ -438,9 +461,9 @@ func applyDiagonal(
 			}
 
 			isValid := result.AddMismatch(
-				contigMask,
+				regionMask,
 				k,
-				int(sequenceInfo.StartGenomic)+gIndex,
+				gIndex,
 			)
 
 			if !isValid {
@@ -477,6 +500,38 @@ func applyDiagonal(
 		}
 	}
 
+	numGaps := 0
+
+	for i := 0; i < len(diagonalGenome.Regions)-1; i++ {
+
+		lenGapRead := diagonalRead.Regions[i+1].Start - diagonalRead.Regions[i].End
+
+		if lenGapRead > 0 {
+			// gaps can still be filled in second pass
+			continue
+		}
+
+		lenGapGenome := diagonalGenome.Regions[i+1].Start - diagonalGenome.Regions[i].End
+
+		if lenGapGenome == 0 {
+			continue
+		}
+
+		numGaps++
+
+		if !config.Mapper.Mapping.IsReadOriginRna {
+			if lenGapGenome > config.Mapper.Mapping.DnaMode.MaxGapLength {
+				// the gap in the genome is too large for DNA reads
+				return false
+			}
+			if numGaps > config.Mapper.Mapping.DnaMode.MaxGapCount {
+				// there are too many gaps in the genome for DNA reads
+				return false
+			}
+		}
+
+	}
+
 	if len(gapsRead.Regions) > 0 {
 		// logrus.WithFields(logrus.Fields{
 		// 	"read":       diagonalRead,
@@ -498,7 +553,11 @@ func applyDiagonal(
 		// result.MatchedRead.AddRegionNonOverlappingPanic(regionRead.Start, regionRead.End)
 		// result.MatchedGenome.AddRegionNonOverlappingPanic(regionGenome.Start, regionGenome.End)
 
-		errRead := result.MatchedRead.AddRegionNonOverlapping(regionRead.Start, regionRead.End)
+		errRead := result.MatchedRead.AddRegionNonOverlapping(
+			regionRead.Start,
+			regionRead.End,
+		)
+
 		if errRead != nil {
 			logrus.WithFields(logrus.Fields{
 				"start": regionRead.Start,
@@ -508,7 +567,11 @@ func applyDiagonal(
 			}).Fatal("overlapping region in read (finalize diagonal match)")
 		}
 
-		errGenome := result.MatchedGenome.AddRegionNonOverlapping(regionGenome.Start, regionGenome.End)
+		errGenome := result.MatchedGenome.AddRegionNonOverlapping(
+			regionGenome.Start,
+			regionGenome.End,
+		)
+
 		if errGenome != nil {
 			logrus.WithFields(logrus.Fields{
 				"start": regionGenome.Start,
@@ -632,9 +695,8 @@ func extendDiagonals(
 		// logrus.Debug("read fully matched")
 	} else {
 
-		// required by AddMismatch
-		sequenceInfo := genomeIndex.GetSequenceInfo(result.SequenceIndex)
-		contigMask := genomeIndex.RegionMask.ContigMasks[sequenceInfo.Contig]
+		// required by AddMisatch
+		regionMask := genomeIndex.RegionMask.TargetMasks[result.SequenceIndex]
 
 		// there are gaps (unmatched regions) in the read (between matched regions / diagonals)
 		if result.MatchedRead.HasGaps() {
@@ -711,9 +773,6 @@ func extendDiagonals(
 						readByte := (*read.Sequence)[gapRead.Start : gapRead.Start+bestSplit]
 						genomeByte := (*genomeIndex.Sequences[result.SequenceIndex])[gapGenome.Start : gapGenome.Start+bestSplit]
 
-						startRead := gapRead.Start
-						startGenomic := int(genomeIndex.GetSequenceInfo(result.SequenceIndex).StartGenomic) + gapGenome.Start
-
 						// add mismatches to the result
 						for i := range bestSplit {
 
@@ -723,9 +782,9 @@ func extendDiagonals(
 							}
 
 							isValid := result.AddMismatch(
-								contigMask,
-								startRead+i,
-								startGenomic+i,
+								regionMask,
+								gapRead.Start+i,
+								gapGenome.Start+i,
 							)
 
 							if !isValid {
@@ -751,7 +810,7 @@ func extendDiagonals(
 						genomeByte := (*genomeIndex.Sequences[result.SequenceIndex])[gapGenome.End-(gapRead.Length()-bestSplit) : gapGenome.End]
 
 						startRead := gapRead.End - (gapRead.Length() - bestSplit)
-						startGenomic := int(genomeIndex.GetSequenceInfo(result.SequenceIndex).StartGenomic) - gapGenome.End - (gapRead.Length() - bestSplit)
+						startGenomic := gapGenome.End - (gapRead.Length() - bestSplit)
 
 						// add the mismatches to the result
 						for i := 0; i < gapRead.Length()-bestSplit; i++ {
@@ -762,7 +821,7 @@ func extendDiagonals(
 
 							// add mismatches to the result
 							isValid := result.AddMismatch(
-								contigMask,
+								regionMask,
 								startRead+i,
 								startGenomic+i,
 							)
@@ -848,8 +907,6 @@ func extendDiagonals(
 
 			genomeSequence := (*genomeIndex.Sequences[result.SequenceIndex])[startGenome : startGenome+len(readSequence)]
 
-			startGenomic := int(genomeIndex.GetSequenceInfo(result.SequenceIndex).StartGenomic) + startGenome
-
 			// trying to extend the read to the left
 			for i := range extensionLength {
 
@@ -859,16 +916,12 @@ func extendDiagonals(
 				}
 
 				isValid := result.AddMismatch(
-					contigMask,
+					regionMask,
 					startRead+i,
-					startGenomic+i,
+					startGenome+i,
 				)
 
 				if !isValid {
-					// mismatch is not added if invalid by new AddMismatch func
-					// result.MismatchesRead = mmBeforeLeftExtension
-					// result = resultBackup
-
 					result.IncompleteMap = true
 					return
 				}
@@ -951,8 +1004,6 @@ func extendDiagonals(
 
 			genomeSequence := (*genomeIndex.Sequences[result.SequenceIndex])[startGenome : startGenome+len(readSequence)]
 
-			startGenomic := int(genomeIndex.GetSequenceInfo(result.SequenceIndex).StartGenomic) + startGenome
-
 			// trying to extend the read to the right
 			for i := range extensionLength {
 
@@ -962,15 +1013,12 @@ func extendDiagonals(
 				}
 
 				isValid := result.AddMismatch(
-					contigMask,
+					regionMask,
 					startRead+i,
-					startGenomic+i,
+					startGenome+i,
 				)
 
 				if !isValid {
-					// the mismatch is not added in new AddMismatch func
-					// result = resultBackup
-
 					result.IncompleteMap = true
 					return
 				}
@@ -1016,8 +1064,9 @@ func mapReadToSequence(
 	// INFO: max mismatches per read is given as percentage (int, 5 = 5%)
 	// compute actual number of allowed mismatches based on read length
 	// store this in the result to prevent frequent computations
-	maxMismatches := int((float32(config.MaxMismatchPercentage()) / 100) *
-		float32(len(*read.Sequence)))
+	// maxMismatches := int((float32(config.MaxMismatchPercentage()) / 100) *
+	// 	float32(len(*read.Sequence)))
+	maxMismatches := config.Mapper.GetMaxMismatches(len(*read.Sequence))
 
 	result := &mapperutils.ReadMatchResult{
 		SequenceIndex:            seqIndex,

@@ -19,6 +19,7 @@ func GetCommandMap() *cobra.Command {
 	var fastqR1FilePath string
 	var fastqR2FilePath string
 	var readOrigin string
+	var regionmaskFilePath string
 
 	var outputDirPath string
 	var samFileName string
@@ -36,6 +37,7 @@ func GetCommandMap() *cobra.Command {
 			SetConfigValue("general.output_dir", outputDirPath)
 			SetConfigValue("mapping.output.sam_file_name", samFileName)
 			SetConfigValue("mapping.threads", threads)
+			SetConfigValue("mapping.regionmask_file_path", regionmaskFilePath)
 
 			if err := viper.Unmarshal(config.Mapper); err != nil {
 				logrus.Fatalf("Unable to decode config: %v", err)
@@ -125,33 +127,16 @@ func ExecMap() {
 	// 	config.LogOut = *logFileMap
 	// }
 
-	// should already be captured by argument parser
-	// errOrigin := config.Mapper.SetReadOrigin(*argsObj.ReadType)
-	// if errOrigin != nil {
-	// 	log.Fatal(errOrigin)
-	// }
-
 	indexFile, errIndexFile := os.Open(config.Mapper.Mapping.IndexFilePath)
 	if errIndexFile != nil {
 		logrus.Fatalf("Could not open index file: %v", errIndexFile)
 	}
+	defer indexFile.Close()
 
 	genomeIndex := index.ReadGenomeIndexByFile(indexFile)
 
-	// if *argsObj.RegionmaskBedFile == (os.File{}) {
-	// 	argsObj.RegionmaskBedFile = nil
-	// }
-	// if *argsObj.RegionmaskPriorityFile == (os.File{}) {
-	// 	argsObj.RegionmaskPriorityFile = nil
-	// }
-	// if (argsObj.RegionmaskBedFile == nil &&
-	// 	argsObj.RegionmaskPriorityFile != nil) ||
-	// 	(argsObj.RegionmaskBedFile != nil &&
-	// 		argsObj.RegionmaskPriorityFile == nil) {
-	// 	logrus.Fatal("Both --regionmaskBed and --regionmaskPriorities " +
-	// 		"need to be provided to use region masking.")
-	// }
-	//
+	// TODO: add regionmask and action support
+
 	// // add region mask to index if provided
 	// if argsObj.RegionmaskBedFile != nil && argsObj.RegionmaskPriorityFile != nil {
 	//
@@ -169,11 +154,6 @@ func ExecMap() {
 	// 	}).Info("Using region mask bed file and priority file")
 	//
 	// }
-
-	// reader, errFastq := fastq.InitFromFiles(
-	// 	argsObj.FastqR1File,
-	// 	argsObj.FastqR2File,
-	// )
 
 	fastqReader, errFastqReader := fastq.InitFromPaths(
 		&config.Mapper.Mapping.FastqR1FilePath,

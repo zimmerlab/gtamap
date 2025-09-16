@@ -142,17 +142,27 @@ func (l *PriorityList) ApplyMaskToRegion(start int, end int) {
 	fmt.Println("-")
 }
 
-func (l *PriorityList) GetItemAtPosition(pos int) (bool, string, int) {
+func (l *PriorityList) GetItemAtPosition(
+	pos int,
+) (
+	bool,
+	string,
+	int,
+	int,
+) {
 
 	index, offset := l.GetInsertionPos(pos)
 
 	if len(l.Items) == 0 ||
 		offset == -1 ||
 		index >= len(l.Items) {
-		return false, "", 0
+		return false, "", 0, -1
 	}
 
-	return true, l.Items[index].Name, l.Items[index].Priority
+	return true,
+		l.Items[index].Name,
+		l.Items[index].Priority,
+		l.Items[index].Threshold
 }
 
 func (l *PriorityList) GetMostImportantItemThatOverlaps(

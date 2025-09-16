@@ -11,6 +11,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/dataloader"
 	"github.com/KleinSamuel/gtamap/src/datawriter"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
+	"github.com/KleinSamuel/gtamap/src/runner"
 	"github.com/sirupsen/logrus"
 )
 
@@ -244,6 +245,45 @@ func ViewRegionMask() {
 
 }
 
+func Debug() {
+
+	// os.Args = []string{
+	// 	"gtamap",
+	// 	"map",
+	// 	"--index",
+	// 	"/home/sam/Data/gtamap/opn1lw-opn1mw/X_154138492_154274890.regionmask.gtai",
+	// 	"--output",
+	// 	"/home/sam/Data/gtamap/opn1lw-opn1mw/out/",
+	// 	"--read-origin",
+	// 	"dna",
+	// 	"--reads-r1",
+	// 	"/home/sam/Data/gtamap/opn1lw-opn1mw/test.fw.40k.fq",
+	// 	"--reads-r2",
+	// 	"/home/sam/Data/gtamap/opn1lw-opn1mw/test.rv.40k.fq",
+	// 	"--threads",
+	// 	"1",
+	// }
+
+	os.Args = []string{
+		"gtamap",
+		"map",
+		"--index",
+		"/home/sam/Data/gtamap/opn1lw-opn1mw/X_154138492_154274890.regionmask.gtai",
+		"--output",
+		"/home/sam/Data/gtamap/opn1lw-opn1mw/out/",
+		"--read-origin",
+		"dna",
+		"--reads-r1",
+		"/home/sam/Data/gtamap/opn1lw-opn1mw/bug.fw.fq",
+		"--reads-r2",
+		"/home/sam/Data/gtamap/opn1lw-opn1mw/bug.rv.fq",
+		"--threads",
+		"1",
+	}
+
+	runner.Execute()
+}
+
 func main() {
 
 	//f, _ := os.Create("cpu_profile.prof")
@@ -302,7 +342,8 @@ func main() {
 	//testIndex()
 
 	// testRegionmask()
-	ViewRegionMask()
+	// ViewRegionMask()
+	Debug()
 
 	//analysis.CompareResults()
 }

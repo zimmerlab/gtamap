@@ -227,11 +227,6 @@ func (r *ReadMatchResult) MergeRegions() {
 func (r *ReadMatchResult) MergeRegionsIfBothConsecutive() {
 
 	if len(r.MatchedRead.Regions) != len(r.MatchedGenome.Regions) {
-
-		fmt.Println(r.SequenceIndex)
-		fmt.Println(r.MatchedRead.Regions)
-		fmt.Println(r.MatchedGenome.Regions)
-
 		logrus.WithFields(logrus.Fields{
 			"len read regions":   len(r.MatchedRead.Regions),
 			"len genome regions": len(r.MatchedGenome.Regions),
@@ -280,7 +275,37 @@ func (r *ReadMatchResult) MergeRegionsIfBothConsecutive() {
 	r.MatchedGenome.Regions = mergedGenome
 }
 
+func (r *ReadMatchResult) IsValid() bool {
+
+	numGapsGenome := 0
+
+	for i := 0; i < len(r.MatchedGenome.Regions)-1; i++ {
+
+		lenGapGenome := r.MatchedGenome.Regions[i+1].Start - r.MatchedGenome.Regions[i].End
+
+		if lenGapGenome == 0 {
+			continue
+		}
+
+		numGapsGenome++
+
+		if config.Mapper.Mapping.IsReadOriginRna {
+
+		} else {
+			if lenGapGenome > config.Mapper.Mapping.DnaMode.MaxGapLength {
+				return false
+			}
+			if numGapsGenome > config.Mapper.Mapping.DnaMode.MaxGapCount {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
 func (r *ReadMatchResult) NormalizeRegions() {
+
 	r.MergeRegions()
 	readRegions := r.MatchedRead.Regions
 	genomeRegions := r.MatchedGenome.Regions
@@ -567,18 +592,19 @@ func hasLongDiagonals(mapping *ReadMatchResult) bool {
 	return true
 }
 
+// AddMismatch tries to add a mismatch at the given position in the read.
+// It checks whether adding the mismatch would exceed the global or region-specific
+// mismatch constraints. If adding the mismatch is valid, it updates the mismatch
+// counts and returns true. If adding the mismatch would violate any constraints,
+// it returns false and does not modify the state.
+// posInRead is the position of the mismatch in the read (0-based).
+// posInTargetRegion is the position of the mismatch in the target region (0-based).
+// It throws a fatal error if a duplicate mismatch position is added.
 func (r *ReadMatchResult) AddMismatch(
-	contigMask *interval.PriorityList,
+	regionMask *interval.PriorityList,
 	posInRead int,
-	posInGenomeGlobal int,
+	posInTargetRegion int,
 ) bool {
-
-	// logrus.WithFields(logrus.Fields{
-	// 	"read":              result.MatchedRead.Regions,
-	// 	"genome":            result.MatchedGenome.Regions,
-	// 	"posInRead":         posInRead,
-	// 	"posInGenomeGlobal": posInGenomeGlobal,
-	// }).Info("adding mismatch to result")
 
 	for _, mm := range r.MismatchesRead {
 		if mm == posInRead {
@@ -592,7 +618,7 @@ func (r *ReadMatchResult) AddMismatch(
 		return false
 	}
 
-	found, name, _ := contigMask.GetItemAtPosition(posInGenomeGlobal)
+	found, name, _, maxMismatches := regionMask.GetItemAtPosition(posInTargetRegion)
 	if !found {
 		name = "unmasked"
 	}
@@ -602,8 +628,7 @@ func (r *ReadMatchResult) AddMismatch(
 	}
 
 	// mismatches exceed region specific mismatch constraint
-	// TODO: check region mismatch constraint
-	if name == "SINE/Alu" && r.MismatchCounts[name]+1 >= 4 {
+	if found && r.MismatchCounts[name]+1 >= maxMismatches {
 		return false
 	}
 

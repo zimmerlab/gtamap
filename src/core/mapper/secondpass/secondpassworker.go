@@ -70,6 +70,10 @@ func remapReadPair(
 	genomeIndex *index.GenomeIndex,
 ) {
 
+	if readPairMapping.ReadPair.ReadR1.Header == "A00925:309:HKNKCDSX3:1:1158:27769:24032" {
+		fmt.Println("here")
+	}
+
 	fwRemaps := make([]*mapperutils.ReadMatchResult, 0)
 
 	for _, mapping := range readPairMapping.Fw {
@@ -110,21 +114,37 @@ func remapReadPair(
 
 	// get valid mappings
 	if len(uniqFwRemaps) > 0 {
-		validMaps := filterValidMaps(uniqFwRemaps, len(*readPairMapping.ReadPair.ReadR1.Sequence), genomeIndex)
+		validMaps := filterValidMaps(
+			uniqFwRemaps,
+			len(*readPairMapping.ReadPair.ReadR1.Sequence),
+			genomeIndex,
+		)
 		readPairMapping.Fw = validMaps
 	} else {
 		// FIX: u sure this can happen here? the origin fw mapping should be in uniqfwremaps and it
 		// can therefore not be empty? which makes this else clause irrelevant?
-		validMaps := filterValidMaps(readPairMapping.Fw, len(*readPairMapping.ReadPair.ReadR1.Sequence), genomeIndex)
+		validMaps := filterValidMaps(
+			readPairMapping.Fw,
+			len(*readPairMapping.ReadPair.ReadR1.Sequence),
+			genomeIndex,
+		)
 		readPairMapping.Fw = validMaps
 	}
 
 	// get valid mappings
 	if len(uniqRvRemaps) > 0 {
-		validMaps := filterValidMaps(uniqRvRemaps, len(*readPairMapping.ReadPair.ReadR2.Sequence), genomeIndex)
+		validMaps := filterValidMaps(
+			uniqRvRemaps,
+			len(*readPairMapping.ReadPair.ReadR2.Sequence),
+			genomeIndex,
+		)
 		readPairMapping.Rv = validMaps
 	} else {
-		validMaps := filterValidMaps(readPairMapping.Rv, len(*readPairMapping.ReadPair.ReadR2.Sequence), genomeIndex)
+		validMaps := filterValidMaps(
+			readPairMapping.Rv,
+			len(*readPairMapping.ReadPair.ReadR2.Sequence),
+			genomeIndex,
+		)
 		readPairMapping.Rv = validMaps
 	}
 }
@@ -164,10 +184,14 @@ func filterValidMaps(
 			continue
 		}
 
-		// skip mappings that exceed mismatch percentage
-		if uint8(float64(len(mapping.MismatchesRead))*100/float64(readLength)) > config.MaxMismatchPercentage() {
+		if !mapping.IsValid() {
 			continue
 		}
+
+		// skip mappings that exceed mismatch percentage
+		// if uint8(float64(len(mapping.MismatchesRead))*100/float64(readLength)) > config.MaxMismatchPercentage() {
+		// 	continue
+		// }
 
 		// skip mappings that are in a repeat region and exceed repeat mismatch count
 		// TODO: adjust to region mask
@@ -213,12 +237,13 @@ func remapRead(
 ) []*mapperutils.ReadMatchResult {
 
 	// NOTE: this is CRUCIAL and NEEDS to be called before ANY REMAP!!!
+	// TODO: please describe why
 	readMapping.NormalizeRegions()
 
 	alternativeReadMatchResults := make([]*mapperutils.ReadMatchResult, 0)
 
 	// only remap if there is an annotation and in RNA mode
-	if annotation != nil && config.IsOriginRNA {
+	if annotation != nil && config.Mapper.Mapping.IsReadOriginRna {
 
 		candidates := make([]*mapperutils.ReadMatchResult, 0)
 
@@ -231,22 +256,6 @@ func remapRead(
 				genomeIndex,
 				annotation.IntronTrees[readMapping.SequenceIndex],
 			)
-
-			// NOTE: redundant?
-			// for _, remap := range remaps {
-			//
-			// 	overhangCorrected := correctOverhangs(
-			// 		remap,
-			// 		annotation.Introns[readMapping.SequenceIndex],
-			// 		read,
-			// 		genomeIndex,
-			// 	)
-			//
-			// 	candidates = append(
-			// 		candidates,
-			// 		overhangCorrected...,
-			// 	)
-			// }
 
 			candidates = append(
 				candidates,
@@ -271,9 +280,12 @@ func remapRead(
 
 		// fill potential gaps in all remaps
 		for _, alternativeMap := range candidates {
-			if alternativeMap.MatchedRead.Regions[0].Start == 0 &&
-				alternativeMap.MatchedRead.Regions[len(alternativeMap.MatchedRead.Regions)-1].End == len(*read.Sequence) &&
-				alternativeMap.MatchedRead.Length() != len(*read.Sequence) {
+
+			isStartMapped := alternativeMap.MatchedRead.Regions[0].Start == 0
+			isEndMapped := alternativeMap.MatchedRead.Regions[len(alternativeMap.MatchedRead.Regions)-1].End == len(*read.Sequence)
+			isLengthEqual := alternativeMap.MatchedRead.Length() == len(*read.Sequence)
+
+			if isStartMapped && isEndMapped && !isLengthEqual {
 
 				// For some reason go decides to share arr space of these objects in alternativeReadMatchResults which
 				// leads to unexpected behavior when appending to the mismatch slices of the objects
@@ -285,9 +297,24 @@ func remapRead(
 				copy(alternativeMap.MismatchesRead, originalMismatches)
 
 				isValid := fillGaps(alternativeMap, genomeIndex, read)
-				if isValid {
-					alternativeReadMatchResults = append(alternativeReadMatchResults, alternativeMap)
+				if !isValid {
+					continue
 				}
+				alternativeReadMatchResults = append(
+					alternativeReadMatchResults,
+					alternativeMap,
+				)
+
+			} else {
+
+				if !alternativeMap.IsValid() {
+					continue
+				}
+
+				alternativeReadMatchResults = append(
+					alternativeReadMatchResults,
+					alternativeMap,
+				)
 			}
 		}
 	}
@@ -321,12 +348,14 @@ func remapRead(
 		}
 	}
 
-	if !readMapping.IncompleteMap && readMapping.MatchedRead.Length() == len(*read.Sequence) {
+	if !readMapping.IncompleteMap &&
+		readMapping.MatchedRead.Length() == len(*read.Sequence) &&
+		readMapping.IsValid() {
 		// after all remap work, append original readMapping if it is a complete remap
 		alternativeReadMatchResults = append(alternativeReadMatchResults, readMapping)
 	}
 
-	if config.IsOriginRNA && annotation != nil {
+	if config.Mapper.Mapping.IsReadOriginRna && annotation != nil {
 		for _, alternative := range alternativeReadMatchResults {
 
 			symIntronCorrected := correctSymmetricIntronErrorsEnhanced(
@@ -349,7 +378,19 @@ func remapRead(
 }
 
 // rightRemapAlignmentBlockFromPos remaps a given readSequenceToRemap from a given remapStart position.
-func rightRemapAlignmentBlockFromPos(remapStart int, anchorRegion regionvector.Region, targetSeqIntronSet *regionvector.RegionSet, readSequenceToRemap []byte, refSeq *[]byte, startInRead int) ([]*regionvector.Region, int, []int) {
+func rightRemapAlignmentBlockFromPos(
+	remapStart int,
+	anchorRegion regionvector.Region,
+	targetSeqIntronSet *regionvector.RegionSet,
+	readSequenceToRemap []byte,
+	refSeq *[]byte,
+	startInRead int,
+) (
+	[]*regionvector.Region,
+	int,
+	[]int,
+) {
+
 	remap := make([]*regionvector.Region, 0)
 
 	// get next intron
@@ -1583,6 +1624,7 @@ func fixPointRNARemap(
 	oriReadMainAnchor := readMatchResult.MatchedRead.Regions[mainAnchorIndex]
 	oriMmMainAnchor := extractMMofAnchor(oriReadMainAnchor, readMatchResult.MismatchesRead)
 
+	// TODO: should it be possible to configure this?
 	if oriMainAnchor.Length()*10 < len(*read.Sequence)*3 {
 		return nil // if the main anchor is super short, dont bother remapping
 	}
@@ -1786,7 +1828,11 @@ func (r *RemapSection) reverseRegions() {
 	r.Mm = revMm
 }
 
-func extractCandidates(anchorRemaps []*Remap, readLength int) []*mapperutils.ReadMatchResult {
+func extractCandidates(
+	anchorRemaps []*Remap,
+	readLength int,
+) []*mapperutils.ReadMatchResult {
+
 	// for each anchor, there can be several combinations. This means 1 Anchor -> N readMatchResults
 	finalResults := make([]*mapperutils.ReadMatchResult, 0)
 
@@ -1824,9 +1870,13 @@ func extractCandidates(anchorRemaps []*Remap, readLength int) []*mapperutils.Rea
 						ValidLeftOptions:    len(leftCandidates),
 						ValidRightOptions:   len(rightCandidates),
 					}
+
+					// TODO: maybe early exit here is mismatch threshold reached
 					alternativeReadMatchResult.MismatchesRead = append(alternativeReadMatchResult.MismatchesRead, lCandidate.Mm...)
 					alternativeReadMatchResult.MismatchesRead = append(alternativeReadMatchResult.MismatchesRead, anchorRemap.Mm...)
 					alternativeReadMatchResult.MismatchesRead = append(alternativeReadMatchResult.MismatchesRead, rCandidate.Mm...)
+
+					// TODO: change to config param
 					if uint8(float64(len(alternativeReadMatchResult.MismatchesRead))*100/float64(readLength)) > config.MaxMismatchPercentage() {
 						continue
 					} else {
@@ -2129,8 +2179,9 @@ func fillGaps(
 					}).Fatal("no best split found")
 				}
 
-				sequenceInfo := genomeIndex.GetSequenceInfo(readMatchResult.SequenceIndex)
-				contigMask := genomeIndex.RegionMask.ContigMasks[sequenceInfo.Contig]
+				// sequenceInfo := genomeIndex.GetSequenceInfo(readMatchResult.SequenceIndex)
+				// contigMask := genomeIndex.RegionMask.ContigMasks[sequenceInfo.Contig]
+				regionMask := genomeIndex.RegionMask.TargetMasks[readMatchResult.SequenceIndex]
 
 				// when bestSplit is 0 then there is nothing to be added to the left side of the gap
 				if bestSplit > 0 {
@@ -2145,8 +2196,6 @@ func fillGaps(
 					readByte := (*read.Sequence)[gapStartRead:gapEndRead]
 					genomeByte := (*genomeIndex.Sequences[readMatchResult.SequenceIndex])[gapStartGenome:gapEndGenome]
 
-					startGenomic := int(sequenceInfo.StartGenomic) + gapStartGenome
-
 					// add the mismatches to the readMatchResult
 					for j := range bestSplit {
 
@@ -2156,9 +2205,9 @@ func fillGaps(
 						}
 
 						isValid := readMatchResult.AddMismatch(
-							contigMask,
+							regionMask,
 							gapStartRead+j,
-							startGenomic+j,
+							gapStartGenome+j,
 						)
 
 						if !isValid {
@@ -2192,8 +2241,6 @@ func fillGaps(
 					readByte := (*read.Sequence)[gapStartRead:gapEndRead]
 					genomeByte := (*genomeIndex.Sequences[readMatchResult.SequenceIndex])[gapStartGenome:gapEndGenome]
 
-					startGenomic := int(sequenceInfo.StartGenomic) + gapStartGenome
-
 					// add the mismatches to the readMatchResult
 					for j := 0; j < gapRead.Length()-bestSplit; j++ {
 
@@ -2203,9 +2250,9 @@ func fillGaps(
 						}
 
 						isValid := readMatchResult.AddMismatch(
-							contigMask,
+							regionMask,
 							gapStartRead+j,
-							startGenomic+j,
+							gapStartGenome+j,
 						)
 
 						if !isValid {
@@ -2321,6 +2368,29 @@ func fillGaps(
 		indexRegionBeforeGap = readMatchResult.MatchedRead.GetGapIndexAfterPos(
 			gapRead.End + 1,
 		)
+	}
+
+	numGaps := 0
+
+	for i := 0; i < len(readMatchResult.MatchedGenome.Regions)-1; i++ {
+
+		lenGapGenome := readMatchResult.MatchedGenome.Regions[i+1].Start - readMatchResult.MatchedGenome.Regions[i].End
+
+		if lenGapGenome <= 0 {
+			continue
+		}
+
+		numGaps++
+
+		if !config.Mapper.Mapping.IsReadOriginRna {
+			if lenGapGenome > config.Mapper.Mapping.DnaMode.MaxGapLength {
+				return false
+			}
+			if numGaps > config.Mapper.Mapping.DnaMode.MaxGapCount {
+				return false
+			}
+		}
+
 	}
 
 	return true

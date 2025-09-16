@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -37,12 +38,13 @@ type MapperConfig struct {
 	} `mapstructure:"index" yaml:"index"`
 
 	Mapping struct {
-		IndexFilePath   string `mapstructure:"index_file_path" yaml:"index_file_path"`
-		FastqR1FilePath string `mapstructure:"fastq_r1_file_path" yaml:"fastq_r1_file_path"`
-		FastqR2FilePath string `mapstructure:"fastq_r2_file_path" yaml:"fastq_r2_file_path"`
-		ReadOrigin      string `mapstructure:"read_origin" yaml:"read_origin"`
-		IsReadOriginRna bool   `mapstructure:"is_read_origin_rna" yaml:"is_read_origin_rna"`
-		Threads         int    `mapstructure:"threads" yaml:"threads"`
+		IndexFilePath      string `mapstructure:"index_file_path" yaml:"index_file_path"`
+		FastqR1FilePath    string `mapstructure:"fastq_r1_file_path" yaml:"fastq_r1_file_path"`
+		FastqR2FilePath    string `mapstructure:"fastq_r2_file_path" yaml:"fastq_r2_file_path"`
+		ReadOrigin         string `mapstructure:"read_origin" yaml:"read_origin"`
+		IsReadOriginRna    bool   `mapstructure:"is_read_origin_rna" yaml:"is_read_origin_rna"`
+		Threads            int    `mapstructure:"threads" yaml:"threads"`
+		RegionmaskFilePath string `mapstructure:"regionmask_file_path" yaml:"regionmask_file_path"`
 
 		RnaMode struct {
 			IntronLengthMin       int     `mapstructure:"intron_length_min" yaml:"intron_length_min"`
@@ -51,10 +53,11 @@ type MapperConfig struct {
 		} `mapstructure:"rna_mode" yaml:"rna_mode"`
 
 		DnaMode struct {
-			MaxGapLength          int     `mapstructure:"max_gap_length" yaml:"max_gap_length"`
-			MaxGapCount           int     `mapstructure:"max_gap_count" yaml:"max_gap_count"`
-			MaxMismatchCount      int     `mapstructure:"max_mismatch_count" yaml:"max_mismatch_count"`
-			MaxMismatchPercentage float64 `mapstructure:"max_mismatch_percentage" yaml:"max_mismatch_percentage"`
+			MinLengthInitialDiagonal int     `mapstructure:"min_length_initial_diagonal" yaml:"min_length_initial_diagonal"`
+			MaxGapLength             int     `mapstructure:"max_gap_length" yaml:"max_gap_length"`
+			MaxGapCount              int     `mapstructure:"max_gap_count" yaml:"max_gap_count"`
+			MaxMismatchCount         int     `mapstructure:"max_mismatch_count" yaml:"max_mismatch_count"`
+			MaxMismatchPercentage    float64 `mapstructure:"max_mismatch_percentage" yaml:"max_mismatch_percentage"`
 		} `mapstructure:"dna_mode" yaml:"dna_mode"`
 
 		Output struct {
@@ -195,13 +198,14 @@ func setDefaults() {
 
 	// MAPPING - RNA MODE
 	viper.SetDefault("mapping.rna_mode.intron_length_min", 20)
-	// viper.SetDefault("mapping.rna_mode.max_mismatch_count", 15)
-	viper.SetDefault("mapping.rna_mode.mismatch_max_percentage", 0.1)
+	viper.SetDefault("mapping.rna_mode.max_mismatch_count", -1)
+	viper.SetDefault("mapping.rna_mode.max_mismatch_percentage", 0.1)
 
 	// MAPPING - DNA MODE
+	viper.SetDefault("mapping.dna_mode.min_length_initial_diagonal", 0.7)
 	viper.SetDefault("mapping.dna_mode.max_gap_length", 1000)
-	viper.SetDefault("mapping.dna_mode.max_gap_count", 3)
-	// viper.SetDefault("mapping.dna_mode.max_mismatch_count", 15)
+	viper.SetDefault("mapping.dna_mode.max_gap_count", 1)
+	viper.SetDefault("mapping.dna_mode.max_mismatch_count", -1)
 	viper.SetDefault("mapping.dna_mode.max_mismatch_percentage", 0.1)
 
 	// MAPPING - OUTPUT
@@ -221,12 +225,17 @@ func InitConfig(configFilePath string) {
 	}
 
 	binaryDir := filepath.Dir(execPath)
-	viper.AddConfigPath(binaryDir)
-	viper.SetConfigName("mapperconfig")
-	viper.SetConfigType("yaml")
+
+	defaultConfigPath := filepath.Join(binaryDir, "mapperconfig.yaml")
+	viper.SetConfigFile(defaultConfigPath)
 
 	if err := viper.ReadInConfig(); err != nil {
-		logrus.Info("Error loading default configuration", err)
+		if _, ok := err.(*fs.PathError); !ok {
+			logrus.Error("Error reading default configuration", err)
+		} else {
+			logrus.Infof("No default configuration file (%s) found",
+				defaultConfigPath)
+		}
 	} else {
 		logrus.WithFields(logrus.Fields{
 			"config": viper.ConfigFileUsed(),

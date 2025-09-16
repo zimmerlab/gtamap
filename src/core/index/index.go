@@ -941,76 +941,32 @@ func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry) *GenomeIndex {
 	// contigMapTargets :=
 
 	for i, entry := range fastaEntries {
+
 		sequence := entry.Sequence
 		sequenceRevComp, revCompErr := utils.ReverseComplementDnaBytes(sequence)
 		if revCompErr != nil {
-			logrus.Fatal("Error reversing complementing sequence", revCompErr)
+			logrus.Fatal("Error reversing and complementing sequence", revCompErr)
 		}
 
 		info := parseFastaHeader(entry.Header)
 		index.SequenceInfo[i] = info
-
 		index.SequenceHeaders[i] = entry.Header
-
 		index.Sequences[i*2] = &sequence
 		index.Sequences[i*2+1] = &sequenceRevComp
 
-		// populate contig to target region map
-		if _, exists := index.ContigToTargetRegions[info.Contig]; !exists {
-			index.ContigToTargetRegions[info.Contig] = regionvector.NewRegionVector()
-		}
-		index.ContigToTargetRegions[info.Contig].AddRegionAndMerge(int(info.StartGenomic), int(info.EndGenomic))
-
-		// if repeatmaskFile != nil {
-		// 	if _, exists := contigMapTargets[info.Contig]; !exists {
-		// 		contigMapTargets[info.Contig] = make([]datastructure.Bounds, 0)
-		// 	}
-		// 	contigMapTargets[info.Contig] = append(
-		// 		contigMapTargets[info.Contig],
-		// 		&datastructure.RepeatRegion{
-		// 			Lower: int(info.StartGenomic),
-		// 			Upper: int(info.EndGenomic),
-		// 		})
+		// // populate contig to target region map
+		// if _, exists := index.ContigToTargetRegions[info.Contig]; !exists {
+		// 	index.ContigToTargetRegions[info.Contig] = regionvector.NewRegionVector()
 		// }
-
-		// if repeatMaskerFile != nil {
-		//
-		// 	logrus.WithFields(logrus.Fields{
-		// 		"file": repeatMaskerFile.Name(),
-		// 	}).Info("Using repeatmasker file")
-		//
-		// 	tree, treeRv, repeats, repeatsRv, err := BuildBlacklistInTree(info.StartGenomic, info.EndGenomic, info.Contig, repeatMaskerFile)
-		// 	logrus.Debugf("Loaded %d annotated repeats into index.\n", len(repeats))
-		// 	if err != nil {
-		// 		logrus.Fatal("Error loading balcklist into interval tree", err)
-		// 		panic(err)
-		// 	}
-		// 	index.Blacklist[i*2] = tree
-		// 	index.RepeatRegions[i*2] = repeats
-		// 	index.Blacklist[i*2+1] = treeRv
-		// 	index.RepeatRegions[i*2+1] = repeatsRv
-		// } else {
-		// 	logrus.Info("No repeatmasker file provided, repeat regions are not detected")
-		// }
+		// index.ContigToTargetRegions[info.Contig].AddRegionAndMerge(
+		// 	int(info.StartGenomic),
+		// 	int(info.EndGenomic),
+		// )
 	}
-
-	// if repeatmaskFile != nil {
-	// 	// build interval trees (containing target regions) per contig
-	// 	contigMapTargetTrees := make(map[string]*datastructure.INTree)
-	// 	for contig, targets := range contigMapTargets {
-	// 		contigMapTargetTrees[contig] = datastructure.NewINTree(targets)
-	// 	}
-	//
-	// 	// load repeatmasker file and build contig repeatmask map for target regions
-	// 	index.ContigRepeatmask = BuildContigRepeatmaskTrees(repeatmaskFile, contigMapTargetTrees)
-	//
-	// 	logrus.Info("Loaded repeatmasker file")
-	// } else {
-	// 	logrus.Info("No repeatmasker file provided, repeat regions are not detected")
-	// }
 
 	for i, seq := range index.Sequences {
 		index.AddSequenceToMap(seq, uint8(i))
+		// TODO: do we plan to use this? if not then remove
 		index.AddSequenceToMapSmall(seq, uint8(i))
 	}
 
@@ -1101,7 +1057,7 @@ func ReadGenomeIndexByFile(indexFile *os.File) *GenomeIndex {
 func BuildAndSerializeGenomeIndex(
 	fastaFile *os.File,
 	outputFile *os.File,
-	regionmaskBedFile *os.File,
+	regionmaskFile *os.File,
 ) {
 
 	fastaEntries, err := dataloader.ReadFasta(fastaFile)
@@ -1123,12 +1079,12 @@ func BuildAndSerializeGenomeIndex(
 	genomeIndex := BuildGenomeIndex(fastaEntries)
 
 	// add region mask to index if provided
-	if regionmaskBedFile != nil {
+	if regionmaskFile != nil {
 
-		AddRegionmaskToIndex(regionmaskBedFile, genomeIndex)
+		AddRegionmaskToIndex(regionmaskFile, genomeIndex)
 
 		logrus.WithFields(logrus.Fields{
-			"region mask": regionmaskBedFile.Name(),
+			"region mask": regionmaskFile.Name(),
 		}).Info("Using region mask bed file and priority file")
 
 	} else {
@@ -1145,7 +1101,8 @@ func AddRegionmaskToIndex(
 
 	mask, errMask := NewRegionMask(
 		regionmaskFile,
-		genomeIndex.ContigToTargetRegions,
+		// genomeIndex.ContigToTargetRegions,
+		genomeIndex.SequenceInfo,
 	)
 
 	if errMask != nil {
