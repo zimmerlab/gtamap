@@ -8,10 +8,11 @@ import (
 )
 
 type PriorityListItem struct {
-	Start    int
-	End      int
-	Priority int
-	Name     string
+	Start     int
+	End       int
+	Priority  int
+	Threshold int
+	Name      string
 }
 
 type PriorityList struct {
@@ -26,25 +27,26 @@ func NewList() *PriorityList {
 	}
 }
 
-func NewListWithData(priorities map[string]int, entries []*PriorityListItem) *PriorityList {
+func NewListWithData(
+	// priorities map[string]int,
+	entries []*PriorityListItem,
+) *PriorityList {
 
 	pList := NewList()
 
 	// sort bed file entries by priorities descending
 	sort.Slice(entries, func(i int, j int) bool {
-		pI := 0
-		if p, exists := priorities[entries[i].Name]; exists {
-			pI = p
-		}
-		pJ := 0
-		if p, exists := priorities[entries[j].Name]; exists {
-			pJ = p
-		}
-		return pI > pJ
+		return entries[i].Priority > entries[j].Priority
 	})
 
 	for _, interval := range entries {
-		pList.InsertInterval(interval.Start, interval.End, priorities[interval.Name], interval.Name)
+		pList.InsertInterval(
+			interval.Start,
+			interval.End,
+			interval.Priority,
+			interval.Name,
+			interval.Threshold,
+		)
 	}
 
 	return pList
@@ -247,7 +249,13 @@ func (l *PriorityList) GetInsertionPos(position int) (int, int) {
 	}
 }
 
-func (l *PriorityList) InsertInterval(start int, end int, priority int, name string) {
+func (l *PriorityList) InsertInterval(
+	start int,
+	end int,
+	priority int,
+	name string,
+	threshold int,
+) {
 
 	// fmt.Println("insert ", start, "-", end)
 
@@ -270,9 +278,9 @@ func (l *PriorityList) InsertInterval(start int, end int, priority int, name str
 			newEnd = l.Items[index].Start
 		}
 
-		l.InsertAtIndex(index, start, newEnd, priority, name)
+		l.InsertAtIndex(index, start, newEnd, priority, name, threshold)
 
-		l.InsertInterval(newEnd, end, priority, name)
+		l.InsertInterval(newEnd, end, priority, name, threshold)
 
 	} else {
 		// interval overlaps with existing interval
@@ -280,6 +288,7 @@ func (l *PriorityList) InsertInterval(start int, end int, priority int, name str
 		oldEnd := l.Items[index].End
 		oldPriority := l.Items[index].Priority
 		oldName := l.Items[index].Name
+		oldThreshold := l.Items[index].Threshold
 
 		newStart := l.Items[index].Start + offset
 		newEnd := min(oldEnd, end)
@@ -287,7 +296,7 @@ func (l *PriorityList) InsertInterval(start int, end int, priority int, name str
 		// fmt.Println("overlap with", l.Items[index], "newStart", newStart, "newEnd", newEnd)
 
 		if l.Items[index].Priority >= priority {
-			l.InsertInterval(newEnd, end, priority, name)
+			l.InsertInterval(newEnd, end, priority, name, threshold)
 			return
 		}
 
@@ -297,41 +306,51 @@ func (l *PriorityList) InsertInterval(start int, end int, priority int, name str
 			l.Items[index].End = newEnd
 			l.Items[index].Priority = priority
 			l.Items[index].Name = name
+			l.Items[index].Threshold = threshold
 		} else {
 			// keep item but split
 			l.Items[index].End = newStart
 
 			index = index + 1
 
-			l.InsertAtIndex(index, newStart, newEnd, priority, name)
+			l.InsertAtIndex(index, newStart, newEnd, priority, name, threshold)
 		}
 
 		if newEnd < oldEnd {
-			l.InsertAtIndex(index+1, newEnd, oldEnd, oldPriority, oldName)
+			l.InsertAtIndex(index+1, newEnd, oldEnd, oldPriority, oldName, oldThreshold)
 		}
 
-		l.InsertInterval(newEnd, end, priority, name)
+		l.InsertInterval(newEnd, end, priority, name, threshold)
 	}
 }
 
-func (l *PriorityList) InsertAtIndex(index int, start int, end int, priority int, name string) {
+func (l *PriorityList) InsertAtIndex(
+	index int,
+	start int,
+	end int,
+	priority int,
+	name string,
+	threshold int,
+) {
 	if index < 0 || index > len(l.Items) {
 		return
 	}
 	if index == len(l.Items) {
 		l.Items = append(l.Items, &PriorityListItem{
-			Start:    start,
-			End:      end,
-			Priority: priority,
-			Name:     name,
+			Start:     start,
+			End:       end,
+			Priority:  priority,
+			Name:      name,
+			Threshold: threshold,
 		})
 	} else {
 		l.Items = append(l.Items[:index+1], l.Items[index:]...)
 		l.Items[index] = &PriorityListItem{
-			Start:    start,
-			End:      end,
-			Priority: priority,
-			Name:     name,
+			Start:     start,
+			End:       end,
+			Priority:  priority,
+			Name:      name,
+			Threshold: threshold,
 		}
 	}
 }
@@ -356,6 +375,10 @@ func (l *PriorityList) Print() {
 	fmt.Printf("\n%5s ", "prio")
 	for _, item := range l.Items {
 		fmt.Printf("%3d ", item.Priority)
+	}
+	fmt.Printf("\n%5s ", "thres")
+	for _, item := range l.Items {
+		fmt.Printf("%3d ", item.Threshold)
 	}
 	fmt.Printf("\n\n")
 

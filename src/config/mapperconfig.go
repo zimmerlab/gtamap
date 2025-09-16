@@ -26,6 +26,7 @@ type MapperConfig struct {
 		Regions            []string `mapstructure:"regions" yaml:"regions"`
 		UpstreamBases      int      `mapstructure:"upstream_bases" yaml:"upstream_bases"`
 		DownstreamBases    int      `mapstructure:"downstream_bases" yaml:"downstream_bases"`
+		RegionmaskFilePath string   `mapstructure:"regionmask_file_path" yaml:"regionmask_file_path"`
 
 		Output struct {
 			SingleFile       bool   `mapstructure:"single_file" yaml:"single_file"`

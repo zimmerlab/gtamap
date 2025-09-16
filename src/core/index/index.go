@@ -1102,7 +1102,6 @@ func BuildAndSerializeGenomeIndex(
 	fastaFile *os.File,
 	outputFile *os.File,
 	regionmaskBedFile *os.File,
-	regionmaskPriorityFile *os.File,
 ) {
 
 	fastaEntries, err := dataloader.ReadFasta(fastaFile)
@@ -1124,13 +1123,12 @@ func BuildAndSerializeGenomeIndex(
 	genomeIndex := BuildGenomeIndex(fastaEntries)
 
 	// add region mask to index if provided
-	if regionmaskBedFile != nil && regionmaskPriorityFile != nil {
+	if regionmaskBedFile != nil {
 
-		AddRegionmaskToIndex(regionmaskBedFile, regionmaskPriorityFile, genomeIndex)
+		AddRegionmaskToIndex(regionmaskBedFile, genomeIndex)
 
 		logrus.WithFields(logrus.Fields{
-			"region mask":   regionmaskBedFile.Name(),
-			"priority file": regionmaskPriorityFile.Name(),
+			"region mask": regionmaskBedFile.Name(),
 		}).Info("Using region mask bed file and priority file")
 
 	} else {
@@ -1141,14 +1139,12 @@ func BuildAndSerializeGenomeIndex(
 }
 
 func AddRegionmaskToIndex(
-	regionmaskBedFile *os.File,
-	regionmaskPriorityFile *os.File,
+	regionmaskFile *os.File,
 	genomeIndex *GenomeIndex,
 ) {
 
 	mask, errMask := NewRegionMask(
-		regionmaskPriorityFile,
-		regionmaskBedFile,
+		regionmaskFile,
 		genomeIndex.ContigToTargetRegions,
 	)
 

@@ -64,19 +64,19 @@ func testFastqReader2() {
 	fmt.Println(read.ReadR2)
 }
 
-func extractGeneSequenceFromGtfAndFastaForIndex() {
-
-	geneIds := make(map[string]struct{})
-	geneIds["ENSG00000173585"] = struct{}{}
-
-	gtfPath := "/home/sam/Data/gtamap/Homo_sapiens.GRCh38.113.chr.gtf"
-	fastaPath := "/home/sam/Data/gtamap/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
-	//fastaIndexPath := "/home/sam/Data/gtamap/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai"
-	outputPath := "/home/sam/Data/gtamap/"
-
-	index.ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath, fastaPath, outputPath, geneIds,
-		0, 0, false)
-}
+// func extractGeneSequenceFromGtfAndFastaForIndex() {
+//
+// 	geneIds := make(map[string]struct{})
+// 	geneIds["ENSG00000173585"] = struct{}{}
+//
+// 	gtfPath := "/home/sam/Data/gtamap/Homo_sapiens.GRCh38.113.chr.gtf"
+// 	fastaPath := "/home/sam/Data/gtamap/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+// 	//fastaIndexPath := "/home/sam/Data/gtamap/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai"
+// 	outputPath := "/home/sam/Data/gtamap/"
+//
+// 	index.ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath, fastaPath, outputPath, geneIds,
+// 		0, 0, false)
+// }
 
 func testSpecificRead() {
 
@@ -103,7 +103,7 @@ func testSpecificRead() {
 
 	numThreads := 1
 
-	mapper.MapAll(genomeIndex, reader, writer, &numThreads)
+	mapper.MapAll(genomeIndex, reader, writer, numThreads)
 }
 
 func testTas2ReadsAll() {
@@ -121,7 +121,7 @@ func testTas2ReadsAll() {
 
 	numThreads := 1
 
-	mapper.MapAll(genomeIndex, reader, writer, &numThreads)
+	mapper.MapAll(genomeIndex, reader, writer, numThreads)
 }
 
 func testTas2ReadsAllOnNsun5() {
@@ -139,7 +139,7 @@ func testTas2ReadsAllOnNsun5() {
 
 	numThreads := 1
 
-	mapper.MapAll(genomeIndex, reader, writer, &numThreads)
+	mapper.MapAll(genomeIndex, reader, writer, numThreads)
 }
 
 func testTas2ReadsAllOnActbRamBug() {
@@ -157,7 +157,7 @@ func testTas2ReadsAllOnActbRamBug() {
 
 	numThreads := 1
 
-	mapper.MapAll(genomeIndex, reader, writer, &numThreads)
+	mapper.MapAll(genomeIndex, reader, writer, numThreads)
 }
 
 func testTas2r4DeletionReads() {
@@ -175,7 +175,7 @@ func testTas2r4DeletionReads() {
 
 	numThreads := 1
 
-	mapper.MapAll(genomeIndex, reader, writer, &numThreads)
+	mapper.MapAll(genomeIndex, reader, writer, numThreads)
 }
 
 func testIndex() {
@@ -230,12 +230,12 @@ func testRegionmask() {
 	//
 	// fmt.Println(regionMask)
 
-	mapper.MapAll(genomeIndex, reader, writer, &numThreads)
+	mapper.MapAll(genomeIndex, reader, writer, numThreads)
 }
 
 func ViewRegionMask() {
 
-	index := index.ReadGenomeIndexByPath("/home/sam/Data/gtamap/opn1lw-opn1mw/X_154138492_154274890.with-regionmask.gtai")
+	index := index.ReadGenomeIndexByPath("/home/sam/Data/gtamap/opn1lw-opn1mw/X_154138492_154274890.regionmask.gtai")
 
 	for contig, mask := range index.RegionMask.ContigMasks {
 		fmt.Println("Contig:", contig)
@@ -301,8 +301,8 @@ func main() {
 	//testTas2ReadsAllOnActbRamBug()
 	//testIndex()
 
-	testRegionmask()
-	// ViewRegionMask()
+	// testRegionmask()
+	ViewRegionMask()
 
 	//analysis.CompareResults()
 }

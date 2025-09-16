@@ -13,7 +13,7 @@ import (
 func GetCommandIndex() *cobra.Command {
 
 	var fastaFilePath string
-	// var regionmaskBedFilePath string
+	var regionmaskFilePath string
 	// var regionmaskPriorityFilePath string
 	var outputDirPath string
 	var indexFileName string
@@ -34,6 +34,7 @@ func GetCommandIndex() *cobra.Command {
 			SetConfigValue("general.output_dir", outputDirPath)
 			SetConfigValue("index.output.index_file_name", indexFileName)
 			SetConfigValue("index.output.use_fasta_file_name", useFastaFileName)
+			SetConfigValue("index.regionmask_file_path", regionmaskFilePath)
 
 			if err := viper.Unmarshal(config.Mapper); err != nil {
 				logrus.Fatalf("Unable to decode config: %v", err)
@@ -79,39 +80,18 @@ func GetCommandIndex() *cobra.Command {
 		"Use the name of the fasta file (without extension) as index file name (within output directory)",
 	)
 
+	flags.StringVarP(
+		&regionmaskFilePath,
+		"regionmask",
+		"m",
+		"",
+		"Regionmask file (.bed) containing specific mismatch constraints per region",
+	)
+
 	return indexCmd
 }
 
 func ExecIndex() {
-
-	// // ensure .gtai suffix of output file
-	// if !strings.HasSuffix(*argsObj.OutputFile, ".gtai") {
-	// 	*argsObj.OutputFile += ".gtai"
-	// }
-	//
-	// outputFileIndex, err := os.OpenFile(
-	// 	*argsObj.OutputFile,
-	// 	os.O_WRONLY|os.O_CREATE|os.O_TRUNC,
-	// 	0o600,
-	// )
-	//
-	// if err != nil {
-	// 	logrus.Fatalf("Could not open output sam file: %v", err)
-	// }
-	//
-	// if *argsObj.RegionmaskBedFile == (os.File{}) {
-	// 	argsObj.RegionmaskBedFile = nil
-	// }
-	// if *argsObj.RegionmaskPriorityFile == (os.File{}) {
-	// 	argsObj.RegionmaskPriorityFile = nil
-	// }
-	// if (argsObj.RegionmaskBedFile == nil &&
-	// 	argsObj.RegionmaskPriorityFile != nil) ||
-	// 	(argsObj.RegionmaskBedFile != nil &&
-	// 		argsObj.RegionmaskPriorityFile == nil) {
-	// 	logrus.Fatal("Both --regionmaskBed and --regionmaskPriorities " +
-	// 		"need to be provided to use region masking.")
-	// }
 
 	fastaFile, err := os.Open(config.Mapper.Index.FastaFilePath)
 	if err != nil {
@@ -123,11 +103,21 @@ func ExecIndex() {
 		logrus.Fatalf("Could not open output index file: %v", err)
 	}
 
+	var regionmaskFile *os.File = nil
+	var errRegionMask error = nil
+
+	if config.Mapper.Index.RegionmaskFilePath != "" {
+		regionmaskFile, errRegionMask = os.Open(config.Mapper.Index.RegionmaskFilePath)
+		if errRegionMask != nil {
+			logrus.Fatalf("Could not open regionmask file: %v", errRegionMask)
+		}
+		defer regionmaskFile.Close()
+	}
+
 	index.BuildAndSerializeGenomeIndex(
 		fastaFile,
 		outputFile,
-		nil,
-		nil,
+		regionmaskFile,
 	)
 }
 
