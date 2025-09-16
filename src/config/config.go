@@ -14,7 +14,7 @@ const toolVersion string = "0.4.0"
 var kmerLength uint8 = 10
 
 // the maximum percentage of mismatches allowed in a read (50 = 50% percent mismatches allowed)
-var maxMismatchPercentage uint8 = 10
+// var maxMismatchPercentage uint8 = 10
 
 // the minimum length of an intron (in base pairs)
 // used to decide whether a gap is a deletion (if below this length) or an intron
@@ -90,9 +90,9 @@ func KmerLength() uint8 {
 	return kmerLength
 }
 
-func MaxMismatchPercentage() uint8 {
-	return maxMismatchPercentage
-}
+// func MaxMismatchPercentage() uint8 {
+// 	return maxMismatchPercentage
+// }
 
 func OutputDirectory() string {
 	// check if directory exists and create it if not

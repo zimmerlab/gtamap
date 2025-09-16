@@ -1138,19 +1138,6 @@ func mapReadToSequence(
 	return finalResults
 }
 
-// exceedsMismatchConstraint checks if the number of mismatches exceeds the maximum allowed percentage
-// as configured in the config. This value is an integer between 0 and 100 which represents the percentage
-// of allowed mismatches in the read.
-// The function returns true if the number of mismatches exceeds the allowed percentage.
-func exceedsMismatchConstraint(
-	read *fastq.Read,
-	result *mapperutils.ReadMatchResult,
-) bool {
-	// the percentage of the mismatches accumulated in the given result relative to the read length
-	mismatchPercentage := uint8(float64(len(result.MismatchesRead)) * 100 / float64(len(*read.Sequence)))
-	return mismatchPercentage > config.MaxMismatchPercentage()
-}
-
 func determineBestSplit(
 	genomeIndex *index.GenomeIndex,
 	read *fastq.Read,

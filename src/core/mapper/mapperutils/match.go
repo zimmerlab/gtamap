@@ -592,6 +592,35 @@ func hasLongDiagonals(mapping *ReadMatchResult) bool {
 	return true
 }
 
+// GetGenomicPosForReadPos returns the corresponding value in the
+// MatchedGenome regions for a given value in the MatchedRead regions.
+// It returns -1 if not corresponding value is found, which should
+// not happen if the given readPos is part of the MatchedRead regions.
+func (r *ReadMatchResult) GetGenomicPosForReadPos(readPos int) int {
+
+	for i, readRegion := range r.MatchedRead.Regions {
+
+		if readRegion.Start > readPos {
+			break
+		}
+
+		if readRegion.End <= readPos {
+			continue
+		}
+
+		offset := readPos - readRegion.Start
+
+		return r.MatchedGenome.Regions[i].Start + offset
+	}
+
+	return -1
+}
+
+func (r *ReadMatchResult) ResetMismatches() {
+	r.MismatchCounts = make(map[string]int)
+	r.MismatchesRead = make([]int, 0)
+}
+
 // AddMismatch tries to add a mismatch at the given position in the read.
 // It checks whether adding the mismatch would exceed the global or region-specific
 // mismatch constraints. If adding the mismatch is valid, it updates the mismatch

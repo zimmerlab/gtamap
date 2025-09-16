@@ -1114,6 +1114,8 @@ func correctOverhangs(
 
 	remaps := make([]*mapperutils.ReadMatchResult, 0)
 
+	regionMask := genomeIndex.RegionMask.TargetMasks[readMatchResult.SequenceIndex]
+
 	if len(readMatchResult.MatchedGenome.Regions) > 1 {
 
 		// we need to check left most anchor and right most anchor
@@ -1167,21 +1169,45 @@ func correctOverhangs(
 			missingBases := adjustedReadAnchorsLeft[i].Start
 			startPos := adjustedAnchorsLeft[i].Start
 			leftPaths := targetSeqIntronSet.TranscriptomeGraph.FindPathsLeft(startPos, missingBases)
-			if len(leftPaths) != 0 {
-				remapSectionsLeft := scoreLeftOptions(leftPaths, adjustedReadAnchorsLeft[i].Start, read.Sequence, genomeIndex.Sequences[readMatchResult.SequenceIndex], adjustedAnchorsLeft[i])
-				leftSections = append(leftSections, remapSectionsLeft...)
+
+			if len(leftPaths) == 0 {
+				continue
 			}
+
+			remapSectionsLeft := scoreLeftOptions(
+				leftPaths,
+				adjustedReadAnchorsLeft[i].Start,
+				read.Sequence,
+				genomeIndex.Sequences[readMatchResult.SequenceIndex],
+				adjustedAnchorsLeft[i],
+				readMatchResult.MismatchConstraintGlobal,
+			)
+
+			leftSections = append(leftSections, remapSectionsLeft...)
 		}
+
 		// correct last region
 		rightSections := make([]*RemapSection, 0)
+
 		for i := 0; i < len(adjustedReadAnchorsRight); i++ {
+
 			missingBases := len(*read.Sequence) - adjustedReadAnchorsRight[i].End
 			startPos := adjustedAnchorsRight[i].End
 			rightPaths := targetSeqIntronSet.TranscriptomeGraph.FindPathsRight(startPos, missingBases)
-			if len(rightPaths) != 0 {
-				remapSectionsRight := scoreRightOptions(rightPaths, adjustedReadAnchorsRight[i].End, read.Sequence, genomeIndex.Sequences[readMatchResult.SequenceIndex], adjustedAnchorsRight[i])
-				rightSections = append(rightSections, remapSectionsRight...)
+
+			if len(rightPaths) == 0 {
+				continue
 			}
+			remapSectionsRight := scoreRightOptions(
+				rightPaths,
+				adjustedReadAnchorsRight[i].End,
+				read.Sequence,
+				genomeIndex.Sequences[readMatchResult.SequenceIndex],
+				adjustedAnchorsRight[i],
+				readMatchResult.MismatchConstraintGlobal,
+			)
+
+			rightSections = append(rightSections, remapSectionsRight...)
 		}
 
 		rightRemaps := chooseBestRemapSection(rightSections)
@@ -1191,9 +1217,14 @@ func correctOverhangs(
 		finalRemaps := make([]*mapperutils.ReadMatchResult, 0)
 
 		if rightRemaps != nil && leftRemaps != nil {
+
 			for _, lSection := range leftRemaps {
+
 				lExtStopRead := lSection.MatchedRead[0].End
+
+			bothLoop:
 				for _, rSection := range rightRemaps {
+
 					rExtStartRead := rSection.MatchedRead[0].Start
 
 					// create template correction once (readMatchResult with regions removed which got remapped)
@@ -1207,45 +1238,87 @@ func correctOverhangs(
 					templateMM := extractMMofAnchor(templateMappedRead, correctedTemplate.MismatchesRead)
 					corrected := correctedTemplate.Copy()
 
+					// corrected.MismatchesRead = templateMM
+					// corrected.MismatchesRead = append(corrected.MismatchesRead, lSection.Mm...)
+					// corrected.MismatchesRead = append(corrected.MismatchesRead, rSection.Mm...)
+
+					corrected.ResetMismatches()
+					mismatches := append(append(templateMM, lSection.Mm...), rSection.Mm...)
+
+					for _, mm := range mismatches {
+						isValid := corrected.AddMismatch(
+							regionMask,
+							mm,
+							corrected.GetGenomicPosForReadPos(mm),
+						)
+						if !isValid {
+							continue bothLoop
+						}
+					}
+
 					for _, region := range lSection.MatchedGenome {
 						corrected.MatchedGenome.AddRegionNonOverlappingPanic(region.Start, region.End)
 					}
-
 					for _, region := range rSection.MatchedGenome {
 						corrected.MatchedGenome.AddRegionNonOverlappingPanic(region.Start, region.End)
 					}
-					corrected.MismatchesRead = templateMM
-					corrected.MismatchesRead = append(corrected.MismatchesRead, lSection.Mm...)
-					corrected.MismatchesRead = append(corrected.MismatchesRead, rSection.Mm...)
 
 					corrected.TotalLeftOptions = lSection.TotalLeftPaths
 					corrected.TotalRightOptions = rSection.TotalRightPaths
 					corrected.ValidLeftOptions = len(leftRemaps)
 					corrected.ValidRightOptions = len(rightRemaps)
+
 					finalRemaps = append(finalRemaps, corrected)
 				}
 			}
+
 		} else if rightRemaps != nil {
+
+		onlyRightLoop:
 			for _, rSection := range rightRemaps {
+
 				rExtStartRead := rSection.MatchedRead[len(rSection.MatchedRead)-1].Start
 				// create template correction once (readMatchResult with regions removed which got remapped)
 				correctedTemplate := readMatchResult.Copy()
+
 				// remove right regions
 				correctedTemplate.MatchedGenome.RemoveRegion(rSection.MainAnchor.End, len(*genomeIndex.Sequences[readMatchResult.SequenceIndex]))
 				templateMappedRead := regionvector.Region{Start: 0, End: rExtStartRead}
 				templateMM := extractMMofAnchor(templateMappedRead, correctedTemplate.MismatchesRead)
 				corrected := correctedTemplate.Copy()
+
+				// corrected.MismatchesRead = templateMM
+				// corrected.MismatchesRead = append(corrected.MismatchesRead, rSection.Mm...)
+
+				corrected.ResetMismatches()
+				mismatches := append(templateMM, rSection.Mm...)
+
+				for _, mm := range mismatches {
+					isValid := corrected.AddMismatch(
+						regionMask,
+						mm,
+						corrected.GetGenomicPosForReadPos(mm),
+					)
+					if !isValid {
+						continue onlyRightLoop
+					}
+				}
+
 				for _, region := range rSection.MatchedGenome {
 					corrected.MatchedGenome.AddRegionNonOverlappingPanic(region.Start, region.End)
 				}
-				corrected.MismatchesRead = templateMM
-				corrected.MismatchesRead = append(corrected.MismatchesRead, rSection.Mm...)
+
 				corrected.TotalRightOptions = rSection.TotalRightPaths
 				corrected.ValidRightOptions = len(rightRemaps)
+
 				finalRemaps = append(finalRemaps, corrected)
 			}
+
 		} else if leftRemaps != nil {
+
+		onlyLeftLoop:
 			for _, lSection := range leftRemaps {
+
 				lExtStopRead := lSection.MatchedRead[0].End
 				// create template correction once (readMatchResult with regions removed which got remapped)
 				correctedTemplate := readMatchResult.Copy()
@@ -1254,13 +1327,31 @@ func correctOverhangs(
 				templateMappedRead := regionvector.Region{Start: lExtStopRead, End: len(*read.Sequence)}
 				templateMM := extractMMofAnchor(templateMappedRead, correctedTemplate.MismatchesRead)
 				corrected := correctedTemplate.Copy()
+
+				// corrected.MismatchesRead = templateMM
+				// corrected.MismatchesRead = append(corrected.MismatchesRead, lSection.Mm...)
+
+				corrected.ResetMismatches()
+				mismatches := append(templateMM, lSection.Mm...)
+
+				for _, mm := range mismatches {
+					isValid := corrected.AddMismatch(
+						regionMask,
+						mm,
+						corrected.GetGenomicPosForReadPos(mm),
+					)
+					if !isValid {
+						continue onlyLeftLoop
+					}
+				}
+
 				for _, region := range lSection.MatchedGenome {
 					corrected.MatchedGenome.AddRegionNonOverlappingPanic(region.Start, region.End)
 				}
-				corrected.MismatchesRead = templateMM
-				corrected.MismatchesRead = append(corrected.MismatchesRead, lSection.Mm...)
+
 				corrected.TotalLeftOptions = lSection.TotalLeftPaths
 				corrected.ValidLeftOptions = len(leftRemaps)
+
 				finalRemaps = append(finalRemaps, corrected)
 			}
 		}
@@ -1268,6 +1359,7 @@ func correctOverhangs(
 		for _, r := range finalRemaps {
 			r.IsOverhangCorrected = true
 		}
+
 		return finalRemaps
 
 	} else {
@@ -1768,7 +1860,15 @@ func fixPointRNARemap(
 				}
 			}
 			if len(leftPaths) != 0 {
-				remapSectionsLeft := scoreLeftOptions(leftPaths, anchorToRemap.MainAnchorRead.Start, read.Sequence, genomeIndex.Sequences[anchorToRemap.SequenceIndex], anchorToRemap.MainAnchorGenome)
+				remapSectionsLeft := scoreLeftOptions(
+					leftPaths,
+					anchorToRemap.MainAnchorRead.Start,
+					read.Sequence,
+					genomeIndex.Sequences[anchorToRemap.SequenceIndex],
+					anchorToRemap.MainAnchorGenome,
+					readMatchResult.MismatchConstraintGlobal,
+				)
+
 				anchorToRemap.TotalLeftPaths = len(leftPaths)
 				anchorToRemap.LeftSections = remapSectionsLeft
 			}
@@ -1793,14 +1893,31 @@ func fixPointRNARemap(
 					rightPaths = append(rightPaths, path)
 				}
 			}
+
 			if len(rightPaths) != 0 {
-				remapSectionsRight := scoreRightOptions(rightPaths, anchorToRemap.MainAnchorRead.End, read.Sequence, genomeIndex.Sequences[anchorToRemap.SequenceIndex], anchorToRemap.MainAnchorGenome)
+
+				remapSectionsRight := scoreRightOptions(
+					rightPaths,
+					anchorToRemap.MainAnchorRead.End,
+					read.Sequence,
+					genomeIndex.Sequences[anchorToRemap.SequenceIndex],
+					anchorToRemap.MainAnchorGenome,
+					readMatchResult.MismatchConstraintGlobal,
+				)
+
 				anchorToRemap.TotalRightPaths = len(rightPaths)
 				anchorToRemap.RightSections = remapSectionsRight
 			}
 		}
 	}
-	readMatchResultRemaps := extractCandidates(remaps, len(*read.Sequence))
+
+	readMatchResultRemaps := extractCandidates(
+		genomeIndex,
+		readMatchResult,
+		remaps,
+		len(*read.Sequence),
+	)
+
 	return readMatchResultRemaps
 }
 
@@ -1829,17 +1946,23 @@ func (r *RemapSection) reverseRegions() {
 }
 
 func extractCandidates(
+	genomeIndex *index.GenomeIndex,
+	readMatchResult *mapperutils.ReadMatchResult,
 	anchorRemaps []*Remap,
 	readLength int,
 ) []*mapperutils.ReadMatchResult {
+
+	regionMask := genomeIndex.RegionMask.TargetMasks[readMatchResult.SequenceIndex]
 
 	// for each anchor, there can be several combinations. This means 1 Anchor -> N readMatchResults
 	finalResults := make([]*mapperutils.ReadMatchResult, 0)
 
 	for _, anchorRemap := range anchorRemaps {
+
 		// get lowest score for left sections
 		var leftCandidates []*RemapSection
 		var rightCandidates []*RemapSection
+
 		if len(anchorRemap.LeftSections) != 0 {
 			leftCandidates = getBestCandidateSections(anchorRemap.LeftSections)
 			// for these candidates we need to do an extra step since their regions and mms are in rev order
@@ -1847,14 +1970,19 @@ func extractCandidates(
 				l.reverseRegions()
 			}
 		}
+
 		if len(anchorRemap.RightSections) != 0 {
 			rightCandidates = getBestCandidateSections(anchorRemap.RightSections)
 		}
 
 		if rightCandidates != nil && leftCandidates != nil {
-			// create all pairwise combos :)
+
+			// create all pairwise combos
 			for _, lCandidate := range leftCandidates {
+
+			bothLoop:
 				for _, rCandidate := range rightCandidates {
+
 					alternativeReadMatchResult := &mapperutils.ReadMatchResult{
 						SequenceIndex:       anchorRemap.SequenceIndex,
 						MatchedRead:         &regionvector.RegionVector{},
@@ -1871,17 +1999,35 @@ func extractCandidates(
 						ValidRightOptions:   len(rightCandidates),
 					}
 
-					// TODO: maybe early exit here is mismatch threshold reached
-					alternativeReadMatchResult.MismatchesRead = append(alternativeReadMatchResult.MismatchesRead, lCandidate.Mm...)
-					alternativeReadMatchResult.MismatchesRead = append(alternativeReadMatchResult.MismatchesRead, anchorRemap.Mm...)
-					alternativeReadMatchResult.MismatchesRead = append(alternativeReadMatchResult.MismatchesRead, rCandidate.Mm...)
+					mismatches := append(append(lCandidate.Mm, anchorRemap.Mm...), rCandidate.Mm...)
 
-					// TODO: change to config param
-					if uint8(float64(len(alternativeReadMatchResult.MismatchesRead))*100/float64(readLength)) > config.MaxMismatchPercentage() {
-						continue
-					} else {
-						alternativeReadMatchResult.IncompleteMap = false
+					for _, mm := range mismatches {
+						isValid := alternativeReadMatchResult.AddMismatch(
+							regionMask,
+							mm,
+							readMatchResult.GetGenomicPosForReadPos(mm),
+						)
+
+						fmt.Println(isValid, mm, readMatchResult.GetGenomicPosForReadPos(mm))
+
+						if !isValid {
+							continue bothLoop
+						}
 					}
+
+					// // TODO: maybe early exit here is mismatch threshold reached
+					// alternativeReadMatchResult.MismatchesRead = append(alternativeReadMatchResult.MismatchesRead, lCandidate.Mm...)
+					// alternativeReadMatchResult.MismatchesRead = append(alternativeReadMatchResult.MismatchesRead, anchorRemap.Mm...)
+					// alternativeReadMatchResult.MismatchesRead = append(alternativeReadMatchResult.MismatchesRead, rCandidate.Mm...)
+					//
+					// // TODO: change to config param
+					// if uint8(float64(len(alternativeReadMatchResult.MismatchesRead))*100/float64(readLength)) > config.MaxMismatchPercentage() {
+					// 	continue
+					// } else {
+					// 	alternativeReadMatchResult.IncompleteMap = false
+					// }
+
+					alternativeReadMatchResult.IncompleteMap = false
 
 					alternativeReadMatchResult.MatchedRead.Regions = append(alternativeReadMatchResult.MatchedRead.Regions, lCandidate.MatchedRead...)
 					alternativeReadMatchResult.MatchedRead.Regions = append(alternativeReadMatchResult.MatchedRead.Regions, anchorRemap.MainAnchorRead)
@@ -1895,6 +2041,8 @@ func extractCandidates(
 				}
 			}
 		} else if leftCandidates != nil {
+
+		onlyLeftLoop:
 			for _, lCandidate := range leftCandidates {
 				alternativeReadMatchResult := &mapperutils.ReadMatchResult{
 					SequenceIndex:       anchorRemap.SequenceIndex,
@@ -1911,14 +2059,31 @@ func extractCandidates(
 					ValidLeftOptions:    len(leftCandidates),
 					ValidRightOptions:   len(rightCandidates),
 				}
-				alternativeReadMatchResult.MismatchesRead = append(alternativeReadMatchResult.MismatchesRead, lCandidate.Mm...)
-				alternativeReadMatchResult.MismatchesRead = append(alternativeReadMatchResult.MismatchesRead, anchorRemap.Mm...)
 
-				if uint8(float64(len(alternativeReadMatchResult.MismatchesRead))*100/float64(readLength)) > config.MaxMismatchPercentage() {
-					continue
-				} else {
-					alternativeReadMatchResult.IncompleteMap = false
+				mismatches := append(lCandidate.Mm, anchorRemap.Mm...)
+
+				for _, mm := range mismatches {
+					isValid := alternativeReadMatchResult.AddMismatch(
+						regionMask,
+						mm,
+						readMatchResult.GetGenomicPosForReadPos(mm),
+					)
+
+					if !isValid {
+						continue onlyLeftLoop
+					}
 				}
+
+				// alternativeReadMatchResult.MismatchesRead = append(alternativeReadMatchResult.MismatchesRead, lCandidate.Mm...)
+				// alternativeReadMatchResult.MismatchesRead = append(alternativeReadMatchResult.MismatchesRead, anchorRemap.Mm...)
+				//
+				// if uint8(float64(len(alternativeReadMatchResult.MismatchesRead))*100/float64(readLength)) > config.MaxMismatchPercentage() {
+				// 	continue
+				// } else {
+				// 	alternativeReadMatchResult.IncompleteMap = false
+				// }
+
+				alternativeReadMatchResult.IncompleteMap = false
 
 				alternativeReadMatchResult.MatchedRead.Regions = append(alternativeReadMatchResult.MatchedRead.Regions, lCandidate.MatchedRead...)
 				alternativeReadMatchResult.MatchedRead.Regions = append(alternativeReadMatchResult.MatchedRead.Regions, anchorRemap.MainAnchorRead)
@@ -1929,6 +2094,8 @@ func extractCandidates(
 				finalResults = append(finalResults, alternativeReadMatchResult)
 			}
 		} else if rightCandidates != nil {
+
+		onlyRightLoop:
 			for _, rCandidate := range rightCandidates {
 				alternativeReadMatchResult := &mapperutils.ReadMatchResult{
 					SequenceIndex:       anchorRemap.SequenceIndex,
@@ -1945,14 +2112,31 @@ func extractCandidates(
 					ValidLeftOptions:    len(leftCandidates),
 					ValidRightOptions:   len(rightCandidates),
 				}
-				alternativeReadMatchResult.MismatchesRead = append(alternativeReadMatchResult.MismatchesRead, anchorRemap.Mm...)
-				alternativeReadMatchResult.MismatchesRead = append(alternativeReadMatchResult.MismatchesRead, rCandidate.Mm...)
 
-				if uint8(float64(len(alternativeReadMatchResult.MismatchesRead))*100/float64(readLength)) > config.MaxMismatchPercentage() {
-					continue
-				} else {
-					alternativeReadMatchResult.IncompleteMap = false
+				mismatches := append(anchorRemap.Mm, rCandidate.Mm...)
+
+				for _, mm := range mismatches {
+					isValid := alternativeReadMatchResult.AddMismatch(
+						regionMask,
+						mm,
+						readMatchResult.GetGenomicPosForReadPos(mm),
+					)
+
+					if !isValid {
+						continue onlyRightLoop
+					}
 				}
+
+				// alternativeReadMatchResult.MismatchesRead = append(alternativeReadMatchResult.MismatchesRead, anchorRemap.Mm...)
+				// alternativeReadMatchResult.MismatchesRead = append(alternativeReadMatchResult.MismatchesRead, rCandidate.Mm...)
+				//
+				// if uint8(float64(len(alternativeReadMatchResult.MismatchesRead))*100/float64(readLength)) > config.MaxMismatchPercentage() {
+				// 	continue
+				// } else {
+				// 	alternativeReadMatchResult.IncompleteMap = false
+				// }
+
+				alternativeReadMatchResult.IncompleteMap = false
 
 				alternativeReadMatchResult.MatchedRead.Regions = append(alternativeReadMatchResult.MatchedRead.Regions, anchorRemap.MainAnchorRead)
 				alternativeReadMatchResult.MatchedRead.Regions = append(alternativeReadMatchResult.MatchedRead.Regions, rCandidate.MatchedRead...)
@@ -1987,18 +2171,30 @@ func getBestCandidateSections(sections []*RemapSection) []*RemapSection {
 	return candidates
 }
 
-func scoreRightOptions(rightPaths [][]regionvector.Region, startInRead int, readSeq *[]byte, refSeq *[]byte, mainAnchor regionvector.Region) []*RemapSection {
+func scoreRightOptions(
+	rightPaths [][]regionvector.Region,
+	startInRead int,
+	readSeq *[]byte,
+	refSeq *[]byte,
+	mainAnchor regionvector.Region,
+	maxMismatches int,
+) []*RemapSection {
+
 	remapSectionsRight := make([]*RemapSection, 0)
 	lenReadSeq := len(*readSeq)
+
 PathLoop:
 	for _, path := range rightPaths {
+
 		currSection := RemapSection{
 			MainAnchor:    mainAnchor,
 			MatchedGenome: path,
 			MatchedRead:   make([]regionvector.Region, 0),
 			Mm:            make([]int, 0),
 		}
+
 		lastStart := startInRead
+
 		for _, genomicRegion := range path {
 			readRegion := regionvector.Region{
 				Start: lastStart,
@@ -2013,7 +2209,8 @@ PathLoop:
 				if (*refSeq)[refPos] != (*readSeq)[lastStart] && lastStart != startInRead {
 					currSection.Mm = append(currSection.Mm, lastStart)
 				}
-				if uint8(float64(len(currSection.Mm))*100/float64(lenReadSeq)) >= config.MaxMismatchPercentage() {
+
+				if int(float64(len(currSection.Mm))*100/float64(lenReadSeq)) > maxMismatches {
 					continue PathLoop // skip this path and don't append to remapSectionsLeft since mms already too many
 				}
 				lastStart++
@@ -2027,11 +2224,21 @@ PathLoop:
 	return remapSectionsRight
 }
 
-func scoreLeftOptions(leftPaths [][]regionvector.Region, startInRead int, readSeq *[]byte, refSeq *[]byte, mainAnchor regionvector.Region) []*RemapSection {
+func scoreLeftOptions(
+	leftPaths [][]regionvector.Region,
+	startInRead int,
+	readSeq *[]byte,
+	refSeq *[]byte,
+	mainAnchor regionvector.Region,
+	maxMismatches int,
+) []*RemapSection {
+
 	remapSectionsLeft := make([]*RemapSection, 0)
 	lenReadSeq := len(*readSeq)
+
 PathLoop:
 	for _, path := range leftPaths {
+
 		// WARN: left pasths are inverted ;)
 		currSection := RemapSection{
 			MainAnchor:    mainAnchor,
@@ -2039,6 +2246,7 @@ PathLoop:
 			MatchedRead:   make([]regionvector.Region, 0),
 			Mm:            make([]int, 0),
 		}
+
 		lastStart := startInRead
 		for _, genomicRegion := range path {
 			readRegion := regionvector.Region{
@@ -2055,7 +2263,7 @@ PathLoop:
 					currSection.Mm = append(currSection.Mm, lastStart-1)
 				}
 
-				if uint8(float64(len(currSection.Mm))*100/float64(lenReadSeq)) >= config.MaxMismatchPercentage() {
+				if int(float64(len(currSection.Mm))*100/float64(lenReadSeq)) > maxMismatches {
 					continue PathLoop // skip this path and don't append to remapSectionsLeft since mms already too many
 				}
 
