@@ -6,30 +6,6 @@ const toolVersion string = "0.4.0"
 
 var kmerLength uint8 = 10
 
-var outputDirectory string = "~/gtamap-output"
-
-var (
-	includeReadsImproperlyPaired  bool = false
-	includeReadsAmbiguouslyMapped bool = false
-	includeReadsUnmapped          bool = false
-)
-
-var (
-	outputIncludeReadSequence  bool = true
-	outputIncludeReadQuality   bool = true
-	outputIncludeDetailedCigar bool = false
-)
-
-// properPairLevel sets the level of reads that are considered properly paired
-// 0 = both reads are mapped to the same reference on different strands
-// 1 = 0 and the distance between the reads is consistent with the fragment length
-var properPairLevel uint8 = 0
-
-var (
-	fragmentLength          int = 0
-	fragmentLengthDeviation int = 0
-)
-
 // Mapping params
 var (
 	MaxBranchPoints int = 30 // how often if applyPossibleDiagonals allowed to branch
@@ -65,44 +41,4 @@ func ToolVersion() string {
 
 func KmerLength() uint8 {
 	return kmerLength
-}
-
-func IncludeReadsImproperlyPaired() bool {
-	return includeReadsImproperlyPaired
-}
-
-func IncludeReadsAmbiguouslyMapped() bool {
-	return includeReadsAmbiguouslyMapped
-}
-
-func IncludeReadsUnmapped() bool {
-	return includeReadsUnmapped
-}
-
-func SetOutputIncludeReadSequence(value bool) {
-	outputIncludeReadSequence = value
-}
-
-func OutputIncludeReadSequence() bool {
-	return outputIncludeReadSequence
-}
-
-func SetOutputIncludeReadQuality(value bool) {
-	outputIncludeReadQuality = value
-}
-
-func OutputIncludeReadQuality() bool {
-	return outputIncludeReadQuality
-}
-
-func SetOutputIncludeDetailedCigar(value bool) {
-	outputIncludeDetailedCigar = value
-}
-
-func OutputIncludeDetailedCigar() bool {
-	return outputIncludeDetailedCigar
-}
-
-func ProperPairLevel() uint8 {
-	return properPairLevel
 }
