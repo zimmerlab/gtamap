@@ -279,20 +279,33 @@ func repairIntrons(
 	return repairedIntrons
 }
 
-func InferIntronsOfTarget(targetId int, confMaps []*ConfidentTask, index *index.GenomeIndex) *mapperutils.TargetAnnotation {
+func InferIntronsOfTarget(
+	targetId int,
+	confMaps []*ConfidentTask,
+	index *index.GenomeIndex,
+) *mapperutils.TargetAnnotation {
+
 	// I. get all gaps of targetId in plus orientation
-	plusOrientatedGaps, plusEvidence, minusEvidence := getGapsPlusOrientation(targetId, confMaps, index) // map[int][]*interval.Interval
+	plusOrientatedGaps, plusEvidence, minusEvidence := getGapsPlusOrientation(
+		targetId,
+		confMaps,
+		index,
+	) // map[int][]*interval.Interval
+
 	// II. count how often each gap exists (plus orientation gaps)
 	countedGapsOfTarget := countGaps(plusOrientatedGaps)
+
 	// III. cluster plus oriented gaps and get start/stop with highest evidence (eStart|eStop)
 	plusOrientatedIntronsOfTarget := clusterGaps(countedGapsOfTarget)
+
 	// Check if some introns which don't follow splice sites would follow them by modifying start/end coords
-	if config.IsOriginRNA {
+	if config.Mapper.Mapping.IsReadOriginRna {
 		repairedIntrons := repairIntrons(plusOrientatedIntronsOfTarget, targetId, index)
 		if repairedIntrons != nil {
 			plusOrientatedIntronsOfTarget = repairedIntrons
 		}
 	}
+
 	// IV. now we mirror these plus orientated introns to get minus coords
 	minusOrientatedIntronsOfTarget := invertIntrons(targetId, plusOrientatedIntronsOfTarget, index)
 
@@ -422,9 +435,12 @@ func getGapsPlusOrientation(
 			}
 
 			var knownSpliceSite int = 0
-			if config.IsOriginRNA && len(confMap.ResultFw.SpliceSitesInfo) != 0 {
+
+			if config.Mapper.Mapping.IsReadOriginRna &&
+				len(confMap.ResultFw.SpliceSitesInfo) != 0 {
 				knownSpliceSite = confMap.ResultFw.SpliceSitesInfo[i-skippedGaps]
 			}
+
 			if rStart > lStop {
 				if confMap.ResultFw.SequenceIndex%2 == 0 {
 					plusOrientatedGapsPerMainSeqId = append(plusOrientatedGapsPerMainSeqId, &regionvector.Gap{
@@ -454,22 +470,30 @@ func getGapsPlusOrientation(
 			}
 
 			var knownSpliceSite int = 0
-			if config.IsOriginRNA && len(confMap.ResultRv.SpliceSitesInfo) != 0 {
+			if config.Mapper.Mapping.IsReadOriginRna &&
+				len(confMap.ResultRv.SpliceSitesInfo) != 0 {
 				knownSpliceSite = confMap.ResultRv.SpliceSitesInfo[i-skippedGaps]
 			}
+
 			if rStart > lStop {
 				if confMap.ResultRv.SequenceIndex%2 == 0 {
-					plusOrientatedGapsPerMainSeqId = append(plusOrientatedGapsPerMainSeqId, &regionvector.Gap{
-						Start:           lStop,
-						End:             rStart,
-						SpliceSiteScore: knownSpliceSite,
-					})
+					plusOrientatedGapsPerMainSeqId = append(
+						plusOrientatedGapsPerMainSeqId,
+						&regionvector.Gap{
+							Start:           lStop,
+							End:             rStart,
+							SpliceSiteScore: knownSpliceSite,
+						},
+					)
 				} else {
-					plusOrientatedGapsPerMainSeqId = append(plusOrientatedGapsPerMainSeqId, &regionvector.Gap{
-						Start:           len(*index.Sequences[sId]) - rStart,
-						End:             len(*index.Sequences[sId]) - lStop,
-						SpliceSiteScore: knownSpliceSite,
-					})
+					plusOrientatedGapsPerMainSeqId = append(
+						plusOrientatedGapsPerMainSeqId,
+						&regionvector.Gap{
+							Start:           len(*index.Sequences[sId]) - rStart,
+							End:             len(*index.Sequences[sId]) - lStop,
+							SpliceSiteScore: knownSpliceSite,
+						},
+					)
 				}
 			}
 		}

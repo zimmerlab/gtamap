@@ -728,7 +728,7 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 
 			// if this is the last match, add the number of matches
 			if i == len(r.MatchedGenome.Regions)-1 {
-				if config.IncludeMMinSAM {
+				if config.Mapper.Mapping.Output.IncludeMMinSAM {
 					builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead, false))
 				} else {
 					builder.WriteString(strconv.Itoa(numMatchesSum))
@@ -753,7 +753,7 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 				continue
 			}
 
-			if config.IncludeMMinSAM {
+			if config.Mapper.Mapping.Output.IncludeMMinSAM {
 				builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead, false))
 			} else {
 				builder.WriteString(strconv.Itoa(numMatchesSum))
@@ -809,7 +809,7 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 
 			// if this is the last match, add the number of matches
 			if i == 0 {
-				if config.IncludeMMinSAM {
+				if config.Mapper.Mapping.Output.IncludeMMinSAM {
 					builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead, true))
 				} else {
 					builder.WriteString(strconv.Itoa(numMatchesSum))
@@ -834,8 +834,14 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 				continue
 			}
 
-			if config.IncludeMMinSAM {
-				builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead, true))
+			if config.Mapper.Mapping.Output.IncludeMMinSAM {
+				builder.WriteString(
+					ParseMatchedRegion(
+						r.MatchedRead.Regions[i],
+						r.MismatchesRead,
+						true,
+					),
+				)
 			} else {
 				builder.WriteString(strconv.Itoa(numMatchesSum))
 				builder.WriteString("M")

@@ -59,16 +59,17 @@ func GlobalFilter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
 	}
 
 	// TODO: Needs to be dynamic based on read length
-	// INFO: DNA RNA MODE
-	if config.IsOriginRNA {
-		return numMatchingFw >= 6 || numMatchingRv >= 6
-	} else {
-		return numMatchingFw >= 7 || numMatchingRv >= 7
-	}
+	keepFw := numMatchingFw >= config.Mapper.GetFilterMinMatches()
+	keepRv := numMatchingRv >= config.Mapper.GetFilterMinMatches()
+
+	return keepFw || keepRv
 }
 
-func BinnedFilter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
-	if config.IsOriginRNA {
+func BinnedFilter(
+	readSequence *[]byte,
+	genomeIndex *index.GenomeIndex,
+) bool {
+	if config.Mapper.Mapping.IsReadOriginRna {
 		// TODO: Needs to be dynamic based on read length
 		// return FilterWithBins(readSequence, genomeIndex, 80, 3)
 		return FilterWithOverlappingBins(readSequence, genomeIndex, 30, 2)
@@ -79,7 +80,13 @@ func BinnedFilter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
 	}
 }
 
-func FilterWithBins(readSequence *[]byte, genomeIndex *index.GenomeIndex, binSize uint32, kmerMatchThreshold int) bool {
+func FilterWithBins(
+	readSequence *[]byte,
+	genomeIndex *index.GenomeIndex,
+	binSize uint32,
+	kmerMatchThreshold int,
+) bool {
+
 	kmerLen := int(config.KmerLength())
 	readLen := len(*readSequence)
 

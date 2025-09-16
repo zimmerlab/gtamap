@@ -48,7 +48,7 @@ func ThirdPassWorker(
 
 		var builder strings.Builder
 
-		if config.IncludeAllPairings {
+		if config.Mapper.Mapping.Output.IncludeAllPairings {
 
 			for i := 0; i < len(task.TargetInfo.Fw); i++ {
 

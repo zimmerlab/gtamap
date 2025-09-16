@@ -1097,9 +1097,8 @@ func mapReadToSequence(
 
 		extendDiagonals(read, genomeIndex, res)
 
-		// INFO: DNA RNA
 		// Only annotate if RNA
-		if res.MatchedGenome.HasGaps() && config.IsOriginRNA {
+		if res.MatchedGenome.HasGaps() && config.Mapper.Mapping.IsReadOriginRna {
 			res.NormalizeRegions()
 			annotateSpliceSites(
 				// read,
@@ -1108,8 +1107,8 @@ func mapReadToSequence(
 			)
 		}
 
-		// INFO: DNA RNA MODE
-		if !config.IsOriginRNA {
+		if !config.Mapper.Mapping.IsReadOriginRna {
+			// TODO: make this configurable
 			// for DNA reads we expect the raw result to already be of a certain length
 			if res.MatchedGenome.Length()*10 < len(*read.Sequence)*7 {
 				// skip this map if the final length is less than 70 precent of read length
@@ -1121,26 +1120,7 @@ func mapReadToSequence(
 			res.IncompleteMap = true
 		}
 
-		// INFO: Now apply blacklist
-		// If res in a repeat region, only append to finalResults when low mm
-
-		// genomeIndex.IsResultValid(res)
-
-		// TODO: adjust to region mask
-		// if genomeIndex.IsPartOfRepeat(res) {
-		//
-		// 	mmPercentage := uint8(float64(len(res.MismatchesRead)) * 100 /
-		// 		float64(len(*read.Sequence)))
-		//
-		// 	if mmPercentage <= config.MaxMismatchPercentageRepeat {
-		// 		finalResults = append(finalResults, res)
-		// 	}
-		// } else {
-		// 	finalResults = append(finalResults, res)
-		// }
-
 		finalResults = append(finalResults, res)
-
 	}
 
 	return finalResults

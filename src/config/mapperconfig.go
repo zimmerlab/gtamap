@@ -48,6 +48,7 @@ type MapperConfig struct {
 		MaxBranchingDepth  int    `mapstructure:"max_branching_depth" yaml:"max_branching_depth"`
 
 		RnaMode struct {
+			FilterMinMatches      int     `mapstructure:"filter_min_matches" yaml:"filter_min_matches"` // the minimum number of exact matches required to keep the read during filtering
 			IntronLengthMin       int     `mapstructure:"intron_length_min" yaml:"intron_length_min"`
 			MaxMismatchCount      int     `mapstructure:"max_mismatch_count" yaml:"max_mismatch_count"`
 			MaxMismatchPercentage float64 `mapstructure:"max_mismatch_percentage" yaml:"max_mismatch_percentage"`
@@ -61,6 +62,7 @@ type MapperConfig struct {
 		} `mapstructure:"rna_mode" yaml:"rna_mode"`
 
 		DnaMode struct {
+			FilterMinMatches         int     `mapstructure:"filter_min_matches" yaml:"filter_min_matches"` // the minimum number of exact matches required to keep the read during filtering
 			MinLengthInitialDiagonal int     `mapstructure:"min_length_initial_diagonal" yaml:"min_length_initial_diagonal"`
 			MaxGapLength             int     `mapstructure:"max_gap_length" yaml:"max_gap_length"`
 			MaxGapCount              int     `mapstructure:"max_gap_count" yaml:"max_gap_count"`
@@ -76,9 +78,9 @@ type MapperConfig struct {
 		} `mapstructure:"dna_mode" yaml:"dna_mode"`
 
 		Output struct {
-			SamFileName        string `mapstructure:"sam_file_name" yaml:"sam_file_name"`
-			IncludeMMinSAM     bool   `mapstructure:"sam_use_x" yaml:"sam_use_x"`
-			IncludeAllPairings bool   `mapstructure:"sam_include_all_pairings" yaml:"sam_include_all_pairings"`
+			SamFileName        string `mapstructure:"sam_file_name" yaml:"sam_file_name"`                       // the default name of the output sam file
+			IncludeMMinSAM     bool   `mapstructure:"sam_use_x" yaml:"sam_use_x"`                               // if set to true, CIGAR will include "=" and "X" runes instead of only "M"
+			IncludeAllPairings bool   `mapstructure:"sam_include_all_pairings" yaml:"sam_include_all_pairings"` // if set to true, all vs. all pairings are written to sam output  NOTE: actual pairing is not implemented yet
 		} `mapstructure:"output" yaml:"output"`
 	} `mapstructure:"mapping" yaml:"mapping"`
 }
@@ -221,6 +223,14 @@ func (c *MapperConfig) GetConfidentIntronClusterRepairWindow() int {
 	}
 }
 
+func (c *MapperConfig) GetFilterMinMatches() int {
+	if c.Mapping.IsReadOriginRna {
+		return c.Mapping.RnaMode.FilterMinMatches
+	} else {
+		return c.Mapping.DnaMode.FilterMinMatches
+	}
+}
+
 func setDefaults() {
 
 	// GENERAL
@@ -245,6 +255,7 @@ func setDefaults() {
 	viper.SetDefault("mapping.max_branching_depth", 30)
 
 	// MAPPING - RNA MODE
+	viper.SetDefault("mapping.rna_mode.filter_min_matches", 6)
 	viper.SetDefault("mapping.rna_mode.intron_length_min", 20)
 	viper.SetDefault("mapping.rna_mode.max_mismatch_count", -1)
 	viper.SetDefault("mapping.rna_mode.max_mismatch_percentage", 0.1)
@@ -256,6 +267,7 @@ func setDefaults() {
 	viper.SetDefault("mapping.rna_mode.confident.intron_cluster_repair_window", 10)
 
 	// MAPPING - DNA MODE
+	viper.SetDefault("mapping.dna_mode.filter_min_matches", 7)
 	viper.SetDefault("mapping.dna_mode.min_length_initial_diagonal", 0.7)
 	viper.SetDefault("mapping.dna_mode.max_gap_length", 1000)
 	viper.SetDefault("mapping.dna_mode.max_gap_count", 1)
