@@ -13,9 +13,6 @@ const toolVersion string = "0.4.0"
 
 var kmerLength uint8 = 10
 
-// the maximum error rate allowed per read
-var errorRate float64 = 0.05
-
 var outputDirectory string = "~/gtamap-output"
 
 var (
@@ -73,10 +70,6 @@ func Env() string {
 
 func ToolVersion() string {
 	return toolVersion
-}
-
-func ErrorRate() float64 {
-	return errorRate
 }
 
 func KmerLength() uint8 {
