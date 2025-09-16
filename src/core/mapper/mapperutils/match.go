@@ -2,12 +2,15 @@ package mapperutils
 
 import (
 	"fmt"
-	"slices"
+	"os"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/KleinSamuel/gtamap/src/config"
+	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
+	"github.com/KleinSamuel/gtamap/src/core/interval"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/sirupsen/logrus"
 )
@@ -35,13 +38,75 @@ type SequenceMatchResult struct {
 }
 
 type ReadMatchResult struct {
-	SequenceIndex   int                        // the index of the sequence in the genome
-	MatchedRead     *regionvector.RegionVector // region vector containing the matched positions in the read
-	MatchedGenome   *regionvector.RegionVector // region vector containing the matched positions in the genome
-	MismatchesRead  []int                      // the positions of the mismatches in the read
-	diagonalHandler *DiagonalHandler
-	IncompleteMap   bool
-	SpliceSitesInfo []int // corresponds to the number of junctions of match result. canonical splice site -> 2 = canonical, 1 = non-can, 0 = no splice site
+	SequenceIndex            int                        // the index of the sequence in the genome
+	MatchedRead              *regionvector.RegionVector // region vector containing the matched positions in the read
+	MatchedGenome            *regionvector.RegionVector // region vector containing the matched positions in the genome
+	MismatchesRead           []int                      // the positions of the mismatches in the read
+	MismatchCounts           map[string]int
+	MismatchConstraintGlobal int
+	diagonalHandler          *DiagonalHandler
+	IncompleteMap            bool
+	SpliceSitesInfo          []int // corresponds to the number of junctions of match result. canonical splice site -> 2 = canonical, 1 = non-can, 0 = no splice site
+
+	Id int // fileds for logging
+
+	IsFixPoint          bool
+	MainAnchorLength    int
+	MainAnchorMM        int
+	TotalLeftOptions    int
+	TotalRightOptions   int
+	ValidLeftOptions    int
+	ValidRightOptions   int
+	LeftFixpointLength  int
+	RightFixpointLength int
+
+	IsOverhangCorrected bool
+
+	IsGapFill          bool
+	IsGapFillOverflow  bool
+	GapsFilled         []int
+	GapsFilledOverflow []int
+
+	IsSymInErr  bool
+	SymInErrLen []int
+}
+
+func (r *ReadMatchResult) String() string {
+	sb := strings.Builder{}
+
+	sb.Write(fmt.Appendf(nil, "ReadMatchResult on seq index %d (incomplete: %t)\n", r.SequenceIndex, r.IncompleteMap))
+
+	maxLenReadStart := 0
+	maxLenReadEnd := 0
+	maxLenGenomeStart := 0
+	maxLenGenomeEnd := 0
+
+	for i := 0; i < len(r.MatchedRead.Regions); i++ {
+
+		read := r.MatchedRead.Regions[i]
+		genome := r.MatchedGenome.Regions[i]
+
+		maxLenReadStart = max(maxLenReadStart, len(strconv.Itoa(read.Start)))
+		maxLenReadEnd = max(maxLenReadEnd, len(strconv.Itoa(read.End)))
+		maxLenGenomeStart = max(maxLenGenomeStart, len(strconv.Itoa(genome.Start)))
+		maxLenGenomeEnd = max(maxLenGenomeEnd, len(strconv.Itoa(genome.End)))
+	}
+
+	for i := 0; i < len(r.MatchedRead.Regions); i++ {
+
+		read := r.MatchedRead.Regions[i]
+		genome := r.MatchedGenome.Regions[i]
+
+		if i > 0 && read.Start > r.MatchedRead.Regions[i-1].End {
+			sb.Write(fmt.Appendf(nil, "%3d: %*d - %*d <-> \n", i, maxLenReadStart, r.MatchedRead.Regions[i-1].End, maxLenReadEnd, read.Start))
+		}
+
+		sb.Write(fmt.Appendf(nil, "%3d: %*d - %*d <-> %*d - %*d\n", i, maxLenReadStart, read.Start, maxLenReadEnd, read.End, maxLenGenomeStart, genome.Start, maxLenGenomeEnd, genome.End))
+	}
+
+	sb.Write(fmt.Appendf(nil, "Mismatches in read: %v\n", r.MismatchesRead))
+
+	return sb.String()
 }
 
 func (r *ReadMatchResult) HasUnknownSpliceSites() bool {
@@ -155,7 +220,92 @@ func (r *ReadMatchResult) MergeRegions() {
 	r.MatchedRead.Regions = mergedRead
 }
 
+// MergeRegions merges the read and genome regions if both are consecutive.
+// This preserves the property that the number of read and genome regions are
+// the same and that each read region is associated with the genome region at
+// the same index.
+func (r *ReadMatchResult) MergeRegionsIfBothConsecutive() {
+
+	if len(r.MatchedRead.Regions) != len(r.MatchedGenome.Regions) {
+		logrus.WithFields(logrus.Fields{
+			"len read regions":   len(r.MatchedRead.Regions),
+			"len genome regions": len(r.MatchedGenome.Regions),
+		}).Error("Cant merge regions of ReadMatchResult: different number of read and genome regions")
+		return
+	}
+
+	mergedRead := make([]regionvector.Region, 1)
+	mergedRead[0] = regionvector.Region{
+		Start: r.MatchedRead.Regions[0].Start,
+		End:   r.MatchedRead.Regions[0].End,
+	}
+
+	mergedGenome := make([]regionvector.Region, 1)
+	mergedGenome[0] = regionvector.Region{
+		Start: r.MatchedGenome.Regions[0].Start,
+		End:   r.MatchedGenome.Regions[0].End,
+	}
+
+	iMerged := 0
+
+	for i := 1; i < len(r.MatchedRead.Regions); i++ {
+
+		isConsecutiveRead := r.MatchedRead.Regions[i].Start == mergedRead[iMerged].End
+		isConsecutiveGenome := r.MatchedGenome.Regions[i].Start == mergedGenome[iMerged].End
+
+		if isConsecutiveRead && isConsecutiveGenome {
+			// extend the last region
+			mergedRead[iMerged].End = r.MatchedRead.Regions[i].End
+			mergedGenome[iMerged].End = r.MatchedGenome.Regions[i].End
+		} else {
+			// add a new region
+			mergedRead = append(mergedRead, regionvector.Region{
+				Start: r.MatchedRead.Regions[i].Start,
+				End:   r.MatchedRead.Regions[i].End,
+			})
+			mergedGenome = append(mergedGenome, regionvector.Region{
+				Start: r.MatchedGenome.Regions[i].Start,
+				End:   r.MatchedGenome.Regions[i].End,
+			})
+			iMerged++
+		}
+	}
+
+	r.MatchedRead.Regions = mergedRead
+	r.MatchedGenome.Regions = mergedGenome
+}
+
+func (r *ReadMatchResult) IsValid() bool {
+
+	numGapsGenome := 0
+
+	for i := 0; i < len(r.MatchedGenome.Regions)-1; i++ {
+
+		lenGapGenome := r.MatchedGenome.Regions[i+1].Start - r.MatchedGenome.Regions[i].End
+
+		if lenGapGenome == 0 {
+			continue
+		}
+
+		numGapsGenome++
+
+		if config.Mapper.Mapping.IsReadOriginRna {
+
+		} else {
+			if lenGapGenome > config.Mapper.Mapping.DnaMode.MaxGapLength {
+				return false
+			}
+			if numGapsGenome > config.Mapper.Mapping.DnaMode.MaxGapCount {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
 func (r *ReadMatchResult) NormalizeRegions() {
+
 	r.MergeRegions()
 	readRegions := r.MatchedRead.Regions
 	genomeRegions := r.MatchedGenome.Regions
@@ -296,16 +446,68 @@ func (r *ReadMatchResult) Copy() *ReadMatchResult {
 		dhCopy = r.diagonalHandler.Copy()
 	}
 
+	mismatchCounts := make(map[string]int)
+	for key, val := range r.MismatchCounts {
+		mismatchCounts[key] = val
+	}
+
+	cSymInErrLen := make([]int, 0)
+	if r.SymInErrLen != nil {
+		cSymInErrLen := make([]int, len(r.SymInErrLen))
+		copy(cSymInErrLen, r.SymInErrLen)
+	}
+
+	cGapsFilled := make([]int, 0)
+	if r.GapsFilled != nil {
+		cGapsFilled = make([]int, len(r.GapsFilled))
+		copy(cGapsFilled, r.GapsFilled)
+	}
+	cGapsFilledOverflow := make([]int, 0)
+	if r.GapsFilledOverflow != nil {
+		cGapsFilledOverflow = make([]int, len(r.GapsFilledOverflow))
+		copy(cGapsFilledOverflow, r.GapsFilledOverflow)
+	}
+
 	return &ReadMatchResult{
-		SequenceIndex:   r.SequenceIndex,
-		MatchedRead:     r.MatchedRead.Copy(),
-		MatchedGenome:   r.MatchedGenome.Copy(),
-		MismatchesRead:  append([]int{}, r.MismatchesRead...),
-		diagonalHandler: dhCopy,
+		SequenceIndex:            r.SequenceIndex,
+		MatchedRead:              r.MatchedRead.Copy(),
+		MatchedGenome:            r.MatchedGenome.Copy(),
+		MismatchesRead:           append([]int{}, r.MismatchesRead...),
+		MismatchCounts:           mismatchCounts,
+		MismatchConstraintGlobal: r.MismatchConstraintGlobal,
+		diagonalHandler:          dhCopy,
+
+		IsFixPoint:          r.IsFixPoint,
+		MainAnchorLength:    r.MainAnchorLength,
+		MainAnchorMM:        r.MainAnchorMM,
+		TotalLeftOptions:    r.TotalLeftOptions,
+		TotalRightOptions:   r.TotalRightOptions,
+		ValidLeftOptions:    r.ValidLeftOptions,
+		ValidRightOptions:   r.ValidRightOptions,
+		LeftFixpointLength:  r.LeftFixpointLength,
+		RightFixpointLength: r.RightFixpointLength,
+
+		IsOverhangCorrected: r.IsOverhangCorrected,
+
+		IsGapFill:          r.IsGapFill,
+		GapsFilled:         cGapsFilled,
+		IsGapFillOverflow:  r.IsGapFillOverflow,
+		GapsFilledOverflow: cGapsFilledOverflow,
+
+		IsSymInErr:  r.IsSymInErr,
+		SymInErrLen: cSymInErrLen,
 	}
 }
 
-func AssignReadMatchResults(fwMappings []*ReadMatchResult, rvMappings []*ReadMatchResult) (map[int][]*ReadMatchResult, map[int][]*ReadMatchResult, map[int]struct{}) {
+func AssignReadMatchResults(
+	fwMappings []*ReadMatchResult,
+	rvMappings []*ReadMatchResult,
+) (
+	map[int][]*ReadMatchResult,
+	map[int][]*ReadMatchResult,
+	map[int]struct{},
+) {
+
 	fwMapPerSeqIndex := make(map[int][]*ReadMatchResult)
 	rvMapPerSeqIndex := make(map[int][]*ReadMatchResult)
 	mappedRegionIds := make(map[int]struct{})
@@ -329,20 +531,31 @@ func AssignReadMatchResults(fwMappings []*ReadMatchResult, rvMappings []*ReadMat
 // receives fw and rv matches of one seqID. Returns possible combinations of fw/rv.
 // E.g. fw -> 25 and rv -> 25 doesnt work since they need to map to separate strands etc
 // Currently returns the best combination with less or equal amount of mm the provided maxMismatches param
-func GetBestPossibleMappingCombination(fwMatches []*ReadMatchResult, rvMatches []*ReadMatchResult) *ValidReadPairCombination {
-	var bestCombination *ValidReadPairCombination
-	maxMismatches := config.MaxConfMm
+func GetBestPossibleMappingCombination(
+	fwMatches []*ReadMatchResult,
+	rvMatches []*ReadMatchResult,
+) *ValidReadPairCombination {
 
-	for i := 0; i < len(fwMatches); i++ {
+	var bestCombination *ValidReadPairCombination
+	maxMismatches := config.Mapper.GetConfidentMaxMismatchCount()
+
+	for i := range fwMatches {
+
 		fwMatch := fwMatches[i]
-		for j := 0; j < len(rvMatches); j++ {
+
+		for j := range rvMatches {
+
 			rvMatch := rvMatches[j]
+
 			if fwMatch.SequenceIndex-1 == rvMatch.SequenceIndex || fwMatch.SequenceIndex == rvMatch.SequenceIndex-1 {
+
 				// dont allow IncompleteMaps
 				if fwMatch.IncompleteMap || rvMatch.IncompleteMap {
 					continue
 				}
+
 				currMM := len(fwMatch.MismatchesRead) + len(rvMatch.MismatchesRead)
+
 				if currMM < maxMismatches {
 					// skip possible combinations if they have short diagonals
 					// (like a diag of length 10 in the end; these cases are likely wrong and should not be classified as confident map)
@@ -373,16 +586,19 @@ func GetBestPossibleMappingCombination(fwMatches []*ReadMatchResult, rvMatches [
 // returns false as soon as one region is smaller than 2*kmerlength
 // iterates over gaps and checks lengths of region before and after gaps
 func hasLongDiagonals(mapping *ReadMatchResult) bool {
+
 	mapping.NormalizeRegions()
+
 	// INFO: DNA RNA MODE
 	// For DNA, l and r regions of junction should be longer
 	for _, region := range mapping.MatchedGenome.Regions {
-		if config.IsOriginRNA {
-			if region.Length() < config.MinConfAnchorLengthRNA {
+
+		if config.Mapper.Mapping.IsReadOriginRna {
+			if region.Length() < config.Mapper.Mapping.RnaMode.Confident.MinAnchorLength {
 				return false
 			}
 		} else {
-			if region.Length() < config.MinConfAnchorLengthDNA {
+			if region.Length() < config.Mapper.Mapping.DnaMode.Confident.MinAnchorLength {
 				return false
 			}
 		}
@@ -390,11 +606,106 @@ func hasLongDiagonals(mapping *ReadMatchResult) bool {
 	return true
 }
 
+// GetGenomicPosForReadPos returns the corresponding value in the
+// MatchedGenome regions for a given value in the MatchedRead regions.
+// It returns -1 if not corresponding value is found, which should
+// not happen if the given readPos is part of the MatchedRead regions.
+func (r *ReadMatchResult) GetGenomicPosForReadPos(readPos int) int {
+
+	for i, readRegion := range r.MatchedRead.Regions {
+
+		if readRegion.Start > readPos {
+			break
+		}
+
+		if readRegion.End <= readPos {
+			continue
+		}
+
+		offset := readPos - readRegion.Start
+
+		return r.MatchedGenome.Regions[i].Start + offset
+	}
+
+	return -1
+}
+
+func (r *ReadMatchResult) ResetMismatches() {
+	r.MismatchCounts = make(map[string]int)
+	r.MismatchesRead = make([]int, 0)
+}
+
+// AddMismatch tries to add a mismatch at the given position in the read.
+// It checks whether adding the mismatch would exceed the global or region-specific
+// mismatch constraints. If adding the mismatch is valid, it updates the mismatch
+// counts and returns true. If adding the mismatch would violate any constraints,
+// it returns false and does not modify the state.
+// posInRead is the position of the mismatch in the read (0-based).
+// posInTargetRegion is the position of the mismatch in the target region (0-based).
+// It throws a fatal error if a duplicate mismatch position is added.
+func (r *ReadMatchResult) AddMismatch(
+	regionMask *interval.PriorityList,
+	posInRead int,
+	posInTargetRegion int,
+) bool {
+
+	for _, mm := range r.MismatchesRead {
+		if mm == posInRead {
+			logrus.Fatal("Trying to add duplicate mismatch position to "+
+				"ReadMatchResult:", r.MismatchesRead, "posInRead:", posInRead)
+		}
+	}
+
+	// mismatches exceed global mismatch constraint
+	if len(r.MismatchesRead)+1 > r.MismatchConstraintGlobal {
+		return false
+	}
+
+	found, name, _, maxMismatches := regionMask.GetItemAtPosition(posInTargetRegion)
+	if !found {
+		name = "unmasked"
+	}
+
+	if _, foundName := r.MismatchCounts[name]; !foundName {
+		r.MismatchCounts[name] = 0
+	}
+
+	// mismatches exceed region specific mismatch constraint
+	if found && r.MismatchCounts[name]+1 >= maxMismatches {
+		return false
+	}
+
+	// add the mismatch count to the region specific mismatch counts
+	r.MismatchCounts[name] += 1
+	// add the read position of the mismatch to the result
+	r.MismatchesRead = append(r.MismatchesRead, posInRead)
+
+	// the read is still valid even after adding the mismatch
+	return true
+}
+
 func (r *ReadMatchResult) GetCigar() (string, error) {
+
 	var builder strings.Builder
-	slices.Sort(r.MismatchesRead)
-	r.MergeRegions()
+
+	// slices.Sort(r.MismatchesRead)
+	sort.Ints(r.MismatchesRead)
+
+	// for i := 1; i < len(r.MismatchesRead); i++ {
+	// 	if r.MismatchesRead[i] == r.MismatchesRead[i-1] {
+	// 		logrus.Fatal("Duplicate mismatch positions in read:", r.MismatchesRead)
+	// 	}
+	// }
+
 	r.NormalizeRegions()
+
+	// TODO: remove this sanity check
+	if len(r.MatchedRead.Regions) != len(r.MatchedGenome.Regions) {
+		logrus.Fatal("len(r.MatchedRead.Regions) != len(r.MatchedGenome.Regions) even after NormalizeRegions()")
+	}
+	if r.MatchedRead.Length() != r.MatchedGenome.Length() {
+		logrus.Fatal("r.MatchedRead.Length() != r.MatchedGenome.Length() even after NormalizeRegions()")
+	}
 
 	isForwardStrand := r.SequenceIndex == 0
 
@@ -403,6 +714,7 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 		// number of cumulative aligned positions (matches or mismatches) between the read and the genome
 		numMatchesSum := 0
 
+		// TODO: is this needed when NormalizeRegions is called above?
 		if len(r.MatchedGenome.Regions) != len(r.MatchedRead.Regions) {
 			// r.SyncRegions()
 			r.NormalizeRegions()
@@ -416,7 +728,7 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 
 			// if this is the last match, add the number of matches
 			if i == len(r.MatchedGenome.Regions)-1 {
-				if config.IncludeMMinSAM {
+				if config.Mapper.Mapping.Output.IncludeMMinSAM {
 					builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead, false))
 				} else {
 					builder.WriteString(strconv.Itoa(numMatchesSum))
@@ -432,16 +744,16 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 				logrus.WithFields(logrus.Fields{
 					"read":   r.MatchedRead,
 					"genome": r.MatchedGenome,
-				}).Warn("Gap in genome and read at the same time")
+				}).Warn("Gap in genome and read at the same time (fw)")
 
-				return "", fmt.Errorf("gap in genome and read at the same time")
+				return "", fmt.Errorf("gap in genome and read at the same time (fw)")
 			}
 
 			if !gapInGenome && !gapInRead {
 				continue
 			}
 
-			if config.IncludeMMinSAM {
+			if config.Mapper.Mapping.Output.IncludeMMinSAM {
 				builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead, false))
 			} else {
 				builder.WriteString(strconv.Itoa(numMatchesSum))
@@ -457,8 +769,11 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 
 				builder.WriteString(strconv.Itoa(numSkipped))
 
-				// determine whether the gap is an intron or a deletion
-				if numSkipped < config.IntronLengthMin() {
+				if !config.Mapper.Mapping.IsReadOriginRna ||
+					numSkipped < config.Mapper.Mapping.RnaMode.IntronLengthMin {
+					// there are no introns in DNA mode
+					// configured threshold is used to determine whether a gap
+					// is a deletion or an intron
 					builder.WriteString("D")
 				} else {
 					builder.WriteString("N")
@@ -494,7 +809,7 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 
 			// if this is the last match, add the number of matches
 			if i == 0 {
-				if config.IncludeMMinSAM {
+				if config.Mapper.Mapping.Output.IncludeMMinSAM {
 					builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead, true))
 				} else {
 					builder.WriteString(strconv.Itoa(numMatchesSum))
@@ -519,8 +834,14 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 				continue
 			}
 
-			if config.IncludeMMinSAM {
-				builder.WriteString(ParseMatchedRegion(r.MatchedRead.Regions[i], r.MismatchesRead, true))
+			if config.Mapper.Mapping.Output.IncludeMMinSAM {
+				builder.WriteString(
+					ParseMatchedRegion(
+						r.MatchedRead.Regions[i],
+						r.MismatchesRead,
+						true,
+					),
+				)
 			} else {
 				builder.WriteString(strconv.Itoa(numMatchesSum))
 				builder.WriteString("M")
@@ -536,7 +857,8 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 				builder.WriteString(strconv.Itoa(numSkipped))
 
 				// determine whether the gap is an intron or a deletion
-				if numSkipped < config.IntronLengthMin() {
+				if !config.Mapper.Mapping.IsReadOriginRna ||
+					numSkipped < config.Mapper.Mapping.RnaMode.IntronLengthMin {
 					builder.WriteString("D")
 				} else {
 					builder.WriteString("N")
@@ -603,6 +925,7 @@ type TargetAnnotation struct {
 	PreferedStrand int                             // 0 -> + (fw+ and rv-); 1 -> - (fw- and rv+)
 	Confidence     float32                         // percentage of reads contributing to PreferedStrand
 	Introns        map[int]*regionvector.RegionSet // maps to sub sequence index, meaning each gene has two slices of introns 0 -> plusOrintation 1 -> minusOrientation
+	IntronTrees    map[int]*datastructure.INTree   // interval trees for intronsmaps
 	// zero bases coords, start incl, stop excl
 }
 
@@ -658,11 +981,16 @@ func (t TargetAnnotation) LogInfo() {
 	}
 }
 
-func ParseMatchedRegion(region regionvector.Region, mms []int, isRev bool) string {
+func ParseMatchedRegion(
+	region regionvector.Region,
+	mismatchesInRead []int,
+	isRev bool,
+) string {
+
 	var builder strings.Builder
-	if len(mms) == 0 {
-		builder.WriteString(fmt.Sprintf("%d=", region.Length()))
-		return builder.String()
+
+	if len(mismatchesInRead) == 0 {
+		return fmt.Sprintf("%d=", region.Length())
 	}
 
 	lastStart := 0      // relative to region start
@@ -677,8 +1005,8 @@ func ParseMatchedRegion(region regionvector.Region, mms []int, isRev bool) strin
 	}
 
 	if isRev {
-		for i := len(mms) - 1; i >= 0; i-- {
-			mm := mms[i]
+		for i := len(mismatchesInRead) - 1; i >= 0; i-- {
+			mm := mismatchesInRead[i]
 			if mm < region.Start || mm >= region.End {
 				continue
 			}
@@ -699,7 +1027,8 @@ func ParseMatchedRegion(region regionvector.Region, mms []int, isRev bool) strin
 			lastStart = relativePos + 1
 		}
 	} else {
-		for _, mm := range mms {
+
+		for _, mm := range mismatchesInRead {
 			if mm < region.Start || mm >= region.End {
 				continue
 			}
@@ -728,4 +1057,45 @@ func ParseMatchedRegion(region regionvector.Region, mms []int, isRev bool) strin
 	}
 
 	return builder.String()
+}
+
+func sliceToString(s []int) string {
+	if len(s) == 0 {
+		return "NA"
+	}
+	strs := make([]string, len(s))
+	for i, v := range s {
+		strs[i] = strconv.Itoa(v)
+	}
+	return strings.Join(strs, ",")
+}
+
+func (r *ReadMatchResult) WriteTSV(f *os.File, gene string, isFw int, altId int, readId string) error {
+	fields := []string{
+		gene,
+		readId,
+		strconv.Itoa(r.SequenceIndex),
+		strconv.Itoa(isFw),
+		strconv.Itoa(altId),
+		strconv.Itoa(len(r.MismatchesRead)),
+		strconv.FormatBool(r.IsFixPoint),
+		strconv.Itoa(r.MainAnchorLength),
+		strconv.Itoa(r.MainAnchorMM),
+		strconv.Itoa(r.TotalLeftOptions),
+		strconv.Itoa(r.TotalRightOptions),
+		strconv.Itoa(r.ValidLeftOptions),
+		strconv.Itoa(r.ValidRightOptions),
+		strconv.Itoa(r.LeftFixpointLength),
+		strconv.Itoa(r.RightFixpointLength),
+		strconv.FormatBool(r.IsOverhangCorrected),
+		strconv.FormatBool(r.IsGapFill),
+		strconv.FormatBool(r.IsGapFillOverflow),
+		sliceToString(r.GapsFilled),
+		sliceToString(r.GapsFilledOverflow),
+		strconv.FormatBool(r.IsSymInErr),
+		sliceToString(r.SymInErrLen),
+	}
+	line := strings.Join(fields, "\t") + "\n"
+	_, err := f.WriteString(line)
+	return err
 }

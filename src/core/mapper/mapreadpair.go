@@ -13,15 +13,19 @@ import (
 
 // var considered int = 0
 // var keepAfterFilter int = 0
-func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
+func MapReadPair(
+	readPair *fastq.ReadPair,
+	genomeIndex *index.GenomeIndex,
 	secondpassChan *secondpass.SecondPassChannel,
 	confidentMatchesChan *confidentmappingpass.ConfidentPassChan,
 	timerChannel chan<- *timer.Timer,
 	progressChan chan<- Event,
 	progressStats *ProgressStats,
 ) {
+
 	keepFw := GlobalFilter(readPair.ReadR1.Sequence, genomeIndex)
 	keepRw := GlobalFilter(readPair.ReadR2.Sequence, genomeIndex)
+
 	// keepFw := BinnedFilter(readPair.ReadR1.Sequence, genomeIndex)
 	// keepRw := BinnedFilter(readPair.ReadR2.Sequence, genomeIndex)
 
@@ -30,6 +34,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 	// 	"keepRv": keepRw,
 	// }).Debug("Filter results")
 
+	// TODO: allow single-end mapping?
 	if !keepFw || !keepRw {
 		return
 	}
@@ -45,6 +50,7 @@ func MapReadPair(readPair *fastq.ReadPair, genomeIndex *index.GenomeIndex,
 
 	resultFw, isMappableFw := MapRead(readPair.ReadR1, genomeIndex, false)
 
+	// TODO: allow mapping of only one read in pair?
 	if !isMappableFw || len(resultFw) == 0 {
 		return
 	}

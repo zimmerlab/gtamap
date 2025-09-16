@@ -864,7 +864,7 @@ if __name__ == "__main__":
 
     mapper1_data = parse_sam_file(args.sam1)
     print("parsed sam")
-    if args.mapper == "hisat2" or args.mapper == "star":
+    if args.mapper == "hisat2" or args.mapper == "star" or args.mapper == "minimap2":
         mapper1_data = convert_to_global(mapper1_data, gene_start)
         print("converted sam")
 

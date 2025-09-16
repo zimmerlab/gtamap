@@ -55,18 +55,22 @@ func (r Region) Length() int {
 	return r.End - r.Start
 }
 
-type RegionVector struct {
-	Regions []Region
-}
-
 func (r Region) String() string {
 	return fmt.Sprintf("[%d, %d]", r.Start, r.End)
+}
+
+type RegionVector struct {
+	Regions []Region
 }
 
 func NewRegionVector() *RegionVector {
 	return &RegionVector{
 		Regions: make([]Region, 0),
 	}
+}
+
+func (rv *RegionVector) Size() int {
+	return rv.NumRegions()
 }
 
 // SortInPlace sorts the regions in ascending order based on their start position
@@ -224,10 +228,28 @@ func (rv *RegionVector) String() string {
 	return result
 }
 
+func (rv *RegionVector) StringTable() string {
+	sb := strings.Builder{}
+	sb.WriteString(fmt.Sprintf("\n%5s ", "index"))
+	for i := range rv.Regions {
+		sb.WriteString(fmt.Sprintf("%3d ", i))
+	}
+	sb.WriteString(fmt.Sprintf("\n%5s ", "start"))
+	for _, r := range rv.Regions {
+		sb.WriteString(fmt.Sprintf("%3d ", r.Start))
+	}
+	sb.WriteString(fmt.Sprintf("\n%5s ", "end"))
+	for _, r := range rv.Regions {
+		sb.WriteString(fmt.Sprintf("%3d ", r.End))
+	}
+	sb.WriteString("\n\n")
+	return sb.String()
+}
+
 func (rv *RegionVector) Length() int {
 	length := 0
 	for _, r := range rv.Regions {
-		length += r.End - r.Start
+		length += r.Length()
 	}
 	return length
 }
@@ -240,24 +262,25 @@ func (rv *RegionVector) GetFirstGap() (Region, bool) {
 	return rv.GetGap(0)
 }
 
-// GetGapAfterRegionIndex returns the gap after the region with given index.
-// It returns nil if the region index is out of bounds or if there is no gap after the region.
-func (rv *RegionVector) GetGapAfterRegionIndex(regionIndex int) (Region, bool) {
-	if regionIndex >= len(rv.Regions) {
-		return Region{}, false
-	}
-
-	gap := Region{
-		Start: rv.Regions[regionIndex].End,
-		End:   rv.Regions[regionIndex+1].Start,
-	}
-
-	if gap.Start >= gap.End {
-		return Region{}, false
-	}
-
-	return gap, true
-}
+// // GetGapAfterRegionIndex returns the gap after the region with given index.
+// // It returns nil if the region index is out of bounds or if there is no gap after the region.
+// func (rv *RegionVector) GetGapAfterRegionIndex(regionIndex int) (Region, bool) {
+//
+// 	if regionIndex >= len(rv.Regions) {
+// 		return Region{}, false
+// 	}
+//
+// 	gap := Region{
+// 		Start: rv.Regions[regionIndex].End,
+// 		End:   rv.Regions[regionIndex+1].Start,
+// 	}
+//
+// 	if gap.Start >= gap.End {
+// 		return Region{}, false
+// 	}
+//
+// 	return gap, true
+// }
 
 func (rv *RegionVector) GetGaps() *RegionVector {
 	gaps := NewRegionVector()
@@ -267,6 +290,25 @@ func (rv *RegionVector) GetGaps() *RegionVector {
 	}
 
 	return gaps
+}
+
+// GetGapAfterRegion return the gap (if present) between the region
+// at the given index and the region after that. It returns false if
+// no such gap is present in the region vector.
+func (rv *RegionVector) GetGapAfterRegionIndex(regionIndex int) (Region, bool) {
+
+	if regionIndex < 0 || regionIndex >= len(rv.Regions)-1 || len(rv.Regions) <= 1 {
+		return Region{}, false
+	}
+
+	if rv.Regions[regionIndex].End != rv.Regions[regionIndex+1].Start {
+		return Region{
+			Start: rv.Regions[regionIndex].End,
+			End:   rv.Regions[regionIndex+1].Start,
+		}, true
+	}
+
+	return Region{}, false
 }
 
 func (rv *RegionVector) GetGap(num int) (Region, bool) {
@@ -424,6 +466,30 @@ func (rv *RegionVector) GetRegionIndexContainingPosRelative(relPos int) (int, er
 	}
 
 	return -1, fmt.Errorf("relative position not found in any region")
+}
+
+func (rv *RegionVector) OverlapsAny(start int, end int) bool {
+
+	left := 0
+	right := rv.Size() - 1
+	mid := 0
+
+	for {
+
+		if left > right || left < 0 || right >= rv.Size() {
+			return false
+		}
+
+		mid = left + ((right - left) / 2)
+
+		if end < rv.Regions[mid].Start {
+			right = mid - 1
+		} else if start >= rv.Regions[mid].End {
+			left = mid + 1
+		} else {
+			return true
+		}
+	}
 }
 
 type RegionSet struct {
@@ -677,7 +743,7 @@ func (t *TranscriptomeGraph) dfsRight(node *TranscriptomeNode, path []Region, le
 		}
 		return
 	}
-	if node.Start < start {
+	if node.Start < start && len(path) > 0 {
 		return // invalid node for right path
 	}
 
@@ -686,6 +752,9 @@ func (t *TranscriptomeGraph) dfsRight(node *TranscriptomeNode, path []Region, le
 
 	if lengthOfCurrentPath == length {
 		// key := serializePath(path)
+		if len(path) == 0 {
+			return // skip empty paths
+		}
 		key := hashPath(path)
 		if !seen[key] {
 			*results = append(*results, append([]Region{}, path...))
@@ -729,7 +798,7 @@ func (t *TranscriptomeGraph) dfsLeft(node *TranscriptomeNode, path []Region, len
 		return
 	}
 
-	if node.Stop > end {
+	if node.Stop > end && len(path) > 0 {
 		return // invalid node for left path
 	}
 
@@ -738,6 +807,9 @@ func (t *TranscriptomeGraph) dfsLeft(node *TranscriptomeNode, path []Region, len
 
 	if lengthOfCurrentPath == length {
 		// key := serializePath(path)
+		if len(path) == 0 {
+			return // skip empty paths
+		}
 		key := hashPath(path)
 		if !seen[key] {
 			*results = append(*results, append([]Region{}, path...))
@@ -915,16 +987,12 @@ func (rs *RegionSet) GetIntersectingIntrons(b Region) []*Intron {
 	for i := idx - 1; i >= 0 && rs.Regions[i].End > b.Start; i-- {
 		if overlaps(rs.Regions[i], b) {
 			introns = append(introns, rs.Regions[i])
-		} else {
-			break
 		}
 	}
 
 	for i := idx; i < len(rs.Regions) && rs.Regions[i].Start < b.End; i++ {
 		if overlaps(rs.Regions[i], b) {
 			introns = append(introns, rs.Regions[i])
-		} else {
-			break
 		}
 	}
 	return introns

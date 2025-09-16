@@ -1,11 +1,14 @@
 package confidentmappingpass
 
 import (
+	"fmt"
+	"os"
 	"sort"
 	"strconv"
 	"sync"
 
 	"github.com/KleinSamuel/gtamap/src/config"
+	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
@@ -13,7 +16,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func ConfidentMappingWorker(confidentChan *ConfidentPassChan, wgConfidentMapping *sync.WaitGroup, annotationChan chan<- map[int]*mapperutils.TargetAnnotation, index *index.GenomeIndex) {
+func ConfidentMappingWorker(
+	confidentChan *ConfidentPassChan,
+	wgConfidentMapping *sync.WaitGroup,
+	annotationChan chan<- map[int]*mapperutils.TargetAnnotation,
+	index *index.GenomeIndex,
+) {
+
 	defer wgConfidentMapping.Done()
 
 	cMapsPerSeq := make(map[int][]*ConfidentTask, 0)
@@ -197,13 +206,20 @@ func getTotalCoverage(coverageFw, coverageRv []int) []int {
 	return totalCoverage
 }
 
-func repairIntrons(inferredIntrons []*regionvector.Intron, targetId int, genomeIndex *index.GenomeIndex) []*regionvector.Intron {
+func repairIntrons(
+	inferredIntrons []*regionvector.Intron,
+	targetId int,
+	genomeIndex *index.GenomeIndex,
+) []*regionvector.Intron {
+
 	repairedIntrons := make([]*regionvector.Intron, 0)
 
 	// if IntronClusterRepairWindow == 10
 	// we go from -5 to 5 (starting at i.Start and i.End)
-	windowDelta := config.IntronClusterRepairWindow / 2
+
+	windowDelta := config.Mapper.GetConfidentIntronClusterRepairWindow() / 2
 	refSeq := genomeIndex.Sequences[targetId]
+
 	for _, intron := range inferredIntrons {
 		if intron.SpliceSiteScore > 0 {
 			repairedIntrons = append(repairedIntrons, intron)
@@ -263,20 +279,33 @@ func repairIntrons(inferredIntrons []*regionvector.Intron, targetId int, genomeI
 	return repairedIntrons
 }
 
-func InferIntronsOfTarget(targetId int, confMaps []*ConfidentTask, index *index.GenomeIndex) *mapperutils.TargetAnnotation {
+func InferIntronsOfTarget(
+	targetId int,
+	confMaps []*ConfidentTask,
+	index *index.GenomeIndex,
+) *mapperutils.TargetAnnotation {
+
 	// I. get all gaps of targetId in plus orientation
-	plusOrientatedGaps, plusEvidence, minusEvidence := getGapsPlusOrientation(targetId, confMaps, index) // map[int][]*interval.Interval
+	plusOrientatedGaps, plusEvidence, minusEvidence := getGapsPlusOrientation(
+		targetId,
+		confMaps,
+		index,
+	) // map[int][]*interval.Interval
+
 	// II. count how often each gap exists (plus orientation gaps)
 	countedGapsOfTarget := countGaps(plusOrientatedGaps)
+
 	// III. cluster plus oriented gaps and get start/stop with highest evidence (eStart|eStop)
 	plusOrientatedIntronsOfTarget := clusterGaps(countedGapsOfTarget)
+
 	// Check if some introns which don't follow splice sites would follow them by modifying start/end coords
-	if config.IsOriginRNA {
+	if config.Mapper.Mapping.IsReadOriginRna {
 		repairedIntrons := repairIntrons(plusOrientatedIntronsOfTarget, targetId, index)
 		if repairedIntrons != nil {
 			plusOrientatedIntronsOfTarget = repairedIntrons
 		}
 	}
+
 	// IV. now we mirror these plus orientated introns to get minus coords
 	minusOrientatedIntronsOfTarget := invertIntrons(targetId, plusOrientatedIntronsOfTarget, index)
 
@@ -299,40 +328,92 @@ func InferIntronsOfTarget(targetId int, confMaps []*ConfidentTask, index *index.
 	intronMap[0] = regionvector.NewRegionSet(plusOrientatedIntronsOfTarget)
 	intronMap[1] = regionvector.NewRegionSet(minusOrientatedIntronsOfTarget)
 
+	intronTreeMap := make(map[int]*datastructure.INTree)
+	convertedPlusRegions := make([]datastructure.Bounds, len(plusOrientatedIntronsOfTarget))
+	for i, intron := range plusOrientatedIntronsOfTarget {
+		convertedPlusRegions[i] = &datastructure.IntronRegion{
+			Lower: intron.Start,
+			Upper: intron.End,
+		}
+	}
+	convertedMinusRegions := make([]datastructure.Bounds, len(minusOrientatedIntronsOfTarget))
+	for i, intron := range minusOrientatedIntronsOfTarget {
+		convertedMinusRegions[i] = &datastructure.IntronRegion{
+			Lower: intron.Start,
+			Upper: intron.End,
+		}
+	}
+
+	intronTreeMap[0] = datastructure.NewINTree(convertedPlusRegions)
+	intronTreeMap[1] = datastructure.NewINTree(convertedMinusRegions)
+
 	targetAnnotation := mapperutils.TargetAnnotation{
 		PreferedStrand: preferredStrandedness,
 		Confidence:     confidence,
 		Introns:        intronMap,
+		IntronTrees:    intronTreeMap,
 	}
 
 	return &targetAnnotation
 }
 
-func invertIntrons(sId int, intronsOfTarget []*regionvector.Intron, index *index.GenomeIndex) []*regionvector.Intron {
+func invertIntrons(
+	sId int,
+	intronsOfTarget []*regionvector.Intron,
+	index *index.GenomeIndex,
+) []*regionvector.Intron {
+
 	mirroredIntronsPerSeqId := make([]*regionvector.Intron, 0)
-	geneLength := int(index.GetSequenceInfo(sId).EndGenomic - index.GetSequenceInfo(sId).StartGenomic)
+
+	geneLength := int(
+		index.GetSequenceInfo(sId).EndGenomic -
+			index.GetSequenceInfo(sId).StartGenomic,
+	)
+
 	for _, intron := range intronsOfTarget {
-		mirroredIntronsPerSeqId = append(mirroredIntronsPerSeqId, &regionvector.Intron{
-			// Start:    geneLength - intron.End + 2*int(index.SequenceInfo[sId].StartGenomic),
-			// End:      geneLength - intron.Start + 2*int(index.SequenceInfo[sId].StartGenomic),
-			Start:           geneLength - intron.End,
-			End:             geneLength - intron.Start,
-			Evidence:        intron.Evidence,
-			SpliceSiteScore: intron.SpliceSiteScore,
-		})
+		mirroredIntronsPerSeqId = append(
+			mirroredIntronsPerSeqId,
+			&regionvector.Intron{
+				// Start:    geneLength - intron.End + 2*int(index.SequenceInfo[sId].StartGenomic),
+				// End:      geneLength - intron.Start + 2*int(index.SequenceInfo[sId].StartGenomic),
+				Start:           geneLength - intron.End,
+				End:             geneLength - intron.Start,
+				Evidence:        intron.Evidence,
+				SpliceSiteScore: intron.SpliceSiteScore,
+			},
+		)
 	}
 
 	return mirroredIntronsPerSeqId
 }
 
 // extracts all gaps in fw and rv mappings but mirrors the rv coords to match fw orientation
-func getGapsPlusOrientation(sId int, cMapsPerSeq []*ConfidentTask, index *index.GenomeIndex) ([]*regionvector.Gap, int, int) {
+func getGapsPlusOrientation(
+	sId int,
+	cMapsPerSeq []*ConfidentTask,
+	index *index.GenomeIndex,
+) (
+	[]*regionvector.Gap,
+	int,
+	int,
+) {
+
 	plusOrientatedGapsPerMainSeqId := make([]*regionvector.Gap, 0)
 	plusStrandednessEvidence := 0
 	minusStrandednessEvidence := 0
 
 	// iterate over each confMap in target seq seqId
 	for _, confMap := range cMapsPerSeq {
+
+		if len(confMap.ResultFw.MatchedRead.Regions) != len(confMap.ResultFw.MatchedGenome.Regions) {
+			fmt.Println("error in get gaps plus orientation result fw")
+			os.Exit(1)
+		}
+		if len(confMap.ResultRv.MatchedRead.Regions) != len(confMap.ResultRv.MatchedGenome.Regions) {
+			fmt.Println("error in get gaps plus orientation result rv")
+			os.Exit(1)
+		}
+
 		confMap.ResultFw.NormalizeRegions()
 		confMap.ResultRv.NormalizeRegions()
 
@@ -354,9 +435,12 @@ func getGapsPlusOrientation(sId int, cMapsPerSeq []*ConfidentTask, index *index.
 			}
 
 			var knownSpliceSite int = 0
-			if config.IsOriginRNA && len(confMap.ResultFw.SpliceSitesInfo) != 0 {
+
+			if config.Mapper.Mapping.IsReadOriginRna &&
+				len(confMap.ResultFw.SpliceSitesInfo) != 0 {
 				knownSpliceSite = confMap.ResultFw.SpliceSitesInfo[i-skippedGaps]
 			}
+
 			if rStart > lStop {
 				if confMap.ResultFw.SequenceIndex%2 == 0 {
 					plusOrientatedGapsPerMainSeqId = append(plusOrientatedGapsPerMainSeqId, &regionvector.Gap{
@@ -386,22 +470,30 @@ func getGapsPlusOrientation(sId int, cMapsPerSeq []*ConfidentTask, index *index.
 			}
 
 			var knownSpliceSite int = 0
-			if config.IsOriginRNA && len(confMap.ResultRv.SpliceSitesInfo) != 0 {
+			if config.Mapper.Mapping.IsReadOriginRna &&
+				len(confMap.ResultRv.SpliceSitesInfo) != 0 {
 				knownSpliceSite = confMap.ResultRv.SpliceSitesInfo[i-skippedGaps]
 			}
+
 			if rStart > lStop {
 				if confMap.ResultRv.SequenceIndex%2 == 0 {
-					plusOrientatedGapsPerMainSeqId = append(plusOrientatedGapsPerMainSeqId, &regionvector.Gap{
-						Start:           lStop,
-						End:             rStart,
-						SpliceSiteScore: knownSpliceSite,
-					})
+					plusOrientatedGapsPerMainSeqId = append(
+						plusOrientatedGapsPerMainSeqId,
+						&regionvector.Gap{
+							Start:           lStop,
+							End:             rStart,
+							SpliceSiteScore: knownSpliceSite,
+						},
+					)
 				} else {
-					plusOrientatedGapsPerMainSeqId = append(plusOrientatedGapsPerMainSeqId, &regionvector.Gap{
-						Start:           len(*index.Sequences[sId]) - rStart,
-						End:             len(*index.Sequences[sId]) - lStop,
-						SpliceSiteScore: knownSpliceSite,
-					})
+					plusOrientatedGapsPerMainSeqId = append(
+						plusOrientatedGapsPerMainSeqId,
+						&regionvector.Gap{
+							Start:           len(*index.Sequences[sId]) - rStart,
+							End:             len(*index.Sequences[sId]) - lStop,
+							SpliceSiteScore: knownSpliceSite,
+						},
+					)
 				}
 			}
 		}
@@ -482,12 +574,15 @@ func clusterGaps(targetGaps map[regionvector.Gap]int) []*regionvector.Intron {
 
 		for _, cluster := range clusters {
 			if currGap.End > cluster.lStart && currGap.Start < cluster.rStop {
+
 				// check if dist from gap start to cluster start is small enough to absorb
-				if cluster.lStart > currGap.Start && cluster.lStart-currGap.Start > config.IntronClusterDelta {
+				if cluster.lStart > currGap.Start &&
+					cluster.lStart-currGap.Start > config.Mapper.GetConfidentIntronClusterDelta() {
 					continue
 				}
 				// check if dist from gap end to cluster end is small enough to absorb
-				if cluster.rStop < currGap.End && currGap.End-cluster.rStop > config.IntronClusterDelta {
+				if cluster.rStop < currGap.End &&
+					currGap.End-cluster.rStop > config.Mapper.GetConfidentIntronClusterDelta() {
 					continue
 				}
 				if cluster.maxEvidence < currGapEvidence {

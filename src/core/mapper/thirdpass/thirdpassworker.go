@@ -2,6 +2,7 @@ package thirdpass
 
 import (
 	"math"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,10 +16,25 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGroup, outputChan chan<- string, index *index.GenomeIndex) {
+func ThirdPassWorker(
+	thirdPassChan *ThirdPassChannel,
+	wgThirdPass *sync.WaitGroup,
+	outputChan chan<- string,
+	index *index.GenomeIndex,
+) {
 	defer wgThirdPass.Done()
 	total := 0
 	mmTotal := 0
+
+	f, err := os.Create(config.Mapper.GetMappingStatsFilePath())
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	if err := WriteHeader(f); err != nil {
+		panic(err)
+	}
 
 	for {
 
@@ -30,12 +46,17 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 		// logrus.Debugf("Third pass: %s", task.ReadPairId)
 
 		var builder strings.Builder
-		if config.IncludeAllPairings {
+
+		if config.Mapper.Mapping.Output.IncludeAllPairings {
+
 			for i := 0; i < len(task.TargetInfo.Fw); i++ {
+
 				if task.TargetInfo.Fw[i].IncompleteMap {
 					continue
 				}
+
 				for j := 0; j < len(task.TargetInfo.Rv); j++ {
+
 					if task.TargetInfo.Rv[j].IncompleteMap {
 						continue
 					}
@@ -45,7 +66,13 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 					total += len(*task.TargetInfo.ReadPair.ReadR1.Sequence)
 					mmTotal += len(task.TargetInfo.Rv[j].MismatchesRead)
 
-					s, err := readPairResultToSamString(index, task.TargetInfo.ReadPair, task.TargetInfo.Fw[i], task.TargetInfo.Rv[j])
+					s, err := readPairResultToSamString(
+						index,
+						task.TargetInfo.ReadPair,
+						task.TargetInfo.Fw[i],
+						task.TargetInfo.Rv[j],
+					)
+
 					if err != nil {
 						logrus.Error("Error converting read pair result to SAM string: ", err)
 						continue
@@ -54,10 +81,14 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 				}
 			}
 		} else {
+
 			// here we do not pair any reads, we just output single sam entries
 			// FW
+
 			numRecordsR1 := 0
+
 			for i := 0; i < len(task.TargetInfo.Fw); i++ {
+
 				if task.TargetInfo.Fw[i].IncompleteMap {
 					continue
 				}
@@ -65,11 +96,29 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 				total += len(*task.TargetInfo.ReadPair.ReadR1.Sequence)
 				mmTotal += len(task.TargetInfo.Fw[i].MismatchesRead)
 
-				s, err := readPairResultToSamString(index, task.TargetInfo.ReadPair, task.TargetInfo.Fw[i], nil)
+				s, err := readPairResultToSamString(
+					index,
+					task.TargetInfo.ReadPair,
+					task.TargetInfo.Fw[i],
+					nil,
+				)
+
+				task.TargetInfo.Fw[i].WriteTSV(
+					f,
+					index.GetSequenceInfo(
+						task.TargetInfo.Fw[i].SequenceIndex,
+					).GeneId,
+					1,
+					i,
+					task.TargetInfo.ReadPair.ReadR1.Header,
+				)
+
 				if err != nil {
-					logrus.Error("Error converting read pair result to SAM string: ", err)
+					logrus.Error("Error converting read pair result to SAM "+
+						"string: ", err)
 					continue
 				}
+
 				builder.WriteString(s)
 
 				numRecordsR1++
@@ -77,7 +126,9 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 
 			// RV
 			numRecordsR2 := 0
+
 			for j := 0; j < len(task.TargetInfo.Rv); j++ {
+
 				if task.TargetInfo.Rv[j].IncompleteMap {
 					continue
 				}
@@ -85,25 +136,49 @@ func ThirdPassWorker(thirdPassChan *ThirdPassChannel, wgThirdPass *sync.WaitGrou
 				total += len(*task.TargetInfo.ReadPair.ReadR2.Sequence)
 				mmTotal += len(task.TargetInfo.Rv[j].MismatchesRead)
 
-				s, err := readPairResultToSamString(index, task.TargetInfo.ReadPair, nil, task.TargetInfo.Rv[j])
+				s, err := readPairResultToSamString(
+					index,
+					task.TargetInfo.ReadPair,
+					nil,
+					task.TargetInfo.Rv[j],
+				)
+
+				task.TargetInfo.Rv[j].WriteTSV(
+					f,
+					index.GetSequenceInfo(
+						task.TargetInfo.Rv[j].SequenceIndex,
+					).GeneId,
+					1,
+					j,
+					task.TargetInfo.ReadPair.ReadR2.Header,
+				)
+
 				if err != nil {
 					logrus.Error("Error converting read pair result to SAM string: ", err)
 					continue
 				}
+
 				builder.WriteString(s)
 
 				numRecordsR2++
 			}
 
-			if (numRecordsR1 == 0 && numRecordsR2 != 0) || (numRecordsR1 != 0 && numRecordsR2 == 0) {
+			if (numRecordsR1 == 0 && numRecordsR2 != 0) ||
+				(numRecordsR1 != 0 && numRecordsR2 == 0) {
 				// one mate is unmapped
 				// write read mate as unmapped to sam
-				builder.WriteString(unmappedReadMateToSamString(task.TargetInfo.ReadPair, numRecordsR1 == 0))
+				builder.WriteString(
+					unmappedReadMateToSamString(
+						task.TargetInfo.ReadPair,
+						numRecordsR1 == 0,
+					),
+				)
 			}
 		}
 
 		outputChan <- builder.String()
 	}
+
 	logrus.Info("Done with output")
 	logrus.WithFields(logrus.Fields{
 		"Average MM":        float64(mmTotal) / float64(total),
@@ -173,9 +248,16 @@ func unmappedReadMateToSamString(readPair *fastq.ReadPair, isR1 bool) string {
 	return builder.String()
 }
 
-func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.ReadPair,
-	resFw *mapperutils.ReadMatchResult, resRv *mapperutils.ReadMatchResult,
-) (string, error) {
+func readPairResultToSamString(
+	genomeIndex *index.GenomeIndex,
+	readPair *fastq.ReadPair,
+	resFw *mapperutils.ReadMatchResult,
+	resRv *mapperutils.ReadMatchResult,
+) (
+	string,
+	error,
+) {
+
 	flagFw := sam.Flag{}
 	flagRv := sam.Flag{}
 
@@ -309,6 +391,7 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 		var errCigarRv error
 
 		cigarRv, errCigarRv = resRv.GetCigar()
+
 		if errCigarRv != nil {
 			logrus.WithFields(logrus.Fields{
 				"read":              readPair.ReadR2.Header,
@@ -486,4 +569,20 @@ func readPairResultToSamString(genomeIndex *index.GenomeIndex, readPair *fastq.R
 	}
 
 	return builder.String(), nil
+}
+
+func WriteHeader(f *os.File) error {
+	header := []string{
+		"Gene", "ReadId", "SId", "IsFw", "AltId", "MM",
+		"IsFixPoint", "MainAnchorLength", "MainAnchorMM",
+		"TotalLeftOptions", "TotalRightOptions",
+		"ValidLeftOptions", "ValidRightOptions",
+		"LeftFixpointLength", "RightFixpointLength",
+		"IsOverhangCorrected",
+		"IsGapFill", "IsGapFillOverflow", "GapsFilled", "GapsFilledOverflow",
+		"IsSymInErr", "SymInErrLen",
+	}
+	line := strings.Join(header, "\t") + "\n"
+	_, err := f.WriteString(line)
+	return err
 }

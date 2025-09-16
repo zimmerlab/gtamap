@@ -2,14 +2,17 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"strconv"
+
+	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
 	"github.com/KleinSamuel/gtamap/src/datawriter"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
+	"github.com/KleinSamuel/gtamap/src/runner"
 	"github.com/sirupsen/logrus"
-	"os"
-	"strconv"
 )
 
 func buildAndSerializeIndexGenome(pathFasta string, pathOutput string) {
@@ -62,19 +65,19 @@ func testFastqReader2() {
 	fmt.Println(read.ReadR2)
 }
 
-func extractGeneSequenceFromGtfAndFastaForIndex() {
-
-	geneIds := make(map[string]struct{})
-	geneIds["ENSG00000173585"] = struct{}{}
-
-	gtfPath := "/home/sam/Data/gtamap/Homo_sapiens.GRCh38.113.chr.gtf"
-	fastaPath := "/home/sam/Data/gtamap/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
-	//fastaIndexPath := "/home/sam/Data/gtamap/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai"
-	outputPath := "/home/sam/Data/gtamap/"
-
-	index.ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath, fastaPath, outputPath, geneIds,
-		0, 0, false)
-}
+// func extractGeneSequenceFromGtfAndFastaForIndex() {
+//
+// 	geneIds := make(map[string]struct{})
+// 	geneIds["ENSG00000173585"] = struct{}{}
+//
+// 	gtfPath := "/home/sam/Data/gtamap/Homo_sapiens.GRCh38.113.chr.gtf"
+// 	fastaPath := "/home/sam/Data/gtamap/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+// 	//fastaIndexPath := "/home/sam/Data/gtamap/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai"
+// 	outputPath := "/home/sam/Data/gtamap/"
+//
+// 	index.ExtractGeneSequenceFromGtfAndFastaForIndex(gtfPath, fastaPath, outputPath, geneIds,
+// 		0, 0, false)
+// }
 
 func testSpecificRead() {
 
@@ -101,7 +104,7 @@ func testSpecificRead() {
 
 	numThreads := 1
 
-	mapper.MapAll(genomeIndex, reader, writer, &numThreads)
+	mapper.MapAll(genomeIndex, reader, writer, numThreads)
 }
 
 func testTas2ReadsAll() {
@@ -119,7 +122,7 @@ func testTas2ReadsAll() {
 
 	numThreads := 1
 
-	mapper.MapAll(genomeIndex, reader, writer, &numThreads)
+	mapper.MapAll(genomeIndex, reader, writer, numThreads)
 }
 
 func testTas2ReadsAllOnNsun5() {
@@ -137,7 +140,7 @@ func testTas2ReadsAllOnNsun5() {
 
 	numThreads := 1
 
-	mapper.MapAll(genomeIndex, reader, writer, &numThreads)
+	mapper.MapAll(genomeIndex, reader, writer, numThreads)
 }
 
 func testTas2ReadsAllOnActbRamBug() {
@@ -155,7 +158,7 @@ func testTas2ReadsAllOnActbRamBug() {
 
 	numThreads := 1
 
-	mapper.MapAll(genomeIndex, reader, writer, &numThreads)
+	mapper.MapAll(genomeIndex, reader, writer, numThreads)
 }
 
 func testTas2r4DeletionReads() {
@@ -173,7 +176,7 @@ func testTas2r4DeletionReads() {
 
 	numThreads := 1
 
-	mapper.MapAll(genomeIndex, reader, writer, &numThreads)
+	mapper.MapAll(genomeIndex, reader, writer, numThreads)
 }
 
 func testIndex() {
@@ -192,6 +195,93 @@ func testIndex() {
 	for _, match := range matches {
 		fmt.Println("Match found: ", match)
 	}
+}
+
+func testRegionmask() {
+
+	genomeIndexPath := "/home/sam/Data/gtamap/opn1lw-opn1mw/X_154138492_154274890.with-regionmask.gtai"
+
+	// bedFilePath := "/home/sam/Data/gtamap/regionmask/mask.bed"
+	// prioFilePath := "/home/sam/Data/gtamap/regionmask/mask.priority"
+
+	// readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.fastq.gz"
+	// readsRvPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_2.fastq.gz"
+
+	readsFwPath := "/home/sam/Data/gtamap/opn1lw-opn1mw/test.fw.40k.fq"
+	readsRvPath := "/home/sam/Data/gtamap/opn1lw-opn1mw/test.rv.40k.fq"
+	// readsFwPath := "/home/sam/Data/gtamap/opn1lw-opn1mw/bug.fw.fq"
+	// readsRvPath := "/home/sam/Data/gtamap/opn1lw-opn1mw/bug.rv.fq"
+
+	outputPath := "/home/sam/Data/gtamap/opn1lw-opn1mw/test.sam"
+
+	genomeIndex := index.ReadGenomeIndexByPath(genomeIndexPath)
+	reader, _ := fastq.InitFromPaths(&readsFwPath, &readsRvPath)
+	writer := datawriter.InitFromPath(outputPath)
+
+	numThreads := 1
+
+	config.IsOriginRNA = true
+	// config.IsOriginRNA = false
+
+	// // TODO: change from nil to actual values
+	// regionMask, errRegionMask := index.NewRegionMaskFromPaths(prioFilePath, bedFilePath, nil)
+	// if errRegionMask != nil {
+	// 	logrus.Fatal("Error creating region mask from paths", errRegionMask)
+	// }
+	//
+	// fmt.Println(regionMask)
+
+	mapper.MapAll(genomeIndex, reader, writer, numThreads)
+}
+
+func ViewRegionMask() {
+
+	index := index.ReadGenomeIndexByPath("/home/sam/Data/gtamap/opn1lw-opn1mw/X_154138492_154274890.regionmask.gtai")
+
+	for contig, mask := range index.RegionMask.ContigMasks {
+		fmt.Println("Contig:", contig)
+		mask.Print()
+	}
+
+}
+
+func Debug() {
+
+	// os.Args = []string{
+	// 	"gtamap",
+	// 	"map",
+	// 	"--index",
+	// 	"/home/sam/Data/gtamap/opn1lw-opn1mw/X_154138492_154274890.regionmask.gtai",
+	// 	"--output",
+	// 	"/home/sam/Data/gtamap/opn1lw-opn1mw/out/",
+	// 	"--read-origin",
+	// 	"dna",
+	// 	"--reads-r1",
+	// 	"/home/sam/Data/gtamap/opn1lw-opn1mw/test.fw.40k.fq",
+	// 	"--reads-r2",
+	// 	"/home/sam/Data/gtamap/opn1lw-opn1mw/test.rv.40k.fq",
+	// 	"--threads",
+	// 	"1",
+	// }
+
+	os.Args = []string{
+		"gtamap",
+		"map",
+		"--index",
+		"/home/sam/Data/gtamap/opn1lw-opn1mw/X_154138492_154274890.regionmask.gtai",
+		"--output",
+		"/home/sam/Data/gtamap/opn1lw-opn1mw/out/",
+		"--read-origin",
+		"dna",
+		"--reads-r1",
+		"/home/sam/Data/gtamap/opn1lw-opn1mw/bug.fw.fq",
+		"--reads-r2",
+		"/home/sam/Data/gtamap/opn1lw-opn1mw/bug.rv.fq",
+		"--threads",
+		"1",
+	}
+
+	runner.Execute()
 }
 
 func main() {
@@ -247,9 +337,13 @@ func main() {
 	//testSpecificRead()
 	//testTas2r4DeletionReads()
 	//testTas2ReadsAll()
-	testTas2ReadsAllOnNsun5()
+	// testTas2ReadsAllOnNsun5()
 	//testTas2ReadsAllOnActbRamBug()
 	//testIndex()
+
+	// testRegionmask()
+	// ViewRegionMask()
+	Debug()
 
 	//analysis.CompareResults()
 }

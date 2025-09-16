@@ -4,7 +4,6 @@ import (
 	"encoding/csv"
 	"math"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"sync"
@@ -75,13 +74,8 @@ func ProgressWorker(progressChan <-chan Event, wg *sync.WaitGroup) {
 	logrus.Debug("Started progressWorker")
 
 	timerStart := time.Now()
-	// Ensure parent dirs exist
-	if err := os.MkdirAll(filepath.Dir(config.LogOut), 0o755); err != nil {
-		logrus.Errorf("Failed to create directories for %s: %v", config.LogOut, err)
-		return
-	}
 
-	tsvFile, err := os.Create(config.LogOut)
+	tsvFile, err := os.Create(config.Mapper.GetMapperProgressLogPath())
 	if err != nil {
 		logrus.Errorf("Failed to create TSV file: %v", err)
 		return
@@ -246,10 +240,10 @@ func ProgressWorker(progressChan <-chan Event, wg *sync.WaitGroup) {
 			rate := float64(totalReadsProcessed) / elapsed.Minutes() / 1_000_000 // in million reads per minute
 
 			logrus.WithFields(logrus.Fields{
-				"reads": strconv.FormatFloat(math.Round(float64(totalReadsProcessed)/1_000_000*100)/100, 'f', 2, 64) + "M",
-				"time":  utils.FormatDuration(elapsed),
-				"rate":  strconv.FormatFloat(rate, 'f', 2, 64) + "M/min",
-				"done":  percentFileRead + "%",
+				"reads":    strconv.FormatFloat(math.Round(float64(totalReadsProcessed)/1_000_000*100)/100, 'f', 2, 64) + "M",
+				"duration": utils.FormatDuration(elapsed),
+				"rate":     strconv.FormatFloat(rate, 'f', 2, 64) + "M/min",
+				"done":     percentFileRead + "%",
 			}).Info("Progress update")
 		}
 	}

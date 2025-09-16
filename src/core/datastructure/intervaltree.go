@@ -1,6 +1,7 @@
 package datastructure
 
 // M. Weyrich: Creating hard copy of this interval tree in order to export fields, making it serializable
+// S. Klein: Changed float64 to integer
 
 // MIT License
 //
@@ -33,21 +34,21 @@ import (
 
 // Bounds is the main interface expected by NewINTree(); requires Limits method to access interval limits.
 type Bounds interface {
-	Limits() (Lower, Upper float64)
+	Limits() (Lower, Upper int)
 }
 
 // INTree is the main package object;
 // holds Slice of reference indices and the respective interval limits.
 type INTree struct {
 	Idxs []int
-	Lmts []float64
+	Lmts []int
 }
 
 // buildTree is the internal tree construction function;
 // creates, sorts and augments nodes into Slices.
 func (inT *INTree) buildTree(bnds []Bounds) {
 	inT.Idxs = make([]int, len(bnds))
-	inT.Lmts = make([]float64, 3*len(bnds))
+	inT.Lmts = make([]int, 3*len(bnds))
 
 	for i, v := range bnds {
 
@@ -66,7 +67,7 @@ func (inT *INTree) buildTree(bnds []Bounds) {
 
 // Including is the main entry point for bounds searches;
 // traverses the tree and collects intervals that overlap with the given value.
-func (inT *INTree) Including(val float64) []int {
+func (inT *INTree) Including(val int) []int {
 	stk := []int{0, len(inT.Idxs) - 1}
 	res := []int{}
 
@@ -121,12 +122,12 @@ func NewINTree(bnds []Bounds) *INTree {
 }
 
 // augment is an internal utility function, adding maximum value of all child nodes to the current node.
-func augment(lmts []float64, idxs []int) {
+func augment(lmts []int, idxs []int) {
 	if len(idxs) < 1 {
 		return
 	}
 
-	max := 0.0
+	max := 0
 
 	for idx := range idxs {
 		if lmts[3*idx+1] > max {
@@ -143,7 +144,7 @@ func augment(lmts []float64, idxs []int) {
 }
 
 // sort is an internal utility function, sorting the tree by lowest limits using Random Pivot QuickSearch
-func sort(lmts []float64, idxs []int) {
+func sort(lmts []int, idxs []int) {
 	if len(idxs) < 2 {
 		return
 	}
@@ -174,9 +175,17 @@ func sort(lmts []float64, idxs []int) {
 }
 
 type RepeatRegion struct {
-	Lower, Upper float64
+	Lower, Upper int
 }
 
-func (rr *RepeatRegion) Limits() (float64, float64) {
+func (rr *RepeatRegion) Limits() (int, int) {
 	return rr.Lower, rr.Upper
+}
+
+type IntronRegion struct {
+	Lower, Upper int
+}
+
+func (ir *IntronRegion) Limits() (int, int) {
+	return ir.Lower, ir.Upper
 }

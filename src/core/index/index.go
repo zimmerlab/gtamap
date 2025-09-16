@@ -2,6 +2,7 @@ package index
 
 import (
 	"encoding/gob"
+	"fmt"
 	"io/fs"
 	"log"
 	"math"
@@ -14,10 +15,8 @@ import (
 
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
-	"github.com/KleinSamuel/gtamap/src/core/datastructure/genemodel"
-	"github.com/KleinSamuel/gtamap/src/core/datastructure/keywordtree"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/keywordtreebyte"
-	"github.com/KleinSamuel/gtamap/src/core/interval"
+	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
 	"github.com/KleinSamuel/gtamap/src/formats/gtf"
@@ -25,526 +24,6 @@ import (
 	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
 )
-
-type GtaIndex struct {
-	Gene               *genemodel.Gene           // information about the gene
-	Transcripts        []*genemodel.Transcript   // all transcripts of the gene
-	SuffixTree         *datastructure.SuffixTree // a single suffix tree containing all transcript sequences forward and reverse complemented
-	NumSequences       int
-	Sequences          []string
-	KeywordTree        *keywordtree.KeywordTree
-	EquivalenceClasses []*genemodel.EquivalenceClass
-}
-
-func (i GtaIndex) TransIndexToTransName(transcriptIndex uint32) string {
-	return i.Transcripts[transcriptIndex].TranscriptIdEnsembl
-}
-
-func (i GtaIndex) SequenceIndexToTranscriptIndex(sequenceIndex uint32) uint32 {
-	return sequenceIndex / 2
-}
-
-func (i GtaIndex) SequenceIndexIsForward(sequenceIndex uint32) bool {
-	return sequenceIndex%2 == 0
-}
-
-// GetSequenceByIndex returns the DNA sequence of the sequence at the given index.
-// This returns the forward sequence if the index is even and the reverse sequence if the index is odd.
-func (i GtaIndex) GetSequenceByIndex(sequenceIndex int) *string {
-	if i.SequenceIndexIsForward(uint32(sequenceIndex)) {
-		return &i.Transcripts[i.SequenceIndexToTranscriptIndex(uint32(sequenceIndex))].SequenceDnaForward
-	} else {
-		return &i.Transcripts[i.SequenceIndexToTranscriptIndex(uint32(sequenceIndex))].SequenceDnaReverse
-	}
-}
-
-// TranslateRwTransPosToFwTransPos translates a relative position revTransPos within a reverse
-// transcript to a relative position within the forward transcript for the transcript at index transcriptIndex.
-func (i GtaIndex) TranslateRwTransPosToFwTransPos(transcriptIndex uint32,
-	revTransPos uint32,
-) uint32 {
-	transcript := i.Transcripts[transcriptIndex]
-
-	if revTransPos >= uint32(transcript.SequenceLength) {
-		panic("Relative position is out of bounds")
-	}
-
-	return uint32(transcript.SequenceLength) - revTransPos - 1
-}
-
-// TranslateRelativeTranscriptPositionToRelativeGenePosition translates a relative position within a transcript to the
-// relative position within the gene. Can be used to check whether two transcript positions relate to the same
-// position on the gene.
-// TODO: untested function
-func (i GtaIndex) TranslateRelativeTranscriptPositionToRelativeGenePosition(transcriptIndex uint32,
-	relativeTranscriptPosition uint32,
-) uint32 {
-	transcript := i.Transcripts[transcriptIndex]
-
-	if relativeTranscriptPosition < 0 {
-		panic("Relative position is out of bounds (less than 0)")
-	}
-	if relativeTranscriptPosition > uint32(transcript.SequenceLength) {
-		panic("Relative position is out of bounds")
-	}
-
-	// Find the exon that contains the relative position by iterating over all exons and subtracting the
-	// length of the exons that are before the relative position until the relative position is within the exon
-	// then return the genomic location by adding the relative position to the genomic start location of the exon.
-	for _, exon := range transcript.Exons {
-
-		exonLength := exon.EndRelative - exon.StartRelative
-
-		if relativeTranscriptPosition >= exonLength {
-			relativeTranscriptPosition -= exonLength
-			continue
-		}
-
-		return exon.StartRelative + relativeTranscriptPosition
-	}
-
-	// panic if the relative position could not be translated to a genomic location
-	// should never happen because every relative position should be within the exons
-	panic("Could not translate to genomic location")
-}
-
-// TransIntervalToGenomicIntervals translates a relative interval on a transcript to genomic intervals.
-// The transcript interval is one continuous interval on the transcript sequence. This interval can span across
-// multiple exons and can therefore consist of multiple genomic intervals.
-// Idea:
-// Iterate over the exons of the transcript and check if the interval intersects with the current exon.
-// The length of each exon is subtracted from the relative transcript start position and until the relative start
-// is larger than the length of the current exon, they do not overlap.
-// When an exon overlaps the transcript interval, then the interval starts either at the start or within the exon.
-// The interval starts at the start of the exon if the relative start position is larger than 0.
-// The interval ends either at the end of the exon or within the exon.
-// The interval ends at the end of the exon if the relative end position is larger than the length of the exon.
-// Otherwise the offset (transcript start or transcript end) is added to the start of the exon to get the position
-// within the exon.
-// TODO: untested function
-func (i GtaIndex) TransIntervalToGenomicIntervals(tranIndex uint32, startTransPos int, endTransPos int) []uint32 {
-	transcript := i.Transcripts[tranIndex]
-
-	// intervals := make([]*core.Interval, 0)
-	intervals := make([]uint32, 0)
-
-	for _, exon := range transcript.Exons {
-
-		exonLength := exon.EndRelative - exon.StartRelative
-
-		if startTransPos >= int(exonLength) {
-			startTransPos -= int(exonLength)
-			endTransPos -= int(exonLength)
-			continue
-		}
-
-		var startGenomic uint32
-		var endGenomic uint32
-
-		if startTransPos >= 0 {
-			startGenomic = exon.StartRelative + uint32(startTransPos)
-			startTransPos -= int(exonLength)
-		} else {
-			startGenomic = exon.StartRelative
-		}
-
-		if endTransPos >= int(exonLength) {
-			endGenomic = exon.EndRelative
-			endTransPos -= int(exonLength)
-		} else {
-			endGenomic = exon.StartRelative + uint32(endTransPos)
-		}
-
-		//intervals = append(intervals, &core.Interval{
-		//	Start: int(startGenomic),
-		//	End:   int(endGenomic),
-		//})
-		intervals = append(intervals, startGenomic)
-		intervals = append(intervals, endGenomic)
-	}
-
-	return intervals
-}
-
-// AddGenomicLocationsToNodes adds the genomic locations to the nodes of the suffix tree.
-// Each node in the suffix tree has a list of positions which are the start positions of the suffix
-// on each of the transcript sequences (forward and reverse). This function adds the genomic locations
-// (the start positions of the suffix on the gene) to the positions.
-func (i GtaIndex) AddGenomicLocationsToNodes() {
-	for _, node := range i.SuffixTree.Nodes {
-		for _, pos := range node.Positions {
-
-			transcriptIndex := i.SequenceIndexToTranscriptIndex(uint32(pos.Index))
-
-			transPos := uint32(pos.Start)
-			if !i.SequenceIndexIsForward(uint32(pos.Index)) {
-				transPos = i.TranslateRwTransPosToFwTransPos(transcriptIndex, uint32(pos.Start))
-			}
-
-			pos.StartGenomic = int(i.TranslateRelativeTranscriptPositionToRelativeGenePosition(transcriptIndex, transPos))
-		}
-	}
-}
-
-func (i GtaIndex) FindEquivalenceClassByGenomicLocation(genomicLocation uint32) *genemodel.EquivalenceClass {
-	for _, ec := range i.EquivalenceClasses {
-		if genomicLocation >= ec.FromGenomic && genomicLocation < ec.ToGenomic {
-			return ec
-		}
-	}
-	return nil
-}
-
-// GetCoveredEquivalenceClassIds returns the ids of the equivalence classes that are covered by
-// the given interval.
-// The given startRelative and endRelative position is relative to the sequence (transcript) and not the gene.
-// Idea:
-// Each position of a transcript must be contained within an equivalence class because these are built upon
-// the exons of all transcripts.
-// The start position is translated to a genomic location and the equivalence class that contains this location
-// is obtained as the initial and current equivalence class.
-// While the given interval spans across the current equivalence class, the next equivalence class is retrieved.
-// TODO: not tested
-func (i GtaIndex) GetCoveredEquivalenceClassIds(sequenceIndex int, startRelative int, endRelative int) []uint32 {
-	ecIds := make([]uint32, 0)
-
-	transcriptIndex := i.SequenceIndexToTranscriptIndex(uint32(sequenceIndex))
-
-	if !i.SequenceIndexIsForward(uint32(sequenceIndex)) {
-		startRelative = int(i.TranslateRwTransPosToFwTransPos(transcriptIndex, uint32(startRelative)))
-		endRelative = int(i.TranslateRwTransPosToFwTransPos(transcriptIndex, uint32(endRelative)))
-	}
-
-	start := i.TranslateRelativeTranscriptPositionToRelativeGenePosition(transcriptIndex, uint32(startRelative))
-
-	ec := i.FindEquivalenceClassByGenomicLocation(start)
-
-	if ec == nil {
-		// should not happen because the equivalence class are based on the positions covered by exons
-		panic("Could not find equivalence class for start position")
-	}
-
-	posRelative := startRelative + int(ec.FromGenomic-ec.ToGenomic)
-	ecIds = append(ecIds, ec.Id)
-
-	for posRelative < endRelative {
-
-		// the given interval spans across the current equivalence class
-		// find the next equivalence class
-		ec := i.EquivalenceClasses[ec.Id+1]
-		ecIds = append(ecIds, ec.Id)
-
-		posRelative += int(ec.ToGenomic - ec.FromGenomic)
-	}
-
-	return ecIds
-}
-
-// AddSequenceToKeywordTree adds all keywords of a sequence to the keyword tree.
-// The length of each keyword is defined by the keyword length of the keyword tree.
-// Each keyword contained in the sequence is added to the keyword tree and the position of the keyword
-// within the sequence is added to the keyword node as well as all equivalence classes that are covered by the
-// keyword.
-// TODO: not tested
-func (i GtaIndex) AddSequenceToKeywordTree(sequence *string, sequenceIndex uint32) {
-	for kStart := 0; kStart < len(*sequence)-int(i.KeywordTree.KeywordLength); kStart++ {
-
-		kEnd := kStart + int(i.KeywordTree.KeywordLength)
-
-		ecIds := i.GetCoveredEquivalenceClassIds(int(sequenceIndex), kStart, kEnd)
-
-		node := i.KeywordTree.AddKeyword((*sequence)[kStart:kEnd])
-
-		node.Positions = append(node.Positions, keywordtree.Position{
-			SequenceIndex:       sequenceIndex,
-			Position:            uint32(kStart),
-			EquivalenceClassIds: ecIds,
-		})
-
-		// break
-	}
-}
-
-func (i GtaIndex) EquivalenceClassIdsMatch(ecIds1 []uint32, ecIds2 []uint32) bool {
-	if len(ecIds1) != len(ecIds2) {
-		return false
-	}
-
-	for i, ecId := range ecIds1 {
-		if ecId != ecIds2[i] {
-			return false
-		}
-	}
-
-	return true
-}
-
-func BuildAndSerializeIndex(gtfFile *os.File, fastaFile *os.File, outputFile *os.File) {
-	timerStart := time.Now()
-
-	timerReadReference := time.Now()
-	durationReadReference := time.Duration(0)
-
-	timerBuildTree := time.Now()
-	durationBuildTree := time.Duration(0)
-
-	timerReadReference = time.Now()
-	var fastIndexFilePath string = fastaFile.Name() + ".fai"
-	dataloader.ExitIfFastaIndexIsMissing(fastIndexFilePath)
-	fastaIndexFile, err := os.Open(fastIndexFilePath)
-	if err != nil {
-		log.Fatal("Error reading fasta index file (.fai)", err)
-	}
-	durationReadReference += time.Since(timerReadReference)
-
-	gtaIndex := GtaIndex{
-		Gene:         nil,
-		Transcripts:  nil,
-		SuffixTree:   nil,
-		NumSequences: 0,
-	}
-
-	// read the reference files (gtf + fasta) and generate the annotation
-	timerReadReference = time.Now()
-	annotation := dataloader.GenerateInputForIndex(gtfFile, fastaFile, fastaIndexFile)
-	durationReadReference += time.Since(timerReadReference)
-
-	gtaIndex.Gene = &genemodel.Gene{
-		GeneIdEnsembl:  annotation.Genes[0].GeneIdEnsembl,
-		Chromosome:     annotation.Genes[0].Chromosome,
-		IsFowardStrand: annotation.Genes[0].IsForwardStrand,
-	}
-
-	gtaIndex.Transcripts = make([]*genemodel.Transcript, len(annotation.Genes[0].Transcripts))
-
-	// add the transcripts and its information of the first gene to the index
-	for i, transcript := range annotation.Genes[0].Transcripts {
-
-		gtaIndex.Transcripts[i] = &genemodel.Transcript{
-			TranscriptIdEnsembl:       transcript.TranscriptIdEnsembl,
-			SequenceDnaForward53Index: i * 2,
-			SequenceDnaReverse53Index: i*2 + 1,
-			SequenceDnaForward:        transcript.SequenceDna,
-			SequenceDnaReverse:        utils.ReverseComplementDNA(transcript.SequenceDna),
-			SequenceLength:            len(transcript.SequenceDna),
-			Exons:                     make([]*genemodel.Exon, len(transcript.Exons)),
-		}
-
-		// the exons of the transcript are added to the transcript in the index
-		for j, exon := range transcript.Exons {
-			gtaIndex.Transcripts[i].Exons[j] = &genemodel.Exon{
-				StartRelative: exon.StartRelative,
-				EndRelative:   exon.EndRelative,
-			}
-		}
-	}
-
-	// generate equivalence classes
-	exonIntervals := make([]*interval.Interval, 0)
-
-	for _, transcript := range gtaIndex.Transcripts {
-		for _, exon := range transcript.Exons {
-			exonIntervals = append(exonIntervals, &interval.Interval{
-				Start: int(exon.StartRelative),
-				End:   int(exon.EndRelative),
-			})
-		}
-	}
-
-	equivalenceClasses := interval.GenerateEquivalenceClasses(exonIntervals)
-
-	gtaIndex.EquivalenceClasses = make([]*genemodel.EquivalenceClass, len(equivalenceClasses))
-
-	for i, ec := range equivalenceClasses {
-		gtaIndex.EquivalenceClasses[i] = &genemodel.EquivalenceClass{
-			Id:          uint32(i),
-			FromGenomic: uint32(ec.Start),
-			ToGenomic:   uint32(ec.End),
-		}
-	}
-
-	// gtaIndex.SuffixTree = datastructure.CreateTree()
-
-	gtaIndex.KeywordTree = keywordtree.NewKeywordTree(config.KmerLength())
-
-	for _, transcript := range gtaIndex.Transcripts {
-
-		timerBuildTree = time.Now()
-		gtaIndex.AddSequenceToKeywordTree(&transcript.SequenceDnaForward, uint32(transcript.SequenceDnaForward53Index))
-		durationBuildTree += time.Since(timerBuildTree)
-		gtaIndex.NumSequences++
-
-		timerBuildTree = time.Now()
-		gtaIndex.AddSequenceToKeywordTree(&transcript.SequenceDnaReverse, uint32(transcript.SequenceDnaReverse53Index))
-		durationBuildTree += time.Since(timerBuildTree)
-		gtaIndex.NumSequences++
-
-		//// the index of the forward sequence in the suffix tree (used for retrieval)
-		//sequenceIndexForward := len(gtaIndex.SuffixTree.Sequences)
-		//timerBuildTree = time.Now()
-		//gtaIndex.SuffixTree.AddSequence(transcript.SequenceDna, sequenceIndexForward)
-		////gtaIndex.SuffixTree.AddSequence(seq, sequenceIndexForward)
-		//durationBuildTree += time.Since(timerBuildTree)
-		//gtaIndex.NumSequences++
-		//
-		//// the index of the reverse complement sequence in the suffix tree (used for retrieval)
-		//sequenceIndexReverse := len(gtaIndex.SuffixTree.Sequences)
-		//timerBuildTree = time.Now()
-		//gtaIndex.SuffixTree.AddSequence(utils.ReverseComplementDNA(transcript.SequenceDna), sequenceIndexReverse)
-		////gtaIndex.SuffixTree.AddSequence(utils.ReverseComplementDNA(seq), sequenceIndexReverse)
-		//durationBuildTree += time.Since(timerBuildTree)
-		//gtaIndex.NumSequences++
-
-		// break
-	}
-
-	// suffix links are only required for tree construction but not for the search
-	// timerBuildTree = time.Now()
-	// gtaIndex.SuffixTree.RemoveAllSuffixLinks()
-	// durationBuildTree += time.Since(timerBuildTree)
-
-	//posPerSeq := make(map[int][]int)
-	//
-	//for _, node := range gtaIndex.SuffixTree.Nodes {
-	//	//fmt.Println("node id: ", node.Id)
-	//
-	//	for _, pos := range node.Positions {
-	//		//fmt.Println("pos: ", pos)
-	//		posPerSeq[pos.Index] = append(posPerSeq[pos.Index], pos.Start)
-	//	}
-	//}
-	//
-	//fmt.Println(len(gtaIndex.SuffixTree.Sequences))
-	//
-	//for i := 0; i < len(gtaIndex.SuffixTree.Sequences); i++ {
-	//	fmt.Println("seqIndex:\t", i)
-	//	fmt.Println("length:\t\t", len(gtaIndex.SuffixTree.Sequences[i]))
-	//
-	//	seen := make(map[int]bool) // Map to store seen integers
-	//	var unique []int
-	//
-	//	for _, num := range posPerSeq[i] {
-	//		if !seen[num] {
-	//			seen[num] = true
-	//			unique = append(unique, num)
-	//		}
-	//	}
-	//
-	//	sort.Ints(unique)
-	//
-	//	fmt.Println("length pos\t", len(unique))
-	//
-	//	for j := 0; j < len(unique); j++ {
-	//		if unique[j] != j {
-	//			fmt.Println("missing: ", j)
-	//		}
-	//	}
-	//
-	//	fmt.Println("")
-	//}
-
-	/*
-		for seqIndex, positions := range posPerSeq {
-			fmt.Println("seqIndex: ", seqIndex)
-			fmt.Println("positions: ", positions)
-		}
-	*/
-
-	// write the index to file as a serialized gob
-	SerializeFromFile(&gtaIndex, outputFile)
-
-	logrus.WithFields(logrus.Fields{
-		"build": utils.FormatDuration(durationBuildTree),
-		"read":  utils.FormatDuration(durationReadReference),
-		"total": utils.FormatDuration(time.Since(timerStart)),
-	}).Info("Successfully built and serialized the GTAMap index")
-}
-
-func SerializeFromPath(gtaIndex *GtaIndex, filePath string) {
-	file, err := os.Create(filePath)
-	if err != nil {
-		panic(err)
-	}
-	defer file.Close()
-
-	SerializeFromFile(gtaIndex, file)
-}
-
-func SerializeFromFile(gtaIndex *GtaIndex, outputFile *os.File) {
-	timerStart := time.Now()
-
-	enc := gob.NewEncoder(outputFile)
-
-	if err := enc.Encode(gtaIndex); err != nil {
-		log.Fatal("encode error:", err)
-	}
-
-	logrus.WithFields(logrus.Fields{
-		"duration": utils.FormatDuration(time.Since(timerStart)),
-		"output":   outputFile.Name(),
-	}).Info("Serialized index")
-}
-
-func SerializeFromFileTest(tree *keywordtree.KeywordTree, outputFile *os.File) {
-	timerStart := time.Now()
-
-	enc := gob.NewEncoder(outputFile)
-
-	if err := enc.Encode(tree); err != nil {
-		log.Fatal("encode error:", err)
-	}
-
-	logrus.WithFields(logrus.Fields{
-		"duration": utils.FormatDuration(time.Since(timerStart)),
-		"output":   outputFile.Name(),
-	}).Info("Serialized index")
-}
-
-func DezerializeFromPath(indexFilePath string) *GtaIndex {
-	// Open the file for reading
-	file, err := os.Open(indexFilePath)
-	if err != nil {
-		panic(err)
-	}
-	defer file.Close()
-
-	return DezerializeFromFile(file)
-}
-
-func DezerializeFromFile(indexFile *os.File) *GtaIndex {
-	timerStart := time.Now()
-
-	// create a decoder and deserialize the person struct from the file
-	decoder := gob.NewDecoder(indexFile)
-
-	var gtaIndex GtaIndex
-
-	if err := decoder.Decode(&gtaIndex); err != nil {
-		panic(err)
-	}
-
-	logrus.WithFields(logrus.Fields{
-		"duration": utils.FormatDuration(time.Since(timerStart)),
-	}).Info("Deserialized index")
-
-	logrus.WithFields(logrus.Fields{
-		"geneId":         gtaIndex.Gene.GeneIdEnsembl,
-		"numTranscripts": len(gtaIndex.Transcripts),
-	}).Info("Index info")
-
-	// information about the transcripts contained in the index
-	for i, transcript := range gtaIndex.Transcripts {
-		logrus.WithFields(logrus.Fields{
-			"sequenceIndex":  i,
-			"transcriptId":   transcript.TranscriptIdEnsembl,
-			"sequenceLength": transcript.SequenceLength,
-		}).Info("Contained transcript")
-	}
-
-	return &gtaIndex
-}
-
-/* GENOME INDEX */
 
 type GenomeIndex struct {
 	SequenceHeaders []string                     // the headers of the sequences at indices 0(+1), 2(+3), 4(+5), etc.
@@ -554,8 +33,15 @@ type GenomeIndex struct {
 	KeywordMap      map[[10]byte][]*keywordtreebyte.Position
 	KeywordMapSmall map[[5]byte][]*keywordtreebyte.Position
 	// ParalogRegions  map[string]*GenomeIndex // additional index per target region of paralog regions
-	Blacklist     map[int]*datastructure.INTree  // interval tree used to store repeat regions. Tree at 0 -> for target region 0 etc...
-	RepeatRegions map[int][]datastructure.Bounds // interval tree used to store repeat regions. Tree at 0 -> for target region 0 etc...
+	// Blacklist        map[int]*datastructure.INTree  // interval tree used to store repeat regions. Tree at 0 -> for target region 0 etc...
+	// RepeatRegions    map[int][]datastructure.Bounds // interval tree used to store repeat regions. Tree at 0 -> for target region 0 etc...
+	// ContigRepeatmask      map[string]*ContigRepeatmask
+	RegionMask            *RegionMask
+	ContigToTargetRegions map[string]*regionvector.RegionVector // map to get the target region for a given contig
+}
+
+func (i *GenomeIndex) SetRegionMask(mask *RegionMask) {
+	i.RegionMask = mask
 }
 
 func (i *GenomeIndex) AddKeywordToMap(keyword [10]byte, sequenceIndex uint8, position uint32) {
@@ -787,76 +273,183 @@ func (i *GenomeIndex) GetSequenceHeader(sequenceIndex int) string {
 }
 
 func (i *GenomeIndex) GetSequenceInfo(sequenceIndex int) *gtf.GeneBasic {
-	if i.IsSequenceForward(sequenceIndex) {
-		return i.SequenceInfo[sequenceIndex]
-	} else {
-		return i.SequenceInfo[sequenceIndex-1]
-	}
+	return i.SequenceInfo[sequenceIndex/2]
 }
 
 func (i *GenomeIndex) GetSequenceContig(sequenceIndex int) string {
-	if i.IsSequenceForward(sequenceIndex) {
-		return i.SequenceInfo[sequenceIndex].Contig
-	} else {
-		return i.SequenceInfo[sequenceIndex-1].Contig
-	}
+	// if i.IsSequenceForward(sequenceIndex) {
+	// 	return i.SequenceInfo[sequenceIndex].Contig
+	// } else {
+	// 	return i.SequenceInfo[sequenceIndex-1].Contig
+	// }
+	return i.SequenceInfo[sequenceIndex/2].Contig
 }
 
 func (i *GenomeIndex) NumSequences() int {
 	return len(i.SequenceHeaders)
 }
 
-func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry, repeatMaskerFile *os.File) *GenomeIndex {
+func (i *GenomeIndex) IsResultValid(result *mapperutils.ReadMatchResult) bool {
+
+	sequenceInfo := i.GetSequenceInfo(result.SequenceIndex)
+
+	if _, found := i.RegionMask.ContigMasks[sequenceInfo.Contig]; !found {
+		return true
+	}
+
+	length := int(sequenceInfo.EndGenomic - sequenceInfo.StartGenomic)
+	isForward := i.IsSequenceForward(result.SequenceIndex)
+
+	fmt.Println("--")
+	// DEBUG: print result
+	fmt.Println(result.String())
+
+	result.MergeRegionsIfBothConsecutive()
+
+	fmt.Println(result.String())
+
+	for _, genomicRegion := range result.MatchedGenome.Regions {
+
+		var startGenomic int
+		if isForward {
+			startGenomic = int(sequenceInfo.StartGenomic) + genomicRegion.Start
+		} else {
+			startGenomic = int(sequenceInfo.StartGenomic) + (length - genomicRegion.End)
+		}
+
+		fmt.Printf("region:\nrel:\t%d - %d\nglb:\t%d - %d\n\n", genomicRegion.Start, genomicRegion.End, startGenomic, startGenomic+genomicRegion.Length())
+
+		i.RegionMask.ContigMasks[sequenceInfo.Contig].ApplyMaskToRegion(startGenomic, startGenomic+genomicRegion.Length())
+
+		//
+		// 	found, name, size := i.RegionMask.ContigMasks[sequenceInfo.Contig].
+		// 		GetMostImportantItemThatOverlaps(
+		// 			startGenomic,
+		// 			startGenomic+genomicRegion.Length(),
+		// 		)
+		//
+		// 	if !found {
+		// 		continue
+		// 	}
+		//
+		// 	// percentOverlap := float32(size) / float32(genomicRegion.Length())
+		// 	fmt.Println()
+		// 	fmt.Println(genomicRegion)
+		// 	fmt.Println(startGenomic, startGenomic+genomicRegion.Length())
+		// 	fmt.Println(name, size)
+		// 	fmt.Println(float32(size) / float32(genomicRegion.Length()))
+		//
+	}
+
+	return true
+}
+
+// TODO: adjust to region mask
+// func (i *GenomeIndex) IsPartOfRepeat(result *mapperutils.ReadMatchResult) bool {
+//
+// 	seqInfo := i.GetSequenceInfo(result.SequenceIndex)
+//
+// 	// no repeatmask for this contig
+// 	if _, found := i.ContigRepeatmask[seqInfo.Contig]; !found {
+// 		return false
+// 	}
+//
+// 	length := int(seqInfo.EndGenomic - seqInfo.StartGenomic)
+// 	isForward := i.IsSequenceForward(result.SequenceIndex)
+//
+// 	for _, genomicRegion := range result.MatchedGenome.Regions {
+//
+// 		var startGenomic int
+// 		if isForward {
+// 			startGenomic = int(seqInfo.StartGenomic) + genomicRegion.Start
+// 		} else {
+// 			startGenomic = int(seqInfo.StartGenomic) + (length - genomicRegion.End)
+// 		}
+//
+// 		repeats := i.ContigRepeatmask[seqInfo.Contig].TreeFw.Including(startGenomic)
+//
+// 		if len(repeats) != 0 && genomicRegion.Length() > 70 {
+// 			return true
+// 		}
+// 	}
+//
+// 	return false
+// }
+
+// CleanResults removes results that do not match contraints.
+// Removes results that are part of a repeat and have more than the allowed
+// number of mismatches.
+func (i *GenomeIndex) CleanResults(
+	results []*mapperutils.ReadMatchResult,
+) []*mapperutils.ReadMatchResult {
+
+	cleaned := make([]*mapperutils.ReadMatchResult, 0)
+
+	for _, result := range results {
+		// skip results that are part of a repeat region and have more than 4 mismatches
+		// TODO: adjust to region mask
+		// if i.IsPartOfRepeat(result) && len(result.MismatchesRead) > 4 {
+		// 	continue
+		// }
+		cleaned = append(cleaned, result)
+	}
+
+	return cleaned
+}
+
+func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry) *GenomeIndex {
+
+	timerStart := time.Now()
+
 	index := GenomeIndex{
 		SequenceHeaders: make([]string, len(fastaEntries)),
 		SequenceInfo:    make([]*gtf.GeneBasic, len(fastaEntries)),
 		Sequences:       make([]*[]byte, len(fastaEntries)*2),
 		KeywordMap:      make(map[[10]byte][]*keywordtreebyte.Position, int(math.Pow(4, 10))),
 		KeywordMapSmall: make(map[[5]byte][]*keywordtreebyte.Position, int(math.Pow(4, 5))),
-		Blacklist:       make(map[int]*datastructure.INTree),
-		RepeatRegions:   make(map[int][]datastructure.Bounds),
+		// Blacklist:        make(map[int]*datastructure.INTree),
+		// RepeatRegions:    make(map[int][]datastructure.Bounds),
+		// ContigRepeatmask:      make(map[string]*ContigRepeatmask),
+		ContigToTargetRegions: make(map[string]*regionvector.RegionVector),
 	}
 
+	// key = contig, value = list of bounds (start+end of targets)
+	// used to build interval trees per contig to speed up repeatmasker loading
+	// contigMapTargets :=
+
 	for i, entry := range fastaEntries {
+
 		sequence := entry.Sequence
 		sequenceRevComp, revCompErr := utils.ReverseComplementDnaBytes(sequence)
 		if revCompErr != nil {
-			logrus.Fatal("Error reversing complementing sequence", revCompErr)
+			logrus.Fatal("Error reversing and complementing sequence", revCompErr)
 		}
 
 		info := parseFastaHeader(entry.Header)
 		index.SequenceInfo[i] = info
-
 		index.SequenceHeaders[i] = entry.Header
-
 		index.Sequences[i*2] = &sequence
 		index.Sequences[i*2+1] = &sequenceRevComp
 
-		if repeatMaskerFile != nil {
-
-			logrus.WithFields(logrus.Fields{
-				"file": repeatMaskerFile.Name(),
-			}).Info("Using repeatmasker file")
-
-			tree, treeRv, repeats, repeatsRv, err := BuildBlacklistInTree(info.StartGenomic, info.EndGenomic, info.Contig, repeatMaskerFile)
-			logrus.Debugf("Loaded %d annotated repeats into index.\n", len(repeats))
-			if err != nil {
-				logrus.Fatal("Error loading balcklist into interval tree", err)
-				panic(err)
-			}
-			index.Blacklist[i*2] = tree
-			index.RepeatRegions[i*2] = repeats
-			index.Blacklist[i*2+1] = treeRv
-			index.RepeatRegions[i*2+1] = repeatsRv
-		} else {
-			logrus.Info("No repeatmasker file provided, repeat regions are not detected")
-		}
+		// // populate contig to target region map
+		// if _, exists := index.ContigToTargetRegions[info.Contig]; !exists {
+		// 	index.ContigToTargetRegions[info.Contig] = regionvector.NewRegionVector()
+		// }
+		// index.ContigToTargetRegions[info.Contig].AddRegionAndMerge(
+		// 	int(info.StartGenomic),
+		// 	int(info.EndGenomic),
+		// )
 	}
 
 	for i, seq := range index.Sequences {
 		index.AddSequenceToMap(seq, uint8(i))
+		// TODO: do we plan to use this? if not then remove
 		index.AddSequenceToMapSmall(seq, uint8(i))
 	}
+
+	logrus.WithFields(logrus.Fields{
+		"duration": utils.FormatDuration(time.Since(timerStart)),
+	}).Info("Built index")
 
 	return &index
 }
@@ -938,7 +531,12 @@ func ReadGenomeIndexByFile(indexFile *os.File) *GenomeIndex {
 	return &genomeIndex
 }
 
-func BuildAndSerializeGenomeIndex(fastaFile *os.File, blackListFile *os.File, outputFile *os.File) {
+func BuildAndSerializeGenomeIndex(
+	fastaFile *os.File,
+	outputFile *os.File,
+	regionmaskFile *os.File,
+) {
+
 	fastaEntries, err := dataloader.ReadFasta(fastaFile)
 	if err != nil {
 		logrus.Fatal("Error extracting sequence from fasta file", err)
@@ -955,12 +553,43 @@ func BuildAndSerializeGenomeIndex(fastaFile *os.File, blackListFile *os.File, ou
 		}).Info("Added sequence #" + strconv.Itoa(i+1))
 	}
 
-	genomeIndex := BuildGenomeIndex(fastaEntries, blackListFile)
+	genomeIndex := BuildGenomeIndex(fastaEntries)
+
+	// add region mask to index if provided
+	if regionmaskFile != nil {
+
+		AddRegionmaskToIndex(regionmaskFile, genomeIndex)
+
+		logrus.WithFields(logrus.Fields{
+			"region mask": regionmaskFile.Name(),
+		}).Info("Using region mask bed file and priority file")
+
+	} else {
+		logrus.Info("No region mask used")
+	}
 
 	WriteGenomeIndex(genomeIndex, outputFile)
 }
 
-func BuildBlacklistInTree(start, end uint32, contig string, blackListFile *os.File) (*datastructure.INTree, *datastructure.INTree, []datastructure.Bounds, []datastructure.Bounds, error) {
+func AddRegionmaskToIndex(
+	regionmaskFile *os.File,
+	genomeIndex *GenomeIndex,
+) {
+
+	mask, errMask := NewRegionMask(
+		regionmaskFile,
+		// genomeIndex.ContigToTargetRegions,
+		genomeIndex.SequenceInfo,
+	)
+
+	if errMask != nil {
+		logrus.Fatal("Error loading region mask", errMask)
+	}
+
+	genomeIndex.SetRegionMask(mask)
+}
+
+func BuildBlacklistInTree(start uint32, end uint32, contig string, blackListFile *os.File) (*datastructure.INTree, *datastructure.INTree, []datastructure.Bounds, []datastructure.Bounds, error) {
 	repeatRegions := make([]datastructure.Bounds, 0)
 	repeatRegionsRev := make([]datastructure.Bounds, 0)
 	regionLength := end - start
@@ -992,17 +621,97 @@ func BuildBlacklistInTree(start, end uint32, contig string, blackListFile *os.Fi
 		regionStartConv := uint32(regionStart)
 		regionEndConv := uint32(regionEnd)
 		if regionStartConv >= start && regionEndConv <= end {
-			repeatRegions = append(repeatRegions, &datastructure.RepeatRegion{Lower: float64(regionStartConv - start), Upper: float64(regionEndConv - start)})
-			repeatRegionsRev = append(repeatRegionsRev, &datastructure.RepeatRegion{Lower: float64(regionLength - (regionEndConv - start)), Upper: float64(regionLength - (regionStartConv - start))})
+			repeatRegions = append(repeatRegions, &datastructure.RepeatRegion{Lower: int(regionStartConv - start), Upper: int(regionEndConv - start)})
+			repeatRegionsRev = append(repeatRegionsRev, &datastructure.RepeatRegion{Lower: int(regionLength - (regionEndConv - start)), Upper: int(regionLength - (regionStartConv - start))})
 		}
 		if regionStartConv > end && regionEndConv > end {
+			// TODO: should repeatRegionsRev be reversed here too?
 			return datastructure.NewINTree(repeatRegions), datastructure.NewINTree(repeatRegionsRev), repeatRegions, repeatRegionsRev, nil
 		}
 
 	}
 
+	// TODO: why is this reversed here but not in early termination case above?
 	slices.Reverse(repeatRegionsRev)
 	return datastructure.NewINTree(repeatRegions), datastructure.NewINTree(repeatRegionsRev), repeatRegions, repeatRegionsRev, nil
+}
+
+type ContigRepeatmask struct {
+	Contig    string
+	TreeFw    *datastructure.INTree
+	TreeRv    *datastructure.INTree
+	RegionsFw []datastructure.Bounds
+	RegionsRv []datastructure.Bounds
+}
+
+func BuildContigRepeatmaskTrees(repeatmaskFile *os.File, targetTrees map[string]*datastructure.INTree) map[string]*ContigRepeatmask {
+
+	scanner, err := dataloader.OpenFileScanner(repeatmaskFile)
+	if err != nil {
+		logrus.Fatal(err)
+	}
+
+	contigMap := make(map[string]*ContigRepeatmask)
+
+	for scanner.Scan() {
+
+		line := scanner.Text()
+		lineParts := strings.Fields(line)
+
+		if len(lineParts) < 7 {
+			continue
+		}
+
+		chr := lineParts[4]
+		if strings.Contains(chr, "chr") {
+			chr = strings.Trim(chr, "chr")
+		}
+
+		if targetTrees != nil {
+			if _, exists := targetTrees[chr]; !exists {
+				continue
+			}
+		}
+
+		regionStart, errStart := strconv.ParseUint(lineParts[5], 10, 32)
+		if errStart != nil {
+			// logrus.Fatal(errStart)
+			continue
+		}
+		regionEnd, errEnd := strconv.ParseUint(lineParts[6], 10, 32)
+		if errEnd != nil {
+			// logrus.Fatal(errEnd)
+			continue
+		}
+
+		regionStartInt := int(regionStart)
+		regionEndInt := int(regionEnd)
+
+		targetTree := targetTrees[chr]
+
+		if len(targetTree.Including(regionStartInt)) == 0 {
+			continue
+		}
+
+		if _, exists := contigMap[chr]; !exists {
+			contigMap[chr] = &ContigRepeatmask{
+				Contig:    chr,
+				RegionsFw: make([]datastructure.Bounds, 0),
+			}
+		}
+
+		contigMap[chr].RegionsFw = append(contigMap[chr].RegionsFw,
+			&datastructure.RepeatRegion{
+				Lower: regionStartInt,
+				Upper: regionEndInt,
+			})
+	}
+
+	for _, contigRepeatmask := range contigMap {
+		contigRepeatmask.TreeFw = datastructure.NewINTree(contigRepeatmask.RegionsFw)
+	}
+
+	return contigMap
 }
 
 func extractFieldFromBlacklist(field int, line string) string {
