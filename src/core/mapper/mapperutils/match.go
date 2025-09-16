@@ -531,20 +531,31 @@ func AssignReadMatchResults(
 // receives fw and rv matches of one seqID. Returns possible combinations of fw/rv.
 // E.g. fw -> 25 and rv -> 25 doesnt work since they need to map to separate strands etc
 // Currently returns the best combination with less or equal amount of mm the provided maxMismatches param
-func GetBestPossibleMappingCombination(fwMatches []*ReadMatchResult, rvMatches []*ReadMatchResult) *ValidReadPairCombination {
+func GetBestPossibleMappingCombination(
+	fwMatches []*ReadMatchResult,
+	rvMatches []*ReadMatchResult,
+) *ValidReadPairCombination {
+
 	var bestCombination *ValidReadPairCombination
 	maxMismatches := config.MaxConfMm
 
-	for i := 0; i < len(fwMatches); i++ {
+	for i := range fwMatches {
+
 		fwMatch := fwMatches[i]
-		for j := 0; j < len(rvMatches); j++ {
+
+		for j := range rvMatches {
+
 			rvMatch := rvMatches[j]
+
 			if fwMatch.SequenceIndex-1 == rvMatch.SequenceIndex || fwMatch.SequenceIndex == rvMatch.SequenceIndex-1 {
+
 				// dont allow IncompleteMaps
 				if fwMatch.IncompleteMap || rvMatch.IncompleteMap {
 					continue
 				}
+
 				currMM := len(fwMatch.MismatchesRead) + len(rvMatch.MismatchesRead)
+
 				if currMM < maxMismatches {
 					// skip possible combinations if they have short diagonals
 					// (like a diag of length 10 in the end; these cases are likely wrong and should not be classified as confident map)
@@ -755,9 +766,11 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 
 				builder.WriteString(strconv.Itoa(numSkipped))
 
-				if !config.IsOriginRNA || numSkipped < config.IntronLengthMin() {
+				if !config.Mapper.Mapping.IsReadOriginRna ||
+					numSkipped < config.Mapper.Mapping.RnaMode.IntronLengthMin {
 					// there are no introns in DNA mode
-					// configured threshold is used to determine whether a gap is a deletion or an intron
+					// configured threshold is used to determine whether a gap
+					// is a deletion or an intron
 					builder.WriteString("D")
 				} else {
 					builder.WriteString("N")
@@ -835,7 +848,8 @@ func (r *ReadMatchResult) GetCigar() (string, error) {
 				builder.WriteString(strconv.Itoa(numSkipped))
 
 				// determine whether the gap is an intron or a deletion
-				if numSkipped < config.IntronLengthMin() {
+				if !config.Mapper.Mapping.IsReadOriginRna ||
+					numSkipped < config.Mapper.Mapping.RnaMode.IntronLengthMin {
 					builder.WriteString("D")
 				} else {
 					builder.WriteString("N")
