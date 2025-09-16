@@ -51,6 +51,13 @@ type MapperConfig struct {
 			IntronLengthMin       int     `mapstructure:"intron_length_min" yaml:"intron_length_min"`
 			MaxMismatchCount      int     `mapstructure:"max_mismatch_count" yaml:"max_mismatch_count"`
 			MaxMismatchPercentage float64 `mapstructure:"max_mismatch_percentage" yaml:"max_mismatch_percentage"`
+
+			Confident struct {
+				MaxMismatchCount          int `mapstructure:"max_mismatch_count" yaml:"max_mismatch_count"`     // how many mm is a conf map allowed to have
+				MinAnchorLength           int `mapstructure:"min_anchor_length" yaml:"min_anchor_length"`       // how long does each ali block in a conf map have to be considered conf
+				IntronClusterDelta        int `mapstructure:"intron_cluster_delta" yaml:"intron_cluster_delta"` // by default, an intron cluster only absorbes an incoming gap (extending its reach) if the delta of gap.start/stop and cluster.start/stop is less than 100. This allows overlapping introns but also resolves intron coord confilct within close proximity
+				IntronClusterRepairWindow int `mapstructure:"intron_cluster_repair_window" yaml:"intron_cluster_repair_window"`
+			} `mapstructure:"confident" yaml:"confident"`
 		} `mapstructure:"rna_mode" yaml:"rna_mode"`
 
 		DnaMode struct {
@@ -59,6 +66,13 @@ type MapperConfig struct {
 			MaxGapCount              int     `mapstructure:"max_gap_count" yaml:"max_gap_count"`
 			MaxMismatchCount         int     `mapstructure:"max_mismatch_count" yaml:"max_mismatch_count"`
 			MaxMismatchPercentage    float64 `mapstructure:"max_mismatch_percentage" yaml:"max_mismatch_percentage"`
+
+			Confident struct {
+				MaxMismatchCount          int `mapstructure:"max_mismatch_count" yaml:"max_mismatch_count"`     // how many mm is a conf map allowed to have
+				MinAnchorLength           int `mapstructure:"min_anchor_length" yaml:"min_anchor_length"`       // how long does each ali block in a conf map have to be considered conf
+				IntronClusterDelta        int `mapstructure:"intron_cluster_delta" yaml:"intron_cluster_delta"` // by default, an intron cluster only absorbes an incoming gap (extending its reach) if the delta of gap.start/stop and cluster.start/stop is less than 100. This allows overlapping introns but also resolves intron coord confilct within close proximity
+				IntronClusterRepairWindow int `mapstructure:"intron_cluster_repair_window" yaml:"intron_cluster_repair_window"`
+			} `mapstructure:"confident" yaml:"confident"`
 		} `mapstructure:"dna_mode" yaml:"dna_mode"`
 
 		Output struct {
@@ -175,6 +189,38 @@ func (c *MapperConfig) SetIndexFastaIndex(fastaIndexFilePath string) {
 	}
 }
 
+func (c *MapperConfig) GetConfidentMaxMismatchCount() int {
+	if c.Mapping.IsReadOriginRna {
+		return c.Mapping.RnaMode.Confident.MaxMismatchCount
+	} else {
+		return c.Mapping.DnaMode.Confident.MaxMismatchCount
+	}
+}
+
+func (c *MapperConfig) GetConfidentMinAnchorLength() int {
+	if c.Mapping.IsReadOriginRna {
+		return c.Mapping.RnaMode.Confident.MinAnchorLength
+	} else {
+		return c.Mapping.DnaMode.Confident.MinAnchorLength
+	}
+}
+
+func (c *MapperConfig) GetConfidentIntronClusterDelta() int {
+	if c.Mapping.IsReadOriginRna {
+		return c.Mapping.RnaMode.Confident.IntronClusterDelta
+	} else {
+		return c.Mapping.DnaMode.Confident.IntronClusterDelta
+	}
+}
+
+func (c *MapperConfig) GetConfidentIntronClusterRepairWindow() int {
+	if c.Mapping.IsReadOriginRna {
+		return c.Mapping.RnaMode.Confident.IntronClusterRepairWindow
+	} else {
+		return c.Mapping.DnaMode.Confident.IntronClusterRepairWindow
+	}
+}
+
 func setDefaults() {
 
 	// GENERAL
@@ -203,12 +249,24 @@ func setDefaults() {
 	viper.SetDefault("mapping.rna_mode.max_mismatch_count", -1)
 	viper.SetDefault("mapping.rna_mode.max_mismatch_percentage", 0.1)
 
+	// MAPPING - RNA MODE - CONFIDENT
+	viper.SetDefault("mapping.rna_mode.confident.max_mismatch_count", 6)
+	viper.SetDefault("mapping.rna_mode.confident.min_anchor_length", 20)
+	viper.SetDefault("mapping.rna_mode.confident.intron_cluster_delta", 100)
+	viper.SetDefault("mapping.rna_mode.confident.intron_cluster_repair_window", 10)
+
 	// MAPPING - DNA MODE
 	viper.SetDefault("mapping.dna_mode.min_length_initial_diagonal", 0.7)
 	viper.SetDefault("mapping.dna_mode.max_gap_length", 1000)
 	viper.SetDefault("mapping.dna_mode.max_gap_count", 1)
 	viper.SetDefault("mapping.dna_mode.max_mismatch_count", -1)
 	viper.SetDefault("mapping.dna_mode.max_mismatch_percentage", 0.1)
+
+	// MAPPING - DNA MODE - CONFIDENT
+	viper.SetDefault("mapping.dna_mode.confident.max_mismatch_count", 6)
+	viper.SetDefault("mapping.dna_mode.confident.min_anchor_length", 50)
+	viper.SetDefault("mapping.dna_mode.confident.intron_cluster_delta", 100)
+	viper.SetDefault("mapping.dna_mode.confident.intron_cluster_repair_window", 10)
 
 	// MAPPING - OUTPUT
 	viper.SetDefault("mapping.output.sam_file_name", "aligned.sam")

@@ -206,13 +206,20 @@ func getTotalCoverage(coverageFw, coverageRv []int) []int {
 	return totalCoverage
 }
 
-func repairIntrons(inferredIntrons []*regionvector.Intron, targetId int, genomeIndex *index.GenomeIndex) []*regionvector.Intron {
+func repairIntrons(
+	inferredIntrons []*regionvector.Intron,
+	targetId int,
+	genomeIndex *index.GenomeIndex,
+) []*regionvector.Intron {
+
 	repairedIntrons := make([]*regionvector.Intron, 0)
 
 	// if IntronClusterRepairWindow == 10
 	// we go from -5 to 5 (starting at i.Start and i.End)
-	windowDelta := config.IntronClusterRepairWindow / 2
+
+	windowDelta := config.Mapper.GetConfidentIntronClusterRepairWindow() / 2
 	refSeq := genomeIndex.Sequences[targetId]
+
 	for _, intron := range inferredIntrons {
 		if intron.SpliceSiteScore > 0 {
 			repairedIntrons = append(repairedIntrons, intron)
@@ -543,12 +550,15 @@ func clusterGaps(targetGaps map[regionvector.Gap]int) []*regionvector.Intron {
 
 		for _, cluster := range clusters {
 			if currGap.End > cluster.lStart && currGap.Start < cluster.rStop {
+
 				// check if dist from gap start to cluster start is small enough to absorb
-				if cluster.lStart > currGap.Start && cluster.lStart-currGap.Start > config.IntronClusterDelta {
+				if cluster.lStart > currGap.Start &&
+					cluster.lStart-currGap.Start > config.Mapper.GetConfidentIntronClusterDelta() {
 					continue
 				}
 				// check if dist from gap end to cluster end is small enough to absorb
-				if cluster.rStop < currGap.End && currGap.End-cluster.rStop > config.IntronClusterDelta {
+				if cluster.rStop < currGap.End &&
+					currGap.End-cluster.rStop > config.Mapper.GetConfidentIntronClusterDelta() {
 					continue
 				}
 				if cluster.maxEvidence < currGapEvidence {

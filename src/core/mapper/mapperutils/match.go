@@ -537,7 +537,7 @@ func GetBestPossibleMappingCombination(
 ) *ValidReadPairCombination {
 
 	var bestCombination *ValidReadPairCombination
-	maxMismatches := config.MaxConfMm
+	maxMismatches := config.Mapper.GetConfidentMaxMismatchCount()
 
 	for i := range fwMatches {
 
@@ -586,16 +586,19 @@ func GetBestPossibleMappingCombination(
 // returns false as soon as one region is smaller than 2*kmerlength
 // iterates over gaps and checks lengths of region before and after gaps
 func hasLongDiagonals(mapping *ReadMatchResult) bool {
+
 	mapping.NormalizeRegions()
+
 	// INFO: DNA RNA MODE
 	// For DNA, l and r regions of junction should be longer
 	for _, region := range mapping.MatchedGenome.Regions {
-		if config.IsOriginRNA {
-			if region.Length() < config.MinConfAnchorLengthRNA {
+
+		if config.Mapper.Mapping.IsReadOriginRna {
+			if region.Length() < config.Mapper.Mapping.RnaMode.Confident.MinAnchorLength {
 				return false
 			}
 		} else {
-			if region.Length() < config.MinConfAnchorLengthDNA {
+			if region.Length() < config.Mapper.Mapping.DnaMode.Confident.MinAnchorLength {
 				return false
 			}
 		}
