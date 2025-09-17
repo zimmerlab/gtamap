@@ -132,8 +132,9 @@ func (c *MapperConfig) SetMappingThreads(threads int) {
 	cpuThreads := runtime.NumCPU()
 	if threads <= 0 || threads > cpuThreads {
 		c.Mapping.Threads = cpuThreads
+	} else {
+		c.Mapping.Threads = threads
 	}
-	c.Mapping.Threads = threads
 }
 
 func (c *MapperConfig) GetMappingOutputSamFile() (*os.File, error) {
