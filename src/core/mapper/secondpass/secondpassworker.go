@@ -1054,7 +1054,7 @@ func correctSymmetricIntronErrorsEnhanced(
 
 		for _, paddingTuple := range comb {
 			corrected.MatchedGenome.Regions[paddingTuple.GapIdx].End += paddingTuple.Padding
-			corrected.MatchedGenome.Regions[paddingTuple.GapIdx].Start += paddingTuple.Padding
+			corrected.MatchedGenome.Regions[paddingTuple.GapIdx+1].Start += paddingTuple.Padding
 			corrected.IsSymInErr = true
 			corrected.SymInErrLen = append(corrected.SymInErrLen, utils.Abs(paddingTuple.Padding))
 		}
@@ -1209,7 +1209,7 @@ func correctOverhangs(
 		// pair remaining sections in leftRemaps and rightRemaps
 		finalRemaps := make([]*mapperutils.ReadMatchResult, 0)
 
-		if rightRemaps != nil && leftRemaps != nil {
+		if len(rightRemaps) != 0 && len(leftRemaps) != 0 {
 			for _, lSection := range leftRemaps {
 
 				lExtStopRead := lSection.MatchedRead[0].End
@@ -1263,7 +1263,7 @@ func correctOverhangs(
 					finalRemaps = append(finalRemaps, corrected)
 				}
 			}
-		} else if rightRemaps != nil {
+		} else if len(rightRemaps) != 0 {
 		onlyRightLoop:
 			for _, rSection := range rightRemaps {
 
@@ -1303,7 +1303,7 @@ func correctOverhangs(
 
 				finalRemaps = append(finalRemaps, corrected)
 			}
-		} else if leftRemaps != nil {
+		} else if len(leftRemaps) != 0 {
 		onlyLeftLoop:
 			for _, lSection := range leftRemaps {
 
