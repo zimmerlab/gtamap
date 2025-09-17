@@ -2292,13 +2292,13 @@ func getPadding(
 	for _, intron := range overlappingIntrons {
 		if intron.LeftOverlap(mainAnchor) {
 			padding := intron.End - mainAnchor.Start
-			if utils.Abs(padding) < mainAnchor.Length() {
+			if utils.Abs(padding) < mainAnchor.Length() && padding != 0 {
 				lPadding[padding] = struct{}{}
 			}
 		}
 		if intron.RightOverlap(mainAnchor) {
 			padding := mainAnchor.End - intron.Start
-			if utils.Abs(padding) < mainAnchor.Length() {
+			if utils.Abs(padding) < mainAnchor.Length() && padding != 0 {
 				rPadding[padding] = struct{}{}
 			}
 		}
