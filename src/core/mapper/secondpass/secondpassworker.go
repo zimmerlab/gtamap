@@ -1267,7 +1267,7 @@ func correctOverhangs(
 		onlyRightLoop:
 			for _, rSection := range rightRemaps {
 
-				rExtStartRead := rSection.MatchedRead[len(rSection.MatchedRead)-1].Start
+				rExtStartRead := rSection.MatchedRead[0].Start
 				// create template correction once (readMatchResult with regions removed which got remapped)
 				correctedTemplate := readMatchResult.Copy()
 
