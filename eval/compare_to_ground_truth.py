@@ -549,28 +549,27 @@ def positional_accuracy(
             delta = len(mapped_mm[read_id][best_overlap_index]) - len(true_mm[read_id])
             mm_delta.append(delta)
             seen = set()
-            if verbose:
-
-                print(f"[\033[31mINCOMPLETE MAP\033[0m] of {read_id} ({read_type}):")
-
-                for i, interval in enumerate(mapped_intervals):
-                    key = "|".join(str(x) for x in chain.from_iterable(interval))
-                    if key not in seen:
-                        seen.add(key)
-                        missed_bases = total_true_bases - overlapping_bases_list[i]
-                        print(
-                            f"> [\033[34mALTERNATIVE\033[0m] Missaligned positions: ({missed_bases})"
-                        )
-                        if len(mapped_mm[read_id][i]) <= len(true_mm[read_id]):
-                            print(f"> [   \033[35mMAP\033[0m]: {mapped_intervals[i]}")
-                        else:
-                            print(f"> [   \033[33mMAP\033[0m]: {mapped_intervals[i]}")
-                        print(f"> [   \033[32mREF\033[0m]: {true_intervals}")
-                        if len(mapped_mm[read_id][i]) <= len(true_mm[read_id]):
-                            print(f"> [\033[35mMM MAP\033[0m]: {mapped_mm[read_id][i]}")
-                        else:
-                            print(f"> [\033[33mMM MAP\033[0m]: {mapped_mm[read_id][i]}")
-                        print(f"> [\033[32mMM REF\033[0m]: {true_mm[read_id]}")
+            # if verbose:
+            #     print(f"[\033[31mINCOMPLETE MAP\033[0m] of {read_id} ({read_type}):")
+            #
+            #     for i, interval in enumerate(mapped_intervals):
+            #         key = "|".join(str(x) for x in chain.from_iterable(interval))
+            #         if key not in seen:
+            #             seen.add(key)
+            #             missed_bases = total_true_bases - overlapping_bases_list[i]
+            #             print(
+            #                 f"> [\033[34mALTERNATIVE\033[0m] Missaligned positions: ({missed_bases})"
+            #             )
+            #             if len(mapped_mm[read_id][i]) <= len(true_mm[read_id]):
+            #                 print(f"> [   \033[35mMAP\033[0m]: {mapped_intervals[i]}")
+            #             else:
+            #                 print(f"> [   \033[33mMAP\033[0m]: {mapped_intervals[i]}")
+            #             print(f"> [   \033[32mREF\033[0m]: {true_intervals}")
+            #             if len(mapped_mm[read_id][i]) <= len(true_mm[read_id]):
+            #                 print(f"> [\033[35mMM MAP\033[0m]: {mapped_mm[read_id][i]}")
+            #             else:
+            #                 print(f"> [\033[33mMM MAP\033[0m]: {mapped_mm[read_id][i]}")
+            #             print(f"> [\033[32mMM REF\033[0m]: {true_mm[read_id]}")
 
     return (
         (
