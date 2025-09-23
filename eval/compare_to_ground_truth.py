@@ -128,6 +128,51 @@ def compare_to_ground_truth(mapper_data, ground_truth_data, verbose):
         true_intervals_dict=ground_truth_data["fw"],
     )
 
+    entries_per_read_fw = [
+        len(alis[0])
+        for read_id, alis in mapper_data["fw"].items()
+        if read_id in ground_truth_data["fw"].keys()
+    ]
+    avg_entries_per_read_fw = (
+        sum(entries_per_read_fw) / len(entries_per_read_fw)
+        if len(entries_per_read_fw) != 0
+        else 0
+    )
+    entries_per_read_rv = [
+        len(alis[0])
+        for read_id, alis in mapper_data["rv"].items()
+        if read_id in ground_truth_data["rv"].keys()
+    ]
+    avg_entries_per_read_rv = (
+        sum(entries_per_read_rv) / len(entries_per_read_rv)
+        if len(entries_per_read_rv) != 0
+        else 0
+    )
+
+    entries_per_read_fw_fp = [
+        len(alis[0])
+        for read_id, alis in mapper_data["fw"].items()
+        if read_id not in ground_truth_data["fw"].keys()
+    ]
+    avg_entries_per_read_fw_fp = (
+        sum(entries_per_read_fw_fp) / len(entries_per_read_fw_fp)
+        if len(entries_per_read_fw_fp) != 0
+        else 0
+    )
+
+    entries_per_read_rv_fp = [
+        len(alis[0])
+        for read_id, alis in mapper_data["rv"].items()
+        if read_id not in ground_truth_data["rv"].keys()
+    ]
+    avg_entries_per_read_rv_fp = (
+        sum(entries_per_read_rv_fp) / len(entries_per_read_rv_fp)
+        if len(entries_per_read_rv_fp) != 0
+        else 0
+    )
+
+    print()
+
     # fw_qual = calculate_avg_quality(mapper_data["fw_q"])
     # rw_qual = calculate_avg_quality(mapper_data["rv_q"])
 
@@ -155,6 +200,10 @@ def compare_to_ground_truth(mapper_data, ground_truth_data, verbose):
         "rv_overlap_strict": rw_accuracy_strict,
         "avg_missaligned_positions_fw_strict": avg_missed_bases_fw_strict,
         "avg_missaligned_positions_rv_strict": avg_missed_bases_rv_strict,
+        "avg_entries_tp_fw": avg_entries_per_read_fw,
+        "avg_entries_tp_rv": avg_entries_per_read_rv,
+        "avg_entries_fp_fw": avg_entries_per_read_fw_fp,
+        "avg_entries_fp_rv": avg_entries_per_read_rv_fp,
     }
 
 
@@ -210,22 +259,23 @@ def parse_sam_file(sam_path):
     fw_dict_mm = defaultdict(list)
 
     for read in samfile:
-        if read.is_reverse and read.is_read2:
-            rv_dict[read.query_name].append(merge_blocks(read.get_blocks()))
-            mm = get_mismatches(read, True)
-            rv_dict_mm[read.query_name].append(mm)
-        elif read.is_reverse and read.is_read1:
-            fw_dict[read.query_name].append(merge_blocks(read.get_blocks()))
-            mm = get_mismatches(read, True)
-            fw_dict_mm[read.query_name].append(mm)
-        elif read.is_forward and read.is_read1:
-            fw_dict[read.query_name].append(merge_blocks(read.get_blocks()))
-            mm = get_mismatches(read, False)
-            fw_dict_mm[read.query_name].append(mm)
-        else:
-            rv_dict[read.query_name].append(merge_blocks(read.get_blocks()))
-            mm = get_mismatches(read, False)
-            rv_dict_mm[read.query_name].append(mm)
+        if read.cigarstring:
+            if read.is_reverse and read.is_read2:
+                rv_dict[read.query_name].append(merge_blocks(read.get_blocks()))
+                mm = get_mismatches(read, True)
+                rv_dict_mm[read.query_name].append(mm)
+            elif read.is_reverse and read.is_read1:
+                fw_dict[read.query_name].append(merge_blocks(read.get_blocks()))
+                mm = get_mismatches(read, True)
+                fw_dict_mm[read.query_name].append(mm)
+            elif read.is_forward and read.is_read1:
+                fw_dict[read.query_name].append(merge_blocks(read.get_blocks()))
+                mm = get_mismatches(read, False)
+                fw_dict_mm[read.query_name].append(mm)
+            else:
+                rv_dict[read.query_name].append(merge_blocks(read.get_blocks()))
+                mm = get_mismatches(read, False)
+                rv_dict_mm[read.query_name].append(mm)
 
     samfile.close()
 
@@ -905,6 +955,10 @@ if __name__ == "__main__":
         "rv_overlap_strict",
         "avg_missaligned_positions_fw_strict",
         "avg_missaligned_positions_rv_strict",
+        "avg_entries_tp_fw",
+        "avg_entries_tp_rv",
+        "avg_entries_fp_fw",
+        "avg_entries_fp_rv",
     ]
 
     for key in print_order:
