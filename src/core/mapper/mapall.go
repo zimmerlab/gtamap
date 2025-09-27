@@ -8,6 +8,7 @@ import (
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/confidentmappingpass"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/events"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/secondpass"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/thirdpass"
@@ -80,14 +81,14 @@ func MapAll(
 	// contains information about the duration of each step
 	timerChan := make(chan *timer.Timer)
 	// contains information about the progress of the mapping
-	progressChan := make(chan Event, 1000)
+	progressChan := make(chan events.Event, 1000)
 
 	var waitgroupProgress sync.WaitGroup
 	waitgroupProgress.Add(1)
 	go ProgressWorker(progressChan, &waitgroupProgress)
 
-	progressChan <- Event{
-		Type: EventFileSize,
+	progressChan <- events.Event{
+		Type: events.EventFileSize,
 		Data: uint64(reader.ProgressReaderR1.TotalBytes + reader.ProgressReaderR2.TotalBytes),
 	}
 
@@ -141,6 +142,7 @@ func MapAll(
 		&waitgroupConfidentMap,
 		annotationChan,
 		genomeIndex,
+		progressChan,
 	)
 
 	var wgThirdPass sync.WaitGroup
@@ -150,6 +152,7 @@ func MapAll(
 		&wgThirdPass,
 		outputChan,
 		genomeIndex,
+		progressChan,
 	)
 
 	var wgSecondpass sync.WaitGroup
@@ -162,6 +165,7 @@ func MapAll(
 		thirdpassChan,
 		genomeIndex,
 		numThreads,
+		progressChan,
 	)
 
 	waitgroupConfidentMap.Wait()

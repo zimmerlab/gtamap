@@ -6,11 +6,13 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/core/index"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/events"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
@@ -21,12 +23,13 @@ func ConfidentMappingWorker(
 	wgConfidentMapping *sync.WaitGroup,
 	annotationChan chan<- map[int]*mapperutils.TargetAnnotation,
 	index *index.GenomeIndex,
+	progressChan chan<- events.Event,
 ) {
-
 	defer wgConfidentMapping.Done()
 
 	cMapsPerSeq := make(map[int][]*ConfidentTask, 0)
 
+	start := time.Now()
 	for {
 		confidentResult, ok := confidentChan.Receive()
 		if !ok {
@@ -57,6 +60,14 @@ func ConfidentMappingWorker(
 			annotation[targetId].Introns[targetId+1].BuildTranscriptomeGraph(len(*index.Sequences[targetId]))
 			annotation[targetId].LogInfo()
 		}
+	}
+	duration := time.Since(start)
+	end := time.Now()
+	progressChan <- events.Event{
+		Type:  events.EventTypeConfidentWorkerTime,
+		Data:  uint64(duration),
+		Start: start,
+		End:   end,
 	}
 
 	annotationChan <- annotation
@@ -211,7 +222,6 @@ func repairIntrons(
 	targetId int,
 	genomeIndex *index.GenomeIndex,
 ) []*regionvector.Intron {
-
 	repairedIntrons := make([]*regionvector.Intron, 0)
 
 	// if IntronClusterRepairWindow == 10
@@ -284,7 +294,6 @@ func InferIntronsOfTarget(
 	confMaps []*ConfidentTask,
 	index *index.GenomeIndex,
 ) *mapperutils.TargetAnnotation {
-
 	// I. get all gaps of targetId in plus orientation
 	plusOrientatedGaps, plusEvidence, minusEvidence := getGapsPlusOrientation(
 		targetId,
@@ -362,7 +371,6 @@ func invertIntrons(
 	intronsOfTarget []*regionvector.Intron,
 	index *index.GenomeIndex,
 ) []*regionvector.Intron {
-
 	mirroredIntronsPerSeqId := make([]*regionvector.Intron, 0)
 
 	geneLength := int(
@@ -397,7 +405,6 @@ func getGapsPlusOrientation(
 	int,
 	int,
 ) {
-
 	plusOrientatedGapsPerMainSeqId := make([]*regionvector.Gap, 0)
 	plusStrandednessEvidence := 0
 	minusStrandednessEvidence := 0

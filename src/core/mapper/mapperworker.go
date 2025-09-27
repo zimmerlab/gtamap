@@ -2,8 +2,10 @@ package mapper
 
 import (
 	"sync"
+	"time"
 
 	"github.com/KleinSamuel/gtamap/src/core/mapper/confidentmappingpass"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/events"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/secondpass"
 
 	"github.com/KleinSamuel/gtamap/src/core/index"
@@ -26,7 +28,7 @@ func MapperWorker(
 	secondpassChan *secondpass.SecondPassChannel,
 	confidentMappingChan *confidentmappingpass.ConfidentPassChan,
 	// paralogMappingChan chan<- *mapperutils.ReadPairMatchResults,
-	progressChan chan<- Event,
+	progressChan chan<- events.Event,
 	timerChan chan<- *timer.Timer,
 ) {
 	defer wg.Done()
@@ -43,6 +45,7 @@ func MapperWorker(
 		NumConfidentMappings: 0,
 	}
 
+	start := time.Now()
 	for task := range taskChan {
 
 		// logrus.WithFields(logrus.Fields{
@@ -53,8 +56,8 @@ func MapperWorker(
 		// send progress update for every chunk of reads processed
 		progressStats.ReadsProcessed++
 		if progressStats.ReadsProcessed >= 1000 {
-			progressChan <- Event{
-				Type: EventTypeReadsProcessed,
+			progressChan <- events.Event{
+				Type: events.EventTypeReadsProcessed,
 				Data: uint64(progressStats.ReadsProcessed),
 			}
 			progressStats.ReadsProcessed = 0
@@ -69,6 +72,15 @@ func MapperWorker(
 			progressChan,
 			progressStats,
 		)
+	}
+	end := time.Now()
+	duration := time.Since(start)
+
+	progressChan <- events.Event{
+		Type:  events.EventTypeMapperWorkerTime,
+		Data:  uint64(duration),
+		Start: start,
+		End:   end,
 	}
 
 	//logrus.WithFields(logrus.Fields{

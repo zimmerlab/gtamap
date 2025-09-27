@@ -6,9 +6,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/index"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/events"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
@@ -21,6 +23,7 @@ func ThirdPassWorker(
 	wgThirdPass *sync.WaitGroup,
 	outputChan chan<- string,
 	index *index.GenomeIndex,
+	progressChan chan<- events.Event,
 ) {
 	defer wgThirdPass.Done()
 	total := 0
@@ -36,6 +39,7 @@ func ThirdPassWorker(
 		panic(err)
 	}
 
+	start := time.Now()
 	for {
 
 		task, ok := thirdPassChan.Receive()
@@ -48,7 +52,6 @@ func ThirdPassWorker(
 		var builder strings.Builder
 
 		if config.Mapper.Mapping.Output.IncludeAllPairings {
-
 			for i := 0; i < len(task.TargetInfo.Fw); i++ {
 
 				if task.TargetInfo.Fw[i].IncompleteMap {
@@ -72,7 +75,6 @@ func ThirdPassWorker(
 						task.TargetInfo.Fw[i],
 						task.TargetInfo.Rv[j],
 					)
-
 					if err != nil {
 						logrus.Error("Error converting read pair result to SAM string: ", err)
 						continue
@@ -178,6 +180,15 @@ func ThirdPassWorker(
 
 		outputChan <- builder.String()
 	}
+	duration := time.Since(start)
+	end := time.Now()
+
+	progressChan <- events.Event{
+		Type:  events.EventTypeOutputWorkerTime,
+		Data:  uint64(duration),
+		Start: start,
+		End:   end,
+	}
 
 	logrus.Info("Done with output")
 	logrus.WithFields(logrus.Fields{
@@ -257,7 +268,6 @@ func readPairResultToSamString(
 	string,
 	error,
 ) {
-
 	flagFw := sam.Flag{}
 	flagRv := sam.Flag{}
 

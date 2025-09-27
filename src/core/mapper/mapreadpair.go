@@ -2,6 +2,7 @@ package mapper
 
 import (
 	"github.com/KleinSamuel/gtamap/src/core/mapper/confidentmappingpass"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/events"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/secondpass"
 
 	"github.com/KleinSamuel/gtamap/src/core/index"
@@ -19,10 +20,9 @@ func MapReadPair(
 	secondpassChan *secondpass.SecondPassChannel,
 	confidentMatchesChan *confidentmappingpass.ConfidentPassChan,
 	timerChannel chan<- *timer.Timer,
-	progressChan chan<- Event,
+	progressChan chan<- events.Event,
 	progressStats *ProgressStats,
 ) {
-
 	keepFw := GlobalFilter(readPair.ReadR1.Sequence, genomeIndex)
 	keepRw := GlobalFilter(readPair.ReadR2.Sequence, genomeIndex)
 
@@ -41,8 +41,8 @@ func MapReadPair(
 
 	progressStats.ReadsAfterFiltering++
 	if progressStats.ReadsAfterFiltering >= 100 {
-		progressChan <- Event{
-			Type: EventTypeReadsAfterFiltering,
+		progressChan <- events.Event{
+			Type: events.EventTypeReadsAfterFiltering,
 			Data: progressStats.ReadsAfterFiltering,
 		}
 		progressStats.ReadsAfterFiltering = 0
@@ -77,8 +77,8 @@ func MapReadPair(
 
 	progressStats.ReadsMapped++
 	if progressStats.ReadsMapped >= 100 {
-		progressChan <- Event{
-			Type: EventTypeReadsMapped,
+		progressChan <- events.Event{
+			Type: events.EventTypeReadsMapped,
 			Data: progressStats.ReadsMapped,
 		}
 		progressStats.ReadsMapped = 0
@@ -86,8 +86,8 @@ func MapReadPair(
 
 	progressStats.NumMappingLocations += uint64(len(resultFw) + len(resultRv))
 	if progressStats.NumMappingLocations >= 1000 {
-		progressChan <- Event{
-			Type: EventTypeNumMappingLocations,
+		progressChan <- events.Event{
+			Type: events.EventTypeNumMappingLocations,
 			Data: progressStats.NumMappingLocations,
 		}
 		progressStats.NumMappingLocations = 0
@@ -119,8 +119,8 @@ func MapReadPair(
 
 		progressStats.NumConfidentMappings++
 		if progressStats.NumConfidentMappings >= 10 {
-			progressChan <- Event{
-				Type: EventTypeNumConfidentMappings,
+			progressChan <- events.Event{
+				Type: events.EventTypeNumConfidentMappings,
 				Data: progressStats.NumConfidentMappings,
 			}
 			progressStats.NumConfidentMappings = 0
