@@ -216,7 +216,7 @@ func applyPossibleDiagonals(
 		if !config.Mapper.Mapping.IsReadOriginRna {
 
 			// for DNA reads we expect the raw result to already be of a certain length
-			if result.MatchedGenome.Length()/len(*read.Sequence) >
+			if float64(result.MatchedGenome.Length())/float64(len(*read.Sequence)) >
 				config.Mapper.Mapping.DnaMode.MinLengthInitialDiagonal {
 
 				// if result.MatchedGenome.Length()*10 > len(*read.Sequence)*7 {

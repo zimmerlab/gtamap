@@ -63,7 +63,7 @@ type MapperConfig struct {
 
 		DnaMode struct {
 			FilterMinMatches         int     `mapstructure:"filter_min_matches" yaml:"filter_min_matches"` // the minimum number of exact matches required to keep the read during filtering
-			MinLengthInitialDiagonal int     `mapstructure:"min_length_initial_diagonal" yaml:"min_length_initial_diagonal"`
+			MinLengthInitialDiagonal float64 `mapstructure:"min_length_initial_diagonal" yaml:"min_length_initial_diagonal"`
 			MaxGapLength             int     `mapstructure:"max_gap_length" yaml:"max_gap_length"`
 			MaxGapCount              int     `mapstructure:"max_gap_count" yaml:"max_gap_count"`
 			MaxMismatchCount         int     `mapstructure:"max_mismatch_count" yaml:"max_mismatch_count"`
