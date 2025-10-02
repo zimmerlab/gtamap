@@ -22,7 +22,6 @@ func ConfidentMappingWorker(
 	annotationChan chan<- map[int]*mapperutils.TargetAnnotation,
 	index *index.GenomeIndex,
 ) {
-
 	defer wgConfidentMapping.Done()
 
 	cMapsPerSeq := make(map[int][]*ConfidentTask, 0)
@@ -58,7 +57,6 @@ func ConfidentMappingWorker(
 			annotation[targetId].LogInfo()
 		}
 	}
-
 	annotationChan <- annotation
 	logrus.Info("Done with Annotation")
 }
@@ -211,7 +209,6 @@ func repairIntrons(
 	targetId int,
 	genomeIndex *index.GenomeIndex,
 ) []*regionvector.Intron {
-
 	repairedIntrons := make([]*regionvector.Intron, 0)
 
 	// if IntronClusterRepairWindow == 10
@@ -284,7 +281,6 @@ func InferIntronsOfTarget(
 	confMaps []*ConfidentTask,
 	index *index.GenomeIndex,
 ) *mapperutils.TargetAnnotation {
-
 	// I. get all gaps of targetId in plus orientation
 	plusOrientatedGaps, plusEvidence, minusEvidence := getGapsPlusOrientation(
 		targetId,
@@ -362,7 +358,6 @@ func invertIntrons(
 	intronsOfTarget []*regionvector.Intron,
 	index *index.GenomeIndex,
 ) []*regionvector.Intron {
-
 	mirroredIntronsPerSeqId := make([]*regionvector.Intron, 0)
 
 	geneLength := int(
@@ -397,7 +392,6 @@ func getGapsPlusOrientation(
 	int,
 	int,
 ) {
-
 	plusOrientatedGapsPerMainSeqId := make([]*regionvector.Gap, 0)
 	plusStrandednessEvidence := 0
 	minusStrandednessEvidence := 0

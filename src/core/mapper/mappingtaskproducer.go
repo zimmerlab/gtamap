@@ -1,14 +1,16 @@
 package mapper
 
 import (
+	"strings"
+
+	"github.com/KleinSamuel/gtamap/src/core/mapper/events"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/sirupsen/logrus"
-	"strings"
 )
 
-func MappingTaskProducer(reader *fastq.Reader, taskChan chan<- MappingTask, progressChan chan<- Event,
-	maxReads int, specificQname string) {
-
+func MappingTaskProducer(reader *fastq.Reader, taskChan chan<- MappingTask, progressChan chan<- events.Event,
+	maxReads int, specificQname string,
+) {
 	defer close(taskChan)
 
 	var byteProgress int64 = 0
@@ -34,8 +36,8 @@ func MappingTaskProducer(reader *fastq.Reader, taskChan chan<- MappingTask, prog
 
 		// send progress event if enough bytes have been processed
 		if byteProgress >= progressChunkSize {
-			progressChan <- Event{
-				Type: EventBytesProcessed,
+			progressChan <- events.Event{
+				Type: events.EventBytesProcessed,
 				Data: uint64(byteProgress),
 			}
 			byteProgress = 0
@@ -56,6 +58,5 @@ func MappingTaskProducer(reader *fastq.Reader, taskChan chan<- MappingTask, prog
 			break
 		}
 	}
-
 	logrus.Debug("MappingTaskProducer finished")
 }

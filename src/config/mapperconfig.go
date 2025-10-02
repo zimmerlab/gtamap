@@ -78,11 +78,12 @@ type MapperConfig struct {
 		} `mapstructure:"dna_mode" yaml:"dna_mode"`
 
 		Output struct {
-			MappingProgressFileName string `mapstructure:"mapping_progress_file_name" yaml:"mapping_progress_file_name"` // the name of the mapping progress log file
-			MappingStatsFileName    string `mapstructure:"mapping_stats_file_name" yaml:"mapping_stats_file_name"`       // the name of the mapping stats file
-			SamFileName             string `mapstructure:"sam_file_name" yaml:"sam_file_name"`                           // the default name of the output sam file
-			IncludeMMinSAM          bool   `mapstructure:"sam_use_x" yaml:"sam_use_x"`                                   // if set to true, CIGAR will include "=" and "X" runes instead of only "M"
-			IncludeAllPairings      bool   `mapstructure:"sam_include_all_pairings" yaml:"sam_include_all_pairings"`     // if set to true, all vs. all pairings are written to sam output  NOTE: actual pairing is not implemented yet
+			MappingProgressFileName          string `mapstructure:"mapping_progress_file_name" yaml:"mapping_progress_file_name"`                       // the name of the mapping progress log file
+			MappingProgressStageTimeFileName string `mapstructure:"mapping_progress_stage_time_file_name" yaml:"mapping_progress_stage_time_file_name"` // the name of the timing file for each main stage of the mappertiming file for each main stage of the mapper
+			MappingStatsFileName             string `mapstructure:"mapping_stats_file_name" yaml:"mapping_stats_file_name"`                             // the name of the mapping stats file
+			SamFileName                      string `mapstructure:"sam_file_name" yaml:"sam_file_name"`                                                 // the default name of the output sam file
+			IncludeMMinSAM                   bool   `mapstructure:"sam_use_x" yaml:"sam_use_x"`                                                         // if set to true, CIGAR will include "=" and "X" runes instead of only "M"
+			IncludeAllPairings               bool   `mapstructure:"sam_include_all_pairings" yaml:"sam_include_all_pairings"`                           // if set to true, all vs. all pairings are written to sam output  NOTE: actual pairing is not implemented yet
 		} `mapstructure:"output" yaml:"output"`
 	} `mapstructure:"mapping" yaml:"mapping"`
 }
@@ -240,6 +241,14 @@ func (c *MapperConfig) GetMapperProgressLogPath() string {
 	}
 }
 
+func (c *MapperConfig) GetMapperProgressStageTimeLogPath() string {
+	if filepath.Dir(c.Mapping.Output.MappingProgressStageTimeFileName) == "." {
+		return filepath.Join(c.General.OutputDir, c.Mapping.Output.MappingProgressStageTimeFileName)
+	} else {
+		return c.Mapping.Output.MappingProgressStageTimeFileName
+	}
+}
+
 func (c *MapperConfig) GetMappingStatsFilePath() string {
 	if filepath.Dir(c.Mapping.Output.MappingStatsFileName) == "." {
 		return filepath.Join(c.General.OutputDir, c.Mapping.Output.MappingStatsFileName)
@@ -298,6 +307,7 @@ func setDefaults() {
 
 	// MAPPING - OUTPUT
 	viper.SetDefault("mapping.output.mapping_progress_file_name", "mapping_progress.log")
+	viper.SetDefault("mapping.output.mapping_progress_stage_time_file_name", "mapping_stage.log")
 	viper.SetDefault("mapping.output.mapping_stats_file_name", "mapping_stats.tsv")
 	viper.SetDefault("mapping.output.sam_file_name", "aligned.sam")
 	viper.SetDefault("mapping.output.sam_use_x", true)

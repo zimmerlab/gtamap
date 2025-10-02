@@ -48,7 +48,6 @@ func ThirdPassWorker(
 		var builder strings.Builder
 
 		if config.Mapper.Mapping.Output.IncludeAllPairings {
-
 			for i := 0; i < len(task.TargetInfo.Fw); i++ {
 
 				if task.TargetInfo.Fw[i].IncompleteMap {
@@ -72,7 +71,6 @@ func ThirdPassWorker(
 						task.TargetInfo.Fw[i],
 						task.TargetInfo.Rv[j],
 					)
-
 					if err != nil {
 						logrus.Error("Error converting read pair result to SAM string: ", err)
 						continue
@@ -257,7 +255,6 @@ func readPairResultToSamString(
 	string,
 	error,
 ) {
-
 	flagFw := sam.Flag{}
 	flagRv := sam.Flag{}
 

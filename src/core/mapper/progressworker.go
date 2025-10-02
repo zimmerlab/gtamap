@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/KleinSamuel/gtamap/src/config"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/events"
 	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
 )
@@ -28,22 +29,6 @@ type ProgressSnapshot struct {
 	TotalBytes           uint64
 	BytesProcessed       uint64
 }
-
-type Event struct {
-	Type uint16
-	Data uint64
-}
-
-// enum defining event types
-const (
-	EventTypeReadsProcessed       = 1
-	EventTypeReadsAfterFiltering  = 2
-	EventTypeReadsMapped          = 3
-	EventTypeNumMappingLocations  = 4
-	EventTypeNumConfidentMappings = 5
-	EventFileSize                 = 6
-	EventBytesProcessed           = 7
-)
 
 type MemorySample struct {
 	Timestamp    time.Time
@@ -68,7 +53,7 @@ func GetMemorySample() MemorySample {
 	}
 }
 
-func ProgressWorker(progressChan <-chan Event, wg *sync.WaitGroup) {
+func ProgressWorker(progressChan <-chan events.Event, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	logrus.Debug("Started progressWorker")
@@ -82,10 +67,21 @@ func ProgressWorker(progressChan <-chan Event, wg *sync.WaitGroup) {
 	}
 	defer tsvFile.Close()
 
+	tsvFileStageFile, err := os.Create(config.Mapper.GetMapperProgressStageTimeLogPath())
+	if err != nil {
+		logrus.Errorf("Failed to create TSV file: %v", err)
+		return
+	}
+	defer tsvFileStageFile.Close()
+
 	tsvWriter := csv.NewWriter(tsvFile)
 	tsvWriter.Comma = '\t'
 	defer tsvWriter.Flush()
 	var numWriterRecords int = 0
+
+	tsvStageFileWriter := csv.NewWriter(tsvFileStageFile)
+	tsvStageFileWriter.Comma = '\t'
+	defer tsvStageFileWriter.Flush()
 
 	header := []string{
 		"timestamp", "readsProcessed", "readsAfterFiltering", "readsMapped",
@@ -105,6 +101,42 @@ func ProgressWorker(progressChan <-chan Event, wg *sync.WaitGroup) {
 	var totalReadsMapped uint64 = 0
 	var numMappingLocations uint64 = 0
 	var numConfidentMappings uint64 = 0
+
+	stage_timer_header := []string{
+		"mappingTaskProducerTime",
+		"mapperWorkerTime",
+		"confidentWorkerTime",
+		"secondPassWorkerTime",
+		"outputWorkerTime",
+		"mappingTaskProducerStart",
+		"mappingTaskProducerEnd",
+		"mapperWorkerStart",
+		"mapperWorkerEnd",
+		"confidentWorkerStart",
+		"confidentWorkerEnd",
+		"secondPassWorkerStart",
+		"secondPassWorkerEnd",
+		"outputWorkerStart",
+		"outputWorkerEnd",
+	}
+	tsvStageFileWriter.Write(stage_timer_header)
+
+	var mappingTaskProducerTime uint64 = 0
+	var mapperWorkerTime uint64 = 0
+	var confidentWorkerTime uint64 = 0
+	var secondPassWorkerTime uint64 = 0
+	var outputWorkerTime uint64 = 0
+
+	var mappingTaskProducerStart time.Time
+	var mappingTaskProducerEnd time.Time
+	var mapperWorkerStart time.Time
+	var mapperWorkerEnd time.Time
+	var confidentWorkerStart time.Time
+	var confidentWorkerEnd time.Time
+	var secondPassWorkerStart time.Time
+	var secondPassWorkerEnd time.Time
+	var outputWorkerStart time.Time
+	var outputWorkerEnd time.Time
 
 	snapshots := make([]ProgressSnapshot, 0)
 
@@ -140,24 +172,64 @@ func ProgressWorker(progressChan <-chan Event, wg *sync.WaitGroup) {
 				}
 				tsvWriter.Write(record)
 
+				stageRecord := []string{
+					strconv.FormatUint(mappingTaskProducerTime, 10),
+					strconv.FormatUint(mapperWorkerTime, 10),
+					strconv.FormatUint(confidentWorkerTime, 10),
+					strconv.FormatUint(secondPassWorkerTime, 10),
+					strconv.FormatUint(outputWorkerTime, 10),
+					mappingTaskProducerStart.Format("15:04:05"),
+					mappingTaskProducerEnd.Format("15:04:05"),
+					mapperWorkerStart.Format("15:04:05"),
+					mapperWorkerEnd.Format("15:04:05"),
+					confidentWorkerStart.Format("15:04:05"),
+					confidentWorkerEnd.Format("15:04:05"),
+					secondPassWorkerStart.Format("15:04:05"),
+					secondPassWorkerEnd.Format("15:04:05"),
+					outputWorkerStart.Format("15:04:05"),
+					outputWorkerEnd.Format("15:04:05"),
+				}
+
+				tsvStageFileWriter.Write(stageRecord)
+
 				return
 			}
 
 			switch event.Type {
-			case EventFileSize:
+			case events.EventFileSize:
 				fileSize = event.Data
-			case EventBytesProcessed:
+			case events.EventBytesProcessed:
 				bytesProcessed = event.Data
-			case EventTypeReadsProcessed:
+			case events.EventTypeReadsProcessed:
 				totalReadsProcessed += event.Data
-			case EventTypeReadsAfterFiltering:
+			case events.EventTypeReadsAfterFiltering:
 				totalReadsAfterFiltering += event.Data
-			case EventTypeReadsMapped:
+			case events.EventTypeReadsMapped:
 				totalReadsMapped += event.Data
-			case EventTypeNumMappingLocations:
+			case events.EventTypeNumMappingLocations:
 				numMappingLocations += event.Data
-			case EventTypeNumConfidentMappings:
+			case events.EventTypeNumConfidentMappings:
 				numConfidentMappings += event.Data
+			case events.EventTypeMapperProducerTime:
+				mappingTaskProducerTime = event.Data
+				mappingTaskProducerStart = event.Start
+				mappingTaskProducerEnd = event.End
+			case events.EventTypeMapperWorkerTime:
+				mapperWorkerTime = event.Data
+				mapperWorkerStart = event.Start
+				mapperWorkerEnd = event.End
+			case events.EventTypeConfidentWorkerTime:
+				confidentWorkerTime = event.Data
+				confidentWorkerStart = event.Start
+				confidentWorkerEnd = event.End
+			case events.EventTypeSecondPassWorkerTime:
+				secondPassWorkerTime = event.Data
+				secondPassWorkerStart = event.Start
+				secondPassWorkerEnd = event.End
+			case events.EventTypeOutputWorkerTime:
+				outputWorkerTime = event.Data
+				outputWorkerStart = event.Start
+				outputWorkerEnd = event.End
 			default:
 				logrus.Warnf("Unknown event type: %d with data: %d", event.Type, event.Data)
 			}
