@@ -62,12 +62,12 @@ type MapperConfig struct {
 		} `mapstructure:"rna_mode" yaml:"rna_mode"`
 
 		DnaMode struct {
-			FilterMinMatches         int     `mapstructure:"filter_min_matches" yaml:"filter_min_matches"` // the minimum number of exact matches required to keep the read during filtering
-			MinLengthInitialDiagonal int     `mapstructure:"min_length_initial_diagonal" yaml:"min_length_initial_diagonal"`
-			MaxGapLength             int     `mapstructure:"max_gap_length" yaml:"max_gap_length"`
-			MaxGapCount              int     `mapstructure:"max_gap_count" yaml:"max_gap_count"`
-			MaxMismatchCount         int     `mapstructure:"max_mismatch_count" yaml:"max_mismatch_count"`
-			MaxMismatchPercentage    float64 `mapstructure:"max_mismatch_percentage" yaml:"max_mismatch_percentage"`
+			FilterMinMatches      int     `mapstructure:"filter_min_matches" yaml:"filter_min_matches"` // the minimum number of exact matches required to keep the read during filtering
+			MinMappingLength      float64 `mapstructure:"min_mapping_length" yaml:"min_mapping_length"`
+			MaxGapLength          int     `mapstructure:"max_gap_length" yaml:"max_gap_length"`
+			MaxGapCount           int     `mapstructure:"max_gap_count" yaml:"max_gap_count"`
+			MaxMismatchCount      int     `mapstructure:"max_mismatch_count" yaml:"max_mismatch_count"`
+			MaxMismatchPercentage float64 `mapstructure:"max_mismatch_percentage" yaml:"max_mismatch_percentage"`
 
 			Confident struct {
 				MaxMismatchCount          int `mapstructure:"max_mismatch_count" yaml:"max_mismatch_count"`     // how many mm is a conf map allowed to have
@@ -138,7 +138,6 @@ func (c *MapperConfig) SetMappingThreads(threads int) {
 }
 
 func (c *MapperConfig) GetMappingOutputSamFile() (*os.File, error) {
-
 	// combine output dir and sam file name
 	outputPath := filepath.Join(
 		c.General.OutputDir,
@@ -154,7 +153,6 @@ func (c *MapperConfig) GetMappingOutputSamFile() (*os.File, error) {
 }
 
 func (c *MapperConfig) GetIndexOutputFile() (*os.File, error) {
-
 	filename := ""
 
 	if c.Index.Output.UseFastaFileName {
@@ -251,7 +249,6 @@ func (c *MapperConfig) GetMappingStatsFilePath() string {
 }
 
 func setDefaults() {
-
 	// GENERAL
 	viper.SetDefault("general.output_dir", "./output")
 
@@ -287,7 +284,7 @@ func setDefaults() {
 
 	// MAPPING - DNA MODE
 	viper.SetDefault("mapping.dna_mode.filter_min_matches", 7)
-	viper.SetDefault("mapping.dna_mode.min_length_initial_diagonal", 0.7)
+	viper.SetDefault("mapping.dna_mode.min_mapping_length", 0.55)
 	viper.SetDefault("mapping.dna_mode.max_gap_length", 1000)
 	viper.SetDefault("mapping.dna_mode.max_gap_count", 1)
 	viper.SetDefault("mapping.dna_mode.max_mismatch_count", -1)
@@ -308,7 +305,6 @@ func setDefaults() {
 }
 
 func InitConfig(configFilePath string) {
-
 	setDefaults()
 
 	// default search path is next to executable
