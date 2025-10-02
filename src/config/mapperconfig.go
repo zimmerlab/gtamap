@@ -62,12 +62,12 @@ type MapperConfig struct {
 		} `mapstructure:"rna_mode" yaml:"rna_mode"`
 
 		DnaMode struct {
-			FilterMinMatches         int     `mapstructure:"filter_min_matches" yaml:"filter_min_matches"` // the minimum number of exact matches required to keep the read during filtering
-			MinLengthInitialDiagonal float64 `mapstructure:"min_length_initial_diagonal" yaml:"min_length_initial_diagonal"`
-			MaxGapLength             int     `mapstructure:"max_gap_length" yaml:"max_gap_length"`
-			MaxGapCount              int     `mapstructure:"max_gap_count" yaml:"max_gap_count"`
-			MaxMismatchCount         int     `mapstructure:"max_mismatch_count" yaml:"max_mismatch_count"`
-			MaxMismatchPercentage    float64 `mapstructure:"max_mismatch_percentage" yaml:"max_mismatch_percentage"`
+			FilterMinMatches      int     `mapstructure:"filter_min_matches" yaml:"filter_min_matches"` // the minimum number of exact matches required to keep the read during filtering
+			MinMappedLength       float64 `mapstructure:"min_mapped_length" yaml:"min_mapped_length"`
+			MaxGapLength          int     `mapstructure:"max_gap_length" yaml:"max_gap_length"`
+			MaxGapCount           int     `mapstructure:"max_gap_count" yaml:"max_gap_count"`
+			MaxMismatchCount      int     `mapstructure:"max_mismatch_count" yaml:"max_mismatch_count"`
+			MaxMismatchPercentage float64 `mapstructure:"max_mismatch_percentage" yaml:"max_mismatch_percentage"`
 
 			Confident struct {
 				MaxMismatchCount          int `mapstructure:"max_mismatch_count" yaml:"max_mismatch_count"`     // how many mm is a conf map allowed to have
@@ -293,7 +293,7 @@ func setDefaults() {
 
 	// MAPPING - DNA MODE
 	viper.SetDefault("mapping.dna_mode.filter_min_matches", 7)
-	viper.SetDefault("mapping.dna_mode.min_length_initial_diagonal", 0.7)
+	viper.SetDefault("mapping.dna_mode.min_mapped_length", 0.55)
 	viper.SetDefault("mapping.dna_mode.max_gap_length", 1000)
 	viper.SetDefault("mapping.dna_mode.max_gap_count", 1)
 	viper.SetDefault("mapping.dna_mode.max_mismatch_count", -1)
