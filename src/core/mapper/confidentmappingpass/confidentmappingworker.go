@@ -6,13 +6,11 @@ import (
 	"sort"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/core/index"
-	"github.com/KleinSamuel/gtamap/src/core/mapper/events"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
@@ -23,13 +21,11 @@ func ConfidentMappingWorker(
 	wgConfidentMapping *sync.WaitGroup,
 	annotationChan chan<- map[int]*mapperutils.TargetAnnotation,
 	index *index.GenomeIndex,
-	progressChan chan<- events.Event,
 ) {
 	defer wgConfidentMapping.Done()
 
 	cMapsPerSeq := make(map[int][]*ConfidentTask, 0)
 
-	start := time.Now()
 	for {
 		confidentResult, ok := confidentChan.Receive()
 		if !ok {
@@ -61,15 +57,6 @@ func ConfidentMappingWorker(
 			annotation[targetId].LogInfo()
 		}
 	}
-	duration := time.Since(start)
-	end := time.Now()
-	progressChan <- events.Event{
-		Type:  events.EventTypeConfidentWorkerTime,
-		Data:  uint64(duration),
-		Start: start,
-		End:   end,
-	}
-
 	annotationChan <- annotation
 	logrus.Info("Done with Annotation")
 }

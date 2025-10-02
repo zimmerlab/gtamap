@@ -6,11 +6,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/index"
-	"github.com/KleinSamuel/gtamap/src/core/mapper/events"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
@@ -23,7 +21,6 @@ func ThirdPassWorker(
 	wgThirdPass *sync.WaitGroup,
 	outputChan chan<- string,
 	index *index.GenomeIndex,
-	progressChan chan<- events.Event,
 ) {
 	defer wgThirdPass.Done()
 	total := 0
@@ -39,7 +36,6 @@ func ThirdPassWorker(
 		panic(err)
 	}
 
-	start := time.Now()
 	for {
 
 		task, ok := thirdPassChan.Receive()
@@ -179,15 +175,6 @@ func ThirdPassWorker(
 		}
 
 		outputChan <- builder.String()
-	}
-	duration := time.Since(start)
-	end := time.Now()
-
-	progressChan <- events.Event{
-		Type:  events.EventTypeOutputWorkerTime,
-		Data:  uint64(duration),
-		Start: start,
-		End:   end,
 	}
 
 	logrus.Info("Done with output")

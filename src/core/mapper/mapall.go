@@ -105,6 +105,7 @@ func MapAll(
 	go TimerWorker(timerChan, &waitGroupTimer)
 
 	// wait group that keeps track of the mapping goroutines that are still running
+	startMainMapping := time.Now()
 	var wgMainMappingPass sync.WaitGroup
 	// start the mapping worker goroutine pool
 	for i := range numThreads {
@@ -123,6 +124,7 @@ func MapAll(
 		)
 	}
 
+	startProducer := time.Now()
 	go MappingTaskProducer(
 		reader,
 		taskChan,
@@ -132,32 +134,51 @@ func MapAll(
 	)
 
 	wgMainMappingPass.Wait()
+	durationMainMapping := time.Since(startMainMapping)
+	endMainMapping := time.Now()
+	progressChan <- events.Event{
+		Type:  events.EventTypeMapperWorkerTime,
+		Data:  uint64(durationMainMapping),
+		Start: startMainMapping,
+		End:   endMainMapping,
+	}
+
+	durationProducer := time.Since(startProducer)
+	endProducer := time.Now()
+	progressChan <- events.Event{
+		Type:  events.EventTypeMapperProducerTime,
+		Data:  uint64(durationProducer),
+		Start: startProducer,
+		End:   endProducer,
+	}
+
 	// close(paralogMappingChan)
 
 	confidentMappingChan.Close()
 	var waitgroupConfidentMap sync.WaitGroup
 	waitgroupConfidentMap.Add(1)
+	startConfident := time.Now()
 	go confidentmappingpass.ConfidentMappingWorker(
 		confidentMappingChan,
 		&waitgroupConfidentMap,
 		annotationChan,
 		genomeIndex,
-		progressChan,
 	)
 
 	var wgThirdPass sync.WaitGroup
+	startThirdPass := time.Now()
 	wgThirdPass.Add(1)
 	go thirdpass.ThirdPassWorker(
 		thirdpassChan,
 		&wgThirdPass,
 		outputChan,
 		genomeIndex,
-		progressChan,
 	)
 
 	var wgSecondpass sync.WaitGroup
 
 	wgSecondpass.Add(1)
+	startSecondPass := time.Now()
 	go secondpass.SecondpassMappingWorker(
 		secondpassChan,
 		&wgSecondpass,
@@ -165,18 +186,41 @@ func MapAll(
 		thirdpassChan,
 		genomeIndex,
 		numThreads,
-		progressChan,
 	)
 
 	waitgroupConfidentMap.Wait()
+	durationConfident := time.Since(startConfident)
+	endConfident := time.Now()
+	progressChan <- events.Event{
+		Type:  events.EventTypeConfidentWorkerTime,
+		Data:  uint64(durationConfident),
+		Start: startConfident,
+		End:   endConfident,
+	}
 	close(annotationChan)
 
 	// waitgroupParalog.Wait()
 	secondpassChan.Close()
 	wgSecondpass.Wait()
+	durationSecondPass := time.Since(startSecondPass)
+	endSecondPass := time.Now()
+	progressChan <- events.Event{
+		Type:  events.EventTypeSecondPassWorkerTime,
+		Data:  uint64(durationSecondPass),
+		Start: startSecondPass,
+		End:   endSecondPass,
+	}
 
 	thirdpassChan.Close()
 	wgThirdPass.Wait()
+	durationThirdPass := time.Since(startThirdPass)
+	endThirdPass := time.Now()
+	progressChan <- events.Event{
+		Type:  events.EventTypeOutputWorkerTime,
+		Data:  uint64(durationThirdPass),
+		Start: startThirdPass,
+		End:   endThirdPass,
+	}
 
 	close(outputChan)
 	waitgroupWriter.Wait()

@@ -5,13 +5,11 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/core/index"
-	"github.com/KleinSamuel/gtamap/src/core/mapper/events"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/thirdpass"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
@@ -26,7 +24,6 @@ func SecondpassMappingWorker(
 	thirdPassChan *thirdpass.ThirdPassChannel,
 	genomeIndex *index.GenomeIndex,
 	numWorkers int,
-	progressChan chan<- events.Event,
 ) {
 	// in here we receive all non-confident readpairs. Some have multiple maps for fw and rv and some are
 	// not completely mapped yet. Confident readpairs are contained in confidentChan.
@@ -41,7 +38,6 @@ func SecondpassMappingWorker(
 	logrus.Info("Started second pass")
 	logrus.Info("Started output worker")
 
-	start := time.Now()
 	for range numWorkers {
 
 		wgSecondpass.Add(1)
@@ -65,14 +61,6 @@ func SecondpassMappingWorker(
 				})
 			}
 		}()
-	}
-	duration := time.Since(start)
-	end := time.Now()
-	progressChan <- events.Event{
-		Type:  events.EventTypeSecondPassWorkerTime,
-		Data:  uint64(duration),
-		Start: start,
-		End:   end,
 	}
 }
 

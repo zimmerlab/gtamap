@@ -14,7 +14,6 @@ import (
 )
 
 func GetCommandMap() *cobra.Command {
-
 	var indexFilePath string
 	var fastqR1FilePath string
 	var fastqR2FilePath string
@@ -27,12 +26,12 @@ func GetCommandMap() *cobra.Command {
 
 	var statsFile string
 	var progressFile string
+	var progressStageTimeFile string
 
 	mapCmd := &cobra.Command{
 		Use:   "map",
 		Short: "Run mapping",
 		Run: func(cmd *cobra.Command, args []string) {
-
 			SetConfigValue("mapping.index_file_path", indexFilePath)
 			SetConfigValue("mapping.fastq_r1_file_path", fastqR1FilePath)
 			SetConfigValue("mapping.fastq_r2_file_path", fastqR2FilePath)
@@ -43,6 +42,7 @@ func GetCommandMap() *cobra.Command {
 			SetConfigValue("mapping.regionmask_file_path", regionmaskFilePath)
 			SetConfigValue("mapping.output.mapping_stats_file_name", statsFile)
 			SetConfigValue("mapping.output.mapping_progress_file_name", progressFile)
+			SetConfigValue("mapping.output.mapping_progress_stage_time_file_name", progressStageTimeFile)
 
 			if err := viper.Unmarshal(config.Mapper); err != nil {
 				logrus.Fatalf("Unable to decode config: %v", err)
@@ -139,11 +139,18 @@ func GetCommandMap() *cobra.Command {
 		"Progress file name (within output dir) or full path (default: mapping_progress.tsv)",
 	)
 
+	flags.StringVarP(
+		&progressStageTimeFile,
+		"stagetime",
+		"e",
+		"",
+		"Progress stage time file name (within output dir) or full path (default: mapping_stage.tsv)",
+	)
+
 	return mapCmd
 }
 
 func ExecMap() {
-
 	indexFile, errIndexFile := os.Open(config.Mapper.Mapping.IndexFilePath)
 	if errIndexFile != nil {
 		logrus.Fatalf("Could not open index file: %v", errIndexFile)
