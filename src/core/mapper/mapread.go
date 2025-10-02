@@ -18,7 +18,6 @@ func MapRead(
 	[]*mapperutils.ReadMatchResult,
 	bool,
 ) {
-
 	// logrus.WithFields(logrus.Fields{
 	// 	"read":   read.Header,
 	// 	"length": len(*read.Sequence),
@@ -49,10 +48,9 @@ func MapRead(
 
 			// add new sequence to global matches
 			if globalMatches.MatchesPerSequence[match.SequenceIndex] == nil {
-				globalMatches.MatchesPerSequence[match.SequenceIndex] =
-					&mapperutils.SequenceMatchResult{
-						MatchesPerDiagonal: make(map[int][]*mapperutils.Match),
-					}
+				globalMatches.MatchesPerSequence[match.SequenceIndex] = &mapperutils.SequenceMatchResult{
+					MatchesPerDiagonal: make(map[int][]*mapperutils.Match),
+				}
 			}
 
 			// add new diagonal to sequence match
@@ -216,8 +214,9 @@ func applyPossibleDiagonals(
 		if !config.Mapper.Mapping.IsReadOriginRna {
 
 			// for DNA reads we expect the raw result to already be of a certain length
-			if result.MatchedGenome.Length()/len(*read.Sequence) >
-				config.Mapper.Mapping.DnaMode.MinLengthInitialDiagonal {
+			theoreticalLength := result.MatchedRead.Regions[len(result.MatchedRead.Regions)-1].End - result.MatchedRead.Regions[0].Start
+			if float64(theoreticalLength)/float64(len(*read.Sequence)) >
+				config.Mapper.Mapping.DnaMode.MinMappingLength {
 
 				// if result.MatchedGenome.Length()*10 > len(*read.Sequence)*7 {
 
@@ -368,7 +367,6 @@ func applyDiagonal(
 	diagonal int,
 	result *mapperutils.ReadMatchResult,
 ) bool {
-
 	diagonalRead := regionvector.NewRegionVector()
 	diagonalGenome := regionvector.NewRegionVector()
 
@@ -694,7 +692,6 @@ func extendDiagonals(
 	genomeIndex *index.GenomeIndex,
 	result *mapperutils.ReadMatchResult,
 ) {
-
 	if result.MatchedRead.Length() == len(*read.Sequence) {
 		// logrus.Debug("read fully matched")
 	} else {
@@ -1061,7 +1058,6 @@ func mapReadToSequence(
 	greedy bool,
 	currDepth *int,
 ) []*mapperutils.ReadMatchResult {
-
 	// list of read match results
 	results := make([]*mapperutils.ReadMatchResult, 0)
 
