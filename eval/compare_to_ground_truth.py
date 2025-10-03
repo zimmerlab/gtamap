@@ -128,18 +128,28 @@ def compare_to_ground_truth(mapper_data, ground_truth_data, verbose):
         true_intervals_dict=ground_truth_data["fw"],
     )
 
+    # entries_per_read_fw = [
+    #     len(alis[0])
+    #     for read_id, alis in mapper_data["fw"].items()
+    #     if read_id in ground_truth_data["fw"].keys()
+    # ]
     entries_per_read_fw = [
-        len(alis[0])
+        len(alis)  # number of times this read appears in the SAM
         for read_id, alis in mapper_data["fw"].items()
-        if read_id in ground_truth_data["fw"].keys()
+        if read_id in ground_truth_data["fw"]
     ]
     avg_entries_per_read_fw = (
         sum(entries_per_read_fw) / len(entries_per_read_fw)
         if len(entries_per_read_fw) != 0
         else 0
     )
+    # entries_per_read_rv = [
+    #     len(alis[0])
+    #     for read_id, alis in mapper_data["rv"].items()
+    #     if read_id in ground_truth_data["rv"].keys()
+    # ]
     entries_per_read_rv = [
-        len(alis[0])
+        len(alis)
         for read_id, alis in mapper_data["rv"].items()
         if read_id in ground_truth_data["rv"].keys()
     ]
@@ -150,7 +160,7 @@ def compare_to_ground_truth(mapper_data, ground_truth_data, verbose):
     )
 
     entries_per_read_fw_fp = [
-        len(alis[0])
+        len(alis)
         for read_id, alis in mapper_data["fw"].items()
         if read_id not in ground_truth_data["fw"].keys()
     ]
@@ -161,7 +171,7 @@ def compare_to_ground_truth(mapper_data, ground_truth_data, verbose):
     )
 
     entries_per_read_rv_fp = [
-        len(alis[0])
+        len(alis)
         for read_id, alis in mapper_data["rv"].items()
         if read_id not in ground_truth_data["rv"].keys()
     ]
@@ -170,8 +180,6 @@ def compare_to_ground_truth(mapper_data, ground_truth_data, verbose):
         if len(entries_per_read_rv_fp) != 0
         else 0
     )
-
-    print()
 
     # fw_qual = calculate_avg_quality(mapper_data["fw_q"])
     # rw_qual = calculate_avg_quality(mapper_data["rv_q"])
@@ -914,7 +922,13 @@ if __name__ == "__main__":
 
     mapper1_data = parse_sam_file(args.sam1)
     print("parsed sam")
-    if args.mapper == "hisat2" or args.mapper == "star":
+    if (
+        args.mapper == "hisat2"
+        or args.mapper == "star"
+        or args.mapper == "minimap2"
+        or args.mapper == "bwa"
+        or args.mapper == "bowtie2"
+    ):
         mapper1_data = convert_to_global(mapper1_data, gene_start)
         print("converted sam")
 
