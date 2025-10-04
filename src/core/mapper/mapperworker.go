@@ -30,6 +30,7 @@ func MapperWorker(
 	// paralogMappingChan chan<- *mapperutils.ReadPairMatchResults,
 	progressChan chan<- events.Event,
 	timerChan chan<- *timer.Timer,
+	mu *sync.Mutex,
 ) {
 	defer wg.Done()
 
@@ -60,7 +61,9 @@ func MapperWorker(
 		// }).Debug("Processing task")
 
 		// send progress update for every chunk of reads processed
+		mu.Lock()
 		progressStats.ReadsProcessed++
+		mu.Unlock()
 		if progressStats.ReadsProcessed >= 1000 {
 			progressChan <- events.Event{
 				Type: events.EventTypeReadsProcessed,
@@ -77,6 +80,7 @@ func MapperWorker(
 			timerChan,
 			progressChan,
 			progressStats,
+			mu,
 		)
 	}
 	durationMainMapping := time.Since(startMainMapping)
@@ -87,7 +91,41 @@ func MapperWorker(
 		Start: startMainMapping,
 		End:   endMainMapping,
 	}
-
+	if progressStats.ReadsProcessed > 0 {
+		progressChan <- events.Event{
+			Type: events.EventTypeReadsProcessed,
+			Data: uint64(progressStats.ReadsProcessed),
+		}
+		progressStats.ReadsProcessed = 0
+	}
+	if progressStats.ReadsMapped > 0 {
+		progressChan <- events.Event{
+			Type: events.EventTypeReadsMapped,
+			Data: progressStats.ReadsMapped,
+		}
+		progressStats.ReadsMapped = 0
+	}
+	if progressStats.ReadsAfterFiltering > 0 {
+		progressChan <- events.Event{
+			Type: events.EventTypeReadsAfterFiltering,
+			Data: progressStats.ReadsAfterFiltering,
+		}
+		progressStats.ReadsAfterFiltering = 0
+	}
+	if progressStats.NumMappingLocations > 0 {
+		progressChan <- events.Event{
+			Type: events.EventTypeNumMappingLocations,
+			Data: progressStats.NumMappingLocations,
+		}
+		progressStats.NumMappingLocations = 0
+	}
+	if progressStats.NumConfidentMappings > 0 {
+		progressChan <- events.Event{
+			Type: events.EventTypeNumConfidentMappings,
+			Data: progressStats.NumConfidentMappings,
+		}
+		progressStats.NumConfidentMappings = 0
+	}
 	//logrus.WithFields(logrus.Fields{
 	//	"workerId": workerId,
 	//}).Debug("Finished MapperWorker")

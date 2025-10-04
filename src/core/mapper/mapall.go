@@ -38,6 +38,9 @@ func MapAll(
 
 	writer.Write(samHeader.String())
 
+	// create mutex for logging events that are incremented across go routines
+	var mu sync.Mutex // one mutex shared for all counters
+
 	// numWorkers := runtime.NumCPU()
 	//
 	// if *numThreads > 0 {
@@ -120,6 +123,7 @@ func MapAll(
 			confidentMappingChan,
 			progressChan,
 			timerChan,
+			&mu,
 		)
 	}
 
