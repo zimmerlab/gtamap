@@ -2,6 +2,7 @@ package mapper
 
 import (
 	"sync"
+	"time"
 
 	"github.com/KleinSamuel/gtamap/src/core/mapper/confidentmappingpass"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/events"
@@ -44,7 +45,14 @@ func MapperWorker(
 		NumConfidentMappings: 0,
 	}
 
+	var startMainMapping time.Time
+	firstItem := true
+
 	for task := range taskChan {
+		if firstItem {
+			firstItem = false
+			startMainMapping = time.Now()
+		}
 
 		// logrus.WithFields(logrus.Fields{
 		// 	"workerId": workerId,
@@ -70,6 +78,14 @@ func MapperWorker(
 			progressChan,
 			progressStats,
 		)
+	}
+	durationMainMapping := time.Since(startMainMapping)
+	endMainMapping := time.Now()
+	progressChan <- events.Event{
+		Type:  events.EventTypeMapperWorkerTime,
+		Data:  uint64(durationMainMapping),
+		Start: startMainMapping,
+		End:   endMainMapping,
 	}
 
 	//logrus.WithFields(logrus.Fields{

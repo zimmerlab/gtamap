@@ -6,11 +6,13 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/core/index"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/events"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/utils"
 	"github.com/sirupsen/logrus"
@@ -21,6 +23,7 @@ func ConfidentMappingWorker(
 	wgConfidentMapping *sync.WaitGroup,
 	annotationChan chan<- map[int]*mapperutils.TargetAnnotation,
 	index *index.GenomeIndex,
+	progressChan chan<- events.Event,
 ) {
 	defer wgConfidentMapping.Done()
 
@@ -42,7 +45,13 @@ func ConfidentMappingWorker(
 	annotation := make(map[int]*mapperutils.TargetAnnotation)
 
 	logrus.Info("Finished collecting all confident maps")
+	firstItem := true
+	var startConfident time.Time
 	for targetId, cMaps := range cMapsPerSeq {
+		if firstItem {
+			firstItem = false
+			startConfident = time.Now()
+		}
 		logrus.Infof("%s confident maps for target region %s", strconv.Itoa(len(cMaps)), strconv.Itoa(targetId))
 		// get Introns per seqId
 		// NOTE: Introns are 0 based, start inclusive and end exclusive
@@ -59,6 +68,15 @@ func ConfidentMappingWorker(
 	}
 	annotationChan <- annotation
 	logrus.Info("Done with Annotation")
+
+	durationConfident := time.Since(startConfident)
+	endConfident := time.Now()
+	progressChan <- events.Event{
+		Type:  events.EventTypeConfidentWorkerTime,
+		Data:  uint64(durationConfident),
+		Start: startConfident,
+		End:   endConfident,
+	}
 }
 
 func getCoverageSlice(mappedReadPairs []*mapperutils.ReadPairMatchResults, geneLength int, index *index.GenomeIndex) []int {

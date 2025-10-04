@@ -2,6 +2,7 @@ package mapper
 
 import (
 	"strings"
+	"time"
 
 	"github.com/KleinSamuel/gtamap/src/core/mapper/events"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
@@ -21,8 +22,15 @@ func MappingTaskProducer(reader *fastq.Reader, taskChan chan<- MappingTask, prog
 	taskCounter := 0
 	foundSpecificQname := false
 
+	var startProducer time.Time
+	firstItem := true
+
 	// add each read pair as a mapping task to the task queue
 	for readPair, _ := reader.NextRead(); readPair != nil; readPair, _ = reader.NextRead() {
+		if firstItem {
+			startProducer = time.Now()
+			firstItem = false
+		}
 
 		if specificQname != "" {
 			name := strings.Split(readPair.ReadR1.Header, " ")[0]
@@ -57,6 +65,14 @@ func MappingTaskProducer(reader *fastq.Reader, taskChan chan<- MappingTask, prog
 		if foundSpecificQname {
 			break
 		}
+	}
+	durationProducer := time.Since(startProducer)
+	endProducer := time.Now()
+	progressChan <- events.Event{
+		Type:  events.EventTypeMapperProducerTime,
+		Data:  uint64(durationProducer),
+		Start: startProducer,
+		End:   endProducer,
 	}
 	logrus.Debug("MappingTaskProducer finished")
 }
