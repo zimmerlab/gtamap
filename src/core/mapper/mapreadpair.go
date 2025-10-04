@@ -1,6 +1,8 @@
 package mapper
 
 import (
+	"sync"
+
 	"github.com/KleinSamuel/gtamap/src/core/mapper/confidentmappingpass"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/events"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/secondpass"
@@ -22,6 +24,7 @@ func MapReadPair(
 	timerChannel chan<- *timer.Timer,
 	progressChan chan<- events.Event,
 	progressStats *ProgressStats,
+	mu *sync.Mutex,
 ) {
 	keepFw := GlobalFilter(readPair.ReadR1.Sequence, genomeIndex)
 	keepRw := GlobalFilter(readPair.ReadR2.Sequence, genomeIndex)
@@ -39,7 +42,9 @@ func MapReadPair(
 		return
 	}
 
+	mu.Lock()
 	progressStats.ReadsAfterFiltering++
+	mu.Unlock()
 	if progressStats.ReadsAfterFiltering >= 100 {
 		progressChan <- events.Event{
 			Type: events.EventTypeReadsAfterFiltering,
@@ -75,7 +80,11 @@ func MapReadPair(
 		return
 	}
 
+	mu.Lock()
 	progressStats.ReadsMapped++
+	progressStats.NumMappingLocations += uint64(len(resultFw) + len(resultRv))
+	mu.Unlock()
+
 	if progressStats.ReadsMapped >= 100 {
 		progressChan <- events.Event{
 			Type: events.EventTypeReadsMapped,
@@ -83,8 +92,6 @@ func MapReadPair(
 		}
 		progressStats.ReadsMapped = 0
 	}
-
-	progressStats.NumMappingLocations += uint64(len(resultFw) + len(resultRv))
 	if progressStats.NumMappingLocations >= 1000 {
 		progressChan <- events.Event{
 			Type: events.EventTypeNumMappingLocations,
@@ -117,7 +124,9 @@ func MapReadPair(
 	if possibleConfMap {
 		confidentMatchesChan.Send(confMap)
 
+		mu.Lock()
 		progressStats.NumConfidentMappings++
+		mu.Unlock()
 		if progressStats.NumConfidentMappings >= 10 {
 			progressChan <- events.Event{
 				Type: events.EventTypeNumConfidentMappings,
