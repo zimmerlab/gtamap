@@ -6,9 +6,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/index"
+	"github.com/KleinSamuel/gtamap/src/core/mapper/events"
 	"github.com/KleinSamuel/gtamap/src/core/mapper/mapperutils"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/KleinSamuel/gtamap/src/formats/sam"
@@ -21,6 +23,7 @@ func ThirdPassWorker(
 	wgThirdPass *sync.WaitGroup,
 	outputChan chan<- string,
 	index *index.GenomeIndex,
+	progressChan chan<- events.Event,
 ) {
 	defer wgThirdPass.Done()
 	total := 0
@@ -36,7 +39,15 @@ func ThirdPassWorker(
 		panic(err)
 	}
 
+	firstItem := true
+	var startThirdPass time.Time
+
 	for {
+		if firstItem {
+			firstItem = false
+			startThirdPass = time.Now()
+
+		}
 
 		task, ok := thirdPassChan.Receive()
 		if !ok {
@@ -183,6 +194,15 @@ func ThirdPassWorker(
 		"Aligned Positions": total,
 		"Mismatches":        mmTotal,
 	}).Info("Stats")
+
+	durationThirdPass := time.Since(startThirdPass)
+	endThirdPass := time.Now()
+	progressChan <- events.Event{
+		Type:  events.EventTypeOutputWorkerTime,
+		Data:  uint64(durationThirdPass),
+		Start: startThirdPass,
+		End:   endThirdPass,
+	}
 }
 
 func unmappedReadMateToSamString(readPair *fastq.ReadPair, isR1 bool) string {

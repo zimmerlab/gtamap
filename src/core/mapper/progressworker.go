@@ -134,7 +134,7 @@ func ProgressWorker(progressChan <-chan events.Event, wg *sync.WaitGroup) {
 	var confidentWorkerStart time.Time
 	var confidentWorkerEnd time.Time
 	var secondPassWorkerStart time.Time
-	var secondPassWorkerEnd time.Time
+	// var secondPassWorkerEnd time.Time
 	var outputWorkerStart time.Time
 	var outputWorkerEnd time.Time
 
@@ -185,7 +185,7 @@ func ProgressWorker(progressChan <-chan events.Event, wg *sync.WaitGroup) {
 					confidentWorkerStart.Format("15:04:05"),
 					confidentWorkerEnd.Format("15:04:05"),
 					secondPassWorkerStart.Format("15:04:05"),
-					secondPassWorkerEnd.Format("15:04:05"),
+					outputWorkerStart.Format("15:04:05"), // second pass end == output start (had to solve like this due to go routines being hard to time when called in loop like in second pass. It is easier this way)
 					outputWorkerStart.Format("15:04:05"),
 					outputWorkerEnd.Format("15:04:05"),
 				}
@@ -225,7 +225,7 @@ func ProgressWorker(progressChan <-chan events.Event, wg *sync.WaitGroup) {
 			case events.EventTypeSecondPassWorkerTime:
 				secondPassWorkerTime = event.Data
 				secondPassWorkerStart = event.Start
-				secondPassWorkerEnd = event.End
+				// secondPassWorkerEnd = event.End
 			case events.EventTypeOutputWorkerTime:
 				outputWorkerTime = event.Data
 				outputWorkerStart = event.Start
