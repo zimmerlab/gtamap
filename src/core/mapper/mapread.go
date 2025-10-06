@@ -635,7 +635,7 @@ func applyDiagonal(
 // }
 
 func annotateSpliceSites(
-	// read *fastq.Read,
+// read *fastq.Read,
 	genomeIndex *index.GenomeIndex,
 	result *mapperutils.ReadMatchResult,
 ) {
@@ -736,7 +736,10 @@ func extendDiagonals(
 						// }).Debug("gap read is larger than gap genome")
 
 						result.IncompleteMap = true
-						return
+
+						readGapPos = gapRead.End + 1
+						indexRegionBeforeGap = result.MatchedRead.GetGapIndexAfterPos(readGapPos)
+						continue // continue since l/r extensions might be required / other gaps also could require gap fill
 					}
 
 					bestSplit := determineBestSplit(
