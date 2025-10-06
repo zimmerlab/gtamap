@@ -671,7 +671,7 @@ func applyDiagonal(
 	}
 
 	// remove used matches and empty diagonals
-	dh.RemovedConsumedRegionsAndDiagonals()
+	dh.RemovedConsumedRegionsAndDiagonals(diagonal)
 
 	// remove invalid diagonals based on the currently applied diagonal
 	dh.RemoveInvalidDiagonals(result, read)
