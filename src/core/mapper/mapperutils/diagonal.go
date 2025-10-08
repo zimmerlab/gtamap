@@ -157,7 +157,7 @@ func (dh *DiagonalHandler) ConsumeKmer(kmerStart, kmerStop, kmerStartGenome, kme
 	}
 }
 
-func (dh *DiagonalHandler) RemovedConsumedRegionsAndDiagonals() {
+func (dh *DiagonalHandler) RemovedConsumedRegionsAndDiagonals(usedDiag int) {
 	// logrus.Debug("removing consumed regions and diagonals")
 
 	// delete the matches that were marked as used
@@ -196,6 +196,9 @@ func (dh *DiagonalHandler) RemovedConsumedRegionsAndDiagonals() {
 		//}).Debug("removed diagonal")
 
 		delete(dh.Diagonals, key)
+	}
+	if len(dh.Diagonals[usedDiag]) > 0 {
+		delete(dh.Diagonals, usedDiag) // also always delete consumed diag
 	}
 }
 

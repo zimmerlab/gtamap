@@ -628,6 +628,9 @@ func clusterGaps(targetGaps map[regionvector.Gap]int) []*regionvector.Intron {
 	// now extract introns with highest evidence
 	fwOrientatedGapsOfTarget := make([]*regionvector.Intron, 0)
 	for _, intronCluster := range clusters {
+		if intronCluster.maxEvidenceSpliceSiteScore == 0 {
+			continue
+		}
 		fwOrientatedGapsOfTarget = append(fwOrientatedGapsOfTarget, &regionvector.Intron{
 			Start:           intronCluster.eStart,
 			End:             intronCluster.eStop,

@@ -2530,36 +2530,65 @@ func fillGaps(
 				// lDonorSeq := string((*read.Sequence)[gapRead.Start : gapRead.Start+minSplit])
 				// rDonorSeq := string((*read.Sequence)[gapRead.End-rSplit : gapRead.End])
 
-				// close gap in genome
-				readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(
-					gapGenomeStart,
-					gapGenomeEnd,
-				)
-
 				// add left part of read
-				if minSplit > 0 {
-					readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(
-						gapRead.Start,
-						gapRead.Start+minSplit,
+				if minMM <= len(readMatchResult.MismatchesRead)+readMatchResult.MismatchConstraintGlobal {
+					regionMask := genomeIndex.RegionMask.TargetMasks[readMatchResult.SequenceIndex]
+					// close gap in genome
+					readMatchResult.MatchedGenome.AddRegionNonOverlappingPanic(
+						gapGenomeStart,
+						gapGenomeEnd,
 					)
-				}
 
-				// add right part of read
-				if rSplit > 0 {
-					readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(
-						gapRead.End-rSplit,
-						gapRead.End,
+					if minSplit > 0 {
+						readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(
+							gapRead.Start,
+							gapRead.Start+minSplit,
+						)
+						for p := 1; p <= minSplit; p++ {
+							if (*read.Sequence)[gapRead.Start+p-1] != (*genomeIndex.Sequences[seqIndex])[gapGenome.Start+p-1] {
+								isValid := readMatchResult.AddMismatch(
+									regionMask,
+									gapRead.Start+p-1,
+									readMatchResult.GetGenomicPosForReadPos(gapRead.Start+p-1),
+								)
+								if !isValid {
+									return false
+								}
+							}
+						}
+					}
+
+					// add right part of read
+					if rSplit > 0 {
+						readMatchResult.MatchedRead.AddRegionNonOverlappingPanic(
+							gapRead.End-rSplit,
+							gapRead.End,
+						)
+						for p := 1; p <= rSplit; p++ {
+							if (*read.Sequence)[gapRead.End-p] != (*genomeIndex.Sequences[seqIndex])[gapGenome.End-p] {
+								isValid := readMatchResult.AddMismatch(
+									regionMask,
+									gapRead.End-p,
+									readMatchResult.GetGenomicPosForReadPos(gapRead.End-p),
+								)
+								if !isValid {
+									return false
+								}
+							}
+						}
+					}
+
+					readMatchResult.NormalizeRegions()
+
+					readMatchResult.IsGapFill = true
+
+					readMatchResult.GapsFilled = append(
+						readMatchResult.GapsFilled,
+						gapRead.Length(),
 					)
+				} else {
+					return false
 				}
-
-				readMatchResult.NormalizeRegions()
-
-				readMatchResult.IsGapFill = true
-
-				readMatchResult.GapsFilled = append(
-					readMatchResult.GapsFilled,
-					gapRead.Length(),
-				)
 			}
 		}
 
@@ -2588,7 +2617,6 @@ func fillGaps(
 				return false
 			}
 		}
-
 	}
 
 	return true
