@@ -30,7 +30,7 @@ func MapperWorker(
 	// paralogMappingChan chan<- *mapperutils.ReadPairMatchResults,
 	progressChan chan<- events.Event,
 	timerChan chan<- *timer.Timer,
-	mu *sync.Mutex,
+	// mu *sync.Mutex,
 ) {
 	defer wg.Done()
 
@@ -61,9 +61,9 @@ func MapperWorker(
 		// }).Debug("Processing task")
 
 		// send progress update for every chunk of reads processed
-		mu.Lock()
+		// mu.Lock()
 		progressStats.ReadsProcessed++
-		mu.Unlock()
+		// mu.Unlock()
 		if progressStats.ReadsProcessed >= 1000 {
 			progressChan <- events.Event{
 				Type: events.EventTypeReadsProcessed,
@@ -80,7 +80,7 @@ func MapperWorker(
 			timerChan,
 			progressChan,
 			progressStats,
-			mu,
+			// mu,
 		)
 	}
 	durationMainMapping := time.Since(startMainMapping)
