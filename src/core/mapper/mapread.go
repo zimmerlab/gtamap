@@ -1003,23 +1003,15 @@ func extendDiagonals(
 			genomeSequence := (*genomeIndex.Sequences[result.SequenceIndex])[startGenome : startGenome+len(readSequence)]
 
 			// trying to extend the read to the left
+
+			impliedMMs := make([]int, 0) // stores mms caused by left ext
 			for i := range extensionLength {
 
 				// skip matches
 				if readSequence[i] == genomeSequence[i] {
 					continue
 				}
-
-				isValid := result.AddMismatch(
-					regionMask,
-					startRead+i,
-					startGenome+i,
-				)
-
-				if !isValid {
-					result.IncompleteMap = true
-					return
-				}
+				impliedMMs = append(impliedMMs, i)
 
 				// INFO: commented out when adding AddMismatch
 
@@ -1041,16 +1033,35 @@ func extendDiagonals(
 				// }
 			}
 
-			// logrus.WithFields(logrus.Fields{
-			// 	"startRead":     startRead,
-			// 	"endRead":       endRead,
-			// 	"startGenome":   startGenome,
-			// 	"endGenome":     startGenome + extensionLength,
-			// 	"numMismatches": numMismatches,
-			// }).Debug("extended match to left (linear)")
+			// after potential left ext, check mms
+			if len(impliedMMs)+len(result.MismatchesRead) < result.MismatchConstraintGlobal {
+				for _, mm := range impliedMMs {
+					// TODO: here the problem is still that if the mm threshold is passed due to an Alu, the mms are kept
+					// in the res but the region vector is not added.
+					isValid := result.AddMismatch(
+						regionMask,
+						startRead+mm,
+						startGenome+mm,
+					)
 
-			result.MatchedRead.AddRegionNonOverlappingPanic(startRead, endRead)
-			result.MatchedGenome.AddRegionNonOverlappingPanic(startGenome, startGenome+extensionLength)
+					if !isValid {
+						result.IncompleteMap = true
+						return
+					}
+				}
+
+				// logrus.WithFields(logrus.Fields{
+				// 	"startRead":     startRead,
+				// 	"endRead":       endRead,
+				// 	"startGenome":   startGenome,
+				// 	"endGenome":     startGenome + extensionLength,
+				// 	"numMismatches": numMismatches,
+				// }).Debug("extended match to left (linear)")
+
+				result.MatchedRead.AddRegionNonOverlappingPanic(startRead, endRead)
+				result.MatchedGenome.AddRegionNonOverlappingPanic(startGenome, startGenome+extensionLength)
+			}
+
 		}
 
 		// logrus.WithFields(logrus.Fields{
@@ -1087,6 +1098,7 @@ func extendDiagonals(
 			// TODO: this could be a use case for clipping
 			// when a read maps to the target sequence but would go out of bounds
 			// it could still be a valid mapping but it needs to be clipped
+
 			if startGenome+len(readSequence) > len(*genomeIndex.Sequences[result.SequenceIndex]) {
 				// logrus.Debug("genome index out of bounds")
 
@@ -1100,23 +1112,14 @@ func extendDiagonals(
 			genomeSequence := (*genomeIndex.Sequences[result.SequenceIndex])[startGenome : startGenome+len(readSequence)]
 
 			// trying to extend the read to the right
+			impliedMMs := make([]int, 0)
 			for i := range extensionLength {
 
 				// add the mismatches to the result
 				if readSequence[i] == genomeSequence[i] {
 					continue
 				}
-
-				isValid := result.AddMismatch(
-					regionMask,
-					startRead+i,
-					startGenome+i,
-				)
-
-				if !isValid {
-					result.IncompleteMap = true
-					return
-				}
+				impliedMMs = append(impliedMMs, i)
 
 				// INFO: commented out when adding AddMismatch
 
@@ -1137,9 +1140,27 @@ func extendDiagonals(
 				// 	return
 				// }
 			}
+			if len(impliedMMs)+len(result.MismatchesRead) < result.MismatchConstraintGlobal {
 
-			result.MatchedRead.AddRegionNonOverlappingPanic(startRead, endRead)
-			result.MatchedGenome.AddRegionNonOverlappingPanic(startGenome, startGenome+extensionLength)
+				// TODO: here the problem is still that if the mm threshold is passed due to an Alu, the mms are kept
+				// in the res but the region vector is not added.
+				for _, mm := range impliedMMs {
+					isValid := result.AddMismatch(
+						regionMask,
+						startRead+mm,
+						startGenome+mm,
+					)
+
+					if !isValid {
+						result.IncompleteMap = true
+						return
+					}
+
+				}
+				result.MatchedRead.AddRegionNonOverlappingPanic(startRead, endRead)
+				result.MatchedGenome.AddRegionNonOverlappingPanic(startGenome, startGenome+extensionLength)
+			}
+
 		}
 	}
 }
