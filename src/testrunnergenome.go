@@ -5,7 +5,6 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/index"
 	"github.com/KleinSamuel/gtamap/src/core/mapper"
 	"github.com/KleinSamuel/gtamap/src/dataloader"
@@ -16,7 +15,6 @@ import (
 )
 
 func buildAndSerializeIndexGenome(pathFasta string, pathOutput string) {
-
 	fastaFile, errFasta := os.Open(pathFasta)
 	if errFasta != nil {
 		logrus.Fatal("Error reading fasta file", errFasta)
@@ -28,7 +26,6 @@ func buildAndSerializeIndexGenome(pathFasta string, pathOutput string) {
 	}
 
 	fastaEntries, err := dataloader.ReadFasta(fastaFile)
-
 	if err != nil {
 		logrus.Fatal("Error extracting sequence from fasta file", err)
 	}
@@ -54,7 +51,6 @@ func deserializeGenomeIndex() *index.GenomeIndex {
 }
 
 func testFastqReader2() {
-
 	pathReadsFw := "../resources/reads/manual/reads_ccr9.1.fq"
 	pathReadsRw := "../resources/reads/manual/reads_ccr9.2.fq"
 
@@ -80,22 +76,21 @@ func testFastqReader2() {
 // }
 
 func testSpecificRead() {
-
-	//genomeIndexPath := "/home/sam/Data/gtamap/tas2/tas2r4/index/ENSG00000127364.gtai"
-	//genomeIndexPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/019/ENSG00000141480.gtai"
-	//genomeIndexPath := "/home/sam/Data/gtamap/rz/g1k_v37_decoy/ENSG00000141480.gtai"
+	// genomeIndexPath := "/home/sam/Data/gtamap/tas2/tas2r4/index/ENSG00000127364.gtai"
+	// genomeIndexPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/019/ENSG00000141480.gtai"
+	// genomeIndexPath := "/home/sam/Data/gtamap/rz/g1k_v37_decoy/ENSG00000141480.gtai"
 	genomeIndexPath := "/home/sam/Data/gtamap/aldob/ENSG00000136872.gtai"
 
-	//readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.tas2r4.fastq"
-	//readsRvPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_2.tas2r4.fastq"
+	// readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.tas2r4.fastq"
+	// readsRvPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_2.tas2r4.fastq"
 
-	//readsFwPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/019/DP800004065TRL1C029R0201052655.r1.fastq"
-	//readsRvPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/019/DP800004065TRL1C029R0201052655.r2.fastq"
+	// readsFwPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/019/DP800004065TRL1C029R0201052655.r1.fastq"
+	// readsRvPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/019/DP800004065TRL1C029R0201052655.r2.fastq"
 
 	readsFwPath := "/home/sam/Data/genome-sam/bug.fw.fq"
 	readsRvPath := "/home/sam/Data/genome-sam/bug.rv.fq"
 
-	//outputPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/019/aligned.sam"
+	// outputPath := "/home/sam/Data/gtamap/tas2/tas2r4/bugs/019/aligned.sam"
 	outputPath := "/home/sam/Data/gtamap/aldob/ENSG00000136872.sam"
 
 	genomeIndex := index.ReadGenomeIndexByPath(genomeIndexPath)
@@ -108,7 +103,6 @@ func testSpecificRead() {
 }
 
 func testTas2ReadsAll() {
-
 	genomeIndexPath := "/home/sam/Data/gtamap/tas2/tas2r4/index/ENSG00000127364.gtai"
 
 	readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.fastq.gz"
@@ -126,7 +120,6 @@ func testTas2ReadsAll() {
 }
 
 func testTas2ReadsAllOnNsun5() {
-
 	genomeIndexPath := "/home/sam/Data/gtamap/nsun5/ENSG00000130305.gtai"
 
 	readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.fastq.gz"
@@ -144,7 +137,6 @@ func testTas2ReadsAllOnNsun5() {
 }
 
 func testTas2ReadsAllOnActbRamBug() {
-
 	genomeIndexPath := "/home/sam/Data/gtamap/actb/ENSG00000075624.gtai"
 
 	readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.fastq.gz"
@@ -162,7 +154,6 @@ func testTas2ReadsAllOnActbRamBug() {
 }
 
 func testTas2r4DeletionReads() {
-
 	genomeIndexPath := "/home/sam/Data/gtamap/tas2/tas2r4/index/ENSG00000127364.gtai"
 
 	readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.with-del.fastq"
@@ -180,7 +171,6 @@ func testTas2r4DeletionReads() {
 }
 
 func testIndex() {
-
 	pattern := "CAAATAAATCTTAAAATTTTATAAATTACATGACTTTTCTCATT"
 
 	var p1 [10]byte
@@ -198,7 +188,6 @@ func testIndex() {
 }
 
 func testRegionmask() {
-
 	genomeIndexPath := "/home/sam/Data/gtamap/opn1lw-opn1mw/X_154138492_154274890.with-regionmask.gtai"
 
 	// bedFilePath := "/home/sam/Data/gtamap/regionmask/mask.bed"
@@ -220,7 +209,7 @@ func testRegionmask() {
 
 	numThreads := 1
 
-	config.IsOriginRNA = true
+	// config.IsOriginRNA = true
 	// config.IsOriginRNA = false
 
 	// // TODO: change from nil to actual values
@@ -235,18 +224,15 @@ func testRegionmask() {
 }
 
 func ViewRegionMask() {
-
 	index := index.ReadGenomeIndexByPath("/home/sam/Data/gtamap/opn1lw-opn1mw/X_154138492_154274890.regionmask.gtai")
 
 	for contig, mask := range index.RegionMask.ContigMasks {
 		fmt.Println("Contig:", contig)
 		mask.Print()
 	}
-
 }
 
 func Debug() {
-
 	// os.Args = []string{
 	// 	"gtamap",
 	// 	"map",
@@ -285,7 +271,6 @@ func Debug() {
 }
 
 func main() {
-
 	//f, _ := os.Create("cpu_profile.prof")
 	//err := pprof.StartCPUProfile(f)
 	//if err != nil {
@@ -298,31 +283,31 @@ func main() {
 	})
 	logrus.SetLevel(logrus.InfoLevel)
 
-	//m := deserializeGenomeIndex()
+	// m := deserializeGenomeIndex()
 
-	//genomeSeqPath := "./resources/ENSG00000173585.zeroed.fasta"
-	//genomeIndexPath := "./resources/ENSG00000173585.genome.gtai"
+	// genomeSeqPath := "./resources/ENSG00000173585.zeroed.fasta"
+	// genomeIndexPath := "./resources/ENSG00000173585.genome.gtai"
 
-	//genomeSeqPath := ""
-	//genomeIndexPath := "./tas2r39.gtai"
+	// genomeSeqPath := ""
+	// genomeIndexPath := "./tas2r39.gtai"
 
-	//outputPath := "./out/test.sam"
+	// outputPath := "./out/test.sam"
 
-	//readsFwPath := "./resources/reads/manual/reads_ccr9.1.fq"
-	//readsRwPath := "./resources/reads/manual/reads_ccr9.2.fq"
-	//readsFwPath := "/home/sam/Data/reads/sim_ccr9/10mio/fw.fastq"
-	//readsRvPath := "/home/sam/Data/reads/sim_ccr9/10mio/rw.fastq"
+	// readsFwPath := "./resources/reads/manual/reads_ccr9.1.fq"
+	// readsRwPath := "./resources/reads/manual/reads_ccr9.2.fq"
+	// readsFwPath := "/home/sam/Data/reads/sim_ccr9/10mio/fw.fastq"
+	// readsRvPath := "/home/sam/Data/reads/sim_ccr9/10mio/rw.fastq"
 
-	//readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.10k.fastq"
-	//readsRvPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_2.10k.fastq"
+	// readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.10k.fastq"
+	// readsRvPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_2.10k.fastq"
 
-	//readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.fastq.gz"
-	//readsRvPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_2.fastq.gz"
+	// readsFwPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_1.fastq.gz"
+	// readsRvPath := "/home/sam/Data/genomes/NG-25876_HGT1_TAS2R4ko_lib434869_7080_3_2.fastq.gz"
 
-	//readsFwPath := "/home/sam/Data/genomes/test.r1.fastq"
-	//readsRvPath := "/home/sam/Data/genomes/test.r2.fastq"
+	// readsFwPath := "/home/sam/Data/genomes/test.r1.fastq"
+	// readsRvPath := "/home/sam/Data/genomes/test.r2.fastq"
 
-	//buildAndSerializeIndexGenome(genomeSeqPath, genomeIndexPath)
+	// buildAndSerializeIndexGenome(genomeSeqPath, genomeIndexPath)
 
 	//genomeIndex := index.ReadGenomeIndexByPath(genomeIndexPath)
 	//reader := fastq.InitFromPaths(&readsFwPath, &readsRvPath)
@@ -332,18 +317,18 @@ func main() {
 	//
 	//mapper.MapAll(genomeIndex, reader, writer, &numThreads)
 
-	//extractGeneSequenceFromGtfAndFastaForIndex()
+	// extractGeneSequenceFromGtfAndFastaForIndex()
 
-	//testSpecificRead()
-	//testTas2r4DeletionReads()
-	//testTas2ReadsAll()
+	// testSpecificRead()
+	// testTas2r4DeletionReads()
+	// testTas2ReadsAll()
 	// testTas2ReadsAllOnNsun5()
-	//testTas2ReadsAllOnActbRamBug()
-	//testIndex()
+	// testTas2ReadsAllOnActbRamBug()
+	// testIndex()
 
 	// testRegionmask()
 	// ViewRegionMask()
 	Debug()
 
-	//analysis.CompareResults()
+	// analysis.CompareResults()
 }
