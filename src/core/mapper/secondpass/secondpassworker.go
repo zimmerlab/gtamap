@@ -1739,7 +1739,7 @@ func fixPointRNARemap(
 
 				// try left pad
 				appliedL := false
-				if adjustedAnchor.Start+l < adjustedReadAnchor.End {
+				if adjustedAnchor.Start+l < adjustedAnchor.End {
 					adjustedAnchor.Start += l
 					adjustedReadAnchor.Start += l
 					appliedL = true
@@ -1978,21 +1978,26 @@ func extractCandidates(
 			for _, lCandidate := range leftCandidates {
 			bothLoop:
 				for _, rCandidate := range rightCandidates {
-
+					mmCountsCopy := make(map[string]int, len(readMatchResult.MismatchCounts))
+					for k, v := range readMatchResult.MismatchCounts {
+						mmCountsCopy[k] = v
+					}
 					alternativeReadMatchResult := &mapperutils.ReadMatchResult{
-						SequenceIndex:       anchorRemap.SequenceIndex,
-						MatchedRead:         &regionvector.RegionVector{},
-						MatchedGenome:       &regionvector.RegionVector{},
-						MismatchesRead:      make([]int, 0),
-						IsFixPoint:          true,
-						MainAnchorMM:        len(anchorRemap.Mm),
-						MainAnchorLength:    anchorRemap.MainAnchorRead.Length(),
-						LeftFixpointLength:  anchorRemap.MainAnchorRead.Start,
-						RightFixpointLength: readLength - anchorRemap.MainAnchorRead.End,
-						TotalLeftOptions:    anchorRemap.TotalLeftPaths,
-						TotalRightOptions:   anchorRemap.TotalRightPaths,
-						ValidLeftOptions:    len(leftCandidates),
-						ValidRightOptions:   len(rightCandidates),
+						SequenceIndex:            anchorRemap.SequenceIndex,
+						MatchedRead:              &regionvector.RegionVector{},
+						MatchedGenome:            &regionvector.RegionVector{},
+						MismatchesRead:           make([]int, 0),
+						IsFixPoint:               true,
+						MainAnchorMM:             len(anchorRemap.Mm),
+						MainAnchorLength:         anchorRemap.MainAnchorRead.Length(),
+						LeftFixpointLength:       anchorRemap.MainAnchorRead.Start,
+						RightFixpointLength:      readLength - anchorRemap.MainAnchorRead.End,
+						TotalLeftOptions:         anchorRemap.TotalLeftPaths,
+						TotalRightOptions:        anchorRemap.TotalRightPaths,
+						ValidLeftOptions:         len(leftCandidates),
+						ValidRightOptions:        len(rightCandidates),
+						MismatchConstraintGlobal: readMatchResult.MismatchConstraintGlobal,
+						MismatchCounts:           mmCountsCopy,
 					}
 
 					mismatches := append(append(lCandidate.Mm, anchorRemap.Mm...), rCandidate.Mm...)
@@ -2039,20 +2044,26 @@ func extractCandidates(
 		} else if leftCandidates != nil {
 		onlyLeftLoop:
 			for _, lCandidate := range leftCandidates {
+				mmCountsCopy := make(map[string]int, len(readMatchResult.MismatchCounts))
+				for k, v := range readMatchResult.MismatchCounts {
+					mmCountsCopy[k] = v
+				}
 				alternativeReadMatchResult := &mapperutils.ReadMatchResult{
-					SequenceIndex:       anchorRemap.SequenceIndex,
-					MatchedRead:         &regionvector.RegionVector{},
-					MatchedGenome:       &regionvector.RegionVector{},
-					MismatchesRead:      make([]int, 0),
-					IsFixPoint:          true,
-					MainAnchorMM:        len(anchorRemap.Mm),
-					MainAnchorLength:    anchorRemap.MainAnchorRead.Length(),
-					LeftFixpointLength:  anchorRemap.MainAnchorRead.Start,
-					RightFixpointLength: readLength - anchorRemap.MainAnchorRead.End,
-					TotalLeftOptions:    anchorRemap.TotalLeftPaths,
-					TotalRightOptions:   anchorRemap.TotalRightPaths,
-					ValidLeftOptions:    len(leftCandidates),
-					ValidRightOptions:   len(rightCandidates),
+					SequenceIndex:            anchorRemap.SequenceIndex,
+					MatchedRead:              &regionvector.RegionVector{},
+					MatchedGenome:            &regionvector.RegionVector{},
+					MismatchesRead:           make([]int, 0),
+					IsFixPoint:               true,
+					MainAnchorMM:             len(anchorRemap.Mm),
+					MainAnchorLength:         anchorRemap.MainAnchorRead.Length(),
+					LeftFixpointLength:       anchorRemap.MainAnchorRead.Start,
+					RightFixpointLength:      readLength - anchorRemap.MainAnchorRead.End,
+					TotalLeftOptions:         anchorRemap.TotalLeftPaths,
+					TotalRightOptions:        anchorRemap.TotalRightPaths,
+					ValidLeftOptions:         len(leftCandidates),
+					ValidRightOptions:        len(rightCandidates),
+					MismatchConstraintGlobal: readMatchResult.MismatchConstraintGlobal,
+					MismatchCounts:           mmCountsCopy,
 				}
 
 				mismatches := append(lCandidate.Mm, anchorRemap.Mm...)
@@ -2091,20 +2102,26 @@ func extractCandidates(
 		} else if rightCandidates != nil {
 		onlyRightLoop:
 			for _, rCandidate := range rightCandidates {
+				mmCountsCopy := make(map[string]int, len(readMatchResult.MismatchCounts))
+				for k, v := range readMatchResult.MismatchCounts {
+					mmCountsCopy[k] = v
+				}
 				alternativeReadMatchResult := &mapperutils.ReadMatchResult{
-					SequenceIndex:       anchorRemap.SequenceIndex,
-					MatchedRead:         &regionvector.RegionVector{},
-					MatchedGenome:       &regionvector.RegionVector{},
-					MismatchesRead:      make([]int, 0),
-					IsFixPoint:          true,
-					MainAnchorMM:        len(anchorRemap.Mm),
-					MainAnchorLength:    anchorRemap.MainAnchorRead.Length(),
-					LeftFixpointLength:  anchorRemap.MainAnchorRead.Start,
-					RightFixpointLength: readLength - anchorRemap.MainAnchorRead.End,
-					TotalLeftOptions:    anchorRemap.TotalLeftPaths,
-					TotalRightOptions:   anchorRemap.TotalRightPaths,
-					ValidLeftOptions:    len(leftCandidates),
-					ValidRightOptions:   len(rightCandidates),
+					SequenceIndex:            anchorRemap.SequenceIndex,
+					MatchedRead:              &regionvector.RegionVector{},
+					MatchedGenome:            &regionvector.RegionVector{},
+					MismatchesRead:           make([]int, 0),
+					IsFixPoint:               true,
+					MainAnchorMM:             len(anchorRemap.Mm),
+					MainAnchorLength:         anchorRemap.MainAnchorRead.Length(),
+					LeftFixpointLength:       anchorRemap.MainAnchorRead.Start,
+					RightFixpointLength:      readLength - anchorRemap.MainAnchorRead.End,
+					TotalLeftOptions:         anchorRemap.TotalLeftPaths,
+					TotalRightOptions:        anchorRemap.TotalRightPaths,
+					ValidLeftOptions:         len(leftCandidates),
+					ValidRightOptions:        len(rightCandidates),
+					MismatchConstraintGlobal: readMatchResult.MismatchConstraintGlobal,
+					MismatchCounts:           mmCountsCopy,
 				}
 
 				mismatches := append(anchorRemap.Mm, rCandidate.Mm...)

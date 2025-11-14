@@ -675,27 +675,27 @@ func (t *TranscriptomeGraph) FindPathsRight(startPos int, length int) [][]Region
 	// seen := make(map[string]bool)
 	seen := make(map[uint64]bool)
 
-	foundStartNode := false
+	//foundStartNode := false
 	for _, startNode := range t.ExonNodes {
 		if startNode.Start <= startPos && startNode.Stop >= startPos {
-			foundStartNode = true
+			//foundStartNode = true
 			t.dfsRight(startNode, []Region{}, length, &results, startPos, seen)
 		}
 	}
 
-	if !foundStartNode {
-		// this means the main anchor is in a region which does not overlap with any exon region in graph
-		// 1. Add manual extension
-		defaultExtensionRight := make([]Region, 0)
-		defaultExtensionRight = append(defaultExtensionRight, Region{Start: startPos, End: startPos + length})
-		results = append(results, defaultExtensionRight)
-		// 2. Get all neighboring exons to the right by checking which introns are overlapping
-		for _, intronNode := range t.IntronNodes {
-			if intronNode.Start <= startPos && intronNode.Stop >= startPos {
-				t.dfsRight(intronNode, []Region{}, length, &results, intronNode.Stop, seen)
-			}
+	//if !foundStartNode {
+	// this means the main anchor is in a region which does not overlap with any exon region in graph
+	// 1. Add manual extension
+	defaultExtensionRight := make([]Region, 0)
+	defaultExtensionRight = append(defaultExtensionRight, Region{Start: startPos, End: startPos + length})
+	results = append(results, defaultExtensionRight)
+	// 2. Get all neighboring exons to the right by checking which introns are overlapping
+	for _, intronNode := range t.IntronNodes {
+		if intronNode.Start <= startPos && intronNode.Stop >= startPos {
+			t.dfsRight(intronNode, []Region{}, length, &results, intronNode.Stop, seen)
 		}
 	}
+	//}
 
 	return results
 }
@@ -704,27 +704,27 @@ func (t *TranscriptomeGraph) FindPathsLeft(startPos int, length int) [][]Region 
 	var results [][]Region
 	seen := make(map[uint64]bool)
 
-	foundStartNode := false
+	//foundStartNode := false
 	for _, startNode := range t.ExonNodes {
 		if startNode.Start <= startPos && startNode.Stop >= startPos {
-			foundStartNode = true
+			//foundStartNode = true
 			t.dfsLeft(startNode, []Region{}, length, &results, startPos, seen)
 		}
 	}
 
-	if !foundStartNode {
-		// this means the main anchor is in a region which does not overlap with any exon region in graph
-		// 1. Add manual extension
-		defaultExtensionLeft := make([]Region, 0)
-		defaultExtensionLeft = append(defaultExtensionLeft, Region{Start: startPos - length, End: startPos})
-		results = append(results, defaultExtensionLeft)
-		// 2. Get all neighboring exons to the right by checking which introns are overlapping
-		for _, intronNode := range t.IntronNodes {
-			if intronNode.Start <= startPos && intronNode.Stop >= startPos {
-				t.dfsLeft(intronNode, []Region{}, length, &results, intronNode.Start, seen)
-			}
+	//if !foundStartNode {
+	//	// this means the main anchor is in a region which does not overlap with any exon region in graph
+	//	// 1. Add manual extension
+	defaultExtensionLeft := make([]Region, 0)
+	defaultExtensionLeft = append(defaultExtensionLeft, Region{Start: startPos - length, End: startPos})
+	results = append(results, defaultExtensionLeft)
+	// 2. Get all neighboring exons to the right by checking which introns are overlapping
+	for _, intronNode := range t.IntronNodes {
+		if intronNode.Start <= startPos && intronNode.Stop >= startPos {
+			t.dfsLeft(intronNode, []Region{}, length, &results, intronNode.Start, seen)
 		}
 	}
+	//}
 	return results
 }
 
