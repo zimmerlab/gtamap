@@ -1,0 +1,2 @@
+timestamp	readsProcessed	readsAfterFiltering	readsMapped	confidentMappings	mappingLocations	percentConfidentOfMapped	percentFiltered	percentMappedTotal	percentMappedFilter	meanLocationsPerRead	allocKB	heapAllocKB	stackAllocKB	totalFileSize	bytesProcessed	percentFileProcessed
+2025-11-14 16:30:15	37900	18152	18066	14407	100428	79.75	47.89	47.67	99.53	5.56	53008	53008	832	23908358	23908358	100.00

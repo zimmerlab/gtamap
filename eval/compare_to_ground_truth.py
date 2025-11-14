@@ -12,7 +12,7 @@ from collections import defaultdict
 import sys
 
 
-def convert_to_global(mapper1_data, offset):
+def convert_to_global_old(mapper1_data, offset):
     c_dict = dict()
     for category, read_dict in mapper1_data.items():
         if category in ["fw_mm", "rv_mm"]:
@@ -28,6 +28,26 @@ def convert_to_global(mapper1_data, offset):
 
         c_dict[category] = converted_regions
 
+    return c_dict
+
+
+def convert_to_global(mapper1_data, offset):
+    c_dict = dict()
+    for category, read_dict in mapper1_data.items():
+        if category in ["fw_mm", "rv_mm"]:
+            c_dict[category] = read_dict
+            continue
+        converted_regions = defaultdict(list)
+        for read_id, regions in read_dict.items():
+            new_region_list = []
+            # Iterate through all alignments for this read
+            for region in regions:
+                converted_region = []
+                for start, stop in region:
+                    converted_region.append((start + offset - 1, stop + offset - 1))
+                new_region_list.append(converted_region)
+            converted_regions[read_id] = new_region_list
+        c_dict[category] = converted_regions
     return c_dict
 
 
@@ -49,7 +69,8 @@ def compare_to_ground_truth(mapper_data, ground_truth_data, verbose):
     gt_rv_reads = set(ground_truth_data["rv"].keys())
 
     # All mapped reads and ground truth reads
-    mapped_reads = mapper_fw_reads.union(mapper_rv_reads)
+    mapped_reads = mapper_fw_reads.intersection(mapper_rv_reads)  # more strict
+    # mapped_reads = mapper_fw_reads.union(mapper_rv_reads) # also allows singletons
     gt_reads = gt_fw_reads.union(gt_rv_reads)
 
     true_positives = mapped_reads.intersection(gt_reads)
@@ -128,18 +149,28 @@ def compare_to_ground_truth(mapper_data, ground_truth_data, verbose):
         true_intervals_dict=ground_truth_data["fw"],
     )
 
+    # entries_per_read_fw = [
+    #     len(alis[0])
+    #     for read_id, alis in mapper_data["fw"].items()
+    #     if read_id in ground_truth_data["fw"].keys()
+    # ]
     entries_per_read_fw = [
-        len(alis[0])
+        len(alis)  # number of times this read appears in the SAM
         for read_id, alis in mapper_data["fw"].items()
-        if read_id in ground_truth_data["fw"].keys()
+        if read_id in ground_truth_data["fw"]
     ]
     avg_entries_per_read_fw = (
         sum(entries_per_read_fw) / len(entries_per_read_fw)
         if len(entries_per_read_fw) != 0
         else 0
     )
+    # entries_per_read_rv = [
+    #     len(alis[0])
+    #     for read_id, alis in mapper_data["rv"].items()
+    #     if read_id in ground_truth_data["rv"].keys()
+    # ]
     entries_per_read_rv = [
-        len(alis[0])
+        len(alis)
         for read_id, alis in mapper_data["rv"].items()
         if read_id in ground_truth_data["rv"].keys()
     ]
@@ -150,7 +181,7 @@ def compare_to_ground_truth(mapper_data, ground_truth_data, verbose):
     )
 
     entries_per_read_fw_fp = [
-        len(alis[0])
+        len(alis)
         for read_id, alis in mapper_data["fw"].items()
         if read_id not in ground_truth_data["fw"].keys()
     ]
@@ -161,7 +192,7 @@ def compare_to_ground_truth(mapper_data, ground_truth_data, verbose):
     )
 
     entries_per_read_rv_fp = [
-        len(alis[0])
+        len(alis)
         for read_id, alis in mapper_data["rv"].items()
         if read_id not in ground_truth_data["rv"].keys()
     ]
@@ -170,8 +201,6 @@ def compare_to_ground_truth(mapper_data, ground_truth_data, verbose):
         if len(entries_per_read_rv_fp) != 0
         else 0
     )
-
-    print()
 
     # fw_qual = calculate_avg_quality(mapper_data["fw_q"])
     # rw_qual = calculate_avg_quality(mapper_data["rv_q"])
@@ -913,7 +942,13 @@ if __name__ == "__main__":
 
     mapper1_data = parse_sam_file(args.sam1)
     print("parsed sam")
-    if args.mapper == "hisat2" or args.mapper == "star" or args.mapper == "minimap2":
+    if (
+        args.mapper == "hisat2"
+        or args.mapper == "star"
+        or args.mapper == "minimap2"
+        or args.mapper == "bwa"
+        or args.mapper == "bowtie2"
+    ):
         mapper1_data = convert_to_global(mapper1_data, gene_start)
         print("converted sam")
 
