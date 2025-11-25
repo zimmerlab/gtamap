@@ -1,0 +1,2 @@
+mappingTaskProducerTime	mapperWorkerTime	confidentWorkerTime	secondPassWorkerTime	outputWorkerTime	mappingTaskProducerStart	mappingTaskProducerEnd	mapperWorkerStart	mapperWorkerEnd	confidentWorkerStart	confidentWorkerEnd	secondPassWorkerStart	secondPassWorkerEnd	outputWorkerStart	outputWorkerEnd
+10138733904	10149435083	117953884	10690	15282228465	12:05:05	12:05:15	12:05:05	12:05:15	12:05:15	12:05:15	12:05:15	12:05:15	12:05:15	12:05:31
