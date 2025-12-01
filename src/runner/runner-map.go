@@ -14,7 +14,6 @@ import (
 )
 
 func GetCommandMap() *cobra.Command {
-
 	var indexFilePath string
 	var fastqR1FilePath string
 	var fastqR2FilePath string
@@ -32,7 +31,6 @@ func GetCommandMap() *cobra.Command {
 		Use:   "map",
 		Short: "Run mapping",
 		Run: func(cmd *cobra.Command, args []string) {
-
 			SetConfigValue("mapping.index_file_path", indexFilePath)
 			SetConfigValue("mapping.fastq_r1_file_path", fastqR1FilePath)
 			SetConfigValue("mapping.fastq_r2_file_path", fastqR2FilePath)
@@ -143,7 +141,6 @@ func GetCommandMap() *cobra.Command {
 }
 
 func ExecMap() {
-
 	indexFile, errIndexFile := os.Open(config.Mapper.Mapping.IndexFilePath)
 	if errIndexFile != nil {
 		logrus.Fatalf("Could not open index file: %v", errIndexFile)
@@ -173,8 +170,8 @@ func ExecMap() {
 	// }
 
 	fastqReader, errFastqReader := fastq.InitFromPaths(
-		&config.Mapper.Mapping.FastqR1FilePath,
-		&config.Mapper.Mapping.FastqR2FilePath,
+		config.Mapper.Mapping.FastqR1FilePath,
+		config.Mapper.Mapping.FastqR2FilePath,
 	)
 	if errFastqReader != nil {
 		logrus.Fatalf("Could not initialize fastq reader: %v", errFastqReader)
