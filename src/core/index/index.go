@@ -290,7 +290,6 @@ func (i *GenomeIndex) NumSequences() int {
 }
 
 func (i *GenomeIndex) IsResultValid(result *mapperutils.ReadMatchResult) bool {
-
 	sequenceInfo := i.GetSequenceInfo(result.SequenceIndex)
 
 	if _, found := i.RegionMask.ContigMasks[sequenceInfo.Contig]; !found {
@@ -382,7 +381,6 @@ func (i *GenomeIndex) IsResultValid(result *mapperutils.ReadMatchResult) bool {
 func (i *GenomeIndex) CleanResults(
 	results []*mapperutils.ReadMatchResult,
 ) []*mapperutils.ReadMatchResult {
-
 	cleaned := make([]*mapperutils.ReadMatchResult, 0)
 
 	for _, result := range results {
@@ -398,7 +396,6 @@ func (i *GenomeIndex) CleanResults(
 }
 
 func BuildGenomeIndex(fastaEntries []*dataloader.FastaEntry) *GenomeIndex {
-
 	timerStart := time.Now()
 
 	index := GenomeIndex{
@@ -536,7 +533,6 @@ func BuildAndSerializeGenomeIndex(
 	outputFile *os.File,
 	regionmaskFile *os.File,
 ) {
-
 	fastaEntries, err := dataloader.ReadFasta(fastaFile)
 	if err != nil {
 		logrus.Fatal("Error extracting sequence from fasta file", err)
@@ -556,17 +552,9 @@ func BuildAndSerializeGenomeIndex(
 	genomeIndex := BuildGenomeIndex(fastaEntries)
 
 	// add region mask to index if provided
-	if regionmaskFile != nil {
+	AddRegionmaskToIndex(regionmaskFile, genomeIndex)
 
-		AddRegionmaskToIndex(regionmaskFile, genomeIndex)
-
-		logrus.WithFields(logrus.Fields{
-			"region mask": regionmaskFile.Name(),
-		}).Info("Using region mask bed file and priority file")
-
-	} else {
-		logrus.Info("No region mask used")
-	}
+	fmt.Println(genomeIndex.RegionMask)
 
 	WriteGenomeIndex(genomeIndex, outputFile)
 }
@@ -575,6 +563,13 @@ func AddRegionmaskToIndex(
 	regionmaskFile *os.File,
 	genomeIndex *GenomeIndex,
 ) {
+	if regionmaskFile != nil {
+		logrus.WithFields(logrus.Fields{
+			"region mask": regionmaskFile.Name(),
+		}).Info("Using region mask bed file and priority file")
+	} else {
+		logrus.Info("No region mask used")
+	}
 
 	mask, errMask := NewRegionMask(
 		regionmaskFile,
@@ -645,7 +640,6 @@ type ContigRepeatmask struct {
 }
 
 func BuildContigRepeatmaskTrees(repeatmaskFile *os.File, targetTrees map[string]*datastructure.INTree) map[string]*ContigRepeatmask {
-
 	scanner, err := dataloader.OpenFileScanner(repeatmaskFile)
 	if err != nil {
 		logrus.Fatal(err)

@@ -32,7 +32,6 @@ func NewRegionMaskFromPaths(
 	// contigToTargetRegions map[string]*regionvector.RegionVector,
 	targets []*gtf.GeneBasic,
 ) (*RegionMask, error) {
-
 	// prioritiesFile, errP := os.Open(prioritiesPath)
 	// if errP != nil {
 	// 	return nil, errP
@@ -59,8 +58,16 @@ func NewRegionMask(
 	// contigToTargetRegions map[string]*regionvector.RegionVector,
 	targets []*gtf.GeneBasic,
 ) (*RegionMask, error) {
-
 	mask := NewEmptyRegionMask(len(targets) * 2)
+
+	if regionmaskFile == nil {
+
+		for i := range mask.TargetMasks {
+			mask.TargetMasks[i] = interval.NewList()
+		}
+
+		return mask, nil
+	}
 
 	scanner := bufio.NewScanner(regionmaskFile)
 

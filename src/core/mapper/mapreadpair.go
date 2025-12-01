@@ -22,9 +22,13 @@ func MapReadPair(
 	progressChan chan<- Event,
 	progressStats *ProgressStats,
 ) {
-
 	keepFw := GlobalFilter(readPair.ReadR1.Sequence, genomeIndex)
-	keepRw := GlobalFilter(readPair.ReadR2.Sequence, genomeIndex)
+
+	keepRw := true
+
+	if readPair.ReadR2 != nil {
+		keepRw = GlobalFilter(readPair.ReadR2.Sequence, genomeIndex)
+	}
 
 	// keepFw := BinnedFilter(readPair.ReadR1.Sequence, genomeIndex)
 	// keepRw := BinnedFilter(readPair.ReadR2.Sequence, genomeIndex)
@@ -55,24 +59,29 @@ func MapReadPair(
 		return
 	}
 
-	resultRv, isMappableRv := MapRead(readPair.ReadR2, genomeIndex, false)
+	resultRv := []*mapperutils.ReadMatchResult{}
+	isMappableRv := false
 
-	// TODO: REMOVE DEBUG
-	// if isMappableFw {
-	// 	debugout.GenerateAlignmentView(genomeIndex, resultFw[0], readPair.ReadR1)
-	// }
-	// if isMappableRv {
-	// 	debugout.GenerateAlignmentView(genomeIndex, resultRv[0], readPair.ReadR2)
-	// }
+	if readPair.ReadR2 == nil {
+		resultRv, isMappableRv = MapRead(readPair.ReadR2, genomeIndex, false)
 
-	if !isMappableRv || len(resultRv) == 0 {
-		// logrus.WithFields(logrus.Fields{
-		// 	"isMappableFw":  isMappableFw,
-		// 	"isMappableRv":  isMappableRv,
-		// 	"num resultsFw": len(resultFw),
-		// 	"num resultsRv": len(resultRv),
-		// }).Debug("readpair not mappable")
-		return
+		// TODO: REMOVE DEBUG
+		// if isMappableFw {
+		// 	debugout.GenerateAlignmentView(genomeIndex, resultFw[0], readPair.ReadR1)
+		// }
+		// if isMappableRv {
+		// 	debugout.GenerateAlignmentView(genomeIndex, resultRv[0], readPair.ReadR2)
+		// }
+
+		if !isMappableRv || len(resultRv) == 0 {
+			// logrus.WithFields(logrus.Fields{
+			// 	"isMappableFw":  isMappableFw,
+			// 	"isMappableRv":  isMappableRv,
+			// 	"num resultsFw": len(resultFw),
+			// 	"num resultsRv": len(resultRv),
+			// }).Debug("readpair not mappable")
+			return
+		}
 	}
 
 	progressStats.ReadsMapped++
