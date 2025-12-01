@@ -27,7 +27,6 @@ func SetConfigValue(key string, value any) {
 }
 
 func Execute() {
-
 	logrus.SetFormatter(
 		&logrus.TextFormatter{
 			FullTimestamp: true,
