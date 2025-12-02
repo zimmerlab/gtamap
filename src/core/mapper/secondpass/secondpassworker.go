@@ -69,11 +69,6 @@ func remapReadPair(
 	annotationMap map[int]*mapperutils.TargetAnnotation,
 	genomeIndex *index.GenomeIndex,
 ) {
-
-	if readPairMapping.ReadPair.ReadR1.Header == "A00925:309:HKNKCDSX3:1:1158:27769:24032" {
-		fmt.Println("here")
-	}
-
 	fwRemaps := make([]*mapperutils.ReadMatchResult, 0)
 
 	for _, mapping := range readPairMapping.Fw {
@@ -139,7 +134,7 @@ func remapReadPair(
 			genomeIndex,
 		)
 		readPairMapping.Rv = validMaps
-	} else {
+	} else if readPairMapping.ReadPair.ReadR2 != nil {
 		validMaps := filterValidMaps(
 			readPairMapping.Rv,
 			len(*readPairMapping.ReadPair.ReadR2.Sequence),
@@ -152,7 +147,6 @@ func remapReadPair(
 func getUniqRemaps(
 	r []*mapperutils.ReadMatchResult,
 ) []*mapperutils.ReadMatchResult {
-
 	uniq := make([]*mapperutils.ReadMatchResult, 0)
 	seen := make(map[string]bool)
 
@@ -174,7 +168,6 @@ func filterValidMaps(
 	readLength int,
 	genomeIndex *index.GenomeIndex,
 ) []*mapperutils.ReadMatchResult {
-
 	valid := make([]*mapperutils.ReadMatchResult, 0)
 
 	for _, mapping := range mappings {
@@ -235,7 +228,6 @@ func remapRead(
 	read *fastq.Read,
 	genomeIndex *index.GenomeIndex,
 ) []*mapperutils.ReadMatchResult {
-
 	// NOTE: this is CRUCIAL and NEEDS to be called before ANY REMAP!!!
 	// TODO: please describe why
 	readMapping.NormalizeRegions()
@@ -390,7 +382,6 @@ func rightRemapAlignmentBlockFromPos(
 	int,
 	[]int,
 ) {
-
 	remap := make([]*regionvector.Region, 0)
 
 	// get next intron
@@ -1012,7 +1003,6 @@ func correctSymmetricIntronErrorsEnhanced(
 	readMatchResult *mapperutils.ReadMatchResult,
 	targetSeqIntronSet *regionvector.RegionSet,
 ) []*mapperutils.ReadMatchResult {
-
 	// collect all sym paddings into this map
 	corrections := make(map[int][]int)
 
@@ -1111,7 +1101,6 @@ func correctOverhangs(
 	genomeIndex *index.GenomeIndex,
 	intronTree *datastructure.INTree,
 ) []*mapperutils.ReadMatchResult {
-
 	remaps := make([]*mapperutils.ReadMatchResult, 0)
 
 	regionMask := genomeIndex.RegionMask.TargetMasks[readMatchResult.SequenceIndex]
@@ -1217,7 +1206,6 @@ func correctOverhangs(
 		finalRemaps := make([]*mapperutils.ReadMatchResult, 0)
 
 		if rightRemaps != nil && leftRemaps != nil {
-
 			for _, lSection := range leftRemaps {
 
 				lExtStopRead := lSection.MatchedRead[0].End
@@ -1271,9 +1259,7 @@ func correctOverhangs(
 					finalRemaps = append(finalRemaps, corrected)
 				}
 			}
-
 		} else if rightRemaps != nil {
-
 		onlyRightLoop:
 			for _, rSection := range rightRemaps {
 
@@ -1313,9 +1299,7 @@ func correctOverhangs(
 
 				finalRemaps = append(finalRemaps, corrected)
 			}
-
 		} else if leftRemaps != nil {
-
 		onlyLeftLoop:
 			for _, lSection := range leftRemaps {
 
@@ -1707,7 +1691,6 @@ func fixPointRNARemap(
 	genomeIndex *index.GenomeIndex,
 	intronTree *datastructure.INTree,
 ) []*mapperutils.ReadMatchResult {
-
 	// init list of remaps
 	remaps := make([]*Remap, 0)
 
@@ -1951,7 +1934,6 @@ func extractCandidates(
 	anchorRemaps []*Remap,
 	readLength int,
 ) []*mapperutils.ReadMatchResult {
-
 	regionMask := genomeIndex.RegionMask.TargetMasks[readMatchResult.SequenceIndex]
 
 	// for each anchor, there can be several combinations. This means 1 Anchor -> N readMatchResults
@@ -1976,10 +1958,8 @@ func extractCandidates(
 		}
 
 		if rightCandidates != nil && leftCandidates != nil {
-
 			// create all pairwise combos
 			for _, lCandidate := range leftCandidates {
-
 			bothLoop:
 				for _, rCandidate := range rightCandidates {
 
@@ -2041,7 +2021,6 @@ func extractCandidates(
 				}
 			}
 		} else if leftCandidates != nil {
-
 		onlyLeftLoop:
 			for _, lCandidate := range leftCandidates {
 				alternativeReadMatchResult := &mapperutils.ReadMatchResult{
@@ -2094,7 +2073,6 @@ func extractCandidates(
 				finalResults = append(finalResults, alternativeReadMatchResult)
 			}
 		} else if rightCandidates != nil {
-
 		onlyRightLoop:
 			for _, rCandidate := range rightCandidates {
 				alternativeReadMatchResult := &mapperutils.ReadMatchResult{
@@ -2179,7 +2157,6 @@ func scoreRightOptions(
 	mainAnchor regionvector.Region,
 	maxMismatches int,
 ) []*RemapSection {
-
 	remapSectionsRight := make([]*RemapSection, 0)
 	lenReadSeq := len(*readSeq)
 
@@ -2232,7 +2209,6 @@ func scoreLeftOptions(
 	mainAnchor regionvector.Region,
 	maxMismatches int,
 ) []*RemapSection {
-
 	remapSectionsLeft := make([]*RemapSection, 0)
 	lenReadSeq := len(*readSeq)
 
@@ -2346,7 +2322,6 @@ func fillGaps(
 	genomeIndex *index.GenomeIndex,
 	read *fastq.Read,
 ) bool {
-
 	// used to keep track of the read position for the next gap
 	readGapPos := 0
 	// returns the index of the first region after which a gap occurs (-1 if no gap)
@@ -2363,7 +2338,6 @@ func fillGaps(
 		gapGenomeEnd := gapGenome.End
 
 		if gapRead.Start != gapRead.End {
-
 			// if we end up in here, it means our map looks like this
 			// [0,97], [113, 150] -> mid block is missing
 

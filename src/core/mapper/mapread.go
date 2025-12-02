@@ -1,6 +1,8 @@
 package mapper
 
 import (
+	"fmt"
+
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/core/index"
@@ -18,6 +20,14 @@ func MapRead(
 	[]*mapperutils.ReadMatchResult,
 	bool,
 ) {
+	if read.Sequence == nil {
+		fmt.Println("ERROR: read sequence is nil")
+		fmt.Println(read.Header)
+	}
+
+	if len(*read.Sequence) < 10 {
+		return make([]*mapperutils.ReadMatchResult, 0), false
+	}
 
 	// logrus.WithFields(logrus.Fields{
 	// 	"read":   read.Header,
@@ -49,10 +59,9 @@ func MapRead(
 
 			// add new sequence to global matches
 			if globalMatches.MatchesPerSequence[match.SequenceIndex] == nil {
-				globalMatches.MatchesPerSequence[match.SequenceIndex] =
-					&mapperutils.SequenceMatchResult{
-						MatchesPerDiagonal: make(map[int][]*mapperutils.Match),
-					}
+				globalMatches.MatchesPerSequence[match.SequenceIndex] = &mapperutils.SequenceMatchResult{
+					MatchesPerDiagonal: make(map[int][]*mapperutils.Match),
+				}
 			}
 
 			// add new diagonal to sequence match
@@ -214,7 +223,6 @@ func applyPossibleDiagonals(
 		// INFO: DNA RNA MODE
 		// this result should already have a certain length before we append it to results
 		if !config.Mapper.Mapping.IsReadOriginRna {
-
 			// for DNA reads we expect the raw result to already be of a certain length
 			if result.MatchedGenome.Length()/len(*read.Sequence) >
 				config.Mapper.Mapping.DnaMode.MinLengthInitialDiagonal {
@@ -223,7 +231,6 @@ func applyPossibleDiagonals(
 
 				*results = append(*results, result)
 			}
-
 		} else {
 			*results = append(*results, result)
 		}
@@ -368,7 +375,6 @@ func applyDiagonal(
 	diagonal int,
 	result *mapperutils.ReadMatchResult,
 ) bool {
-
 	diagonalRead := regionvector.NewRegionVector()
 	diagonalGenome := regionvector.NewRegionVector()
 
@@ -694,7 +700,6 @@ func extendDiagonals(
 	genomeIndex *index.GenomeIndex,
 	result *mapperutils.ReadMatchResult,
 ) {
-
 	if result.MatchedRead.Length() == len(*read.Sequence) {
 		// logrus.Debug("read fully matched")
 	} else {
@@ -1061,7 +1066,6 @@ func mapReadToSequence(
 	greedy bool,
 	currDepth *int,
 ) []*mapperutils.ReadMatchResult {
-
 	// list of read match results
 	results := make([]*mapperutils.ReadMatchResult, 0)
 

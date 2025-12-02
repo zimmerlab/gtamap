@@ -1,6 +1,7 @@
 package thirdpass
 
 import (
+	"fmt"
 	"math"
 	"os"
 	"strconv"
@@ -48,7 +49,6 @@ func ThirdPassWorker(
 		var builder strings.Builder
 
 		if config.Mapper.Mapping.Output.IncludeAllPairings {
-
 			for i := 0; i < len(task.TargetInfo.Fw); i++ {
 
 				if task.TargetInfo.Fw[i].IncompleteMap {
@@ -72,7 +72,6 @@ func ThirdPassWorker(
 						task.TargetInfo.Fw[i],
 						task.TargetInfo.Rv[j],
 					)
-
 					if err != nil {
 						logrus.Error("Error converting read pair result to SAM string: ", err)
 						continue
@@ -127,52 +126,54 @@ func ThirdPassWorker(
 			// RV
 			numRecordsR2 := 0
 
-			for j := 0; j < len(task.TargetInfo.Rv); j++ {
+			if task.TargetInfo.ReadPair.ReadR2 != nil {
+				for j := 0; j < len(task.TargetInfo.Rv); j++ {
 
-				if task.TargetInfo.Rv[j].IncompleteMap {
-					continue
-				}
+					if task.TargetInfo.Rv[j].IncompleteMap {
+						continue
+					}
 
-				total += len(*task.TargetInfo.ReadPair.ReadR2.Sequence)
-				mmTotal += len(task.TargetInfo.Rv[j].MismatchesRead)
+					total += len(*task.TargetInfo.ReadPair.ReadR2.Sequence)
+					mmTotal += len(task.TargetInfo.Rv[j].MismatchesRead)
 
-				s, err := readPairResultToSamString(
-					index,
-					task.TargetInfo.ReadPair,
-					nil,
-					task.TargetInfo.Rv[j],
-				)
-
-				task.TargetInfo.Rv[j].WriteTSV(
-					f,
-					index.GetSequenceInfo(
-						task.TargetInfo.Rv[j].SequenceIndex,
-					).GeneId,
-					1,
-					j,
-					task.TargetInfo.ReadPair.ReadR2.Header,
-				)
-
-				if err != nil {
-					logrus.Error("Error converting read pair result to SAM string: ", err)
-					continue
-				}
-
-				builder.WriteString(s)
-
-				numRecordsR2++
-			}
-
-			if (numRecordsR1 == 0 && numRecordsR2 != 0) ||
-				(numRecordsR1 != 0 && numRecordsR2 == 0) {
-				// one mate is unmapped
-				// write read mate as unmapped to sam
-				builder.WriteString(
-					unmappedReadMateToSamString(
+					s, err := readPairResultToSamString(
+						index,
 						task.TargetInfo.ReadPair,
-						numRecordsR1 == 0,
-					),
-				)
+						nil,
+						task.TargetInfo.Rv[j],
+					)
+
+					task.TargetInfo.Rv[j].WriteTSV(
+						f,
+						index.GetSequenceInfo(
+							task.TargetInfo.Rv[j].SequenceIndex,
+						).GeneId,
+						1,
+						j,
+						task.TargetInfo.ReadPair.ReadR2.Header,
+					)
+
+					if err != nil {
+						logrus.Error("Error converting read pair result to SAM string: ", err)
+						continue
+					}
+
+					builder.WriteString(s)
+
+					numRecordsR2++
+				}
+
+				if (numRecordsR1 == 0 && numRecordsR2 != 0) ||
+					(numRecordsR1 != 0 && numRecordsR2 == 0) {
+					// one mate is unmapped
+					// write read mate as unmapped to sam
+					builder.WriteString(
+						unmappedReadMateToSamString(
+							task.TargetInfo.ReadPair,
+							numRecordsR1 == 0,
+						),
+					)
+				}
 			}
 		}
 
@@ -187,7 +188,10 @@ func ThirdPassWorker(
 	}).Info("Stats")
 }
 
-func unmappedReadMateToSamString(readPair *fastq.ReadPair, isR1 bool) string {
+func unmappedReadMateToSamString(
+	readPair *fastq.ReadPair,
+	isR1 bool,
+) string {
 	flag := sam.Flag{}
 
 	flag.SetUnmapped()
@@ -248,6 +252,139 @@ func unmappedReadMateToSamString(readPair *fastq.ReadPair, isR1 bool) string {
 	return builder.String()
 }
 
+func readSingleResultToSamString(
+	genomeIndex *index.GenomeIndex,
+	read *fastq.Read,
+	resFw *mapperutils.ReadMatchResult,
+) (
+	string,
+	error,
+) {
+	flag := sam.Flag{}
+
+	if resFw == nil {
+		// TODO: handle parameter for writing unmapped results to output
+		return "", fmt.Errorf("No mapping result provided for single read: %s", read.Header)
+	}
+
+	if !genomeIndex.IsSequenceForward(resFw.SequenceIndex) {
+		flag.SetReverseStrand()
+	}
+
+	geneStartRelativeToContig := int(genomeIndex.GetSequenceInfo(resFw.SequenceIndex).StartGenomic)
+	geneEndRelativeToContig := int(genomeIndex.GetSequenceInfo(resFw.SequenceIndex).EndGenomic)
+
+	headerFw := strings.Split(read.Header, " ")[0]
+
+	// FLAG
+	flagStr := strconv.Itoa(flag.Value)
+
+	// RNAME
+	// the name of the reference sequence (contig) to which the read is aligned
+	// it is supposed that both pairs must map to the same contig
+	rname := genomeIndex.GetSequenceInfo(resFw.SequenceIndex).Contig
+
+	// POS
+	// the offset is the start of the first region in the matched genome which corresponds to the first
+	// mapped position of the read
+	startGenomeFw := 0
+	firstRegionGenome, _ := resFw.MatchedGenome.GetFirstRegion()
+	offsetFw := firstRegionGenome.Start
+	// if the read is mapped to the reverse strand, we need to calculate the offset because the target sequence
+	// was reverse complemented. therefore the start position in 5'-3' direction of the original sequence is the
+	// end position of the reverse complemented sequence
+	if flag.IsReverseStrand() {
+		geneLength := geneEndRelativeToContig - geneStartRelativeToContig
+		lastRegionGenome, _ := resFw.MatchedGenome.GetLastRegion()
+		offsetFw = geneLength - lastRegionGenome.End
+	}
+	// +1 because the sam format is 1-based
+	startGenomeFw = geneStartRelativeToContig + offsetFw + 1
+
+	// MAPQ
+	// https://samtools.github.io/hts-specs/SAMv1.pdf
+	// No alignments should be assigned mapping quality 255
+	// TODO: implement mapping quality
+	mapqFw := 254
+
+	// CIGAR
+	// https://samtools.github.io/hts-specs/SAMv1.pdf
+	// Adjacent CIGAR operations should be different
+
+	cigar, errCigar := resFw.GetCigar()
+	if errCigar != nil {
+		logrus.WithFields(logrus.Fields{
+			"read":              read.Header,
+			"length of mapping": resFw.MatchedGenome.Length(),
+			"expected length":   len(*read.Sequence),
+		}).Error("Error getting CIGAR string of FW read: ", errCigar)
+
+		// TODO: handle error
+		// return "", false
+		cigar = "*"
+	}
+
+	// SEQ
+	seqFw := string(*read.Sequence)
+	if flag.IsReverseStrand() {
+		revCompSeq, revCompSeqErr := utils.ReverseComplementDnaBytes(*read.Sequence)
+		if revCompSeqErr != nil {
+			logrus.WithFields(logrus.Fields{
+				"read": read.Header,
+			}).Error("Error reversing complementing sequence", revCompSeqErr)
+			return "", revCompSeqErr
+		}
+		seqFw = string(revCompSeq)
+	}
+
+	// QUAL
+	qual := string(*read.Quality)
+	if flag.IsReverseStrand() {
+		qual = string(utils.ReverseBytes(*read.Quality))
+	}
+
+	// ATTRIBUTES
+
+	var builder strings.Builder
+
+	// R1 READ
+	// QNAME
+	builder.WriteString(headerFw)
+	builder.WriteString("\t")
+	// FLAG
+	builder.WriteString(flagStr)
+	builder.WriteString("\t")
+	// RNAME
+	builder.WriteString(rname)
+	builder.WriteString("\t")
+	// POS
+	builder.WriteString(strconv.Itoa(startGenomeFw))
+	builder.WriteString("\t")
+	// MAPQ
+	builder.WriteString(strconv.Itoa(mapqFw))
+	builder.WriteString("\t")
+	// CIGAR
+	builder.WriteString(cigar)
+	builder.WriteString("\t")
+	// RNEXT
+	builder.WriteString("*")
+	builder.WriteString("\t")
+	// PNEXT
+	builder.WriteString("0")
+	builder.WriteString("\t")
+	// TLEN
+	builder.WriteString("0")
+	builder.WriteString("\t")
+	// SEQ
+	builder.WriteString(seqFw)
+	builder.WriteString("\t")
+	// QUAL
+	builder.WriteString(qual)
+	builder.WriteString("\n")
+
+	return builder.String(), nil
+}
+
 func readPairResultToSamString(
 	genomeIndex *index.GenomeIndex,
 	readPair *fastq.ReadPair,
@@ -257,6 +394,13 @@ func readPairResultToSamString(
 	string,
 	error,
 ) {
+	if readPair.ReadR2 == nil {
+		return readSingleResultToSamString(
+			genomeIndex,
+			readPair.ReadR1,
+			resFw,
+		)
+	}
 
 	flagFw := sam.Flag{}
 	flagRv := sam.Flag{}

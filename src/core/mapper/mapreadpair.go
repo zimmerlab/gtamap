@@ -62,7 +62,7 @@ func MapReadPair(
 	resultRv := []*mapperutils.ReadMatchResult{}
 	isMappableRv := false
 
-	if readPair.ReadR2 == nil {
+	if readPair.ReadR2 != nil {
 		resultRv, isMappableRv = MapRead(readPair.ReadR2, genomeIndex, false)
 
 		// TODO: REMOVE DEBUG
