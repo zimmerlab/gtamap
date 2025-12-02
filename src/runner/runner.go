@@ -74,12 +74,14 @@ func Execute() {
 	indexPreRegionCmd := GetCommandIndexPreRegion()
 	indexCmd := GetCommandIndex()
 	mapCmd := GetCommandMap()
+	generateConfCmd := GetCommandGenerateConf()
 
 	rootCmd.AddCommand(
 		indexPreCmd,
 		indexPreRegionCmd,
 		indexCmd,
 		mapCmd,
+		generateConfCmd,
 	)
 
 	if err := rootCmd.Execute(); err != nil {
