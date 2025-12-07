@@ -31,8 +31,12 @@ func Abs(x int) int {
 	return x
 }
 
-func ScoreSpliceSites(donorFirstBase byte, donorSecondBase byte, acceptorFirstBase byte,
-	acceptorSecondBase byte, isForwardStrand bool,
+func ScoreSpliceSites(
+	donorFirstBase byte,
+	donorSecondBase byte,
+	acceptorFirstBase byte,
+	acceptorSecondBase byte,
+	isForwardStrand bool,
 ) (int, bool) {
 	if isForwardStrand {
 		if donorFirstBase == byte('G') && donorSecondBase == byte('T') &&

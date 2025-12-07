@@ -62,12 +62,13 @@ type MapperConfig struct {
 		} `mapstructure:"rna_mode" yaml:"rna_mode"`
 
 		DnaMode struct {
-			FilterMinMatches         int     `mapstructure:"filter_min_matches" yaml:"filter_min_matches"` // the minimum number of exact matches required to keep the read during filtering
-			MinLengthInitialDiagonal int     `mapstructure:"min_length_initial_diagonal" yaml:"min_length_initial_diagonal"`
-			MaxGapLength             int     `mapstructure:"max_gap_length" yaml:"max_gap_length"`
-			MaxGapCount              int     `mapstructure:"max_gap_count" yaml:"max_gap_count"`
-			MaxMismatchCount         int     `mapstructure:"max_mismatch_count" yaml:"max_mismatch_count"`
-			MaxMismatchPercentage    float64 `mapstructure:"max_mismatch_percentage" yaml:"max_mismatch_percentage"`
+			FilterMinMatches                   int     `mapstructure:"filter_min_matches" yaml:"filter_min_matches"` // the minimum number of exact matches required to keep the read during filtering
+			MinLengthInitialDiagonal           int     `mapstructure:"min_length_initial_diagonal" yaml:"min_length_initial_diagonal"`
+			MinLengthInitialDiagonalPercentage float64 `mapstructure:"min_length_initial_diagonal_percentage" yaml:"min_length_initial_diagonal_percentage"`
+			MaxGapLength                       int     `mapstructure:"max_gap_length" yaml:"max_gap_length"`
+			MaxGapCount                        int     `mapstructure:"max_gap_count" yaml:"max_gap_count"`
+			MaxMismatchCount                   int     `mapstructure:"max_mismatch_count" yaml:"max_mismatch_count"`
+			MaxMismatchPercentage              float64 `mapstructure:"max_mismatch_percentage" yaml:"max_mismatch_percentage"`
 
 			Confident struct {
 				MaxMismatchCount          int `mapstructure:"max_mismatch_count" yaml:"max_mismatch_count"`     // how many mm is a conf map allowed to have
@@ -132,12 +133,12 @@ func (c *MapperConfig) SetMappingThreads(threads int) {
 	cpuThreads := runtime.NumCPU()
 	if threads <= 0 || threads > cpuThreads {
 		c.Mapping.Threads = cpuThreads
+	} else {
+		c.Mapping.Threads = threads
 	}
-	c.Mapping.Threads = threads
 }
 
 func (c *MapperConfig) GetMappingOutputSamFile() (*os.File, error) {
-
 	// combine output dir and sam file name
 	outputPath := filepath.Join(
 		c.General.OutputDir,
@@ -153,7 +154,6 @@ func (c *MapperConfig) GetMappingOutputSamFile() (*os.File, error) {
 }
 
 func (c *MapperConfig) GetIndexOutputFile() (*os.File, error) {
-
 	filename := ""
 
 	if c.Index.Output.UseFastaFileName {
@@ -250,7 +250,6 @@ func (c *MapperConfig) GetMappingStatsFilePath() string {
 }
 
 func setDefaults() {
-
 	// GENERAL
 	viper.SetDefault("general.output_dir", "./output")
 
@@ -307,7 +306,6 @@ func setDefaults() {
 }
 
 func InitConfig(configFilePath string) {
-
 	setDefaults()
 
 	// default search path is next to executable

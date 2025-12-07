@@ -11,7 +11,6 @@ import (
 // TODO: this has to be adjusted in order to allow for multiple targets in index
 // it should then return a list of potential sequences (n,n+1 grouped)
 func GlobalFilter(readSequence *[]byte, genomeIndex *index.GenomeIndex) bool {
-
 	// indexHasBlacklist := len(genomeIndex.RepeatRegions) > 0
 	numMatching := 0
 
@@ -86,7 +85,6 @@ func FilterWithBins(
 	binSize uint32,
 	kmerMatchThreshold int,
 ) bool {
-
 	kmerLen := int(config.KmerLength())
 	readLen := len(*readSequence)
 

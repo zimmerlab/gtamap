@@ -137,7 +137,14 @@ func MapRead(
 		dh := mapperutils.NewDiagonalHandlerWithDataCopy(sequenceMatches.MatchesPerDiagonal)
 		initialDepth := 0
 
-		tmpResults := mapReadToSequence(seqIndex, read, genomeIndex, dh, greedy, &initialDepth)
+		tmpResults := mapReadToSequence(
+			seqIndex,
+			read,
+			genomeIndex,
+			dh,
+			greedy,
+			&initialDepth,
+		)
 		// fmt.Println(x)
 
 		// var result mapperutils.ReadMatchResult
@@ -224,8 +231,8 @@ func applyPossibleDiagonals(
 		// this result should already have a certain length before we append it to results
 		if !config.Mapper.Mapping.IsReadOriginRna {
 			// for DNA reads we expect the raw result to already be of a certain length
-			if result.MatchedGenome.Length()/len(*read.Sequence) >
-				config.Mapper.Mapping.DnaMode.MinLengthInitialDiagonal {
+			if float64(result.MatchedGenome.Length())/float64(len(*read.Sequence)) >
+				config.Mapper.Mapping.DnaMode.MinLengthInitialDiagonalPercentage {
 
 				// if result.MatchedGenome.Length()*10 > len(*read.Sequence)*7 {
 
@@ -723,6 +730,8 @@ func extendDiagonals(
 				gapRead, _ := result.MatchedRead.GetGapAfterRegionIndex(indexRegionBeforeGap)
 				gapGenome, gapGenomeOk := result.MatchedGenome.GetGapAfterRegionIndex(indexRegionBeforeGap)
 
+				// potentialInsertion := gapRead.Length() > gapGenome.Length()
+
 				if !gapGenomeOk {
 					// logrus.WithFields(logrus.Fields{
 					// 	"read":    result.MatchedRead,
@@ -744,7 +753,7 @@ func extendDiagonals(
 						// }).Debug("gap read is larger than gap genome")
 
 						result.IncompleteMap = true
-						return
+						// return
 					}
 
 					bestSplit := determineBestSplit(
@@ -1142,7 +1151,7 @@ func determineBestSplit(
 	// 	"gapGenome": gapGenome,
 	// }).Debug("determining best split")
 
-	// cululative mismatch count for the left and right extensions
+	// cumulative mismatch count for the left and right extensions
 	// for lErrors the index i represents the number of mismatches for the first i positions of the extension
 	// for rErrors the index i represents the number of mismatches for the last i positions of the extension
 	lErrors := make([]int, gapRead.Length()+1)
@@ -1170,7 +1179,11 @@ func determineBestSplit(
 
 	// the minimum number of mismatches
 	// the +2 is based on the maximum penalty returned by scoreSpliceSites()
-	minErrors := lErrors[gapRead.Length()] + rErrors[gapRead.Length()] + 2
+	minErrors := lErrors[gapRead.Length()] + rErrors[gapRead.Length()]
+	if config.Mapper.Mapping.IsReadOriginRna {
+		minErrors += 2
+	}
+
 	// the position of the split with the minimum number of mismatches
 	minSplit := -1
 
@@ -1210,18 +1223,16 @@ func determineBestSplit(
 		// add a penalty if the splice site is not canonical
 		// 2 means that there is no known splice site
 
-		// INFO: DNA RNA MODE
-		// only score splicesites in RNA mode
-
-		spliceSitePenalty, _ := utils.ScoreSpliceSites(
-			donorSiteSeq[0],
-			donorSiteSeq[1],
-			acceptorSiteSeq[0],
-			acceptorSiteSeq[1],
-			lookOnPlusStrand,
-		)
-
-		numMismatches += spliceSitePenalty
+		if config.Mapper.Mapping.IsReadOriginRna {
+			spliceSitePenalty, _ := utils.ScoreSpliceSites(
+				donorSiteSeq[0],
+				donorSiteSeq[1],
+				acceptorSiteSeq[0],
+				acceptorSiteSeq[1],
+				lookOnPlusStrand,
+			)
+			numMismatches += spliceSitePenalty
+		}
 
 		// logrus.WithFields(logrus.Fields{
 		// 	"split":               i,

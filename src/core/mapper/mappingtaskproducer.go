@@ -1,14 +1,19 @@
 package mapper
 
 import (
+	"strings"
+
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/sirupsen/logrus"
-	"strings"
 )
 
-func MappingTaskProducer(reader *fastq.Reader, taskChan chan<- MappingTask, progressChan chan<- Event,
-	maxReads int, specificQname string) {
-
+func MappingTaskProducer(
+	reader *fastq.Reader,
+	taskChan chan<- MappingTask,
+	progressChan chan<- Event,
+	maxReads int,
+	specificQname string,
+) {
 	defer close(taskChan)
 
 	var byteProgress int64 = 0
