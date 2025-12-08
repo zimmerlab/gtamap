@@ -264,7 +264,7 @@ func readSingleResultToSamString(
 
 	if resFw == nil {
 		// TODO: handle parameter for writing unmapped results to output
-		return "", fmt.Errorf("No mapping result provided for single read: %s", read.Header)
+		return "", fmt.Errorf("no mapping result provided for single read: %s", read.Header)
 	}
 
 	if !genomeIndex.IsSequenceForward(resFw.SequenceIndex) {
@@ -634,11 +634,11 @@ func readPairResultToSamString(
 	}
 
 	// ATTRIBUTES
-
 	var builder strings.Builder
 
 	// R1 READ
 	if resFw != nil {
+
 		// QNAME
 		builder.WriteString(headerFw)
 		builder.WriteString("\t")
@@ -677,6 +677,7 @@ func readPairResultToSamString(
 
 	// R2 READ
 	if resRv != nil {
+
 		// QNAME
 		builder.WriteString(headerRv)
 		builder.WriteString("\t")

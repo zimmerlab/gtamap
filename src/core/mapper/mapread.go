@@ -882,12 +882,13 @@ func extendDiagonals(
 						}
 					}
 
-					if fillGap {
-						if maxBasesToMap < gapRead.Length() {
-							fmt.Println("insertion detected during gap filling")
-						}
-					} else {
-						// if !fillGap {
+					// if fillGap {
+					// 	if maxBasesToMap < gapRead.Length() {
+					// 		fmt.Println("insertion detected during gap filling")
+					// 	}
+					// } else {
+
+					if !fillGap {
 						// reset the mismatches to the state before
 						// attempting to fill the gap
 						result.MismatchesRead = mmCopy
@@ -1175,12 +1176,6 @@ func determineBestSplit(
 	// 	"gapGenome": gapGenome,
 	// }).Debug("determining best split")
 
-	seqGapRead := string((*read.Sequence)[gapRead.Start:gapRead.End])
-	seqGapGenome := string((*genomeIndex.Sequences[seqIndex])[gapGenome.Start:gapGenome.End])
-
-	fmt.Println(seqGapRead)
-	fmt.Println(seqGapGenome)
-
 	// maximum number of positions to consider for the split
 	// if the genome gap is smaller than the read gap then there is a
 	// potential insertion
@@ -1214,7 +1209,7 @@ func determineBestSplit(
 
 	// the minimum number of mismatches
 	// the +2 is based on the maximum penalty returned by scoreSpliceSites()
-	minErrors := lErrors[maxPositionsRead] + rErrors[maxPositionsRead]
+	minErrors := lErrors[maxPositionsRead] + rErrors[maxPositionsRead] + 1
 	if config.Mapper.Mapping.IsReadOriginRna {
 		minErrors += 2
 	}
