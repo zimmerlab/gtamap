@@ -34,7 +34,7 @@ table.insert(dap.configurations.go, {
 
 table.insert(dap.configurations.go, {
 	type = "go",
-	name = "giab chr20",
+	name = "debugging",
 	request = "launch",
 	mode = "debug",
 	program = "/home/sam/Projects/gtamap/src/main.go",
@@ -42,17 +42,17 @@ table.insert(dap.configurations.go, {
 	showLog = true,
 	args = {
 		"map",
+		"--config",
+		"/home/sam/Data/gtamap/evaluation/gtamap_config.yaml",
 		"--index",
-		"/home/sam/Data/gtamap/evaluation/index/20:39659472-39675318.gtai",
+		"/home/sam/Data/gtamap/evaluation/index/20:18345927-18347017.gtai",
 		"--output",
 		"/home/sam/Data/gtamap/evaluation/output/",
 		"--read-origin",
 		"dna",
 		"--reads-r1",
 		"/home/sam/Data/gtamap/evaluation/fastq/test.r1.fastq",
-		-- "/home/sam/Data/gtamap/evaluation/fastq/2A2_TGACCA_L001_R1_001.fastq.gz",
 		"--reads-r2",
 		"/home/sam/Data/gtamap/evaluation/fastq/test.r2.fastq",
-		-- "/home/sam/Data/gtamap/evaluation/fastq/2A2_TGACCA_L001_R2_001.fastq.gz",
 	},
 })
