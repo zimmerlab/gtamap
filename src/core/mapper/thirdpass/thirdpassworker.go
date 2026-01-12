@@ -637,7 +637,7 @@ func readPairResultToSamString(
 	tagsFw := ""
 	if resFw != nil {
 		tagsFw = fmt.Sprintf(
-			"XH:i:%d\tXG::%d",
+			"XH:i:%d\tXG:i:%d",
 			int(math.Round(float64(resFw.OccurrenceWeightHarmonic)*100)/100),
 			int(math.Round(float64(resFw.OccurrenceWeightGeometric)*100)/100),
 		)
