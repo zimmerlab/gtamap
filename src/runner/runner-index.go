@@ -12,9 +12,8 @@ import (
 
 func GetCommandIndex() *cobra.Command {
 	var fastaFilePath string
-	var genomeFastaFilePath string
 	var regionmaskFilePath string
-	// var regionmaskPriorityFilePath string
+	var kmerOccurrencesFilePath string
 	var outputDirPath string
 	var indexFileName string
 	var useFastaFileName bool
@@ -30,11 +29,11 @@ func GetCommandIndex() *cobra.Command {
 			}
 
 			SetConfigValue("index.fasta_file_path", fastaFilePath)
-			SetConfigValue("index.genome_fasta_file_path", genomeFastaFilePath)
 			SetConfigValue("general.output_dir", outputDirPath)
 			SetConfigValue("index.output.index_file_name", indexFileName)
 			SetConfigValue("index.output.use_fasta_file_name", useFastaFileName)
 			SetConfigValue("index.regionmask_file_path", regionmaskFilePath)
+			SetConfigValue("index.kmer_occurrences_file_path", kmerOccurrencesFilePath)
 
 			if err := viper.Unmarshal(config.Mapper); err != nil {
 				logrus.Fatalf("Unable to decode config: %v", err)
@@ -54,15 +53,6 @@ func GetCommandIndex() *cobra.Command {
 		"Fasta file (required)",
 	)
 	indexCmd.MarkFlagRequired("fasta")
-
-	flags.StringVarP(
-		&genomeFastaFilePath,
-		"genome-fasta",
-		"g",
-		"",
-		"Genomic fasta file (required)",
-	)
-	indexCmd.MarkFlagRequired("genome-fasta")
 
 	flags.StringVarP(
 		&outputDirPath,
@@ -97,6 +87,14 @@ func GetCommandIndex() *cobra.Command {
 		"Regionmask file (.bed) containing specific mismatch constraints per region",
 	)
 
+	flags.StringVarP(
+		&kmerOccurrencesFilePath,
+		"kmer-occurrences",
+		"k",
+		"",
+		"Genome-wide kmer occurrences (.tsv) to compute region-specific kmer frequencies",
+	)
+
 	return indexCmd
 }
 
@@ -104,11 +102,6 @@ func ExecIndex() {
 	fastaFile, err := os.Open(config.Mapper.Index.FastaFilePath)
 	if err != nil {
 		logrus.Fatalf("Could not open fasta file: %v", err)
-	}
-
-	genomeFastaFile, errGenome := os.Open(config.Mapper.Index.GenomeFastaFilePath)
-	if errGenome != nil {
-		logrus.Fatalf("Could not open genome fasta file: %v", errGenome)
 	}
 
 	outputFile, err := config.Mapper.GetIndexOutputFile()
@@ -127,10 +120,21 @@ func ExecIndex() {
 		defer regionmaskFile.Close()
 	}
 
+	var kmerOccurrencesFile *os.File = nil
+	var errKmerOccurrences error = nil
+
+	if config.Mapper.Index.KmerOccurrencesFilePath != "" {
+		kmerOccurrencesFile, errKmerOccurrences = os.Open(config.Mapper.Index.KmerOccurrencesFilePath)
+		if errKmerOccurrences != nil {
+			logrus.Fatalf("Could not open kmer occurrences file: %v", errKmerOccurrences)
+		}
+		defer kmerOccurrencesFile.Close()
+	}
+
 	index.BuildAndSerializeGenomeIndex(
 		fastaFile,
-		genomeFastaFile,
 		outputFile,
 		regionmaskFile,
+		kmerOccurrencesFile,
 	)
 }

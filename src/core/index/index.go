@@ -535,9 +535,9 @@ func ReadGenomeIndexByFile(indexFile *os.File) *GenomeIndex {
 
 func BuildAndSerializeGenomeIndex(
 	fastaFile *os.File,
-	genomeFastaFile *os.File,
 	outputFile *os.File,
 	regionmaskFile *os.File,
+	kmerOccurrencesFile *os.File,
 ) {
 	fastaEntries, err := dataloader.ReadFasta(fastaFile)
 	if err != nil {
@@ -563,10 +563,12 @@ func BuildAndSerializeGenomeIndex(
 		genomeIndex,
 	)
 
+	genomeKmers := ReadGenomeKmerOccurrences(kmerOccurrencesFile)
+
 	ComputeKmerOccurrences(
 		fastaEntries[0].Sequence,
-		genomeFastaFile,
 		genomeIndex,
+		genomeKmers,
 	)
 
 	WriteGenomeIndex(genomeIndex, outputFile)
@@ -581,35 +583,56 @@ func (k *KmerOccurrences) GetKmerCountAtPosition(pos int) uint64 {
 	return k.KmerCounts[k.PosToKmerIndex[pos]]
 }
 
-func ComputeKmerOccurrences(
-	targetSequence []byte,
-	genomeFile *os.File,
-	genomeIndex *GenomeIndex,
-) {
-	geneKmers := make(map[[10]byte]int)
+func ReadGenomeKmerOccurrences(f *os.File) map[[10]byte]uint64 {
+	genomeKmers := make(map[[10]byte]uint64, int(math.Pow(5, 10)))
 
-	kmerCounts := make([]uint64, 0)
-	posToKmerIndex := make([]int, len(targetSequence)-10)
+	scanner := bufio.NewScanner(f)
+	// scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 
-	for kStart := 0; kStart < len(targetSequence)-10; kStart++ {
-		seqBytes := *(*[10]byte)((targetSequence)[kStart : kStart+10])
+	lineNum := 0
+	for scanner.Scan() {
 
-		kmerIndex, foundGeneKmer := geneKmers[seqBytes]
+		lineNum++
+		line := scanner.Text()
 
-		if !foundGeneKmer {
-			geneKmers[seqBytes] = len(kmerCounts)
-			kmerIndex = len(kmerCounts)
-			kmerCounts = append(kmerCounts, 0)
+		fields := strings.Split(line, "\t")
+		if len(fields) < 2 {
+			logrus.Fatal("Could not parse genome kmer occurrences file: line ",
+				lineNum, " has less than 2 columns")
 		}
 
-		posToKmerIndex[kStart] = kmerIndex
+		// column 1 -> [10]byte key
+		if len(fields[0]) != 10 {
+			logrus.Fatal("Could not parse genome kmer occurrences file: line ",
+				lineNum, " column 1 is not 10 bytes")
+		}
+		var key [10]byte
+		copy(key[:], fields[0])
+
+		// column 2 -> uint64 value
+		val, err := strconv.ParseUint(fields[1], 10, 64)
+		if err != nil {
+			logrus.Fatal("Could not parse genome kmer occurrences file: line ",
+				lineNum, " column 2 is not a valid uint64")
+		}
+
+		genomeKmers[key] = val
 	}
 
+	if err := scanner.Err(); err != nil {
+		logrus.Fatal("Error reading genome kmer occurrences file", err)
+	}
+
+	return genomeKmers
+}
+
+func ComputeGenomeKmerOccurrences(
+	genomeFile *os.File,
+	outputFile *os.File,
+) {
 	timerStart := time.Now()
 
 	genomeKmers := make(map[[10]byte]uint64, int(math.Pow(5, 10)))
-	genomeMinCount := uint64(math.MaxUint64)
-	genomeMaxCount := uint64(0)
 
 	genomeContigs, err := dataloader.ReadFasta(genomeFile)
 	if err != nil {
@@ -631,30 +654,12 @@ func ComputeKmerOccurrences(
 				genomeKmers[seqBytes] = 0
 			}
 			genomeKmers[seqBytes]++
-
-			if genomeKmers[seqBytes] < genomeMinCount {
-				genomeMinCount = genomeKmers[seqBytes]
-			}
-			if genomeKmers[seqBytes] > genomeMaxCount {
-				genomeMaxCount = genomeKmers[seqBytes]
-			}
-
-			kmerIndex, foundGeneKmer := geneKmers[seqBytes]
-			if !foundGeneKmer {
-				continue
-			}
-
-			kmerCounts[kmerIndex]++
 		}
-
 		// break
 	}
 
-	d := time.Since(timerStart)
-
-	fmt.Println("Genome kmer counts stats:")
-	fmt.Println("Min:", genomeMinCount)
-	fmt.Println("Max:", genomeMaxCount)
+	dComp := time.Since(timerStart)
+	timerStart = time.Now()
 
 	type kmerCount struct {
 		kmer  [10]byte
@@ -670,37 +675,126 @@ func ComputeKmerOccurrences(
 		return sorted[i].count < sorted[j].count
 	})
 
-	// Print 5 lowest
-	for i := 0; i < 5 && i < len(sorted); i++ {
-		fmt.Printf("%s -> %d\n", string(sorted[i].kmer[:]), sorted[i].count)
-	}
+	dSort := time.Since(timerStart)
+	timerStart = time.Now()
 
-	// Print 5 highest
-	for i := len(sorted) - 5; i < len(sorted); i++ {
-		if i >= 0 {
-			fmt.Printf("%s -> %d\n", string(sorted[i].kmer[:]), sorted[i].count)
-		}
-	}
-
-	file, err := os.Create("/home/sam/Data/kmers.tsv")
-	if err != nil {
-		logrus.Fatal(err)
-	}
-	defer file.Close()
-
-	writer := bufio.NewWriter(file)
+	writer := bufio.NewWriter(outputFile)
 	defer writer.Flush()
 
 	for _, kc := range sorted {
 		fmt.Fprintf(writer, "%s\t%d\n", string(kc.kmer[:]), kc.count)
 	}
 
+	dWrite := time.Since(timerStart)
+
+	logrus.WithFields(logrus.Fields{
+		"d compute": utils.FormatDuration(dComp),
+		"d sort":    utils.FormatDuration(dSort),
+		"d write":   utils.FormatDuration(dWrite),
+		"d total":   utils.FormatDuration(dComp + dSort + dWrite),
+	}).Info("Finished computing genomic kmer occurrences")
+}
+
+func ComputeKmerOccurrences(
+	targetSequence []byte,
+	genomeIndex *GenomeIndex,
+	genomeKmers map[[10]byte]uint64,
+) {
+	timerStart := time.Now()
+
+	geneKmers := make(map[[10]byte]int)
+
+	kmerCounts := make([]uint64, 0)
+	posToKmerIndex := make([]int, len(targetSequence)-10)
+
+	showWarning := true
+
+	for kStart := 0; kStart < len(targetSequence)-10; kStart++ {
+		seqBytes := *(*[10]byte)((targetSequence)[kStart : kStart+10])
+
+		kmerIndex, foundGeneKmer := geneKmers[seqBytes]
+
+		if !foundGeneKmer {
+			geneKmers[seqBytes] = len(kmerCounts)
+			kmerIndex = len(kmerCounts)
+
+			// use 1 as pseudocount to prevent downstream issues
+			// with zero counts
+			var count uint64 = 1
+			foundCount := false
+
+			if genomeKmers != nil {
+				count, foundCount = genomeKmers[seqBytes]
+
+				if !foundCount && showWarning {
+					// the kmer should be in the genome kmers map if the target
+					// region was extracted from the same genome that was used
+					// to generate the counts
+					logrus.Warn("Kmer from target region not found in genome" +
+						" kmer occurrences map!")
+					logrus.Warn("Kmer: ", string(seqBytes[:]))
+					logrus.Warn("This may indicate that the target region was" +
+						" not extracted from the same genome that was used to" +
+						" compute the kmer occurrences.")
+					showWarning = false
+				}
+			}
+
+			kmerCounts = append(kmerCounts, count)
+		}
+
+		posToKmerIndex[kStart] = kmerIndex
+	}
+
+	// genomeKmers := make(map[[10]byte]uint64, int(math.Pow(5, 10)))
+	// genomeMinCount := uint64(math.MaxUint64)
+	// genomeMaxCount := uint64(0)
+	//
+	// genomeContigs, err := dataloader.ReadFasta(genomeFile)
+	// if err != nil {
+	// 	logrus.Fatal("Error reading genome fasta file", err)
+	// }
+	//
+	// for i, contig := range genomeContigs {
+	//
+	// 	logrus.WithFields(logrus.Fields{
+	// 		"chromosome": contig.Header,
+	// 		"number":     i + 1,
+	// 		"total":      len(genomeContigs),
+	// 	}).Info("Computing kmer occurrences")
+	//
+	// 	for kStart := 0; kStart < len(contig.Sequence)-10; kStart++ {
+	// 		seqBytes := *(*[10]byte)((contig.Sequence)[kStart : kStart+10])
+	//
+	// 		if _, exists := genomeKmers[seqBytes]; !exists {
+	// 			genomeKmers[seqBytes] = 0
+	// 		}
+	// 		genomeKmers[seqBytes]++
+	//
+	// 		if genomeKmers[seqBytes] < genomeMinCount {
+	// 			genomeMinCount = genomeKmers[seqBytes]
+	// 		}
+	// 		if genomeKmers[seqBytes] > genomeMaxCount {
+	// 			genomeMaxCount = genomeKmers[seqBytes]
+	// 		}
+	//
+	// 		kmerIndex, foundGeneKmer := geneKmers[seqBytes]
+	// 		if !foundGeneKmer {
+	// 			continue
+	// 		}
+	//
+	// 		kmerCounts[kmerIndex]++
+	// 	}
+	//
+	// 	// break
+	// }
+
+	d := time.Since(timerStart)
+
 	logrus.WithFields(logrus.Fields{
 		"duration": utils.FormatDuration(d),
 	}).Info("Finished computing genomic kmer occurrences")
 
-	// genomeIndex.KmerOccurrences = indexToCount
-	// genomeIndex.KmerOccurrences = genomicKmerCounts
 	genomeIndex.KmerOccurrences = KmerOccurrences{
 		KmerCounts:     kmerCounts,
 		PosToKmerIndex: posToKmerIndex,

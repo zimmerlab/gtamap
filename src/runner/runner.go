@@ -75,6 +75,7 @@ func Execute() {
 	indexCmd := GetCommandIndex()
 	mapCmd := GetCommandMap()
 	generateConfCmd := GetCommandGenerateConf()
+	computeKmerOccCmd := GetCommandKmerOccurrences()
 
 	rootCmd.AddCommand(
 		indexPreCmd,
@@ -82,6 +83,7 @@ func Execute() {
 		indexCmd,
 		mapCmd,
 		generateConfCmd,
+		computeKmerOccCmd,
 	)
 
 	if err := rootCmd.Execute(); err != nil {
