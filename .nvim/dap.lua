@@ -12,12 +12,19 @@ table.insert(dap.configurations.go, {
 })
 
 table.insert(dap.configurations.go, {
+	type = "delve",
+	name = "debug simple",
+	request = "launch",
+	mode = "debug",
+	program = "/home/sam/Projects/gtamap/src/runner.go",
+})
+
+table.insert(dap.configurations.go, {
 	type = "go",
 	name = "Kartmann",
 	request = "launch",
 	mode = "debug",
 	program = "/home/sam/Projects/gtamap/src/main.go",
-	console = "integratedTerminal",
 	showLog = true,
 	args = {
 		"map",
@@ -33,26 +40,73 @@ table.insert(dap.configurations.go, {
 })
 
 table.insert(dap.configurations.go, {
+	type = "delve",
+	name = "debugging gap",
+	request = "launch",
+	-- mode = "debug",
+	program = "/home/sam/Projects/gtamap/src/main.go",
+	outputMode = "remote",
+	args = {
+		"map",
+		"--config",
+		"/home/sam/Data/gtamap/evaluation/bugs/20251211_gaptest/gtamap_config.yaml",
+		"--index",
+		"/home/sam/Data/gtamap/evaluation/bugs/20251211_gaptest/20:18931791-18934204.gtai",
+		"--output",
+		"/home/sam/Data/gtamap/evaluation/bugs/20251211_gaptest/",
+		"--read-origin",
+		"dna",
+		"--reads-r1",
+		"/home/sam/Data/gtamap/evaluation/bugs/20251211_gaptest/test.r1.fastq",
+		"--reads-r2",
+		"/home/sam/Data/gtamap/evaluation/bugs/20251211_gaptest/test.r2.fastq",
+	},
+})
+
+table.insert(dap.configurations.go, {
+	type = "delve",
+	name = "debugging weight",
+	request = "launch",
+	-- mode = "debug",
+	program = "/home/sam/Projects/gtamap/src/main.go",
+	outputMode = "remote",
+	args = {
+		"map",
+		"--config",
+		"/home/sam/Data/gtamap/evaluation/genes/dmd/gtamap_config.yaml",
+		"--index",
+		"/home/sam/Data/gtamap/evaluation/genes/dmd/index.kmer-10.v2.gtai",
+		"--output",
+		"/home/sam/Data/gtamap/evaluation/genes/dmd/",
+		"--read-origin",
+		"rna",
+		"--reads-r1",
+		"/home/sam/Data/gtamap/evaluation/genes/dmd/1916600.r1.fastq",
+		"--reads-r2",
+		"/home/sam/Data/gtamap/evaluation/genes/dmd/1916600.r2.fastq",
+	},
+})
+
+table.insert(dap.configurations.go, {
 	type = "go",
-	name = "debugging",
+	name = "rs bug",
 	request = "launch",
 	mode = "debug",
 	program = "/home/sam/Projects/gtamap/src/main.go",
-	console = "integratedTerminal",
 	showLog = true,
 	args = {
 		"map",
 		"--config",
-		"/home/sam/Data/gtamap/evaluation/gtamap_config.yaml",
+		"/home/sam/Data/gtamap/evaluation/bugs/20251211_rs200630371/gtamap_config.yaml",
 		"--index",
-		"/home/sam/Data/gtamap/evaluation/index/20:18345927-18347017.gtai",
+		"/home/sam/Data/gtamap/evaluation/bugs/20251211_rs200630371/20:18345927-18347017.gtai",
 		"--output",
-		"/home/sam/Data/gtamap/evaluation/output/",
+		"/home/sam/Data/gtamap/evaluation/bugs/",
 		"--read-origin",
 		"dna",
 		"--reads-r1",
-		"/home/sam/Data/gtamap/evaluation/fastq/test.r1.fastq",
+		"/home/sam/Data/gtamap/evaluation/bugs/20251211_rs200630371/rs200630371.novoalign.R1.fastq",
 		"--reads-r2",
-		"/home/sam/Data/gtamap/evaluation/fastq/test.r2.fastq",
+		"/home/sam/Data/gtamap/evaluation/bugs/20251211_rs200630371/rs200630371.novoalign.R2.fastq",
 	},
 })
