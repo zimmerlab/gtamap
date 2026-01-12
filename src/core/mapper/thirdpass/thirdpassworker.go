@@ -633,7 +633,25 @@ func readPairResultToSamString(
 		qualRv = string(utils.ReverseBytes(*readPair.ReadR2.Quality))
 	}
 
-	// ATTRIBUTES
+	// TAGS
+	tagsFw := ""
+	if resFw != nil {
+		tagsFw = fmt.Sprintf(
+			"XH:i:%d\tXG::%d",
+			int(math.Round(float64(resFw.OccurrenceWeightHarmonic)*100)/100),
+			int(math.Round(float64(resFw.OccurrenceWeightGeometric)*100)/100),
+		)
+	}
+
+	tagsRv := ""
+	if resRv != nil {
+		tagsRv = fmt.Sprintf(
+			"XH:i:%d\tXG:i:%d",
+			int(math.Round(float64(resRv.OccurrenceWeightHarmonic)*100)/100),
+			int(math.Round(float64(resRv.OccurrenceWeightGeometric)*100)/100),
+		)
+	}
+
 	var builder strings.Builder
 
 	// R1 READ
@@ -671,6 +689,11 @@ func readPairResultToSamString(
 		builder.WriteString("\t")
 		// QUAL
 		builder.WriteString(qualFw)
+		if tagsFw != "" {
+			builder.WriteString("\t")
+			// TAGS
+			builder.WriteString(tagsFw)
+		}
 		builder.WriteString("\n")
 
 	}
@@ -710,6 +733,11 @@ func readPairResultToSamString(
 		builder.WriteString("\t")
 		// QUAL
 		builder.WriteString(qualRv)
+		if tagsRv != "" {
+			builder.WriteString("\t")
+			// TAGS
+			builder.WriteString(tagsRv)
+		}
 		builder.WriteString("\n")
 	}
 

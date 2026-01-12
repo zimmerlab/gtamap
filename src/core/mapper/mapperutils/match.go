@@ -38,15 +38,18 @@ type SequenceMatchResult struct {
 }
 
 type ReadMatchResult struct {
-	SequenceIndex            int                        // the index of the sequence in the genome
-	MatchedRead              *regionvector.RegionVector // region vector containing the matched positions in the read
-	MatchedGenome            *regionvector.RegionVector // region vector containing the matched positions in the genome
-	MismatchesRead           []int                      // the positions of the mismatches in the read
-	MismatchCounts           map[string]int
-	MismatchConstraintGlobal int
-	diagonalHandler          *DiagonalHandler
-	IncompleteMap            bool
-	SpliceSitesInfo          []int // corresponds to the number of junctions of match result. canonical splice site -> 2 = canonical, 1 = non-can, 0 = no splice site
+	SequenceIndex             int                        // the index of the sequence in the genome
+	MatchedRead               *regionvector.RegionVector // region vector containing the matched positions in the read
+	MatchedGenome             *regionvector.RegionVector // region vector containing the matched positions in the genome
+	MismatchesRead            []int                      // the positions of the mismatches in the read
+	MismatchCounts            map[string]int
+	MismatchConstraintGlobal  int
+	diagonalHandler           *DiagonalHandler
+	OccurrenceWeightHarmonic  float32
+	OccurrenceWeightGeometric float32
+	IncompleteMap             bool
+	Invalid                   bool
+	SpliceSitesInfo           []int // corresponds to the number of junctions of match result. canonical splice site -> 2 = canonical, 1 = non-can, 0 = no splice site
 
 	Id int // fileds for logging
 
@@ -225,7 +228,6 @@ func (r *ReadMatchResult) MergeRegions() {
 // the same and that each read region is associated with the genome region at
 // the same index.
 func (r *ReadMatchResult) MergeRegionsIfBothConsecutive() {
-
 	if len(r.MatchedRead.Regions) != len(r.MatchedGenome.Regions) {
 		logrus.WithFields(logrus.Fields{
 			"len read regions":   len(r.MatchedRead.Regions),
@@ -276,7 +278,6 @@ func (r *ReadMatchResult) MergeRegionsIfBothConsecutive() {
 }
 
 func (r *ReadMatchResult) IsValid() bool {
-
 	numGapsGenome := 0
 
 	for i := 0; i < len(r.MatchedGenome.Regions)-1; i++ {
@@ -290,7 +291,12 @@ func (r *ReadMatchResult) IsValid() bool {
 		numGapsGenome++
 
 		if config.Mapper.Mapping.IsReadOriginRna {
-
+			if lenGapGenome > config.Mapper.Mapping.RnaMode.MaxGapLength {
+				return false
+			}
+			if numGapsGenome > config.Mapper.Mapping.RnaMode.MaxGapCount {
+				return false
+			}
 		} else {
 			if lenGapGenome > config.Mapper.Mapping.DnaMode.MaxGapLength {
 				return false
@@ -305,7 +311,6 @@ func (r *ReadMatchResult) IsValid() bool {
 }
 
 func (r *ReadMatchResult) NormalizeRegions() {
-
 	r.MergeRegions()
 	readRegions := r.MatchedRead.Regions
 	genomeRegions := r.MatchedGenome.Regions
@@ -507,7 +512,6 @@ func AssignReadMatchResults(
 	map[int][]*ReadMatchResult,
 	map[int]struct{},
 ) {
-
 	fwMapPerSeqIndex := make(map[int][]*ReadMatchResult)
 	rvMapPerSeqIndex := make(map[int][]*ReadMatchResult)
 	mappedRegionIds := make(map[int]struct{})
@@ -535,7 +539,6 @@ func GetBestPossibleMappingCombination(
 	fwMatches []*ReadMatchResult,
 	rvMatches []*ReadMatchResult,
 ) *ValidReadPairCombination {
-
 	var bestCombination *ValidReadPairCombination
 	maxMismatches := config.Mapper.GetConfidentMaxMismatchCount()
 
@@ -586,13 +589,11 @@ func GetBestPossibleMappingCombination(
 // returns false as soon as one region is smaller than 2*kmerlength
 // iterates over gaps and checks lengths of region before and after gaps
 func hasLongDiagonals(mapping *ReadMatchResult) bool {
-
 	mapping.NormalizeRegions()
 
 	// INFO: DNA RNA MODE
 	// For DNA, l and r regions of junction should be longer
 	for _, region := range mapping.MatchedGenome.Regions {
-
 		if config.Mapper.Mapping.IsReadOriginRna {
 			if region.Length() < config.Mapper.Mapping.RnaMode.Confident.MinAnchorLength {
 				return false
@@ -611,7 +612,6 @@ func hasLongDiagonals(mapping *ReadMatchResult) bool {
 // It returns -1 if not corresponding value is found, which should
 // not happen if the given readPos is part of the MatchedRead regions.
 func (r *ReadMatchResult) GetGenomicPosForReadPos(readPos int) int {
-
 	for i, readRegion := range r.MatchedRead.Regions {
 
 		if readRegion.Start > readPos {
@@ -648,7 +648,6 @@ func (r *ReadMatchResult) AddMismatch(
 	posInRead int,
 	posInTargetRegion int,
 ) bool {
-
 	for _, mm := range r.MismatchesRead {
 		if mm == posInRead {
 			logrus.Fatal("Trying to add duplicate mismatch position to "+
@@ -685,7 +684,6 @@ func (r *ReadMatchResult) AddMismatch(
 }
 
 func (r *ReadMatchResult) GetCigar() (string, error) {
-
 	var builder strings.Builder
 
 	// slices.Sort(r.MismatchesRead)
@@ -986,7 +984,6 @@ func ParseMatchedRegion(
 	mismatchesInRead []int,
 	isRev bool,
 ) string {
-
 	var builder strings.Builder
 
 	if len(mismatchesInRead) == 0 {
@@ -1027,7 +1024,6 @@ func ParseMatchedRegion(
 			lastStart = relativePos + 1
 		}
 	} else {
-
 		for _, mm := range mismatchesInRead {
 			if mm < region.Start || mm >= region.End {
 				continue

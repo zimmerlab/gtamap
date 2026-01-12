@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 )
@@ -179,4 +180,45 @@ func ArrayIntToString(arr []int, sep string) string {
 		builder.WriteString(fmt.Sprintf("%d", item))
 	}
 	return builder.String()
+}
+
+const (
+	valueBits = 29
+	valueMask = (uint64(1) << valueBits) - 1
+)
+
+func Pack(index uint16, value uint32) uint64 {
+	// Optional safety checks (recommended during development)
+	if index >= 500 {
+		panic("index overflow")
+	}
+	if value >= 300_000_000 {
+		panic("value overflow")
+	}
+
+	return (uint64(index) << valueBits) | uint64(value)
+}
+
+func UnpackIndex(packed uint64) uint16 {
+	return uint16(packed >> valueBits)
+}
+
+func UnpackValue(packed uint64) uint32 {
+	return uint32(packed & valueMask)
+}
+
+func GeometricMean(counts []uint64) float64 {
+	var logSum float64
+	for _, count := range counts {
+		logSum += math.Log(float64(count))
+	}
+	return math.Exp(logSum / float64(len(counts)))
+}
+
+func HarmonicMean(counts []uint64) float64 {
+	var sumReciprocals float64
+	for _, count := range counts {
+		sumReciprocals += 1.0 / float64(count)
+	}
+	return float64(len(counts)) / sumReciprocals
 }

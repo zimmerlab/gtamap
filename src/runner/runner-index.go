@@ -11,8 +11,8 @@ import (
 )
 
 func GetCommandIndex() *cobra.Command {
-
 	var fastaFilePath string
+	var genomeFastaFilePath string
 	var regionmaskFilePath string
 	// var regionmaskPriorityFilePath string
 	var outputDirPath string
@@ -23,7 +23,6 @@ func GetCommandIndex() *cobra.Command {
 		Use:   "index",
 		Short: "Build the gtamap index (.gtai)",
 		Run: func(cmd *cobra.Command, args []string) {
-
 			if indexFileName != "" && useFastaFileName {
 				cmd.PrintErrf("\n%s [-i | --index-file-name] and [-u | --use-fasta-file-name] cannot be used together.\n\n", cmd.ErrPrefix())
 				cmd.Usage()
@@ -31,6 +30,7 @@ func GetCommandIndex() *cobra.Command {
 			}
 
 			SetConfigValue("index.fasta_file_path", fastaFilePath)
+			SetConfigValue("index.genome_fasta_file_path", genomeFastaFilePath)
 			SetConfigValue("general.output_dir", outputDirPath)
 			SetConfigValue("index.output.index_file_name", indexFileName)
 			SetConfigValue("index.output.use_fasta_file_name", useFastaFileName)
@@ -54,6 +54,15 @@ func GetCommandIndex() *cobra.Command {
 		"Fasta file (required)",
 	)
 	indexCmd.MarkFlagRequired("fasta")
+
+	flags.StringVarP(
+		&genomeFastaFilePath,
+		"genome-fasta",
+		"g",
+		"",
+		"Genomic fasta file (required)",
+	)
+	indexCmd.MarkFlagRequired("genome-fasta")
 
 	flags.StringVarP(
 		&outputDirPath,
@@ -92,10 +101,14 @@ func GetCommandIndex() *cobra.Command {
 }
 
 func ExecIndex() {
-
 	fastaFile, err := os.Open(config.Mapper.Index.FastaFilePath)
 	if err != nil {
 		logrus.Fatalf("Could not open fasta file: %v", err)
+	}
+
+	genomeFastaFile, errGenome := os.Open(config.Mapper.Index.GenomeFastaFilePath)
+	if errGenome != nil {
+		logrus.Fatalf("Could not open genome fasta file: %v", errGenome)
 	}
 
 	outputFile, err := config.Mapper.GetIndexOutputFile()
@@ -116,6 +129,7 @@ func ExecIndex() {
 
 	index.BuildAndSerializeGenomeIndex(
 		fastaFile,
+		genomeFastaFile,
 		outputFile,
 		regionmaskFile,
 	)

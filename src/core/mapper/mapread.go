@@ -532,7 +532,14 @@ func applyDiagonal(
 
 		numGaps++
 
-		if !config.Mapper.Mapping.IsReadOriginRna {
+		if config.Mapper.Mapping.IsReadOriginRna {
+			if lenGapGenome > config.Mapper.Mapping.RnaMode.MaxGapLength {
+				return false
+			}
+			if numGaps > config.Mapper.Mapping.RnaMode.MaxGapCount {
+				return false
+			}
+		} else {
 			if lenGapGenome > config.Mapper.Mapping.DnaMode.MaxGapLength {
 				// the gap in the genome is too large for DNA reads
 				return false
@@ -545,13 +552,13 @@ func applyDiagonal(
 
 	}
 
-	if len(gapsRead.Regions) > 0 {
-		// logrus.WithFields(logrus.Fields{
-		// 	"read":       diagonalRead,
-		// 	"genome":     diagonalGenome,
-		// 	"mismatches": result.MismatchesRead,
-		// }).Debug("filled gap")
-	}
+	// if len(gapsRead.Regions) > 0 {
+	// 	logrus.WithFields(logrus.Fields{
+	// 		"read":       diagonalRead,
+	// 		"genome":     diagonalGenome,
+	// 		"mismatches": result.MismatchesRead,
+	// 	}).Debug("filled gap")
+	// }
 
 	// add all matches in diagonal to the result
 	for i := 0; i < len(diagonalRead.Regions); i++ {
@@ -779,6 +786,27 @@ func extendDiagonals(
 					// if num bases in gap genome is smaller then there could
 					// be an insertions in the read
 					maxBasesToMap := min(gapRead.Length(), gapGenome.Length())
+
+					indelSize := gapRead.Length() - gapGenome.Length()
+
+					// fmt.Println("indel size during gap filling:", indelSize)
+
+					if indelSize < 0 {
+						// fmt.Println("deletion detected during gap filling")
+						// fmt.Println("indel size:", -indelSize)
+						// fmt.Println(config.Mapper.Mapping.DnaMode.MaxGapLength)
+
+						if (!config.Mapper.Mapping.IsReadOriginRna &&
+							-indelSize > config.Mapper.Mapping.DnaMode.MaxGapLength) ||
+							(config.Mapper.Mapping.IsReadOriginRna &&
+								-indelSize > config.Mapper.Mapping.RnaMode.MaxGapLength) {
+							// fmt.Println("deletion too large during gap filling")
+							result.IncompleteMap = true
+							return
+						}
+					} else if indelSize > 0 {
+						// fmt.Println("insertion detected during gap filling")
+					}
 
 					// make a copy of the mismatches to be able to revert if
 					// threshold is exceeded
@@ -1102,11 +1130,6 @@ func mapReadToSequence(
 	// list of read match results
 	results := make([]*mapperutils.ReadMatchResult, 0)
 
-	// INFO: max mismatches per read is given as percentage (int, 5 = 5%)
-	// compute actual number of allowed mismatches based on read length
-	// store this in the result to prevent frequent computations
-	// maxMismatches := int((float32(config.MaxMismatchPercentage()) / 100) *
-	// 	float32(len(*read.Sequence)))
 	maxMismatches := config.Mapper.GetMaxMismatches(len(*read.Sequence))
 
 	result := &mapperutils.ReadMatchResult{

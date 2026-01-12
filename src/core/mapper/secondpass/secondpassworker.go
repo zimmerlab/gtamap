@@ -47,17 +47,17 @@ func SecondpassMappingWorker(
 
 			for {
 
-				task, ok := secondPassChan.Receive()
+				readPairMapping, ok := secondPassChan.Receive()
 
 				if !ok {
 					break
 				}
 
-				remapReadPair(task, annotation, genomeIndex)
+				remapReadPair(readPairMapping, annotation, genomeIndex)
 
 				thirdPassChan.Send(&thirdpass.ThirdPassTask{
-					ReadPairId: task.ReadPair.ReadR1.Header,
-					TargetInfo: task,
+					ReadPairId: readPairMapping.ReadPair.ReadR1.Header,
+					TargetInfo: readPairMapping,
 				})
 			}
 		}()
@@ -142,6 +142,37 @@ func remapReadPair(
 		)
 		readPairMapping.Rv = validMaps
 	}
+
+	ComputeOccurrenceWeights(readPairMapping, genomeIndex)
+}
+
+func ComputeOccurrenceWeights(
+	readPairMapping *mapperutils.ReadPairMatchResults,
+	genomeIndex *index.GenomeIndex,
+) {
+	for _, fwMapping := range readPairMapping.Fw {
+		ComputeOccurrenceWeight(fwMapping, genomeIndex)
+	}
+	for _, rvMapping := range readPairMapping.Rv {
+		ComputeOccurrenceWeight(rvMapping, genomeIndex)
+	}
+}
+
+func ComputeOccurrenceWeight(
+	result *mapperutils.ReadMatchResult,
+	genomeIndex *index.GenomeIndex,
+) {
+	countsTotal := make([]uint64, 0)
+
+	for _, r := range result.MatchedGenome.Regions {
+		for i := r.Start; i < r.End-10; i++ {
+			count := genomeIndex.KmerOccurrences.GetKmerCountAtPosition(i)
+			countsTotal = append(countsTotal, count)
+		}
+	}
+
+	result.OccurrenceWeightHarmonic = float32(utils.HarmonicMean(countsTotal))
+	result.OccurrenceWeightGeometric = float32(utils.GeometricMean(countsTotal))
 }
 
 func getUniqRemaps(
@@ -1988,7 +2019,7 @@ func extractCandidates(
 							readMatchResult.GetGenomicPosForReadPos(mm),
 						)
 
-						fmt.Println(isValid, mm, readMatchResult.GetGenomicPosForReadPos(mm))
+						// fmt.Println(isValid, mm, readMatchResult.GetGenomicPosForReadPos(mm))
 
 						if !isValid {
 							continue bothLoop

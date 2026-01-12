@@ -1,6 +1,7 @@
 package index
 
 import (
+	"bufio"
 	"encoding/gob"
 	"fmt"
 	"io/fs"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -38,6 +40,9 @@ type GenomeIndex struct {
 	// ContigRepeatmask      map[string]*ContigRepeatmask
 	RegionMask            *RegionMask
 	ContigToTargetRegions map[string]*regionvector.RegionVector // map to get the target region for a given contig
+	// KmerOccurrences       map[int]uint32                        // index in target region to kmer count in genome
+	// KmerOccurrences []uint64 // index in target region to kmer count in genome (size length-k)
+	KmerOccurrences KmerOccurrences
 }
 
 func (i *GenomeIndex) SetRegionMask(mask *RegionMask) {
@@ -530,6 +535,7 @@ func ReadGenomeIndexByFile(indexFile *os.File) *GenomeIndex {
 
 func BuildAndSerializeGenomeIndex(
 	fastaFile *os.File,
+	genomeFastaFile *os.File,
 	outputFile *os.File,
 	regionmaskFile *os.File,
 ) {
@@ -552,11 +558,153 @@ func BuildAndSerializeGenomeIndex(
 	genomeIndex := BuildGenomeIndex(fastaEntries)
 
 	// add region mask to index if provided
-	AddRegionmaskToIndex(regionmaskFile, genomeIndex)
+	AddRegionmaskToIndex(
+		regionmaskFile,
+		genomeIndex,
+	)
 
-	fmt.Println(genomeIndex.RegionMask)
+	ComputeKmerOccurrences(
+		fastaEntries[0].Sequence,
+		genomeFastaFile,
+		genomeIndex,
+	)
 
 	WriteGenomeIndex(genomeIndex, outputFile)
+}
+
+type KmerOccurrences struct {
+	KmerCounts     []uint64
+	PosToKmerIndex []int
+}
+
+func (k *KmerOccurrences) GetKmerCountAtPosition(pos int) uint64 {
+	return k.KmerCounts[k.PosToKmerIndex[pos]]
+}
+
+func ComputeKmerOccurrences(
+	targetSequence []byte,
+	genomeFile *os.File,
+	genomeIndex *GenomeIndex,
+) {
+	geneKmers := make(map[[10]byte]int)
+
+	kmerCounts := make([]uint64, 0)
+	posToKmerIndex := make([]int, len(targetSequence)-10)
+
+	for kStart := 0; kStart < len(targetSequence)-10; kStart++ {
+		seqBytes := *(*[10]byte)((targetSequence)[kStart : kStart+10])
+
+		kmerIndex, foundGeneKmer := geneKmers[seqBytes]
+
+		if !foundGeneKmer {
+			geneKmers[seqBytes] = len(kmerCounts)
+			kmerIndex = len(kmerCounts)
+			kmerCounts = append(kmerCounts, 0)
+		}
+
+		posToKmerIndex[kStart] = kmerIndex
+	}
+
+	timerStart := time.Now()
+
+	genomeKmers := make(map[[10]byte]uint64, int(math.Pow(5, 10)))
+	genomeMinCount := uint64(math.MaxUint64)
+	genomeMaxCount := uint64(0)
+
+	genomeContigs, err := dataloader.ReadFasta(genomeFile)
+	if err != nil {
+		logrus.Fatal("Error reading genome fasta file", err)
+	}
+
+	for i, contig := range genomeContigs {
+
+		logrus.WithFields(logrus.Fields{
+			"chromosome": contig.Header,
+			"number":     i + 1,
+			"total":      len(genomeContigs),
+		}).Info("Computing kmer occurrences")
+
+		for kStart := 0; kStart < len(contig.Sequence)-10; kStart++ {
+			seqBytes := *(*[10]byte)((contig.Sequence)[kStart : kStart+10])
+
+			if _, exists := genomeKmers[seqBytes]; !exists {
+				genomeKmers[seqBytes] = 0
+			}
+			genomeKmers[seqBytes]++
+
+			if genomeKmers[seqBytes] < genomeMinCount {
+				genomeMinCount = genomeKmers[seqBytes]
+			}
+			if genomeKmers[seqBytes] > genomeMaxCount {
+				genomeMaxCount = genomeKmers[seqBytes]
+			}
+
+			kmerIndex, foundGeneKmer := geneKmers[seqBytes]
+			if !foundGeneKmer {
+				continue
+			}
+
+			kmerCounts[kmerIndex]++
+		}
+
+		// break
+	}
+
+	d := time.Since(timerStart)
+
+	fmt.Println("Genome kmer counts stats:")
+	fmt.Println("Min:", genomeMinCount)
+	fmt.Println("Max:", genomeMaxCount)
+
+	type kmerCount struct {
+		kmer  [10]byte
+		count uint64
+	}
+
+	sorted := make([]kmerCount, 0, len(genomeKmers))
+	for kmer, count := range genomeKmers {
+		sorted = append(sorted, kmerCount{kmer, count})
+	}
+
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].count < sorted[j].count
+	})
+
+	// Print 5 lowest
+	for i := 0; i < 5 && i < len(sorted); i++ {
+		fmt.Printf("%s -> %d\n", string(sorted[i].kmer[:]), sorted[i].count)
+	}
+
+	// Print 5 highest
+	for i := len(sorted) - 5; i < len(sorted); i++ {
+		if i >= 0 {
+			fmt.Printf("%s -> %d\n", string(sorted[i].kmer[:]), sorted[i].count)
+		}
+	}
+
+	file, err := os.Create("/home/sam/Data/kmers.tsv")
+	if err != nil {
+		logrus.Fatal(err)
+	}
+	defer file.Close()
+
+	writer := bufio.NewWriter(file)
+	defer writer.Flush()
+
+	for _, kc := range sorted {
+		fmt.Fprintf(writer, "%s\t%d\n", string(kc.kmer[:]), kc.count)
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"duration": utils.FormatDuration(d),
+	}).Info("Finished computing genomic kmer occurrences")
+
+	// genomeIndex.KmerOccurrences = indexToCount
+	// genomeIndex.KmerOccurrences = genomicKmerCounts
+	genomeIndex.KmerOccurrences = KmerOccurrences{
+		KmerCounts:     kmerCounts,
+		PosToKmerIndex: posToKmerIndex,
+	}
 }
 
 func AddRegionmaskToIndex(
