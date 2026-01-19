@@ -1,6 +1,6 @@
 package config
 
-const toolVersion string = "0.4.0"
+const toolVersion string = "0.4.1"
 
 var kmerLength uint8 = 10
 
