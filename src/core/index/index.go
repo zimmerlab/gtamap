@@ -584,6 +584,10 @@ func (k *KmerOccurrences) GetKmerCountAtPosition(pos int) uint64 {
 }
 
 func ReadGenomeKmerOccurrences(f *os.File) map[[10]byte]uint64 {
+	if f == nil {
+		return make(map[[10]byte]uint64)
+	}
+
 	genomeKmers := make(map[[10]byte]uint64, int(math.Pow(5, 10)))
 
 	scanner := bufio.NewScanner(f)
@@ -707,7 +711,7 @@ func ComputeKmerOccurrences(
 	kmerCounts := make([]uint64, 0)
 	posToKmerIndex := make([]int, len(targetSequence)-10)
 
-	showWarning := true
+	showWarning := config.Mapper.Index.KmerOccurrencesFilePath != ""
 
 	for kStart := 0; kStart < len(targetSequence)-10; kStart++ {
 		seqBytes := *(*[10]byte)((targetSequence)[kStart : kStart+10])
