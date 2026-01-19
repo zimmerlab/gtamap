@@ -25,7 +25,7 @@ make clean
 
 ### Manual Build
 ```bash
-go build -o gtamap ./src
+go build -o gtamap ./src/main.go
 ```
 
 ## Key Features
