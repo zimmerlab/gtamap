@@ -1,2 +1,0 @@
-mappingTaskProducerTime	mapperWorkerTime	confidentWorkerTime	secondPassWorkerTime	outputWorkerTime	mappingTaskProducerStart	mappingTaskProducerEnd	mapperWorkerStart	mapperWorkerEnd	confidentWorkerStart	confidentWorkerEnd	secondPassWorkerStart	secondPassWorkerEnd	outputWorkerStart	outputWorkerEnd
-141706059	451345625	13215580	14236	1205422345	16:30:13	16:30:14	16:30:13	16:30:14	16:30:14	16:30:14	16:30:14	16:30:14	16:30:14	16:30:15
