@@ -1,6 +1,33 @@
 # GTAMap
 GTAMap is a locus-centric read mapping tool that inverts the traditional mapping paradigm. Rather than asking "where does this read belong?", GTAMap asks "what evidence exists for this locus?" This approach maximizes sensitivity for hypothesis-driven analysis of specific genomic regions, particularly genes with paralogs, pseudogenes, or repetitive elements.
 
+## Building from Source
+
+### Prerequisites
+- Go 1.22 or later
+
+### Using Make
+```bash
+make build
+```
+
+This compiles the application and produces the `gtamap` executable in the `build/` directory.
+
+To install to `/usr/local/bin/`:
+```bash
+make install
+```
+
+To clean build artifacts:
+```bash
+make clean
+```
+
+### Manual Build
+```bash
+go build -o gtamap ./src
+```
+
 ## Key Features
 
 - Targeted mapping to user-defined genomic regions

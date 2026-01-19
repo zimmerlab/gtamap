@@ -7,6 +7,7 @@ eval/repeatmasker/*.png
 gtamap
 gtamap_config.yaml
 output/
+build/
 
 .idea/
 .vite/
