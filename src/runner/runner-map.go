@@ -180,8 +180,8 @@ func ExecMap() {
 	// }
 
 	fastqReader, errFastqReader := fastq.InitFromPaths(
-		&config.Mapper.Mapping.FastqR1FilePath,
-		&config.Mapper.Mapping.FastqR2FilePath,
+		config.Mapper.Mapping.FastqR1FilePath,
+		config.Mapper.Mapping.FastqR2FilePath,
 	)
 	if errFastqReader != nil {
 		logrus.Fatalf("Could not initialize fastq reader: %v", errFastqReader)

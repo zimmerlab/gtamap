@@ -22,7 +22,6 @@ type ArgsIndexPreRegion struct {
 }
 
 func GetCommandIndexPreRegion() *cobra.Command {
-
 	var fastaFilePath string
 	var fastaIndexFilePath string
 	var singleFile bool
@@ -34,7 +33,6 @@ func GetCommandIndexPreRegion() *cobra.Command {
 		Use:   "index-pre-region",
 		Short: "Extract target region sequences from a genome",
 		Run: func(cmd *cobra.Command, args []string) {
-
 			SetConfigValue("index.fasta_file_path", fastaFilePath)
 			SetConfigValue("index.fasta_index_file_path", fastaIndexFilePath)
 			SetConfigValue("index.output.single_file", singleFile)
@@ -123,7 +121,6 @@ type IndexPreRegionArgs struct {
 }
 
 func parseRegionString(regionStr string) (IndexPreRegionArgs, error) {
-
 	rArr := strings.Split(regionStr, ":")
 	if len(rArr) != 2 {
 		return IndexPreRegionArgs{}, fmt.Errorf("invalid region format: %s", regionStr)
@@ -154,7 +151,6 @@ func parseRegionString(regionStr string) (IndexPreRegionArgs, error) {
 }
 
 func ExecIndexPreRegion() {
-
 	logrus.Info("Extracting region sequence from genome")
 
 	regions := make([]IndexPreRegionArgs, len(config.Mapper.Index.Regions))
@@ -173,5 +169,6 @@ func ExecIndexPreRegion() {
 		regions[0].Start,
 		regions[0].End,
 		config.Mapper.General.OutputDir,
+		config.Mapper.Index.Output.FastaFileName,
 	)
 }

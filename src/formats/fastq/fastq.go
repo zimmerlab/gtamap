@@ -43,21 +43,21 @@ func (pr *ProgressReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func InitFromPaths(pathR1Reads *string, pathR2Reads *string) (*Reader, error) {
+func InitFromPaths(pathR1Reads string, pathR2Reads string) (*Reader, error) {
 	var fileR1Reads *os.File = nil
 	var errR1 error = nil
 
 	var fileR2Reads *os.File = nil
 	var errR2 error = nil
 
-	fileR1Reads, errR1 = os.Open(*pathR1Reads)
+	fileR1Reads, errR1 = os.Open(pathR1Reads)
 	if errR1 != nil {
 		logrus.Fatal("Error reading R1 reads: ", errR1)
 	}
 
 	// if R2 reads are given, open them as well
-	if pathR2Reads != nil {
-		fileR2Reads, errR2 = os.Open(*pathR2Reads)
+	if pathR2Reads != "" {
+		fileR2Reads, errR2 = os.Open(pathR2Reads)
 		if errR2 != nil {
 			logrus.Fatal("Error reading R2 reads: ", errR2)
 		}
@@ -67,9 +67,18 @@ func InitFromPaths(pathR1Reads *string, pathR2Reads *string) (*Reader, error) {
 }
 
 func InitFromFiles(fastqR1File *os.File, fastqR2File *os.File) (*Reader, error) {
+	r1Name := "<not provided>"
+	if fastqR1File != nil {
+		r1Name = fastqR1File.Name()
+	}
+	r2Name := "<not provided>"
+	if fastqR2File != nil {
+		r2Name = fastqR2File.Name()
+	}
+
 	logrus.WithFields(logrus.Fields{
-		"R1": fastqR1File.Name(),
-		"R2": fastqR2File.Name(),
+		"R1": r1Name,
+		"R2": r2Name,
 	}).Debug("Initializing reader")
 
 	var progressReaderR1 *ProgressReader = nil
@@ -98,6 +107,11 @@ func InitFromFiles(fastqR1File *os.File, fastqR2File *os.File) (*Reader, error) 
 	}
 
 	logrus.Debug("Initialized reader with R1 reads")
+
+	progressReaderR2 = &ProgressReader{
+		r:          nil,
+		TotalBytes: 0,
+	}
 
 	// if R2 reads are given, open them as well
 	if fastqR2File != nil {

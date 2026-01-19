@@ -27,7 +27,6 @@ func SetConfigValue(key string, value any) {
 }
 
 func Execute() {
-
 	logrus.SetFormatter(
 		&logrus.TextFormatter{
 			FullTimestamp: true,
@@ -75,12 +74,16 @@ func Execute() {
 	indexPreRegionCmd := GetCommandIndexPreRegion()
 	indexCmd := GetCommandIndex()
 	mapCmd := GetCommandMap()
+	generateConfCmd := GetCommandGenerateConf()
+	computeKmerOccCmd := GetCommandKmerOccurrences()
 
 	rootCmd.AddCommand(
 		indexPreCmd,
 		indexPreRegionCmd,
 		indexCmd,
 		mapCmd,
+		generateConfCmd,
+		computeKmerOccCmd,
 	)
 
 	if err := rootCmd.Execute(); err != nil {

@@ -19,6 +19,7 @@ func ExtractSequenceFromFastaForIndex(
 	start int,
 	end int,
 	outputPath string,
+	outputFileName string,
 ) {
 	// fastaIndexPath := fastaPath + ".fai"
 
@@ -53,7 +54,12 @@ func ExtractSequenceFromFastaForIndex(
 
 	name := fmt.Sprintf("%s:%d-%d", chromosome, start, end)
 
-	outFilePath := filepath.Join(outputPath, name+".fa")
+	var outFilePath string
+	if outputFileName != "" {
+		outFilePath = filepath.Join(outputPath, outputFileName)
+	} else {
+		outFilePath = filepath.Join(outputPath, name+".fa")
+	}
 
 	outFile, errOpen := os.Create(outFilePath)
 	if errOpen != nil {
@@ -95,7 +101,6 @@ func ExtractGeneSequenceFromGtfAndFastaForIndex(
 	downstreamBases int,
 	singleFasta bool,
 ) error {
-
 	// fastaIndexPath := fastaPath + ".fai"
 
 	logrus.WithFields(logrus.Fields{
@@ -182,7 +187,6 @@ func ExtractGeneSequenceFromGtfAndFastaForIndex(
 		outFile.Close()
 
 	} else {
-
 		// write each gene to separate fa file
 		for _, gene := range geneInfo {
 			if gene == nil {

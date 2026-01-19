@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 )
@@ -31,8 +32,12 @@ func Abs(x int) int {
 	return x
 }
 
-func ScoreSpliceSites(donorFirstBase byte, donorSecondBase byte, acceptorFirstBase byte,
-	acceptorSecondBase byte, isForwardStrand bool,
+func ScoreSpliceSites(
+	donorFirstBase byte,
+	donorSecondBase byte,
+	acceptorFirstBase byte,
+	acceptorSecondBase byte,
+	isForwardStrand bool,
 ) (int, bool) {
 	if isForwardStrand {
 		if donorFirstBase == byte('G') && donorSecondBase == byte('T') &&
@@ -121,11 +126,18 @@ func ComplementDnaBytes(dna []byte) ([]byte, error) {
 	return complement, nil
 }
 
-func ReverseBytes(s []byte) []byte {
+func ReverseBytesInplace(s []byte) {
 	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
 		s[i], s[j] = s[j], s[i]
 	}
-	return s
+}
+
+func ReverseBytes(s []byte) []byte {
+	newBytes := make([]byte, len(s))
+	for i := range s {
+		newBytes[i] = s[len(s)-1-i]
+	}
+	return newBytes
 }
 
 func FormatDuration(d time.Duration) string {
@@ -168,4 +180,45 @@ func ArrayIntToString(arr []int, sep string) string {
 		builder.WriteString(fmt.Sprintf("%d", item))
 	}
 	return builder.String()
+}
+
+const (
+	valueBits = 29
+	valueMask = (uint64(1) << valueBits) - 1
+)
+
+func Pack(index uint16, value uint32) uint64 {
+	// Optional safety checks (recommended during development)
+	if index >= 500 {
+		panic("index overflow")
+	}
+	if value >= 300_000_000 {
+		panic("value overflow")
+	}
+
+	return (uint64(index) << valueBits) | uint64(value)
+}
+
+func UnpackIndex(packed uint64) uint16 {
+	return uint16(packed >> valueBits)
+}
+
+func UnpackValue(packed uint64) uint32 {
+	return uint32(packed & valueMask)
+}
+
+func GeometricMean(counts []uint64) float64 {
+	var logSum float64
+	for _, count := range counts {
+		logSum += math.Log(float64(count))
+	}
+	return math.Exp(logSum / float64(len(counts)))
+}
+
+func HarmonicMean(counts []uint64) float64 {
+	var sumReciprocals float64
+	for _, count := range counts {
+		sumReciprocals += 1.0 / float64(count)
+	}
+	return float64(len(counts)) / sumReciprocals
 }

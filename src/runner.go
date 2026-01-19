@@ -1,495 +1,399 @@
 package main
 
-// func main() {
-// 	// ff, errr := os.Create("cpu.pprof")
-// 	// if errr != nil {
-// 	// 	panic(errr)
-// 	// }
-// 	// defer ff.Close()
-// 	// if err := pprof.StartCPUProfile(ff); err != nil {
-// 	// 	panic(err)
-// 	// }
-// 	// defer pprof.StopCPUProfile()
-//
-// 	parser := argparse.NewParser(
-// 		"gtamap",
-// 		"Gene-centric spliced read mapping",
-// 	)
-//
-// 	var cmdIndexPre *argparse.Command = parser.NewCommand(
-// 		"index-pre",
-// 		"Extract gene sequences from genome.",
-// 	)
-//
-// 	var fastaFileIndexPre *string = cmdIndexPre.String(
-// 		"",
-// 		"fasta",
-// 		&argparse.Options{
-// 			Required: true,
-// 			Help: "Nucleotide sequences (FASTA) file (currently only " +
-// 				"non-compressed).",
-// 		},
-// 	)
-// 	var gtfFileIndexPre *string = cmdIndexPre.String(
-// 		"",
-// 		"gtf",
-// 		&argparse.Options{
-// 			Required: true,
-// 			Help: "Genome annotation (GTF) file (currently only " +
-// 				"non-compressed).",
-// 		},
-// 	)
-// 	var separateExtraction *bool = cmdIndexPre.Flag(
-// 		"",
-// 		"splitgenes",
-// 		&argparse.Options{
-// 			Help: "Extract gene sequences into separate fasta files, if " +
-// 				"more than one gene id is specified in --geneids",
-// 		},
-// 	)
-// 	var outputDirIndexPre *string = cmdIndexPre.String(
-// 		"",
-// 		"output",
-// 		&argparse.Options{
-// 			Required: true,
-// 			Help:     "Output directory for extracted gene sequences.",
-// 		},
-// 	)
-// 	var geneIdsIndexPre *string = cmdIndexPre.String(
-// 		"",
-// 		"geneids",
-// 		&argparse.Options{
-// 			Required: false,
-// 			Help:     "Gene IDs to extract (comma-separated).",
-// 		},
-// 	)
-// 	var upstreamIndexPre *int = cmdIndexPre.Int(
-// 		"",
-// 		"upstream", &argparse.Options{
-// 			Required: false,
-// 			Help: "Number of bases to add upstream of the gene start " +
-// 				"position.",
-// 			Default: 0,
-// 		},
-// 	)
-// 	var downstreamIndexPre *int = cmdIndexPre.Int(
-// 		"",
-// 		"downstream",
-// 		&argparse.Options{
-// 			Required: false,
-// 			Help: "Number of bases to add downstream of the gene end " +
-// 				"position.",
-// 			Default: 0,
-// 		},
-// 	)
-// 	var logLevelIndexPre *string = cmdIndexPre.Selector(
-// 		"",
-// 		"loglevel",
-// 		[]string{"ERROR", "INFO", "DEBUG"},
-// 		&argparse.Options{
-// 			Required: false,
-// 			Help:     "Log output level.",
-// 			Default:  "INFO",
-// 		},
-// 	)
-//
-// 	var cmdIndexPreRegion *argparse.Command = parser.NewCommand("index-pre-region", "Extract a specific sequence from genome.")
-// 	var fastaFileIndexPreRegion *string = cmdIndexPreRegion.String("", "fasta", &argparse.Options{
-// 		Required: true,
-// 		Help:     "Nucleotide sequences (FASTA) file (currently only non-compressed).",
-// 	})
-// 	var outputDirIndexPreRegion *string = cmdIndexPreRegion.String("", "output", &argparse.Options{
-// 		Required: true,
-// 		Help:     "Output directory for extracted gene sequences.",
-// 	})
-// 	var regionIndexPreRegion *string = cmdIndexPreRegion.String("", "region", &argparse.Options{
-// 		Required: true,
-// 		Help:     "Region to extract (e.g. 1:1000-2000).",
-// 	})
-// 	var logLevelIndexPreRegion *string = cmdIndexPreRegion.Selector("", "loglevel", []string{"ERROR", "INFO", "DEBUG"}, &argparse.Options{
-// 		Required: false,
-// 		Help:     "Log output level.",
-// 		Default:  "INFO",
-// 	})
-//
-// 	var cmdIndex *argparse.Command = parser.NewCommand("index", "Build the GTAMap index (.gtai).")
-// 	var fastaFile *os.File = cmdIndex.File("", "fasta", os.O_RDONLY, 0o600, &argparse.Options{
-// 		Required: true,
-// 		Help:     "Nucleotide sequences (FASTA) file.",
-// 	})
-// 	// repeatMaskerFile := cmdIndex.File(
-// 	// 	"", "repeatmask",
-// 	// 	os.O_RDONLY, 0o600,
-// 	// 	&argparse.Options{
-// 	// 		Required: false,
-// 	// 		Help:     "Path to genome wide repeatmasker file (hg38.fa.out).",
-// 	// 	})
-// 	var regionMaskBedFileIndex *os.File = cmdIndex.File(
-// 		"",
-// 		"regionmaskBed",
-// 		os.O_RDONLY,
-// 		0o600,
-// 		&argparse.Options{
-// 			Required: false,
-// 			Help: "Path to BED file containing regions to mask during " +
-// 				"index construction.",
-// 		},
-// 	)
-// 	var regionMaskPriorityFileIndex *os.File = cmdIndex.File(
-// 		"",
-// 		"regionmaskPriorities",
-// 		os.O_RDONLY,
-// 		0o600,
-// 		&argparse.Options{
-// 			Required: false,
-// 			Help: "Path to TSV file containing region names and their " +
-// 				"corresponding priority (higher number = higher priority).",
-// 		},
-// 	)
-// 	var outputFileName *string = cmdIndex.String("", "output", &argparse.Options{
-// 		Required: true,
-// 		Help:     "Output file (file extension: .gtai).",
-// 	})
-// 	var logLevelIndex *string = cmdIndex.Selector("", "loglevel", []string{"ERROR", "INFO", "DEBUG"}, &argparse.Options{
-// 		Required: false,
-// 		Help:     "Log output level.",
-// 		Default:  "INFO",
-// 	})
-//
-// 	var cmdMap *argparse.Command = parser.NewCommand("map", "Map reads to the GTAMap index.")
-// 	var indexFile *os.File = cmdMap.File("", "index", os.O_RDONLY, 0o600, &argparse.Options{
-// 		Required: true,
-// 		Help:     "GTAMap index (.gtai) file",
-// 	})
-// 	var fastqFwFile *os.File = cmdMap.File("", "r1", os.O_RDONLY, 0o600, &argparse.Options{
-// 		Required: true,
-// 		Help:     "FASTQ file containing the forward reads.",
-// 	})
-// 	var fastqRwFile *os.File = cmdMap.File("", "r2", os.O_RDONLY, 0o600, &argparse.Options{
-// 		Required: false,
-// 		Help:     "FASTQ file containing the reverse reads.",
-// 	})
-// 	var outputFileMap *string = cmdMap.String("", "output", &argparse.Options{
-// 		Required: true,
-// 		Help:     "Output SAM file (file extension: .sam).",
-// 		Default:  "",
-// 	})
-// 	var logFileMap *string = cmdMap.String("", "log", &argparse.Options{
-// 		Help:    "Output log file.",
-// 		Default: "",
-// 	})
-// 	var readType *string = cmdMap.String("", "read-type", &argparse.Options{
-// 		Required: true,
-// 		Help:     "Specify read type (DNA or RNA).",
-// 	})
-// 	var logLevelMap *string = cmdMap.Selector("", "loglevel", []string{"ERROR", "INFO", "DEBUG"}, &argparse.Options{
-// 		Required: false,
-// 		Help:     "log output level",
-// 		Default:  "INFO",
-// 	})
-// 	var numThreads *int = cmdMap.Int("", "threads", &argparse.Options{
-// 		Required: false,
-// 		Help:     "Number of threads to use (default: all)",
-// 		Default:  -1,
-// 	})
-// 	var regionmaskBedFileMap *os.File = cmdMap.File(
-// 		"",
-// 		"regionmaskBed",
-// 		os.O_RDONLY, 0o600,
-// 		&argparse.Options{
-// 			Required: false,
-// 			Help: "Path to BED file containing regions to mask during " +
-// 				"index construction.",
-// 		},
-// 	)
-// 	var regionmaskPriorityFileMap *os.File = cmdMap.File(
-// 		"",
-// 		"regionmaskPriorities",
-// 		os.O_RDONLY,
-// 		0o600,
-// 		&argparse.Options{
-// 			Required: false,
-// 			Help: "Path to TSV file containing region names and their " +
-// 				"corresponding priority (higher number = higher priority).",
-// 		},
-// 	)
-//
-// 	// var paralogFilePathMap *string = cmdMap.String("", "paralogs", &argparse.Options{
-// 	// 	Required: false,
-// 	// 	Help:     "Paralog region meta file for target regions.",
-// 	// 	Default:  "",
-// 	// })
-//
-// 	// OLD paralog mode (currently not used anymore)
-// 	// var cmdParalogPre *argparse.Command = parser.NewCommand("paralog", "Extract known paralog genes from ENSEMBL Database and prepare paralog.csv for main target index extension.")
-// 	// var geneIdsParalogPre *string = cmdParalogPre.String("", "geneids", &argparse.Options{
-// 	// 	Required: false,
-// 	// 	Help:     "Query Gene IDs for extracting paralog genes from DB (comma-separated).",
-// 	// })
-// 	// var indexDirParalogPre *string = cmdParalogPre.String("", "indexdir", &argparse.Options{
-// 	// 	Required: false,
-// 	// 	Help:     "Target directory for .gai index files of paralog genes.",
-// 	// 	Default:  "index",
-// 	// })
-// 	// var fastaDirParalogPre *string = cmdParalogPre.String("", "fastadir", &argparse.Options{
-// 	// 	Required: false,
-// 	// 	Help:     "Target directory for .fa files of paralog genes.",
-// 	// 	Default:  "fasta_in",
-// 	// })
-// 	// var speciesParalogPre *string = cmdParalogPre.String("", "species", &argparse.Options{
-// 	// 	Required: false,
-// 	// 	Help:     "Corresponding species of target genes. Species name needs to exist in https://www.ensembl.org/index.html",
-// 	// 	Default:  "human",
-// 	// })
-// 	// var fastaFileParalogPre *string = cmdParalogPre.String("", "fasta", &argparse.Options{
-// 	// 	Required: true,
-// 	// 	Help:     "Nucleotide sequences (FASTA) file (currently only non-compressed). Note: A corresponding .fai file needs to be in the same dir as the genome.fa file.",
-// 	// })
-// 	// var gtfFileParalogPre *string = cmdParalogPre.String("", "gtf", &argparse.Options{
-// 	// 	Required: true,
-// 	// 	Help:     "Genome annotation (GTF) file (currently only non-compressed).",
-// 	// })
-// 	// var paralogMetaOutParalogPre *string = cmdParalogPre.String("", "meta", &argparse.Options{
-// 	// 	Required: false,
-// 	// 	Help:     "Prefix of paralog csv file.",
-// 	// 	Default:  "paralogs",
-// 	// })
-// 	// var logLevelParalogPre *string = cmdParalogPre.Selector("", "loglevel", []string{"ERROR", "INFO", "DEBUG"}, &argparse.Options{
-// 	// 	Required: false,
-// 	// 	Help:     "Log output level.",
-// 	// 	Default:  "INFO",
-// 	// })
-//
-// 	err := parser.Parse(os.Args)
-// 	if err != nil {
-// 		fmt.Print(parser.Usage(err))
-// 		return
-// 	}
-//
-// 	logrus.SetFormatter(&logrus.TextFormatter{
-// 		FullTimestamp: true,
-// 	})
-//
-// 	mapperConfig, err := config.LoadMapperConfig()
-// 	fmt.Println(mapperConfig)
-//
-// 	if cmdIndexPre.Happened() {
-//
-// 		level, _ := logrus.ParseLevel(*logLevelIndexPre)
-// 		logrus.SetLevel(level)
-//
-// 		printBanner()
-// 		logrus.Info("Extracting gene sequences from genome")
-//
-// 		// parsing gene ids
-// 		geneIds := make(map[string]struct{})
-// 		if *geneIdsIndexPre != "" {
-// 			genes := strings.Split(*geneIdsIndexPre, ",")
-// 			for _, gene := range genes {
-// 				geneIds[gene] = struct{}{}
-// 			}
-// 		}
-//
-// 		index.ExtractGeneSequenceFromGtfAndFastaForIndex(*gtfFileIndexPre, *fastaFileIndexPre,
-// 			*outputDirIndexPre, geneIds, *upstreamIndexPre, *downstreamIndexPre, *separateExtraction)
-//
-// 		logrus.Info("Done")
-//
-// 	} else if cmdIndexPreRegion.Happened() {
-//
-// 		level, _ := logrus.ParseLevel(*logLevelIndexPreRegion)
-// 		logrus.SetLevel(level)
-//
-// 		printBanner()
-// 		logrus.Info("Extracting region sequence from genome")
-//
-// 		// parsing region
-// 		region := strings.Split(*regionIndexPreRegion, ":")
-// 		if len(region) != 2 {
-// 			logrus.Fatal("Invalid region format. Expected format: <chromosome>:<start>-<end>")
-// 		}
-// 		chromosome := region[0]
-// 		startEnd := strings.Split(region[1], "-")
-// 		if len(startEnd) != 2 {
-// 			logrus.Fatal("Invalid region format. Expected format: <chromosome>:<start>-<end>")
-// 		}
-// 		start, err := strconv.Atoi(startEnd[0])
-// 		if err != nil || start < 0 {
-// 			logrus.Fatal("Invalid start position. Expected a positive integer.")
-// 		}
-// 		end, err := strconv.Atoi(startEnd[1])
-// 		if err != nil || end <= start {
-// 			logrus.Fatal("Invalid end position. Expected an integer greater than start position.")
-// 		}
-//
-// 		index.ExtractSequenceFromFastaForIndex(*fastaFileIndexPreRegion, chromosome, start, end,
-// 			*outputDirIndexPreRegion)
-//
-// 		logrus.Info("Done")
-//
-// 	} else if cmdIndex.Happened() {
-//
-// 		level, _ := logrus.ParseLevel(*logLevelIndex)
-// 		logrus.SetLevel(level)
-//
-// 		printBanner()
-// 		logrus.Info("Building GTAMap index (.gtai)")
-//
-// 		// ensure suffix .gtai
-// 		if !strings.HasSuffix(*outputFileName, ".gtai") {
-// 			*outputFileName += ".gtai"
-// 		}
-//
-// 		outputFileIndex, err := os.OpenFile(*outputFileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
-// 		if err != nil {
-// 			logrus.Fatalf("Could not open output sam file: %v", err)
-// 		}
-//
-// 		if *regionMaskBedFileIndex == (os.File{}) {
-// 			regionMaskBedFileIndex = nil
-// 		}
-// 		if *regionMaskPriorityFileIndex == (os.File{}) {
-// 			regionMaskPriorityFileIndex = nil
-// 		}
-// 		if (regionMaskBedFileIndex == nil && regionMaskPriorityFileIndex != nil) ||
-// 			(regionMaskBedFileIndex != nil && regionMaskPriorityFileIndex == nil) {
-// 			logrus.Fatal("Both --regionmaskBed and --regionmaskPriorities need to be provided to use region masking.")
-// 		}
-//
-// 		// if *repeatMaskerFile == (os.File{}) {
-// 		// 	repeatMaskerFile = nil
-// 		// }
-//
-// 		index.BuildAndSerializeGenomeIndex(
-// 			fastaFile,
-// 			outputFileIndex,
-// 			regionMaskBedFileIndex,
-// 			regionMaskPriorityFileIndex,
-// 		)
-//
-// 	} else if cmdMap.Happened() {
-//
-// 		level, _ := logrus.ParseLevel(*logLevelMap)
-// 		logrus.SetLevel(level)
-//
-// 		if *logFileMap != "" {
-// 			config.LogOut = *logFileMap
-// 		}
-//
-// 		if *readType != "DNA" && *readType != "RNA" {
-// 			log.Fatalf("Invalid read type: %s. Must be DNA or RNA.", *readType)
-// 		}
-//
-// 		config.IsOriginRNA = *readType == "RNA"
-//
-// 		printBanner()
-// 		logrus.Info("Mapping reads to given index")
-//
-// 		genomeIndex := index.ReadGenomeIndexByFile(indexFile)
-//
-// 		if *regionmaskBedFileMap == (os.File{}) {
-// 			regionmaskBedFileMap = nil
-// 		}
-// 		if *regionmaskPriorityFileMap == (os.File{}) {
-// 			regionmaskPriorityFileMap = nil
-// 		}
-// 		if (regionmaskBedFileMap == nil &&
-// 			regionmaskPriorityFileMap != nil) ||
-// 			(regionmaskBedFileMap != nil &&
-// 				regionmaskPriorityFileMap == nil) {
-// 			logrus.Fatal("Both --regionmaskBed and --regionmaskPriorities " +
-// 				"need to be provided to use region masking.")
-// 		}
-// 		// add region mask to index if provided
-// 		if regionmaskBedFileMap != nil && regionmaskPriorityFileMap != nil {
-// 			index.AddRegionmaskToIndex(regionmaskBedFileMap, regionmaskPriorityFileMap, genomeIndex)
-//
-// 			logrus.WithFields(logrus.Fields{
-// 				"region mask":   regionmaskBedFileMap.Name(),
-// 				"priority file": regionmaskPriorityFileMap.Name(),
-// 			}).Info("Using region mask bed file and priority file")
-//
-// 		} else {
-// 			logrus.Info("No region mask used")
-// 		}
-//
-// 		reader, errFastq := fastq.InitFromFiles(fastqFwFile, fastqRwFile)
-// 		if errFastq != nil {
-// 			logrus.Fatalf("Could not initialize fastq reader: %v", errFastq)
-// 		}
-//
-// 		writer := datawriter.InitFromPath(*outputFileMap)
-//
-// 		// Old paralog logic where main index is extended by using paralog indices
-// 		// if *paralogFilePathMap != "" {
-// 		// 	logrus.Info("Found paralog file. Reading in paralog indices.")
-// 		// 	paralogFileMap, err := os.Open(*paralogFilePathMap)
-// 		// 	if err != nil {
-// 		// 		panic("Error reading provided paralog file. Make sure it exists")
-// 		// 	}
-// 		// 	genomeIndex.LoadParalogs(paralogFileMap)
-// 		// }
-//
-// 		mapper.MapAll(genomeIndex, reader, writer, numThreads)
-//
-// 	} else {
-// 		fmt.Println(parser.Usage("no valid command supplied"))
-// 		return
-// 	}
-// 	// else if cmdParalogPre.Happened() {
-// 	// 	level, _ := logrus.ParseLevel(*logLevelParalogPre)
-// 	// 	logrus.SetLevel(level)
-// 	//
-// 	// 	printBanner()
-// 	// 	logrus.Info("Scanning DB for paralogs of specified target IDs.")
-// 	//
-// 	// 	// make output dirs if non existent
-// 	// 	err := os.MkdirAll(*indexDirParalogPre, 0o755)
-// 	// 	if err != nil {
-// 	// 		logrus.Fatalf("Something went wrong creating dir %s: %s", *indexDirParalogPre, err)
-// 	// 	}
-// 	//
-// 	// 	err = os.MkdirAll(*fastaDirParalogPre, 0o755)
-// 	// 	if err != nil {
-// 	// 		logrus.Fatalf("Something went wrong creating dir %s: %s", *indexDirParalogPre, err)
-// 	// 	}
-// 	//
-// 	// 	// parsing gene ids from cmd parser arg
-// 	// 	targetGeneIds := make([]string, 0)
-// 	// 	if *geneIdsParalogPre != "" {
-// 	// 		genes := strings.Split(*geneIdsParalogPre, ",")
-// 	// 		for _, gene := range genes {
-// 	// 			targetGeneIds = append(targetGeneIds, gene)
-// 	// 		}
-// 	// 	}
-// 	//
-// 	// 	// I. get paralog seqs per target gene (a map where each target region has a set of paralog ids)
-// 	// 	targetParalogs := extraction.GetParalogs(targetGeneIds, *speciesParalogPre)
-// 	//
-// 	// 	// II. check if some of the gene ids are already present in --fastadir
-// 	// 	paralogsToExtractSeq := index.OptimizeFastaExtraction(targetParalogs, fastaDirParalogPre)
-// 	//
-// 	// 	// III. extract all identified non-existent paralogs into separate .fa files in '--fastadir'
-// 	// 	for target, paralogs := range paralogsToExtractSeq {
-// 	// 		if len(paralogs) > 0 {
-// 	// 			logrus.Infof("Extracting %s paralog sequences of target region %s into %s", strconv.Itoa(len(paralogs)), target, *fastaDirParalogPre)
-// 	// 			index.ExtractGeneSequenceFromGtfAndFastaForIndex(*gtfFileParalogPre, *fastaFileParalogPre,
-// 	// 				*fastaDirParalogPre, paralogs, 0, 0, true)
-// 	// 			logrus.Infof("Finished extracting %s paralog sequences of target region %s into %s", strconv.Itoa(len(paralogs)), target, *fastaDirParalogPre)
-// 	// 		}
-// 	// 	}
-// 	//
-// 	// 	// IV. get only ids where index non-existent in --indexdir
-// 	// 	paralogsToSerialize := index.OptimizeIndexSerialisation(targetParalogs, indexDirParalogPre)
-// 	//
-// 	// 	// V. read in all seqs in '--fastadir' and serialize index into '--indexdir' for each paralog seq
-// 	// 	index.BuildAndSerializeAll(paralogsToSerialize, indexDirParalogPre, fastaDirParalogPre)
-// 	//
-// 	// 	// VI. gather abs paths to indices into map[target][]paralogIndexPaths
-// 	// 	indexPaths := extraction.GetAbsPathsPerTarget(targetParalogs, indexDirParalogPre)
-// 	//
-// 	// 	// VI. write paralogs.csv
-// 	// 	metaOut := fmt.Sprintf("%s.csv", *paralogMetaOutParalogPre)
-// 	// 	extraction.WriteParalogsPre(metaOut, indexPaths)
-// 	// 	logrus.Infof("Wrote target to paralog mapping to destination file: %s", metaOut)
-// }
+import (
+	"bufio"
+	"encoding/binary"
+	"fmt"
+	"hash/fnv"
+	"math"
+	"os"
+	"runtime"
+	"time"
+
+	"github.com/KleinSamuel/gtamap/src/dataloader"
+)
+
+func printMemUsage() {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	fmt.Printf("Alloc = %v MB\n", bToMb(m.Alloc))
+	fmt.Printf("TotalAlloc = %v MB\n", bToMb(m.TotalAlloc))
+	fmt.Printf("Sys = %v MB\n", bToMb(m.Sys))
+	fmt.Printf("NumGC = %v\n", m.NumGC)
+}
+
+func bToMb(b uint64) uint64 {
+	return b / 1024 / 1024
+}
+
+// BloomFilter represents the bit array and hash functions
+type BloomFilter struct {
+	bitset []bool
+	size   uint
+	hashes uint
+}
+
+// NewBloomFilter creates a new Bloom filter
+func NewBloomFilter(n uint, falsePositiveRate float64) *BloomFilter {
+	// Optimal size of bit array m
+	m := uint(math.Ceil(-1 * float64(n) * math.Log(falsePositiveRate) / (math.Ln2 * math.Ln2)))
+	// Optimal number of hash functions k
+	k := uint(math.Ceil((float64(m) / float64(n)) * math.Ln2))
+
+	return &BloomFilter{
+		bitset: make([]bool, m),
+		size:   m,
+		hashes: k,
+	}
+}
+
+// Add inserts a k-mer (as []byte) into the filter
+func (bf *BloomFilter) Add(item []byte) {
+	for i := uint(0); i < bf.hashes; i++ {
+		idx := bf.hash(item, i) % bf.size
+		bf.bitset[idx] = true
+	}
+}
+
+// Check returns true if the k-mer may exist (false positive possible)
+func (bf *BloomFilter) Check(item []byte) bool {
+	for i := uint(0); i < bf.hashes; i++ {
+		idx := bf.hash(item, i) % bf.size
+		if !bf.bitset[idx] {
+			return false
+		}
+	}
+	return true
+}
+
+// hash function combining FNV with iteration index
+func (bf *BloomFilter) hash(item []byte, i uint) uint {
+	h := fnv.New64a()
+	h.Write(item)
+	sum := h.Sum64()
+	// Combine with index for multiple hash functions
+	return uint(sum + uint64(i*0x9e3779b97f4a7c13))
+}
+
+const (
+	valueBits = 29
+	valueMask = (uint64(1) << valueBits) - 1
+)
+
+func pack(index uint16, value uint32) uint64 {
+	// Optional safety checks (recommended during development)
+	if index >= 500 {
+		panic("index overflow")
+	}
+	if value >= 300_000_000 {
+		panic("value overflow")
+	}
+
+	return (uint64(index) << valueBits) | uint64(value)
+}
+
+func unpackIndex(packed uint64) uint16 {
+	return uint16(packed >> valueBits)
+}
+
+func unpackValue(packed uint64) uint32 {
+	return uint32(packed & valueMask)
+}
+
+func writePosToCluster(posToCluster map[int][]uint64, filepath string) error {
+	file, err := os.Create(filepath)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer file.Close()
+
+	// gzWriter := gzip.NewWriter(file)
+	writer := bufio.NewWriterSize(file, 1<<20) // 1MB buffer
+	defer writer.Flush()
+
+	// Write map length
+	binary.Write(writer, binary.LittleEndian, uint64(len(posToCluster)))
+
+	// Write each entry
+	for key, slice := range posToCluster {
+		binary.Write(writer, binary.LittleEndian, int64(key))
+		binary.Write(writer, binary.LittleEndian, uint64(len(slice)))
+		binary.Write(writer, binary.LittleEndian, slice)
+	}
+
+	return nil
+}
+
+func writePosToCount(posToCount map[int]uint32, filepath string) error {
+	file, err := os.Create(filepath)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer file.Close()
+
+	// gzWriter := gzip.NewWriter(file)
+	writer := bufio.NewWriterSize(file, 1<<20) // 1MB buffer
+	defer writer.Flush()
+
+	// Write map length
+	binary.Write(writer, binary.LittleEndian, uint64(len(posToCount)))
+
+	// Write each entry
+	for key, count := range posToCount {
+		binary.Write(writer, binary.LittleEndian, int64(key))
+		binary.Write(writer, binary.LittleEndian, count)
+	}
+
+	return nil
+}
+
+func ReadPosToCluster(filepath string) (map[int][]uint64, error) {
+	file, err := os.Open(filepath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	reader := bufio.NewReaderSize(file, 1<<20)
+
+	var mapLen uint64
+	binary.Read(reader, binary.LittleEndian, &mapLen)
+
+	posToCluster := make(map[int][]uint64, mapLen)
+
+	for i := uint64(0); i < mapLen; i++ {
+		var key int64
+		var sliceLen uint64
+		binary.Read(reader, binary.LittleEndian, &key)
+		binary.Read(reader, binary.LittleEndian, &sliceLen)
+
+		slice := make([]uint64, sliceLen)
+		binary.Read(reader, binary.LittleEndian, slice)
+		posToCluster[int(key)] = slice
+	}
+
+	return posToCluster, nil
+}
+
+func ReadPosToCount(filepath string) (map[int]uint32, error) {
+	file, err := os.Open(filepath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	reader := bufio.NewReaderSize(file, 1<<20)
+
+	var mapLen uint64
+	binary.Read(reader, binary.LittleEndian, &mapLen)
+
+	posToCount := make(map[int]uint32, mapLen)
+
+	for i := uint64(0); i < mapLen; i++ {
+		var key int64
+		var count uint32
+		binary.Read(reader, binary.LittleEndian, &key)
+		binary.Read(reader, binary.LittleEndian, &count)
+		posToCount[int(key)] = count
+	}
+
+	return posToCount, nil
+}
+
+func test1() {
+	geneFilePath := "/home/sam/Data/ENSG00000198947.fa"
+	geneFile, errGeneFile := os.Open(geneFilePath)
+	if errGeneFile != nil {
+		fmt.Println(errGeneFile)
+	}
+
+	// fastaFilePath := "/home/sam/Data/reference-genomes/ensembl/115/homo_sapiens/Homo_sapiens.GRCh38.dna.chromosome.20.fa"
+	fastaFilePath := "/home/sam/Data/reference-genomes/ensembl/115/homo_sapiens/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+	fastaFile, errFile := os.Open(fastaFilePath)
+	if errFile != nil {
+		fmt.Println(errFile)
+	}
+
+	// outFilePath := "/home/sam/Data/test.gtai"
+	// outFile, errOutFile := os.Create(outFilePath)
+	// if errOutFile != nil {
+	// 	fmt.Println(errOutFile)
+	// }
+
+	geneEntries, errGeneEntries := dataloader.ReadFasta(geneFile)
+	if errGeneEntries != nil {
+		fmt.Println(errGeneEntries)
+	}
+
+	fastaEntries, err := dataloader.ReadFasta(fastaFile)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Println(len(fastaEntries))
+	fmt.Println(len(fastaEntries[0].Sequence))
+	fmt.Println(fastaEntries[0].Header)
+
+	geneKmers := make(map[[20]byte][]int)
+
+	for kStart := 0; kStart <= len(geneEntries[0].Sequence)-20; kStart++ {
+		seqBytes := *(*[20]byte)((geneEntries[0].Sequence)[kStart : kStart+20])
+		geneKmers[seqBytes] = make([]int, 0)
+	}
+
+	fmt.Println("gene kmers:", len(geneKmers))
+
+	timerStart := time.Now()
+
+	genomeKmers := make(map[[20]byte]map[uint64]struct{}, len(geneKmers))
+
+	for i := 0; i < len(fastaEntries); i++ {
+
+		fmt.Println("processing chromosome", i, "of", len(fastaEntries), fastaEntries[i].Header)
+		printMemUsage()
+
+		for kStart := 0; kStart <= len(fastaEntries[i].Sequence)-20; kStart++ {
+			seqBytes := *(*[20]byte)((fastaEntries[i].Sequence)[kStart : kStart+20])
+
+			if _, found := geneKmers[seqBytes]; !found {
+				continue
+			}
+
+			// var posIdx int = kStart / 500
+			posIdx := pack(uint16(i), uint32(kStart/500))
+
+			if _, found := genomeKmers[seqBytes]; !found {
+				genomeKmers[seqBytes] = make(map[uint64]struct{})
+			}
+
+			genomeKmers[seqBytes][posIdx] = struct{}{}
+		}
+
+		if i >= 24 {
+			break
+		}
+	}
+
+	d := time.Since(timerStart)
+
+	fmt.Println("genome kmers:", len(genomeKmers), "in", d)
+
+	// posToCluster := make(map[int][]uint64)
+	posToCount := make(map[int]uint32)
+
+	for kStart := 0; kStart < len(geneEntries[0].Sequence)-20; kStart++ {
+		seqBytes := *(*[20]byte)((geneEntries[0].Sequence)[kStart : kStart+20])
+
+		positions, found := genomeKmers[seqBytes]
+		if !found {
+			continue
+		}
+
+		// posToCluster[kStart] = make([]uint64, 0)
+		posToCount[kStart] = uint32(len(positions))
+
+		// for posIdx := range positions {
+		// 	posToCluster[kStart] = append(posToCluster[kStart], posIdx)
+		// }
+
+		// for posIdx := range posToCluster[kStart-1] {
+		// 	if _, found := posToCluster[kStart][posIdx]; !found {
+		// 		delete(posToCluster[kStart-1], posIdx)
+		// 	}
+		// }
+
+		if kStart%100000 == 0 {
+			fmt.Println(kStart, "of", len(geneEntries[0].Sequence))
+			printMemUsage()
+		}
+
+	}
+
+	// free memory
+	genomeKmers = nil
+
+	printMemUsage()
+
+	serPath := "/home/sam/Data/gtamap/evaluation/genes/dmd/test.gob"
+
+	// writePosToCluster(posToCluster, serPath)
+	writePosToCount(posToCount, serPath)
+
+	// bf := NewBloomFilter(uint(len(geneKmers)), 0.1)
+	//
+	// for kmer := range geneKmers {
+	// 	bf.Add(kmer[:])
+	// }
+
+	// compute clusters
+	// numChr := len(fastaEntries)
+	// clusterSize := 500
+
+	// fastaEntries[0].Header = "20\tchr20\t+\t1\t64444167"
+
+	// count := 0
+	//
+	// for kStart := 0; kStart <= len(fastaEntries[0].Sequence)-10; kStart++ {
+	// 	seqBytes := *(*[10]byte)((fastaEntries[0].Sequence)[kStart : kStart+10])
+	//
+	// 	_, found := geneKmers[seqBytes]
+	//
+	// 	if !found {
+	// 		continue
+	// 	}
+	//
+	// 	count++
+	//
+	// 	// compute cluster index
+	// 	var clusterIdx int
+	// 	clusterIdx = kStart / clusterSize
+	//
+	// 	// geneKmers[seqBytes] += 1
+	// 	geneKmers[seqBytes] = append(geneKmers[seqBytes], clusterIdx)
+	// }
+	//
+	// fmt.Println(count)
+
+	// genomeIndex := index.BuildGenomeIndex(fastaEntries)
+	// index.WriteGenomeIndex(genomeIndex, outFile)
+}
+
+func test2() {
+	serPath := "/home/sam/Data/gtamap/evaluation/genes/dmd/test.gob"
+
+	posToCluster, err := ReadPosToCluster(serPath)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Println(len(posToCluster))
+}
+
+func test3() {
+	serPath := "/home/sam/Data/gtamap/evaluation/genes/dmd/genomic-kmers.count.all.gob"
+
+	posToCount, err := ReadPosToCount(serPath)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	maxVal := 0
+
+	for _, v := range posToCount {
+		if int(v) > maxVal {
+			maxVal = int(v)
+		}
+		// fmt.Println(k, v)
+		// break
+	}
+
+	for i := 0; i <= maxVal; i++ {
+		fmt.Println(i, ",", posToCount[i])
+	}
+}
+
+func main() {
+	// test1()
+	test3()
+}

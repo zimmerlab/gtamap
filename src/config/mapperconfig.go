@@ -20,14 +20,16 @@ type MapperConfig struct {
 	} `mapstructure:"general" yaml:"general"`
 
 	Index struct {
-		FastaFilePath      string   `mapstructure:"fasta_file_path" yaml:"fasta_file_path"`
-		FastaIndexFilePath string   `mapstructure:"fasta_index_file_path" yaml:"fasta_index_file_path"`
-		GtfFilePath        string   `mapstructure:"gtf_file_path" yaml:"gtf_file_path"`
-		GeneIds            []string `mapstructure:"gene_ids" yaml:"gene_ids"`
-		Regions            []string `mapstructure:"regions" yaml:"regions"`
-		UpstreamBases      int      `mapstructure:"upstream_bases" yaml:"upstream_bases"`
-		DownstreamBases    int      `mapstructure:"downstream_bases" yaml:"downstream_bases"`
-		RegionmaskFilePath string   `mapstructure:"regionmask_file_path" yaml:"regionmask_file_path"`
+		FastaFilePath           string   `mapstructure:"fasta_file_path" yaml:"fasta_file_path"`
+		GenomeFastaFilePath     string   `mapstructure:"genome_fasta_file_path" yaml:"genome_fasta_file_path"`
+		FastaIndexFilePath      string   `mapstructure:"fasta_index_file_path" yaml:"fasta_index_file_path"`
+		GtfFilePath             string   `mapstructure:"gtf_file_path" yaml:"gtf_file_path"`
+		GeneIds                 []string `mapstructure:"gene_ids" yaml:"gene_ids"`
+		Regions                 []string `mapstructure:"regions" yaml:"regions"`
+		UpstreamBases           int      `mapstructure:"upstream_bases" yaml:"upstream_bases"`
+		DownstreamBases         int      `mapstructure:"downstream_bases" yaml:"downstream_bases"`
+		RegionmaskFilePath      string   `mapstructure:"regionmask_file_path" yaml:"regionmask_file_path"`
+		KmerOccurrencesFilePath string   `mapstructure:"kmer_occurrences_file_path" yaml:"kmer_occurrences_file_path"`
 
 		Output struct {
 			SingleFile       bool   `mapstructure:"single_file" yaml:"single_file"`
@@ -50,6 +52,9 @@ type MapperConfig struct {
 		RnaMode struct {
 			FilterMinMatches      int     `mapstructure:"filter_min_matches" yaml:"filter_min_matches"` // the minimum number of exact matches required to keep the read during filtering
 			IntronLengthMin       int     `mapstructure:"intron_length_min" yaml:"intron_length_min"`
+			MaxGapLength          int     `mapstructure:"max_gap_length" yaml:"max_gap_length"`
+			MaxGapLengthTotal     int     `mapstructure:"max_gap_length_total" yaml:"max_gap_length_total"`
+			MaxGapCount           int     `mapstructure:"max_gap_count" yaml:"max_gap_count"`
 			MaxMismatchCount      int     `mapstructure:"max_mismatch_count" yaml:"max_mismatch_count"`
 			MaxMismatchPercentage float64 `mapstructure:"max_mismatch_percentage" yaml:"max_mismatch_percentage"`
 
@@ -62,12 +67,13 @@ type MapperConfig struct {
 		} `mapstructure:"rna_mode" yaml:"rna_mode"`
 
 		DnaMode struct {
-			FilterMinMatches      int     `mapstructure:"filter_min_matches" yaml:"filter_min_matches"` // the minimum number of exact matches required to keep the read during filtering
-			MinMappingLength      float64 `mapstructure:"min_mapping_length" yaml:"min_mapping_length"`
-			MaxGapLength          int     `mapstructure:"max_gap_length" yaml:"max_gap_length"`
-			MaxGapCount           int     `mapstructure:"max_gap_count" yaml:"max_gap_count"`
-			MaxMismatchCount      int     `mapstructure:"max_mismatch_count" yaml:"max_mismatch_count"`
-			MaxMismatchPercentage float64 `mapstructure:"max_mismatch_percentage" yaml:"max_mismatch_percentage"`
+			FilterMinMatches                   int     `mapstructure:"filter_min_matches" yaml:"filter_min_matches"` // the minimum number of exact matches required to keep the read during filtering
+			MinLengthInitialDiagonal           int     `mapstructure:"min_length_initial_diagonal" yaml:"min_length_initial_diagonal"`
+			MinLengthInitialDiagonalPercentage float64 `mapstructure:"min_length_initial_diagonal_percentage" yaml:"min_length_initial_diagonal_percentage"`
+			MaxGapLength                       int     `mapstructure:"max_gap_length" yaml:"max_gap_length"`
+			MaxGapCount                        int     `mapstructure:"max_gap_count" yaml:"max_gap_count"`
+			MaxMismatchCount                   int     `mapstructure:"max_mismatch_count" yaml:"max_mismatch_count"`
+			MaxMismatchPercentage              float64 `mapstructure:"max_mismatch_percentage" yaml:"max_mismatch_percentage"`
 
 			Confident struct {
 				MaxMismatchCount          int `mapstructure:"max_mismatch_count" yaml:"max_mismatch_count"`     // how many mm is a conf map allowed to have
@@ -86,6 +92,11 @@ type MapperConfig struct {
 			IncludeAllPairings               bool   `mapstructure:"sam_include_all_pairings" yaml:"sam_include_all_pairings"`                           // if set to true, all vs. all pairings are written to sam output  NOTE: actual pairing is not implemented yet
 		} `mapstructure:"output" yaml:"output"`
 	} `mapstructure:"mapping" yaml:"mapping"`
+
+	KmerOccurrences struct {
+		GenomeFastaFilePath string `mapstructure:"genome_fasta_file_path" yaml:"genome_fasta_file_path"`
+		OutputTsvFilePath   string `mapstructure:"output_tsv_file_path" yaml:"output_tsv_file_path"`
+	} `mapstructure:"kmer_occurrences" yaml:"kmer_occurrences"`
 }
 
 // SetReadOrigin sets the read origin and the derived boolean flag.

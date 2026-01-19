@@ -53,17 +53,17 @@ func SecondpassMappingWorker(
 
 			for {
 
-				task, ok := secondPassChan.Receive()
+				readPairMapping, ok := secondPassChan.Receive()
 
 				if !ok {
 					break
 				}
 
-				remapReadPair(task, annotation, genomeIndex)
+				remapReadPair(readPairMapping, annotation, genomeIndex)
 
 				thirdPassChan.Send(&thirdpass.ThirdPassTask{
-					ReadPairId: task.ReadPair.ReadR1.Header,
-					TargetInfo: task,
+					ReadPairId: readPairMapping.ReadPair.ReadR1.Header,
+					TargetInfo: readPairMapping,
 				})
 			}
 		}()
@@ -81,10 +81,6 @@ func remapReadPair(
 	annotationMap map[int]*mapperutils.TargetAnnotation,
 	genomeIndex *index.GenomeIndex,
 ) {
-	// if readPairMapping.ReadPair.ReadR1.Header == "A00925:309:HKNKCDSX3:1:1158:27769:24032" {
-	// 	fmt.Println("here")
-	// }
-
 	fwRemaps := make([]*mapperutils.ReadMatchResult, 0)
 
 	for _, mapping := range readPairMapping.Fw {
@@ -150,7 +146,7 @@ func remapReadPair(
 			genomeIndex,
 		)
 		readPairMapping.Rv = validMaps
-	} else {
+	} else if readPairMapping.ReadPair.ReadR2 != nil {
 		validMaps := filterValidMaps(
 			readPairMapping.Rv,
 			len(*readPairMapping.ReadPair.ReadR2.Sequence),
@@ -158,6 +154,37 @@ func remapReadPair(
 		)
 		readPairMapping.Rv = validMaps
 	}
+
+	ComputeOccurrenceWeights(readPairMapping, genomeIndex)
+}
+
+func ComputeOccurrenceWeights(
+	readPairMapping *mapperutils.ReadPairMatchResults,
+	genomeIndex *index.GenomeIndex,
+) {
+	for _, fwMapping := range readPairMapping.Fw {
+		ComputeOccurrenceWeight(fwMapping, genomeIndex)
+	}
+	for _, rvMapping := range readPairMapping.Rv {
+		ComputeOccurrenceWeight(rvMapping, genomeIndex)
+	}
+}
+
+func ComputeOccurrenceWeight(
+	result *mapperutils.ReadMatchResult,
+	genomeIndex *index.GenomeIndex,
+) {
+	countsTotal := make([]uint64, 0)
+
+	for _, r := range result.MatchedGenome.Regions {
+		for i := r.Start; i < r.End-10; i++ {
+			count := genomeIndex.KmerOccurrences.GetKmerCountAtPosition(i)
+			countsTotal = append(countsTotal, count)
+		}
+	}
+
+	result.OccurrenceWeightHarmonic = float32(utils.HarmonicMean(countsTotal))
+	result.OccurrenceWeightGeometric = float32(utils.GeometricMean(countsTotal))
 }
 
 func getUniqRemaps(
@@ -1221,7 +1248,7 @@ func correctOverhangs(
 		// pair remaining sections in leftRemaps and rightRemaps
 		finalRemaps := make([]*mapperutils.ReadMatchResult, 0)
 
-		if len(rightRemaps) != 0 && len(leftRemaps) != 0 {
+		if rightRemaps != nil && leftRemaps != nil {
 			for _, lSection := range leftRemaps {
 
 				lExtStopRead := lSection.MatchedRead[0].End
@@ -1275,7 +1302,7 @@ func correctOverhangs(
 					finalRemaps = append(finalRemaps, corrected)
 				}
 			}
-		} else if len(rightRemaps) != 0 {
+		} else if rightRemaps != nil {
 		onlyRightLoop:
 			for _, rSection := range rightRemaps {
 
@@ -1315,7 +1342,7 @@ func correctOverhangs(
 
 				finalRemaps = append(finalRemaps, corrected)
 			}
-		} else if len(leftRemaps) != 0 {
+		} else if leftRemaps != nil {
 		onlyLeftLoop:
 			for _, lSection := range leftRemaps {
 

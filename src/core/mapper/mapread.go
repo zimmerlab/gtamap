@@ -1,6 +1,8 @@
 package mapper
 
 import (
+	"fmt"
+
 	"github.com/KleinSamuel/gtamap/src/config"
 	"github.com/KleinSamuel/gtamap/src/core/datastructure/regionvector"
 	"github.com/KleinSamuel/gtamap/src/core/index"
@@ -18,6 +20,15 @@ func MapRead(
 	[]*mapperutils.ReadMatchResult,
 	bool,
 ) {
+	if read.Sequence == nil {
+		fmt.Println("ERROR: read sequence is nil")
+		fmt.Println(read.Header)
+	}
+
+	if len(*read.Sequence) < 10 {
+		return make([]*mapperutils.ReadMatchResult, 0), false
+	}
+
 	// logrus.WithFields(logrus.Fields{
 	// 	"read":   read.Header,
 	// 	"length": len(*read.Sequence),
@@ -126,7 +137,14 @@ func MapRead(
 		dh := mapperutils.NewDiagonalHandlerWithDataCopy(sequenceMatches.MatchesPerDiagonal)
 		initialDepth := 0
 
-		tmpResults := mapReadToSequence(seqIndex, read, genomeIndex, dh, greedy, &initialDepth)
+		tmpResults := mapReadToSequence(
+			seqIndex,
+			read,
+			genomeIndex,
+			dh,
+			greedy,
+			&initialDepth,
+		)
 		// fmt.Println(x)
 
 		// var result mapperutils.ReadMatchResult
@@ -212,17 +230,14 @@ func applyPossibleDiagonals(
 		// INFO: DNA RNA MODE
 		// this result should already have a certain length before we append it to results
 		if !config.Mapper.Mapping.IsReadOriginRna {
-
 			// for DNA reads we expect the raw result to already be of a certain length
-			theoreticalLength := result.MatchedRead.Regions[len(result.MatchedRead.Regions)-1].End - result.MatchedRead.Regions[0].Start
-			if float64(theoreticalLength)/float64(len(*read.Sequence)) >
-				config.Mapper.Mapping.DnaMode.MinMappingLength {
+			if float64(result.MatchedGenome.Length())/float64(len(*read.Sequence)) >
+				config.Mapper.Mapping.DnaMode.MinLengthInitialDiagonalPercentage {
 
 				// if result.MatchedGenome.Length()*10 > len(*read.Sequence)*7 {
 
 				*results = append(*results, result)
 			}
-
 		} else {
 			*results = append(*results, result)
 		}
@@ -563,7 +578,14 @@ func applyDiagonal(
 
 		numGaps++
 
-		if !config.Mapper.Mapping.IsReadOriginRna {
+		if config.Mapper.Mapping.IsReadOriginRna {
+			if lenGapGenome > config.Mapper.Mapping.RnaMode.MaxGapLength {
+				return false
+			}
+			if numGaps > config.Mapper.Mapping.RnaMode.MaxGapCount {
+				return false
+			}
+		} else {
 			if lenGapGenome > config.Mapper.Mapping.DnaMode.MaxGapLength {
 				// the gap in the genome is too large for DNA reads
 				return false
@@ -576,11 +598,23 @@ func applyDiagonal(
 
 	}
 
-	// add regions to MatchedRead only if they are not excluded
-	for _, region := range diagonalRead.Regions {
-		if _, exclude := readKmersToExclude[region]; exclude {
-			continue
-		}
+	// if len(gapsRead.Regions) > 0 {
+	// 	logrus.WithFields(logrus.Fields{
+	// 		"read":       diagonalRead,
+	// 		"genome":     diagonalGenome,
+	// 		"mismatches": result.MismatchesRead,
+	// 	}).Debug("filled gap")
+	// }
+
+	// add all matches in diagonal to the result
+	for i := 0; i < len(diagonalRead.Regions); i++ {
+		regionRead := diagonalRead.Regions[i]
+		regionGenome := diagonalGenome.Regions[i]
+
+		// logrus.WithFields(logrus.Fields{
+		// 	"read":   regionRead,
+		// 	"genome": regionGenome,
+		// }).Debug("adding diagonal match to result")
 
 		regionRead := region
 
@@ -798,6 +832,8 @@ func extendDiagonals(
 				gapRead, _ := result.MatchedRead.GetGapAfterRegionIndex(indexRegionBeforeGap)
 				gapGenome, gapGenomeOk := result.MatchedGenome.GetGapAfterRegionIndex(indexRegionBeforeGap)
 
+				// potentialInsertion := gapRead.Length() > gapGenome.Length()
+
 				if !gapGenomeOk {
 					// logrus.WithFields(logrus.Fields{
 					// 	"read":    result.MatchedRead,
@@ -811,19 +847,16 @@ func extendDiagonals(
 					// 	"gapGenome": gapGenome,
 					// }).Debug("found gap to be handled")
 
-					// This case is covered in remap read (fillGaps)
-					if gapRead.Length() > gapGenome.Length() {
-						// logrus.WithFields(logrus.Fields{
-						// 	"gapRead":   gapRead,
-						// 	"gapGenome": gapGenome,
-						// }).Debug("gap read is larger than gap genome")
-
-						result.IncompleteMap = true
-
-						readGapPos = gapRead.End + 1
-						indexRegionBeforeGap = result.MatchedRead.GetGapIndexAfterPos(readGapPos)
-						continue // continue since l/r extensions might be required / other gaps also could require gap fill
-					}
+					// // This case is covered in remap read (fillGaps)
+					// if gapRead.Length() > gapGenome.Length() {
+					// 	// logrus.WithFields(logrus.Fields{
+					// 	// 	"gapRead":   gapRead,
+					// 	// 	"gapGenome": gapGenome,
+					// 	// }).Debug("gap read is larger than gap genome")
+					//
+					// 	result.IncompleteMap = true
+					// 	return
+					// }
 
 					bestSplit := determineBestSplit(
 						genomeIndex,
@@ -844,6 +877,32 @@ func extendDiagonals(
 					// false if any mismatch threshold was exceeded
 					fillGap := true
 
+					// max number of read bases than can be mapped
+					// if num bases in gap genome is smaller then there could
+					// be an insertions in the read
+					maxBasesToMap := min(gapRead.Length(), gapGenome.Length())
+
+					indelSize := gapRead.Length() - gapGenome.Length()
+
+					// fmt.Println("indel size during gap filling:", indelSize)
+
+					if indelSize < 0 {
+						// fmt.Println("deletion detected during gap filling")
+						// fmt.Println("indel size:", -indelSize)
+						// fmt.Println(config.Mapper.Mapping.DnaMode.MaxGapLength)
+
+						if (!config.Mapper.Mapping.IsReadOriginRna &&
+							-indelSize > config.Mapper.Mapping.DnaMode.MaxGapLength) ||
+							(config.Mapper.Mapping.IsReadOriginRna &&
+								-indelSize > config.Mapper.Mapping.RnaMode.MaxGapLength) {
+							// fmt.Println("deletion too large during gap filling")
+							result.IncompleteMap = true
+							return
+						}
+					} else if indelSize > 0 {
+						// fmt.Println("insertion detected during gap filling")
+					}
+
 					// make a copy of the mismatches to be able to revert if
 					// threshold is exceeded
 					mmCopy := make([]int, len(result.MismatchesRead))
@@ -853,15 +912,20 @@ func extendDiagonals(
 						mmCountsCopy[k] = v
 					}
 
-					// when bestSplit is 0 then there is nothing to be added to the left side of the gap
+					// when bestSplit is 0 then there is nothing to be added
+					// to the left side of the gap
 					if bestSplit > 0 {
 
+						// number of bases that are to be mapped on the left
+						// side of the gap
+						numBases := bestSplit
+
 						// the read and genome sequences from the start of the gap to the best split (left)
-						readByte := (*read.Sequence)[gapRead.Start : gapRead.Start+bestSplit]
-						genomeByte := (*genomeIndex.Sequences[result.SequenceIndex])[gapGenome.Start : gapGenome.Start+bestSplit]
+						readByte := (*read.Sequence)[gapRead.Start : gapRead.Start+numBases]
+						genomeByte := (*genomeIndex.Sequences[result.SequenceIndex])[gapGenome.Start : gapGenome.Start+numBases]
 
 						// add mismatches to the result
-						for i := range bestSplit {
+						for i := range numBases {
 
 							if readByte[i] == genomeByte[i] {
 								// skip matches
@@ -883,32 +947,31 @@ func extendDiagonals(
 
 						if fillGap {
 							// add the split to the result only if threshold was not exeeded
-							result.MatchedRead.AddRegionNonOverlappingPanic(gapRead.Start, gapRead.Start+bestSplit)
-							result.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.Start+bestSplit)
-
-							// update copy
-							mmCopy = make([]int, len(result.MismatchesRead))
-							copy(mmCopy, result.MismatchesRead)
-							mmCountsCopy = make(map[string]int)
-							for k, v := range result.MismatchCounts {
-								mmCountsCopy[k] = v
-							}
+							result.MatchedRead.AddRegionNonOverlappingPanic(gapRead.Start, gapRead.Start+numBases)
+							result.MatchedGenome.AddRegionNonOverlappingPanic(gapGenome.Start, gapGenome.Start+numBases)
 						}
 					}
 
-					// when bestSplit is equal to the length of the gap then there is nothing
-					// to be added to the right side of the gap
-					if fillGap && bestSplit < gapRead.Length() {
+					// when bestSplit is equal to the length of the max num of
+					// bases that can be mapped in the read then there is
+					// nothing to be added to the right side of the gap
+					if fillGap && bestSplit < maxBasesToMap {
 
-						// the read and genome sequences from the best split to the end of the gap (right)
-						readByte := (*read.Sequence)[gapRead.End-(gapRead.Length()-bestSplit) : gapRead.End]
-						genomeByte := (*genomeIndex.Sequences[result.SequenceIndex])[gapGenome.End-(gapRead.Length()-bestSplit) : gapGenome.End]
+						// the read and genome sequences from the best split
+						// to the end of the gap (right)
 
-						startRead := gapRead.End - (gapRead.Length() - bestSplit)
-						startGenomic := gapGenome.End - (gapRead.Length() - bestSplit)
+						// number of bases that are to be mapped on the right
+						// side of the gap
+						numBases := maxBasesToMap - bestSplit
+
+						readByte := (*read.Sequence)[gapRead.End-numBases : gapRead.End]
+						genomeByte := (*genomeIndex.Sequences[result.SequenceIndex])[gapGenome.End-numBases : gapGenome.End]
+
+						startRead := gapRead.End - numBases
+						startGenomic := gapGenome.End - numBases
 
 						// add the mismatches to the result
-						for i := 0; i < gapRead.Length()-bestSplit; i++ {
+						for i := range numBases {
 
 							if readByte[i] == genomeByte[i] {
 								continue
@@ -929,17 +992,24 @@ func extendDiagonals(
 						}
 
 						if fillGap {
-							// add the split to the result only if threshold was not exeeded
+							// add the split to the result only if threshold
+							// was not exeeded
 							result.MatchedRead.AddRegionNonOverlappingPanic(
-								gapRead.End-(gapRead.Length()-bestSplit),
+								startRead,
 								gapRead.End,
 							)
 							result.MatchedGenome.AddRegionNonOverlappingPanic(
-								gapGenome.End-(gapRead.Length()-bestSplit),
+								startGenomic,
 								gapGenome.End,
 							)
 						}
 					}
+
+					// if fillGap {
+					// 	if maxBasesToMap < gapRead.Length() {
+					// 		fmt.Println("insertion detected during gap filling")
+					// 	}
+					// } else {
 
 					if !fillGap {
 						// reset the mismatches to the state before
@@ -1176,11 +1246,6 @@ func mapReadToSequence(
 	// list of read match results
 	results := make([]*mapperutils.ReadMatchResult, 0)
 
-	// INFO: max mismatches per read is given as percentage (int, 5 = 5%)
-	// compute actual number of allowed mismatches based on read length
-	// store this in the result to prevent frequent computations
-	// maxMismatches := int((float32(config.MaxMismatchPercentage()) / 100) *
-	// 	float32(len(*read.Sequence)))
 	maxMismatches := config.Mapper.GetMaxMismatches(len(*read.Sequence))
 
 	result := &mapperutils.ReadMatchResult{
@@ -1227,7 +1292,8 @@ func mapReadToSequence(
 			}
 		}
 
-		if res.MatchedGenome.Length() != len(*read.Sequence) {
+		// if res.MatchedGenome.Length() != len(*read.Sequence) {
+		if res.MatchedRead.Length() != len(*read.Sequence) {
 			res.IncompleteMap = true
 		}
 
@@ -1249,16 +1315,21 @@ func determineBestSplit(
 	// 	"gapGenome": gapGenome,
 	// }).Debug("determining best split")
 
-	// cululative mismatch count for the left and right extensions
+	// maximum number of positions to consider for the split
+	// if the genome gap is smaller than the read gap then there is a
+	// potential insertion
+	maxPositionsRead := min(gapGenome.Length(), gapRead.Length())
+
+	// cumulative mismatch count for the left and right extensions
 	// for lErrors the index i represents the number of mismatches for the first i positions of the extension
 	// for rErrors the index i represents the number of mismatches for the last i positions of the extension
-	lErrors := make([]int, gapRead.Length()+1)
-	rErrors := make([]int, gapRead.Length()+1)
+	lErrors := make([]int, maxPositionsRead+1)
+	rErrors := make([]int, maxPositionsRead+1)
 
 	lErrors[0] = 0
 	rErrors[0] = 0
 
-	for i := 1; i <= gapRead.Length(); i++ {
+	for i := 1; i <= maxPositionsRead; i++ {
 		lErrors[i] = lErrors[i-1]
 		if (*read.Sequence)[gapRead.Start+i-1] != (*genomeIndex.Sequences[seqIndex])[gapGenome.Start+i-1] {
 			lErrors[i]++
@@ -1277,7 +1348,11 @@ func determineBestSplit(
 
 	// the minimum number of mismatches
 	// the +2 is based on the maximum penalty returned by scoreSpliceSites()
-	minErrors := lErrors[gapRead.Length()] + rErrors[gapRead.Length()] + 2
+	minErrors := lErrors[maxPositionsRead] + rErrors[maxPositionsRead] + 1
+	if config.Mapper.Mapping.IsReadOriginRna {
+		minErrors += 2
+	}
+
 	// the position of the split with the minimum number of mismatches
 	minSplit := -1
 
@@ -1285,50 +1360,49 @@ func determineBestSplit(
 	// TODO: if no suitable split is found then:
 	// - maybe there is another exon in between if enough bases missing from read
 	// - maybe keep the readpair for unmapped pass
-	for i := 0; i <= gapRead.Length(); i++ {
+	for i := 0; i <= maxPositionsRead; i++ {
 
 		lPos := i
-		rPos := gapRead.Length() - i
+		rPos := maxPositionsRead - i
 
 		numMismatches := lErrors[lPos] + rErrors[rPos]
 
-		donorSiteStart := gapGenome.Start + i
-		donorSiteSeq := (*genomeIndex.Sequences[seqIndex])[donorSiteStart : donorSiteStart+2]
+		if config.Mapper.Mapping.IsReadOriginRna {
 
-		splitRev := gapRead.Length() - i
-		acceptorSiteStart := gapGenome.End - splitRev
-		acceptorSiteSeq := (*genomeIndex.Sequences[seqIndex])[acceptorSiteStart-2 : acceptorSiteStart]
+			donorSiteStart := gapGenome.Start + i
+			donorSiteSeq := (*genomeIndex.Sequences[seqIndex])[donorSiteStart : donorSiteStart+2]
 
-		var lookOnPlusStrand bool
-		if genomeIndex.GetSequenceInfo(seqIndex / 2).IsForwardStrand {
-			if genomeIndex.IsSequenceForward(seqIndex) {
-				lookOnPlusStrand = true
+			splitRev := gapRead.Length() - i
+			acceptorSiteStart := gapGenome.End - splitRev
+			acceptorSiteSeq := (*genomeIndex.Sequences[seqIndex])[acceptorSiteStart-2 : acceptorSiteStart]
+
+			var lookOnPlusStrand bool
+			if genomeIndex.GetSequenceInfo(seqIndex / 2).IsForwardStrand {
+				if genomeIndex.IsSequenceForward(seqIndex) {
+					lookOnPlusStrand = true
+				} else {
+					lookOnPlusStrand = false
+				}
 			} else {
-				lookOnPlusStrand = false
+				if genomeIndex.IsSequenceForward(seqIndex) {
+					lookOnPlusStrand = false
+				} else {
+					lookOnPlusStrand = true
+				}
 			}
-		} else {
-			if genomeIndex.IsSequenceForward(seqIndex) {
-				lookOnPlusStrand = false
-			} else {
-				lookOnPlusStrand = true
-			}
+
+			// add a penalty if the splice site is not canonical
+			// 2 means that there is no known splice site
+
+			spliceSitePenalty, _ := utils.ScoreSpliceSites(
+				donorSiteSeq[0],
+				donorSiteSeq[1],
+				acceptorSiteSeq[0],
+				acceptorSiteSeq[1],
+				lookOnPlusStrand,
+			)
+			numMismatches += spliceSitePenalty
 		}
-
-		// add a penalty if the splice site is not canonical
-		// 2 means that there is no known splice site
-
-		// INFO: DNA RNA MODE
-		// only score splicesites in RNA mode
-
-		spliceSitePenalty, _ := utils.ScoreSpliceSites(
-			donorSiteSeq[0],
-			donorSiteSeq[1],
-			acceptorSiteSeq[0],
-			acceptorSiteSeq[1],
-			lookOnPlusStrand,
-		)
-
-		numMismatches += spliceSitePenalty
 
 		// logrus.WithFields(logrus.Fields{
 		// 	"split":               i,

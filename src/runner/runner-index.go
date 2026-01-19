@@ -11,10 +11,9 @@ import (
 )
 
 func GetCommandIndex() *cobra.Command {
-
 	var fastaFilePath string
 	var regionmaskFilePath string
-	// var regionmaskPriorityFilePath string
+	var kmerOccurrencesFilePath string
 	var outputDirPath string
 	var indexFileName string
 	var useFastaFileName bool
@@ -23,7 +22,6 @@ func GetCommandIndex() *cobra.Command {
 		Use:   "index",
 		Short: "Build the gtamap index (.gtai)",
 		Run: func(cmd *cobra.Command, args []string) {
-
 			if indexFileName != "" && useFastaFileName {
 				cmd.PrintErrf("\n%s [-i | --index-file-name] and [-u | --use-fasta-file-name] cannot be used together.\n\n", cmd.ErrPrefix())
 				cmd.Usage()
@@ -35,6 +33,7 @@ func GetCommandIndex() *cobra.Command {
 			SetConfigValue("index.output.index_file_name", indexFileName)
 			SetConfigValue("index.output.use_fasta_file_name", useFastaFileName)
 			SetConfigValue("index.regionmask_file_path", regionmaskFilePath)
+			SetConfigValue("index.kmer_occurrences_file_path", kmerOccurrencesFilePath)
 
 			if err := viper.Unmarshal(config.Mapper); err != nil {
 				logrus.Fatalf("Unable to decode config: %v", err)
@@ -88,11 +87,18 @@ func GetCommandIndex() *cobra.Command {
 		"Regionmask file (.bed) containing specific mismatch constraints per region",
 	)
 
+	flags.StringVarP(
+		&kmerOccurrencesFilePath,
+		"kmer-occurrences",
+		"k",
+		"",
+		"Genome-wide kmer occurrences (.tsv) to compute region-specific kmer frequencies",
+	)
+
 	return indexCmd
 }
 
 func ExecIndex() {
-
 	fastaFile, err := os.Open(config.Mapper.Index.FastaFilePath)
 	if err != nil {
 		logrus.Fatalf("Could not open fasta file: %v", err)
@@ -114,9 +120,21 @@ func ExecIndex() {
 		defer regionmaskFile.Close()
 	}
 
+	var kmerOccurrencesFile *os.File = nil
+	var errKmerOccurrences error = nil
+
+	if config.Mapper.Index.KmerOccurrencesFilePath != "" {
+		kmerOccurrencesFile, errKmerOccurrences = os.Open(config.Mapper.Index.KmerOccurrencesFilePath)
+		if errKmerOccurrences != nil {
+			logrus.Fatalf("Could not open kmer occurrences file: %v", errKmerOccurrences)
+		}
+		defer kmerOccurrencesFile.Close()
+	}
+
 	index.BuildAndSerializeGenomeIndex(
 		fastaFile,
 		outputFile,
 		regionmaskFile,
+		kmerOccurrencesFile,
 	)
 }
