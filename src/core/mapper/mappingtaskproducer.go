@@ -2,7 +2,9 @@ package mapper
 
 import (
 	"strings"
+	"time"
 
+	"github.com/KleinSamuel/gtamap/src/core/mapper/events"
 	"github.com/KleinSamuel/gtamap/src/formats/fastq"
 	"github.com/sirupsen/logrus"
 )
@@ -10,7 +12,7 @@ import (
 func MappingTaskProducer(
 	reader *fastq.Reader,
 	taskChan chan<- MappingTask,
-	progressChan chan<- Event,
+	progressChan chan<- events.Event,
 	maxReads int,
 	specificQname string,
 ) {
