@@ -655,7 +655,7 @@ func readPairResultToSamString(
 
 	// TAGS
 	tagsFw := ""
-	if resFw != nil {
+	if resFw != nil && resFw.OccurrenceWeightHarmonic > 0 && resFw.OccurrenceWeightGeometric > 0 {
 		tagsFw = fmt.Sprintf(
 			"XH:i:%d\tXG:i:%d",
 			int(math.Round((1.0/float64(resFw.OccurrenceWeightHarmonic))*100)/100),
@@ -664,7 +664,7 @@ func readPairResultToSamString(
 	}
 
 	tagsRv := ""
-	if resRv != nil {
+	if resRv != nil && resRv.OccurrenceWeightHarmonic > 0 && resRv.OccurrenceWeightGeometric > 0 {
 		tagsRv = fmt.Sprintf(
 			"XH:i:%d\tXG:i:%d",
 			int(math.Round((1.0/float64(resRv.OccurrenceWeightHarmonic))*100)/100),

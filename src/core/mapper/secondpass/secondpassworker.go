@@ -174,6 +174,10 @@ func ComputeOccurrenceWeight(
 	result *mapperutils.ReadMatchResult,
 	genomeIndex *index.GenomeIndex,
 ) {
+	if len(genomeIndex.KmerOccurrences.KmerCounts) == 0 {
+		return
+	}
+
 	countsTotal := make([]uint64, 0)
 
 	for _, r := range result.MatchedGenome.Regions {
