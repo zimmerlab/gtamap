@@ -65,6 +65,32 @@ table.insert(dap.configurations.go, {
 
 table.insert(dap.configurations.go, {
 	type = "delve",
+	name = "debugging pig",
+	request = "launch",
+	-- mode = "debug",
+	program = "/home/users/klein/Projects/gtamap/src/main.go",
+	outputMode = "remote",
+	args = {
+		"map",
+		"--config",
+		"/mnt/proj/projekte/expressionlab/dmd-pig/gtamap/gtamap_config.yaml",
+		"--index",
+		"/mnt/proj/projekte/expressionlab/dmd-pig/results/gtamap/78918581/dc092a89/ENSSSCG00000053426.gtai",
+		"--output",
+		"/home/users/klein/test/",
+		"--threads",
+		"1",
+		"--read-origin",
+		"rna",
+		"--reads-r1",
+		"/mnt/raidinput/input/own/SeqReads/Jaudas/01.RawData/Tri_Bi_14085_1.fq.gz",
+		"--reads-r2",
+		"/mnt/raidinput/input/own/SeqReads/Jaudas/01.RawData/Tri_Bi_14085_2.fq.gz",
+	},
+})
+
+table.insert(dap.configurations.go, {
+	type = "delve",
 	name = "debugging weight",
 	request = "launch",
 	-- mode = "debug",

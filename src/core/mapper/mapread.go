@@ -1277,8 +1277,10 @@ func determineBestSplit(
 			donorSiteStart := gapGenome.Start + i
 			donorSiteSeq := (*genomeIndex.Sequences[seqIndex])[donorSiteStart : donorSiteStart+2]
 
-			splitRev := gapRead.Length() - i
+			// TODO: why was this gapRead intially?
+			splitRev := gapGenome.Length() - i
 			acceptorSiteStart := gapGenome.End - splitRev
+
 			acceptorSiteSeq := (*genomeIndex.Sequences[seqIndex])[acceptorSiteStart-2 : acceptorSiteStart]
 
 			var lookOnPlusStrand bool
